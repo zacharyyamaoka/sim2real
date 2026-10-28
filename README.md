@@ -20,3 +20,11 @@ every page is a `.base` dashboard or an analysis over datasets the producers wri
 | `brand/icons/` | the app icon proposals |
 | `reports/` | review reports (`reports/media/` is gitignored) |
 | `docs/` | decisions |
+
+## Diagnostics
+
+The stock diagnostics library is `robotdx.diagnostics` in `/home/bam/io-diagnostics` (lifted from `diagnostics_ref` at
+1f0eb75; on io-diagnostics main since 8c89965; numpy via the `io-diagnostics[diagnostics]` extra). `diagnostics_ref/` is frozen
+and superseded. This repo keeps the producer that runs the library on the real rack and writes the report's data:
+
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/diagnostics_run_rack.py

@@ -1,6 +1,9 @@
 """Run the stock diagnostics on the real 1-DOF rack (rack_2026-10-24/25) and write what the report and data-ui read.
 
-    env -u VIRTUAL_ENV uv run --isolated --project /home/bam/sim2real/diagnostics_ref python /home/bam/sim2real/diagnostics_ref/tools/run_rack.py
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/diagnostics_run_rack.py
+
+The library is robotdx.diagnostics in io-diagnostics (lifted from this repo's diagnostics_ref at 1f0eb75, on io-diagnostics main
+8c89965); this script stays here because it is sim2real's producer of the report's data.
 
 Writes, under reports/media/diagnostics-catalog-2026-10-28/data/:
 - results.json      every Result as a diagnostics-record/0 status line (RobotDx's record, lossless)
