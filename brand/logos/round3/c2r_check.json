@@ -1,0 +1,23 @@
+{
+ "plain s2r": 0.0342,
+ "dissolve-trail": 0.1422,
+ "loupe-2": 0.2186,
+ "viewfinder-brackets": 0.1951,
+ "assemble": 0.1523,
+ "exploded-half": 0.1507,
+ "frame-spill": 0.1797,
+ "breakout-2": 0.2322,
+ "teeth-to-pixels": 0.162,
+ "dither-sweep-2": 0.1458,
+ "screen-dissolve": 0.2774,
+ "ghost-tile": 0.4474,
+ "phone-ar": 0.2251,
+ "dither-loupe": 0.1842,
+ "upward-drift": 0.1561,
+ "gear-badge": 0.1843,
+ "tile-monogram": 0.4403,
+ "pixel-wake": 0.1432,
+ "lens-flip": 0.3861,
+ "s2r-dissolve": 0.1163,
+ "window-breakout": 0.2494
+}
