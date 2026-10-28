@@ -18,3 +18,10 @@ A built copy of data-ui, never edited here. Re-vendor it from data-ui; do not pa
   `source/build_robot.py`; BSD-3-Clause meshes), used by the 3D card at the 6-DOF and full-suite scales.
 
 To update: rebuild data-ui (or a newer lane), then replace `dist/` wholesale and record the new commit here.
+
+## Re-vendor when lane/dashboard-cards lands on data-ui main (noted 2026-10-28)
+
+The data-ui agent: the lane has moved past dbe1bd7 to 0412c55+ (one driver per instance, Back/Forward fixes, and repeated
+sources now need explicit ids). Re-vendor from main once it lands, and re-run `dashboards/build.py` plus the checks. The
+13 gaps found here are filed at `/home/bam/data-ui/reports/backlog-sim2real-gaps-2026-10-28.md`. #1 (the clock ignores
+filters) and #13 (`src` set after load) come first.
