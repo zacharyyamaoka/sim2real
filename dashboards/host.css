@@ -1,20 +1,24 @@
 /* The host page around one <data-dashboard>: a thin header and the review switcher. Everything else is data-ui. */
+/* WHY real is blue and sim (stand-in) is orange, here and in every series (Zach, 2026-10-28): "train the eye to know what is
+   real and what is sim ... leaves green and red for elsewhere", so green and red mean pass/fail only. The chip colours are
+   the hues of data-ui's series slots 1 and 2, shaded for WCAG AA text (>= 5.4:1 on their fills, both themes); the accent is
+   neutral so that blue keeps one meaning. */
 /* WHY every variable is --s2r-*: data-ui falls back to shadcn names (--muted, --accent, --border), so a host --muted repainted its table headers */
 :root {
   --s2r-page: #f6f6f7; --s2r-ink: #18181b; --s2r-muted: #71717a; --s2r-line: #e4e4e7; --s2r-panel: #ffffff;
-  --s2r-stand-in: #b3261e; --s2r-stand-in-bg: #fdecea; --s2r-real: #1f6f3a; --s2r-real-bg: #e7f4ec; --s2r-accent: #2a78d6;
+  --s2r-stand-in: #a3400c; --s2r-stand-in-bg: #fcebdf; --s2r-real: #1a5bb0; --s2r-real-bg: #e6eefb; --s2r-accent: #3f3f46;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --s2r-page: #0c0c0e; --s2r-ink: #ececef; --s2r-muted: #9a9aa3; --s2r-line: #2c2c31; --s2r-panel: #151518;
-    --s2r-stand-in: #ff8a80; --s2r-stand-in-bg: #3a1513; --s2r-real: #7fd49b; --s2r-real-bg: #12291a; --s2r-accent: #6aa5ec;
+    --s2r-stand-in: #f5a173; --s2r-stand-in-bg: #3a1d0d; --s2r-real: #8fbaf2; --s2r-real-bg: #13233b; --s2r-accent: #d4d4d8;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --s2r-page: #0c0c0e; --s2r-ink: #ececef; --s2r-muted: #9a9aa3; --s2r-line: #2c2c31; --s2r-panel: #151518;
-  --s2r-stand-in: #ff8a80; --s2r-stand-in-bg: #3a1513; --s2r-real: #7fd49b; --s2r-real-bg: #12291a; --s2r-accent: #6aa5ec;
+  --s2r-stand-in: #f5a173; --s2r-stand-in-bg: #3a1d0d; --s2r-real: #8fbaf2; --s2r-real-bg: #13233b; --s2r-accent: #d4d4d8;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }

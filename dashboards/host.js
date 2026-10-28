@@ -2,8 +2,25 @@
 // choice (localStorage), else the build's default (the recommended pick). Switching reloads the page clean.
 // WHY a reload instead of swapping the element: each dashboard owns the URL's rails, hash selections and its clock;
 // a fresh page is the one state that can never leak from the previous proposal into the next.
-import '../vendor/data-ui/dist/data-ui.js';
+import { resolveTokens, toRgb } from '../vendor/data-ui/dist/data-ui.js';
 import '../vendor/data-ui/dist/dashboard.js';
+
+// Zach (2026-10-28): "We want to train the eye to know what is real and what is sim. Blue and orange ... leaves green
+// and red for elsewhere." Real is data-ui's series slot 1 (blue), sim is slot 2 (orange); green and red are pass/fail only.
+// WHY the host resolves the palette: a .base's `style.palette` takes colours, and three.js (the 3D card) cannot read var().
+// The build writes slot tokens (`var(--data-series-1)`, so no hex of ours has to pass data-ui's contrast checks in two
+// themes); the host swaps in the colours data-ui resolved for the theme on screen and redraws when the theme changes.
+const SLOT = /var\(--(data-series-\d)\)/g;
+const MIX = /color-mix\((?:[^()]|\([^()]*\))*\)/g;
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const response = await nativeFetch(input, init);
+  const url = typeof input === 'string' ? input : (input instanceof URL ? input.href : input.url);
+  if (!response.ok || !/\.base(?:[?#]|$)/.test(url)) return response;
+  const slots = resolveTokens(document.getElementById('dash')).css;
+  const text = (await response.text()).replace(SLOT, (_match, name) => slots[name]).replace(MIX, (mix) => toRgb(mix));
+  return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers });
+};
 
 const STORE = 'sim2real/switcher';
 const manifest = await (await fetch('proposals.json', { cache: 'no-store' })).json();
@@ -45,6 +62,10 @@ dash.id = 'dash';
 dash.setAttribute('aria-label', `${proposal.title} · ${scale.short}`);
 dash.setAttribute('src', src);
 document.getElementById('page').append(dash);
+// the system scheme or the page's own theme switch: re-read the .base so its palette is resolved again (rails, selections and the clock stay)
+const redraw = () => dash.reload();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
+new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
 
 // Click-through: a device's badge on Visual home opens its type's block on Type catalog, same scale, device selected.
 // WHY in the host and not a `select:` in the .base: a selection filters every panel reading `devices`, which would empty

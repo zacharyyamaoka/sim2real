@@ -52,8 +52,22 @@ TORQUE_GATE = 2.0  # acceptance.py T3: torque within 2x the run-to-run floor
 TOOL_GATE_MM = 5.0  # Zach 2024-04-09: "within 5mm should be ok for grasping"; the only number he put on the arm gate
 ERROR_SCALE = 20  # the 3D card draws the twin's error against the real device this many times larger (labelled)
 DISPLAY_EVERY = 2  # rack runs are logged at 91-95 Hz; every 2nd row (~47 Hz) is plenty for a time series card
-PALETTE = {"target": "#8b9099", "real": "#2a78d6", "twin": "#e8743b", "real B": "#8fb8ea", f"twin ×{ERROR_SCALE}": "#e8743b",
+# WHY slots and not hex: Zach (2026-10-28), "train the eye to know what is real and what is sim. Blue and orange ... leaves
+# green and red for elsewhere". Real is data-ui's series slot 1 (blue), sim (twin, model, stand-in) is slot 2 (orange); both
+# pass data-ui's contrast checks in light and dark, which our old hard-coded #e8743b did not (data-ui PEP 0010 §7). host.js
+# resolves the slot tokens per theme, because a palette takes colours and the 3D card cannot read var(). Target and floor
+# stay neutral grey; green and red are pass/fail only. "real B" is the same blue, lighter: a repeat, not a new hue.
+REAL, SIM = "var(--data-series-1)", "var(--data-series-2)"
+PALETTE = {"target": "#8b9099", "real": REAL, "twin": SIM, "real B": f"color-mix(in srgb, {REAL} 55%, white)", f"twin ×{ERROR_SCALE}": SIM,
            "floor": "#9aa0a6", "floor −": "#9aa0a6"}
+# data-ui badge slots: 0 muted, 1 blue, 2 orange, 3 green, 8 red. Every badge column is set, because an unlisted value gets a hashed
+# slot ("not twinned" came out blue and "servo" orange, which read as real and sim): blue/orange mean real/sim only, green/red pass/fail only
+BADGE_SLOT = {"real": 1, "real B": 1, "twin": 2, "stand-in": 2, "target": 0, "floor": 0, "floor −": 0, "real-camera": 1, "sim-render": 2,
+              "illustrative": 2}
+VERDICT_SLOT = {"twinned": 3, "not twinned": 8, "no evidence": 0, "inside share": 3, "over share": 8}
+STATUS_SLOT = {"pass": 3, "fail": 8, "partial": 4, "not_run": 0}
+PLAIN_SLOT = {value: 0 for value in ("servo", "eef", "camera", "imu", "ft", "goal", "joint", "joint class", "motor", "note", "residual", "sensor",
+                                     "tool", "rig", "run", "run set", "staircase", "waypoints")}  # type and kind: a label, not a colour
 RAIL_TYPES = ("servo", "camera")  # the types whose Type catalog block has a device picker in the rail (dataset_entries)
 TONES = {"pass": "good", "fail": "bad", "partial": "warn", "not_run": "muted"}
 
@@ -63,6 +77,15 @@ CLASS_OF = {11: "shoulder", 12: "shoulder", 13: "shoulder", 4: "elbow", 21: "elb
 SHARE_MM = {"shoulder": 2.0, "elbow": 2.0, "wrist": 1.0}
 LEVER_M = {"shoulder": 0.55, "elbow": 0.30, "wrist": 0.10}
 RACK_ORDER = [14, 15, 1, 4, 21, 11, 12, 13]  # wrist, elbow, shoulder: the KPI report's order
+# WHY a fixed slot per device: unlisted names get a hashed slot, and two of the rack's motors (CAN 1 and 12, CAN 4 and 21)
+# landed on the same one. Order: CAN id ascending, then J1..J6. Slots 3-8 first, so the blue and orange that mean real and
+# sim stay off the motors; the 7th and 8th motor (CAN 15, 21) have to take 1 and 2 (data-ui's palette has 8 hues, and 3, 6 and 8 are
+# green, green and red: a backlog item, data-ui needs a longer categorical palette that skips blue/orange/green/red).
+DEVICE_SLOTS = [3, 4, 5, 6, 7, 8, 1, 2]
+RACK_MOTORS = [f"CAN {can}" for can in sorted(RACK_ORDER)]
+ARM_JOINTS = ["J1 shoulder pan", "J2 shoulder lift", "J3 elbow", "J4 wrist 1", "J5 wrist 2", "J6 wrist 3"]
+PALETTE.update({name: f"var(--data-series-{slot})" for name, slot in zip(RACK_MOTORS + ARM_JOINTS, DEVICE_SLOTS + DEVICE_SLOTS)})
+PALETTE.update({"Scene camera": "var(--data-series-5)", "Wrist camera": "var(--data-series-7)"})  # the suite's two cameras: pink and purple, not a hashed blue or orange
 
 
 # ---------------------------------------------------------------------------------------------------- small helpers
@@ -1034,19 +1057,19 @@ def write_scale(scale: str, data: dict) -> dict:
     counts = {}
     counts["devices"] = write_dataset(folder, "devices.json", f"Devices · {SCALES[scale]['title']}", f"{basis}; built {stamp}", {
         "device": {"type": "text", "note": "One sensor or actuator (or a derived quantity, type eef)."},
-        "type": {"type": "text", "display": "badge"}, "verdict": {"type": "text", "display": "badge"},
+        "type": {"type": "text", "display": "badge", "colors": PLAIN_SLOT}, "verdict": {"type": "text", "display": "badge", "colors": VERDICT_SLOT},
         "ratio": {"type": "number", "unit": "×", "digits": 3, "note": f"sim-vs-real error ÷ the device's own run-to-run floor; twinned at ≤ {GATE}"},
         "gate": {"type": "number", "unit": "×"}, "twinned": {"type": "number", "note": "1 if twinned, else 0 (for counting)"},
-        "basis": {"type": "text", "display": "badge", "note": "real = measured on the rack; stand-in = synthetic (perturbed sim)"},
+        "basis": {"type": "text", "display": "badge", "colors": BADGE_SLOT, "note": "real = measured on the rack; stand-in = synthetic (perturbed sim)"},
     }, data["devices"])
     counts["gates"] = write_dataset(folder, "gates.json", f"Gates · {SCALES[scale]['title']}", f"{basis}; built {stamp}", {
-        "status": {"type": "text", "display": "badge", "note": "pass · fail · partial (real evidence that cannot settle it) · not_run (no evidence, never a pass)"},
+        "status": {"type": "text", "display": "badge", "colors": STATUS_SLOT, "note": "pass · fail · partial (real evidence that cannot settle it) · not_run (no evidence, never a pass)"},
         "passed": {"type": "number"}, "cell": {"type": "number"},
     }, data["gates"])
     unit_props = {"t": {"type": "number", "unit": "s", "digits": 3}, "q_deg": {"type": "number", "unit": "°", "digits": 4},
                   "gap_mrad": {"type": "number", "unit": "mrad", "digits": 3}, "tau_nm": {"type": "number", "unit": "N·m", "digits": 3},
                   "i_q_a": {"type": "number", "unit": "A"}, "temp_c": {"type": "number", "unit": "°C"},
-                  "situation": {"type": "text", "display": "badge", "note": "target · real · twin · real B (the stand-in's repeat) · floor (± the device's floor, two points)"}}
+                  "situation": {"type": "text", "display": "badge", "colors": BADGE_SLOT, "note": "target · real · twin · real B (the stand-in's repeat) · floor (± the device's floor, two points)"}}
     for type_ in types:
         counts[f"samples_{type_}"] = write_dataset(folder, f"samples_{type_}.json", f"{type_} samples · {SCALES[scale]['title']}",
                                                    f"{basis}; built {stamp}", unit_props, data[type_])
@@ -1059,10 +1082,10 @@ def write_scale(scale: str, data: dict) -> dict:
                                              f"{basis}; twin drawn with its error x{ERROR_SCALE} (display aid); built {stamp}",
                                              {"situation": {"type": "text"}}, data["scene"])
     counts["budget"] = write_dataset(folder, "budget.json", f"Error budget · {SCALES[scale]['title']}", f"{basis}; built {stamp}",
-                                     {"verdict": {"type": "text", "display": "badge"}, "kind": {"type": "text", "display": "badge"},
+                                     {"verdict": {"type": "text", "display": "badge", "colors": VERDICT_SLOT}, "kind": {"type": "text", "display": "badge", "colors": PLAIN_SLOT},
                                       "lever_m": {"type": "number", "unit": "m"}}, data["budget"])
     counts["runs"] = write_dataset(folder, "runs.json", f"Runs · {SCALES[scale]['title']}", f"{basis}; built {stamp}",
-                                   {"kind": {"type": "text", "display": "badge"}, "duration_s": {"type": "number", "unit": "s"}}, data["runs"])
+                                   {"kind": {"type": "text", "display": "badge", "colors": PLAIN_SLOT}, "duration_s": {"type": "number", "unit": "s"}}, data["runs"])
     if scale != "rack":
         long_rows = []
         for row in data["budget"]:
@@ -1080,7 +1103,7 @@ def write_scale(scale: str, data: dict) -> dict:
             row["poster"] = f"media/{pathlib.Path(row['poster']).name}"
         counts["media"] = write_dataset(folder, "media.json", f"Camera clips · {SCALES[scale]['title']}", f"{basis}; built {stamp}",
                                         {"src": {"type": "text", "media": "video"}, "poster": {"type": "text", "media": "image"},
-                                         "t0": {"type": "number", "unit": "s"}, "basis": {"type": "text", "display": "badge"}}, data["media"])
+                                         "t0": {"type": "number", "unit": "s"}, "basis": {"type": "text", "display": "badge", "colors": BADGE_SLOT}}, data["media"])
     titles = {"servo": "Servo", "eef": "End effector", "camera": "Camera", "imu": "IMU", "ft": "F/T"}
     worst = {}
     for device in data["devices"]:

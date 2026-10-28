@@ -29,12 +29,28 @@ style:
   numbers: { digits: 3, compact: true }
   palette:
     target: '#8b9099'
-    real: '#2a78d6'
-    twin: '#e8743b'
-    real B: '#8fb8ea'
-    twin ×20: '#e8743b'
+    real: var(--data-series-1)
+    twin: var(--data-series-2)
+    real B: 'color-mix(in srgb, var(--data-series-1) 55%, white)'
+    twin ×20: var(--data-series-2)
     floor: '#9aa0a6'
     'floor −': '#9aa0a6'
+    CAN 1: var(--data-series-3)
+    CAN 4: var(--data-series-4)
+    CAN 11: var(--data-series-5)
+    CAN 12: var(--data-series-6)
+    CAN 13: var(--data-series-7)
+    CAN 14: var(--data-series-8)
+    CAN 15: var(--data-series-1)
+    CAN 21: var(--data-series-2)
+    J1 shoulder pan: var(--data-series-3)
+    J2 shoulder lift: var(--data-series-4)
+    J3 elbow: var(--data-series-5)
+    J4 wrist 1: var(--data-series-6)
+    J5 wrist 2: var(--data-series-7)
+    J6 wrist 3: var(--data-series-8)
+    Scene camera: var(--data-series-5)
+    Wrist camera: var(--data-series-7)
 clock: { data: scene, time: t, loop: true }
 datasets: { devices: devices.json, scene: scene.json, servo: samples_servo.json, eef: samples_eef.json }
 links:

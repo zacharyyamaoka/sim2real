@@ -321,7 +321,9 @@ def main() -> int:
             if not frames:
                 continue
             label = "SIM TWIN" if situation == "twin" else "SYNTHETIC REAL (perturbed sim stand-in)"
-            colour = "0x1f5fbf" if situation == "twin" else "0xb3261e"
+            # WHY real blue, sim orange (Zach, 2026-10-28; the dashboards' one rule): the stand-in plays the real device, so it
+            # wears real's blue; white text clears 5:1 on both. Red and green are pass/fail only.
+            colour = "0xb04a0e" if situation == "twin" else "0x1f5fbf"
             encode(frames, MEDIA / f"{cam}_{situation}.mp4", label, colour)
             print(f"{cam}_{situation}.mp4: {len(frames)} frames")
         print(situation, len(result["rows"]), "rows")
