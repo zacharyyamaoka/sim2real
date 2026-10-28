@@ -1,0 +1,101 @@
+# sim2real · proposal 3-gate-matrix · scale arm: Acceptance: devices x gates, each cell a pass/fail you can open
+# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# SIM STAND-IN: no real run exists at this scale.
+data: gates.json
+properties:
+  device: { displayName: Device }
+  type: { displayName: Type }
+  verdict: { displayName: Verdict }
+  ratio: { displayName: 'Twin ÷ floor' }
+  gate_used: { displayName: Gate used }
+  gate_limit: { displayName: limit }
+  sim_vs_real: { displayName: Sim vs real }
+  floor: { displayName: Floor }
+  real_vs_target: { displayName: Real vs target }
+  torque_ratio: { displayName: 'Torque ÷ floor' }
+  situation: { displayName: Situation }
+  q_deg: { displayName: Angle }
+  gap_mrad: { displayName: 'Twin − real' }
+  tau_nm: { displayName: Torque }
+  gate_title: { displayName: Gate }
+  status: { displayName: Status }
+  allocation_mm: { displayName: Allocation }
+  sim_vs_real_mm: { displayName: Sim vs real (tool mm) }
+  real_vs_target_mm: { displayName: Real vs target (tool mm) }
+  used: { displayName: Used }
+  label: { displayName: Node }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    target: '#8b9099'
+    real: '#2a78d6'
+    twin: '#e8743b'
+    real B: '#8fb8ea'
+    twin ×20: '#e8743b'
+    floor: '#9aa0a6'
+    'floor −': '#9aa0a6'
+datasets: { gates: { data: gates.json, facets: [type, status] }, devices: devices.json }
+links: [{ from: gates.device, to: devices.device }]
+layout:
+  panels:
+    - text: "## Gate matrix · 6-DOF arm\n**Scale: 6-DOF arm · SIM STAND-IN: no real UR5e run exists.** 'Real' is the same MuJoCo UR5e with four declared perturbations and sensor noise, run twice for its floor. Chosen to exercise the page, not measured. Rows are devices, blocks are gates in order; hover a block for its value, click it for the evidence."
+      w: 12
+    - { view: Gate cells passing, w: 3, h: 2 }
+    - { view: Devices twinned, w: 3, h: 2 }
+    - { view: Passing per gate, w: 6, h: 2 }
+    - text: '**Blocks, left to right:** S1 floor · S2 angle fidelity · S3 torque fidelity · S4 stop accuracy · (other device types: their own gates, in order)'
+      w: 12
+    - { view: Devices × gates, w: 12, h: 4 }
+    - { view: Evidence, w: 12, h: 5, toolbar: full }
+views:
+  - type: gauge
+    name: Gate cells passing
+    from: gates
+    gauge:
+      value: { property: passed, summary: Ratio, per: cell }
+      min: 0
+      max: 1
+      target: 1
+      shape: arc
+      better: higher
+      label: 'Cells passing, of 26'
+      bands:
+        - { to: 0.5, tone: bad }
+        - { to: 0.99, tone: warn }
+        - { tone: good }
+  - type: gauge
+    name: Devices twinned
+    from: devices
+    gauge:
+      value: { property: twinned, summary: Sum }
+      min: 0
+      max: 7
+      target: 7
+      shape: arc
+      better: higher
+      label: 'Devices twinned (≤ 1.5× their floor)'
+      bands:
+        - { to: 3.5, tone: bad }
+        - { to: 6.5, tone: warn }
+        - { tone: good }
+  - type: barlist
+    name: Passing per gate
+    from: gates
+    barlist: { label: gate_title, value: { property: passed, summary: Sum }, better: higher, limit: 12 }
+  - type: tracker
+    name: Devices × gates
+    from: gates
+    groupBy: { property: device }
+    groupOrder: [J1 shoulder pan, J2 shoulder lift, J3 elbow, J4 wrist 1, J5 wrist 2, J6 wrist 3, Tool (EEF)]
+    sort:
+      - { property: order, direction: ASC }
+    tracker:
+      state: status
+      label: gate_title
+      tones: { pass: good, fail: bad, partial: warn, not_run: muted }
+  - type: table
+    name: Evidence
+    from: gates
+    groupBy: { property: gate_title }
+    order: [device, status, value, target, detail, evidence, basis]

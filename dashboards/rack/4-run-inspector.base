@@ -1,0 +1,137 @@
+# sim2real · proposal 4-run-inspector · scale rack: Time: pick a run from the tree, every channel real vs twin on one clock
+# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# REAL rack data.
+data: runs.json
+properties:
+  device: { displayName: Device }
+  type: { displayName: Type }
+  verdict: { displayName: Verdict }
+  ratio: { displayName: 'Twin ÷ floor' }
+  gate_used: { displayName: Gate used }
+  gate_limit: { displayName: limit }
+  sim_vs_real: { displayName: Sim vs real }
+  floor: { displayName: Floor }
+  real_vs_target: { displayName: Real vs target }
+  torque_ratio: { displayName: 'Torque ÷ floor' }
+  situation: { displayName: Situation }
+  q_deg: { displayName: Angle }
+  gap_mrad: { displayName: 'Twin − real' }
+  tau_nm: { displayName: Torque }
+  gate_title: { displayName: Gate }
+  status: { displayName: Status }
+  allocation_mm: { displayName: Allocation }
+  sim_vs_real_mm: { displayName: Sim vs real (tool mm) }
+  real_vs_target_mm: { displayName: Real vs target (tool mm) }
+  used: { displayName: Used }
+  label: { displayName: Node }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    target: '#8b9099'
+    real: '#2a78d6'
+    twin: '#e8743b'
+    real B: '#8fb8ea'
+    twin ×20: '#e8743b'
+    floor: '#9aa0a6'
+    'floor −': '#9aa0a6'
+clock: { data: servo, time: t }
+datasets: { runs: runs.json, servo: samples_servo.json, scene: scene_runs.json, media: media.json }
+links:
+  - { from: servo.run, to: runs.run }
+  - { from: scene.run_set, to: runs.run_set }
+  - { from: media.run, to: runs.run }
+layout:
+  panels:
+    - text: "## Run inspector · 1-DOF rack\n**Scale: 1-DOF · One Dof Test Rack · REAL data.** 8 motors, real held-out runs (Oct 23-25) against each station's twin (bam_rack_twin, replayed; RMS reproduced exactly). One real camera (CAN 14's RealSense); no sim render of the rack exists, so no camera can be wiped yet. The tree lists every run; click one (it starts on the first) and every card below plays it on one clock."
+      w: 12
+    - { view: Runs, w: 6, h: 4, title: Runs }
+    - { view: '3D', w: 6, h: 4 }
+    - { view: Playback, w: 12 }
+    - { view: Angle · real vs twin, w: 6, h: 3 }
+    - { view: 'Twin − real', w: 6, h: 3 }
+    - { view: Torque · real vs twin, w: 6, h: 3 }
+    - { view: Current (real only), w: 6, h: 3 }
+    - { view: Camera (only the staircase has one), w: 6, h: 4 }
+    - { view: Winding temperature (real only), w: 6, h: 4 }
+views:
+  - type: table
+    name: Runs
+    from: runs
+    select: run
+    tree: { parent: parent }
+    order: [label, kind, duration_s, rms_q_mrad, twin, situations, basis]
+  - type: scene3d
+    name: '3D'
+    from: scene
+    scene3d:
+      x: px
+      'y': py
+      z: pz
+      series: situation
+      target: twin ×20
+      t: t
+      skeleton:
+        - [m0_bx, m0_by, m0_bz]
+        - [m0_ax, m0_ay, m0_az]
+        - [m0_tx, m0_ty, m0_tz]
+        - [gap_x, gap_y, gap_z]
+        - [m1_bx, m1_by, m1_bz]
+        - [m1_ax, m1_ay, m1_az]
+        - [m1_tx, m1_ty, m1_tz]
+        - [gap_x, gap_y, gap_z]
+        - [m2_bx, m2_by, m2_bz]
+        - [m2_ax, m2_ay, m2_az]
+        - [m2_tx, m2_ty, m2_tz]
+        - [gap_x, gap_y, gap_z]
+        - [m3_bx, m3_by, m3_bz]
+        - [m3_ax, m3_ay, m3_az]
+        - [m3_tx, m3_ty, m3_tz]
+        - [gap_x, gap_y, gap_z]
+        - [m4_bx, m4_by, m4_bz]
+        - [m4_ax, m4_ay, m4_az]
+        - [m4_tx, m4_ty, m4_tz]
+        - [gap_x, gap_y, gap_z]
+        - [m5_bx, m5_by, m5_bz]
+        - [m5_ax, m5_ay, m5_az]
+        - [m5_tx, m5_ty, m5_tz]
+        - [gap_x, gap_y, gap_z]
+        - [m6_bx, m6_by, m6_bz]
+        - [m6_ax, m6_ay, m6_az]
+        - [m6_tx, m6_ty, m6_tz]
+        - [gap_x, gap_y, gap_z]
+        - [m7_bx, m7_by, m7_bz]
+        - [m7_ax, m7_ay, m7_az]
+        - [m7_tx, m7_ty, m7_tz]
+  - type: playback
+    name: Playback
+    playback: { speeds: [0.25, 0.5, 1, 2], range: true, readout: true }
+  - type: timeseries
+    name: Angle · real vs twin
+    from: servo
+    timeseries: { x: t, 'y': q_deg, series: situation, unit: '°', legend: top, dash: [target] }
+    filters: 'situation != "floor" && situation != "floor −"'
+  - type: timeseries
+    name: 'Twin − real'
+    from: servo
+    timeseries: { x: t, 'y': gap_mrad, series: situation, unit: mrad, legend: top, dash: [floor, 'floor −'] }
+    filters: 'situation == "twin" || situation == "floor" || situation == "floor −"'
+  - type: timeseries
+    name: Torque · real vs twin
+    from: servo
+    timeseries: { x: t, 'y': tau_nm, series: situation, unit: N·m, legend: top }
+    filters: 'situation == "real" || situation == "twin" || situation == "real B"'
+  - type: timeseries
+    name: Current (real only)
+    from: servo
+    timeseries: { x: t, 'y': i_q_a, series: situation, unit: A, legend: top }
+    filters: 'situation == "real"'
+  - type: video
+    name: Camera (only the staircase has one)
+    from: media
+    video: { src: src, label: run, primary: true }
+  - type: timeseries
+    name: Winding temperature (real only)
+    from: servo
+    timeseries: { x: t, 'y': temp_c, series: situation, unit: '°C', legend: top }
+    filters: 'situation == "real"'

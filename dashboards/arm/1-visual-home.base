@@ -1,0 +1,114 @@
+# sim2real · proposal 1-visual-home · scale arm: Space: the robot in 3D and its cameras, every view sim vs real, a badge per device
+# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# SIM STAND-IN: no real run exists at this scale.
+data: devices.json
+properties:
+  device: { displayName: Device }
+  type: { displayName: Type }
+  verdict: { displayName: Verdict }
+  ratio: { displayName: 'Twin ÷ floor' }
+  gate_used: { displayName: Gate used }
+  gate_limit: { displayName: limit }
+  sim_vs_real: { displayName: Sim vs real }
+  floor: { displayName: Floor }
+  real_vs_target: { displayName: Real vs target }
+  torque_ratio: { displayName: 'Torque ÷ floor' }
+  situation: { displayName: Situation }
+  q_deg: { displayName: Angle }
+  gap_mrad: { displayName: 'Twin − real' }
+  tau_nm: { displayName: Torque }
+  gate_title: { displayName: Gate }
+  status: { displayName: Status }
+  allocation_mm: { displayName: Allocation }
+  sim_vs_real_mm: { displayName: Sim vs real (tool mm) }
+  real_vs_target_mm: { displayName: Real vs target (tool mm) }
+  used: { displayName: Used }
+  label: { displayName: Node }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    target: '#8b9099'
+    real: '#2a78d6'
+    twin: '#e8743b'
+    real B: '#8fb8ea'
+    twin ×20: '#e8743b'
+    floor: '#9aa0a6'
+    'floor −': '#9aa0a6'
+clock: { data: scene, time: t, loop: true }
+datasets: { devices: devices.json, scene: scene.json, servo: samples_servo.json, eef: samples_eef.json }
+links:
+  - { from: servo.run_set, to: scene.run_set }
+  - { from: eef.run_set, to: scene.run_set }
+layout:
+  panels:
+    - text: "## Visual home · 6-DOF arm\n**Scale: 6-DOF arm · SIM STAND-IN: no real UR5e run exists.** 'Real' is the same MuJoCo UR5e with four declared perturbations and sensor noise, run twice for its floor. Chosen to exercise the page, not measured. Green = twin within 1.5× the device's own run-to-run floor. The 3D draws the twin as a ghost with its error ×20."
+      w: 12
+    - { view: Twinned, w: 3, h: 3 }
+    - view: 'Calibrated?'
+      w: 9
+      h: 3
+      title: "Calibrated? Each device's share of its fidelity gate (≤ 1 passes)"
+    - { view: Playback, w: 12 }
+    - { view: '3D · real (solid) vs twin (ghost, error ×20)', w: 12, h: 5 }
+    - { view: 'Joint gap · twin − real, every servo', w: 8, h: 3 }
+    - { view: 'Tool gap · twin − real', w: 4, h: 3 }
+views:
+  - type: gauge
+    name: Twinned
+    from: devices
+    gauge:
+      value: { property: twinned, summary: Sum }
+      min: 0
+      max: 7
+      target: 7
+      shape: arc
+      better: higher
+      label: 'Devices twinned (≤ 1.5× their floor)'
+      bands:
+        - { to: 3.5, tone: bad }
+        - { to: 6.5, tone: warn }
+        - { tone: good }
+  - type: kpi
+    name: 'Calibrated?'
+    from: devices
+    groupBy: { property: device }
+    kpi:
+      value: { property: gate_used }
+      compare: { against: gate_limit, better: lower }
+  - type: playback
+    name: Playback
+    playback: { speeds: [0.25, 0.5, 1, 2], range: true, readout: true }
+  - type: scene3d
+    name: '3D · real (solid) vs twin (ghost, error ×20)'
+    from: scene
+    scene3d:
+      x: px
+      'y': py
+      z: pz
+      series: situation
+      target: twin ×20
+      t: t
+      skeleton:
+        - [base_x, base_y, base_z]
+        - [shoulder_link_x, shoulder_link_y, shoulder_link_z]
+        - [upper_arm_link_x, upper_arm_link_y, upper_arm_link_z]
+        - [forearm_link_x, forearm_link_y, forearm_link_z]
+        - [wrist_1_link_x, wrist_1_link_y, wrist_1_link_z]
+        - [wrist_2_link_x, wrist_2_link_y, wrist_2_link_z]
+        - [wrist_3_link_x, wrist_3_link_y, wrist_3_link_z]
+        - [px, py, pz]
+      robot:
+        model: '../../vendor/data-ui/gallery/pid-tuning/media/ur5e_links.glb'
+        links: [base, shoulder_link, upper_arm_link, forearm_link, wrist_1_link, wrist_2_link, wrist_3_link]
+        ghost: twin ×20
+  - type: timeseries
+    name: 'Joint gap · twin − real, every servo'
+    from: servo
+    timeseries: { x: t, 'y': gap_mrad, series: device, unit: mrad, legend: top }
+    filters: 'situation == "twin" && run_set == "UR5e · coordinated tape (stand-in)"'
+  - type: timeseries
+    name: 'Tool gap · twin − real'
+    from: eef
+    timeseries: { x: t, 'y': gap_mm, series: situation, unit: mm, legend: top }
+    filters: 'situation == "twin" || situation == "floor"'

@@ -1,0 +1,120 @@
+# sim2real · proposal 4-run-inspector · scale arm: Time: pick a run from the tree, every channel real vs twin on one clock
+# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# SIM STAND-IN: no real run exists at this scale.
+data: runs.json
+properties:
+  device: { displayName: Device }
+  type: { displayName: Type }
+  verdict: { displayName: Verdict }
+  ratio: { displayName: 'Twin ÷ floor' }
+  gate_used: { displayName: Gate used }
+  gate_limit: { displayName: limit }
+  sim_vs_real: { displayName: Sim vs real }
+  floor: { displayName: Floor }
+  real_vs_target: { displayName: Real vs target }
+  torque_ratio: { displayName: 'Torque ÷ floor' }
+  situation: { displayName: Situation }
+  q_deg: { displayName: Angle }
+  gap_mrad: { displayName: 'Twin − real' }
+  tau_nm: { displayName: Torque }
+  gate_title: { displayName: Gate }
+  status: { displayName: Status }
+  allocation_mm: { displayName: Allocation }
+  sim_vs_real_mm: { displayName: Sim vs real (tool mm) }
+  real_vs_target_mm: { displayName: Real vs target (tool mm) }
+  used: { displayName: Used }
+  label: { displayName: Node }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    target: '#8b9099'
+    real: '#2a78d6'
+    twin: '#e8743b'
+    real B: '#8fb8ea'
+    twin ×20: '#e8743b'
+    floor: '#9aa0a6'
+    'floor −': '#9aa0a6'
+clock: { data: servo, time: t }
+datasets:
+  runs: runs.json
+  servo:
+    data: samples_servo.json
+    facets: [{ property: device, as: select, label: Servo }]
+    filters: 'device == "J3 elbow"'
+  eef: samples_eef.json
+  scene: scene.json
+links:
+  - { from: servo.run, to: runs.run }
+  - { from: eef.run, to: runs.run }
+  - { from: scene.run_set, to: runs.run_set }
+layout:
+  panels:
+    - text: "## Run inspector · 6-DOF arm\n**Scale: 6-DOF arm · SIM STAND-IN: no real UR5e run exists.** 'Real' is the same MuJoCo UR5e with four declared perturbations and sensor noise, run twice for its floor. Chosen to exercise the page, not measured. The tree lists every run; click one (it starts on the first) and every card below plays it on one clock."
+      w: 12
+    - { view: Runs, w: 6, h: 4, title: Runs }
+    - { view: '3D', w: 6, h: 4 }
+    - { view: Playback, w: 12 }
+    - { view: Angle · real vs twin, w: 6, h: 3 }
+    - { view: 'Twin − real', w: 6, h: 3 }
+    - { view: Torque · real vs twin, w: 6, h: 3 }
+    - { view: Tool · error vs target, w: 6, h: 3 }
+views:
+  - type: table
+    name: Runs
+    from: runs
+    select: run
+    tree: { parent: parent }
+    order: [label, kind, duration_s, twin, situations, basis]
+  - type: scene3d
+    name: '3D'
+    from: scene
+    scene3d:
+      x: px
+      'y': py
+      z: pz
+      series: situation
+      target: twin ×20
+      t: t
+      skeleton:
+        - [base_x, base_y, base_z]
+        - [shoulder_link_x, shoulder_link_y, shoulder_link_z]
+        - [upper_arm_link_x, upper_arm_link_y, upper_arm_link_z]
+        - [forearm_link_x, forearm_link_y, forearm_link_z]
+        - [wrist_1_link_x, wrist_1_link_y, wrist_1_link_z]
+        - [wrist_2_link_x, wrist_2_link_y, wrist_2_link_z]
+        - [wrist_3_link_x, wrist_3_link_y, wrist_3_link_z]
+        - [px, py, pz]
+      robot:
+        model: '../../vendor/data-ui/gallery/pid-tuning/media/ur5e_links.glb'
+        links: [base, shoulder_link, upper_arm_link, forearm_link, wrist_1_link, wrist_2_link, wrist_3_link]
+        ghost: twin ×20
+  - type: playback
+    name: Playback
+    playback: { speeds: [0.25, 0.5, 1, 2], range: true, readout: true }
+  - type: timeseries
+    name: Angle · real vs twin
+    from: servo
+    timeseries: { x: t, 'y': q_deg, series: situation, unit: '°', legend: top, dash: [target] }
+    filters: 'situation != "floor" && situation != "floor −"'
+  - type: timeseries
+    name: 'Twin − real'
+    from: servo
+    timeseries: { x: t, 'y': gap_mrad, series: situation, unit: mrad, legend: top, dash: [floor, 'floor −'] }
+    filters: 'situation == "twin" || situation == "floor" || situation == "floor −"'
+  - type: timeseries
+    name: Torque · real vs twin
+    from: servo
+    timeseries: { x: t, 'y': tau_nm, series: situation, unit: N·m, legend: top }
+    filters: 'situation == "real" || situation == "twin" || situation == "real B"'
+  - type: timeseries
+    name: Tool · error vs target
+    from: eef
+    timeseries:
+      x: t
+      'y': err_mm
+      series: situation
+      unit: mm
+      legend: top
+      rules: [{ 'y': 5.0, label: '5 mm' }]
+    filters: 'situation != "floor"'

@@ -1,0 +1,49 @@
+/* The host page around one <data-dashboard>: a thin header and the review switcher. Everything else is data-ui. */
+/* WHY every variable is --s2r-*: data-ui falls back to shadcn names (--muted, --accent, --border), so a host --muted repainted its table headers */
+:root {
+  --s2r-page: #f6f6f7; --s2r-ink: #18181b; --s2r-muted: #71717a; --s2r-line: #e4e4e7; --s2r-panel: #ffffff;
+  --s2r-stand-in: #b3261e; --s2r-stand-in-bg: #fdecea; --s2r-real: #1f6f3a; --s2r-real-bg: #e7f4ec; --s2r-accent: #2a78d6;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --s2r-page: #0c0c0e; --s2r-ink: #ececef; --s2r-muted: #9a9aa3; --s2r-line: #2c2c31; --s2r-panel: #151518;
+    --s2r-stand-in: #ff8a80; --s2r-stand-in-bg: #3a1513; --s2r-real: #7fd49b; --s2r-real-bg: #12291a; --s2r-accent: #6aa5ec;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --s2r-page: #0c0c0e; --s2r-ink: #ececef; --s2r-muted: #9a9aa3; --s2r-line: #2c2c31; --s2r-panel: #151518;
+  --s2r-stand-in: #ff8a80; --s2r-stand-in-bg: #3a1513; --s2r-real: #7fd49b; --s2r-real-bg: #12291a; --s2r-accent: #6aa5ec;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--s2r-page); color: var(--s2r-ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--s2r-line); background: var(--s2r-panel); position: sticky; top: 0; z-index: 5; }
+.mark { font: 700 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -0.02em; background: var(--s2r-ink); color: var(--s2r-panel); border-radius: 6px; padding: 6px 7px; }
+.what { min-width: 0; flex: 1; }
+.line1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 15px; }
+.line2 { color: var(--s2r-muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.chip[data-basis="real"] { color: var(--s2r-real); background: var(--s2r-real-bg); }
+.chip[data-basis="stand-in"] { color: var(--s2r-stand-in); background: var(--s2r-stand-in-bg); }
+.src { color: var(--s2r-muted); font-size: 12px; text-decoration: none; border: 1px solid var(--s2r-line); border-radius: 6px; padding: 3px 8px; }
+.src:hover { color: var(--s2r-ink); }
+main { padding: 12px 16px 96px; }
+data-dashboard { display: block; }
+.switcher { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--s2r-panel); border: 1px solid var(--s2r-line); border-radius: 12px; padding: 8px 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+  max-width: calc(100vw - 32px); font-size: 12.5px; }
+.switcher .tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--s2r-muted); }
+.switcher label { display: flex; align-items: center; gap: 6px; }
+.switcher label span { color: var(--s2r-muted); }
+.switcher select { font: inherit; color: var(--s2r-ink); background: var(--s2r-page); border: 1px solid var(--s2r-line); border-radius: 7px; padding: 4px 6px; max-width: 46vw; }
+@media (max-width: 640px) {
+  .bar { padding: 8px 16px; }
+  .line2 { white-space: normal; }
+  main { padding: 10px 16px 132px; }
+  .switcher { left: 16px; right: 16px; bottom: 12px; justify-content: space-between; }
+  .switcher .tag { display: none; }
+  .switcher label { flex: 1; min-width: 0; }
+  .switcher select { width: 100%; max-width: none; }
+}

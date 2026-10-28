@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim2real · dashboard proposals</title>
+<meta name="description" content="Five orthogonal sim2real dashboard proposals at three scales (1-DOF rack on real data; 6-DOF arm and full sensor suite as sim stand-ins), every page a data-ui .base dashboard.">
+<link rel="stylesheet" href="../vendor/data-ui/dist/data-ui.css">
+<link rel="stylesheet" href="host.css">
+</head>
+<body>
+<header class="bar">
+  <span class="mark" aria-hidden="true">s2r</span>
+  <div class="what">
+    <div class="line1"><b id="proposal-title">sim2real</b> <span id="scale-chip" class="chip"></span></div>
+    <div class="line2" id="proposal-axis"></div>
+  </div>
+  <a class="src" id="base-link" href="#" target="_blank" rel="noopener">.base</a>
+</header>
+<main id="page"></main>
+<!-- WHY a floating picker, bottom-right: Zach reviews variants live without editing URLs (memory: prototype switch in
+     app). Temporary: it goes once a proposal is picked. -->
+<aside class="switcher" id="switcher" aria-label="Proposal and scale (temporary review switcher)">
+  <span class="tag">review</span>
+  <label><span>Proposal</span><select id="pick-proposal"></select></label>
+  <label><span>Scale</span><select id="pick-scale"></select></label>
+</aside>
+<script type="module" src="host.js"></script>
+</body>
+</html>

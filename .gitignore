@@ -4,3 +4,11 @@ __pycache__/
 *.pyc
 .venv/
 dist/
+# Regenerable (python3 dashboards/build.py; vendor/VENDOR.md names the data-ui commit): source + .base files are committed, data is not
+vendor/data-ui/*
+!vendor/data-ui/VENDOR.md
+dashboards/*/*.json
+!dashboards/proposals.json
+dashboards/*/media/
+dashboards/source/*.json
+dashboards/source/media/

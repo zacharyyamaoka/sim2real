@@ -1,0 +1,79 @@
+# sim2real · proposal 5-error-budget · scale suite: Consequence: the tool's error at the top, split into what each joint and sensor costs
+# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# SIM STAND-IN: no real run exists at this scale.
+data: budget.json
+properties:
+  device: { displayName: Device }
+  type: { displayName: Type }
+  verdict: { displayName: Verdict }
+  ratio: { displayName: 'Twin ÷ floor' }
+  gate_used: { displayName: Gate used }
+  gate_limit: { displayName: limit }
+  sim_vs_real: { displayName: Sim vs real }
+  floor: { displayName: Floor }
+  real_vs_target: { displayName: Real vs target }
+  torque_ratio: { displayName: 'Torque ÷ floor' }
+  situation: { displayName: Situation }
+  q_deg: { displayName: Angle }
+  gap_mrad: { displayName: 'Twin − real' }
+  tau_nm: { displayName: Torque }
+  gate_title: { displayName: Gate }
+  status: { displayName: Status }
+  allocation_mm: { displayName: Allocation }
+  sim_vs_real_mm: { displayName: Sim vs real (tool mm) }
+  real_vs_target_mm: { displayName: Real vs target (tool mm) }
+  used: { displayName: Used }
+  label: { displayName: Node }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    target: '#8b9099'
+    real: '#2a78d6'
+    twin: '#e8743b'
+    real B: '#8fb8ea'
+    twin ×20: '#e8743b'
+    floor: '#9aa0a6'
+    'floor −': '#9aa0a6'
+datasets: { budget: budget.json, devices: devices.json, encoder_vs_true: encoder_vs_true.json }
+layout:
+  panels:
+    - text: "## Error budget · Full sensor suite\n**Scale: full sensor suite · SIM STAND-IN: no real sensor suite exists.** UR5e + scene camera + wrist camera + wrist IMU + wrist F/T in MuJoCo; 'real' = the perturbed model (frames say SYNTHETIC REAL). Two errors per node (Zach, 2026-07-31): sim vs real, and real vs target. Allocations are acceptance.py's agent defaults (\"Zach to confirm\")."
+      w: 12
+    - { view: Top of the budget, w: 4, h: 2 }
+    - { view: 'Share used, every node', w: 8, h: 4 }
+    - { view: Budget tree, w: 12, h: 5 }
+    - { view: Encoder sees vs tool sees, w: 12, h: 3 }
+views:
+  - type: kpi
+    name: Top of the budget
+    from: budget
+    filters: 'id == "grasp"'
+    kpi:
+      label: Tool vs object at a grasp · sim vs real
+      value: { property: sim_vs_real_mm }
+      compare: { against: allocation_mm, better: lower }
+  - type: bullet
+    name: 'Share used, every node'
+    from: budget
+    filters: 'kind != "note" && kind != "residual"'
+    sort:
+      - { property: order, direction: ASC }
+    bullet: { value: { property: used }, target: 1, max: 4, label: label, better: lower, bands: [1, 2, 4] }
+  - type: table
+    name: Budget tree
+    from: budget
+    tree: { parent: parent }
+    sort:
+      - { property: order, direction: ASC }
+    order: [label, allocation_mm, sim_vs_real_mm, used, verdict, encoder_mrad, true_mrad, basis, note]
+  - type: chart
+    name: Encoder sees vs tool sees
+    from: encoder_vs_true
+    chart:
+      mark: bar
+      encoding:
+        'y': { field: joint, title: null, sort: null }
+        x: { field: mrad, title: 'twin − real, RMS (mrad)' }
+        color: { field: what, title: null }
+        yOffset: { field: what }

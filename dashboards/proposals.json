@@ -1,0 +1,64 @@
+{
+ "built": "2026-10-28T02:53:04Z",
+ "default": {
+  "proposal": "1-visual-home",
+  "scale": "rack"
+ },
+ "proposals": [
+  {
+   "id": "1-visual-home",
+   "title": "Visual home",
+   "axis": "Space: the robot in 3D and its cameras, every view sim vs real, a badge per device",
+   "question": "Is it calibrated? (one glance)"
+  },
+  {
+   "id": "2-type-catalog",
+   "title": "Type catalog",
+   "axis": "Device type: one standard block per sensor/actuator type; a robot is a list of typed devices",
+   "question": "How good is this kind of device?"
+  },
+  {
+   "id": "3-gate-matrix",
+   "title": "Gate matrix",
+   "axis": "Acceptance: devices x gates, each cell a pass/fail you can open",
+   "question": "Which gates block us?"
+  },
+  {
+   "id": "4-run-inspector",
+   "title": "Run inspector",
+   "axis": "Time: pick a run from the tree, every channel real vs twin on one clock",
+   "question": "What happened in this run?"
+  },
+  {
+   "id": "5-error-budget",
+   "title": "Error budget",
+   "axis": "Consequence: the tool's error at the top, split into what each joint and sensor costs",
+   "question": "Where does the tool error come from?"
+  }
+ ],
+ "scales": [
+  {
+   "id": "rack",
+   "title": "1-DOF · the rack's 8 motors",
+   "short": "1-DOF rack",
+   "basis": "real"
+  },
+  {
+   "id": "arm",
+   "title": "6-DOF · UR5e arm",
+   "short": "6-DOF arm",
+   "basis": "stand-in"
+  },
+  {
+   "id": "suite",
+   "title": "6-DOF + cameras, IMU, F/T",
+   "short": "Full sensor suite",
+   "basis": "stand-in"
+  }
+ ],
+ "first_run": {
+  "rack": "CAN 14 · s01 · 10-24",
+  "arm": "UR5e · coordinated tape (stand-in)",
+  "suite": "UR5e · coordinated tape (stand-in)"
+ }
+}

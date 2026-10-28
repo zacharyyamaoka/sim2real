@@ -1,0 +1,112 @@
+# sim2real · proposal 2-type-catalog · scale arm: Device type: one standard block per sensor/actuator type; a robot is a list of typed devices
+# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# SIM STAND-IN: no real run exists at this scale.
+data: devices.json
+properties:
+  device: { displayName: Device }
+  type: { displayName: Type }
+  verdict: { displayName: Verdict }
+  ratio: { displayName: 'Twin ÷ floor' }
+  gate_used: { displayName: Gate used }
+  gate_limit: { displayName: limit }
+  sim_vs_real: { displayName: Sim vs real }
+  floor: { displayName: Floor }
+  real_vs_target: { displayName: Real vs target }
+  torque_ratio: { displayName: 'Torque ÷ floor' }
+  situation: { displayName: Situation }
+  q_deg: { displayName: Angle }
+  gap_mrad: { displayName: 'Twin − real' }
+  tau_nm: { displayName: Torque }
+  gate_title: { displayName: Gate }
+  status: { displayName: Status }
+  allocation_mm: { displayName: Allocation }
+  sim_vs_real_mm: { displayName: Sim vs real (tool mm) }
+  real_vs_target_mm: { displayName: Real vs target (tool mm) }
+  used: { displayName: Used }
+  label: { displayName: Node }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    target: '#8b9099'
+    real: '#2a78d6'
+    twin: '#e8743b'
+    real B: '#8fb8ea'
+    twin ×20: '#e8743b'
+    floor: '#9aa0a6'
+    'floor −': '#9aa0a6'
+clock: { data: servo, time: t, loop: true }
+datasets:
+  devices: devices.json
+  servo:
+    data: samples_servo.json
+    facets: [{ property: device, as: select, label: Servo }]
+    filters: 'device == "J3 elbow"'
+  eef: samples_eef.json
+links: []
+layout:
+  panels:
+    - text: "## Type catalog · 6-DOF arm\n**Scale: 6-DOF arm · SIM STAND-IN: no real UR5e run exists.** 'Real' is the same MuJoCo UR5e with four declared perturbations and sensor noise, run twice for its floor. Chosen to exercise the page, not measured. Each type below is the same standard block at every scale; pick the device in the rail."
+      w: 12
+    - view: 'Robot = typed devices'
+      w: 12
+      h: 3
+      title: 'Composition: the robot as a list of typed devices'
+    - text: "### Servo · standard block\nRuler: joint angle RMS, twin vs real, ÷ the device's own run-to-run floor (≤ 1.5×); torque within 2×; stop error p90 against its share of the 5 mm tool gate."
+      w: 12
+    - { view: Servo · each device, w: 12 }
+    - { view: 'Servo · angle, real vs twin', w: 6, h: 3 }
+    - { view: "Servo · twin − real (lines: ± the device's floor)", w: 6, h: 3 }
+    - { view: 'Servo · torque, real vs twin', w: 12, h: 3 }
+    - text: "### End effector · standard block\nDerived one level up from every joint. Ruler: tool position RMS, twin vs real, ÷ floor (≤ 1.5×); tool at a stop within 5 mm (Zach, 2024)."
+      w: 12
+    - { view: End effector · each device, w: 4, h: 2 }
+    - { view: Tool path · real vs twin (XZ), w: 8, h: 4 }
+    - { view: 'Tool · twin − real', w: 4, h: 2 }
+views:
+  - type: table
+    name: 'Robot = typed devices'
+    from: devices
+    groupBy: { property: type_title }
+    order: [device, verdict, gate_used, ratio, sim_vs_real, floor, real_vs_target, metric, basis]
+  - type: kpi
+    name: Servo · each device
+    from: devices
+    groupBy: { property: device }
+    kpi:
+      value: { property: gate_used }
+      compare: { against: gate_limit, better: lower }
+    filters: 'type == "servo"'
+  - type: timeseries
+    name: 'Servo · angle, real vs twin'
+    from: servo
+    timeseries: { x: t, 'y': q_deg, series: situation, unit: '°', legend: top, dash: [target] }
+    filters: 'situation != "floor" && situation != "floor −"'
+  - type: timeseries
+    name: "Servo · twin − real (lines: ± the device's floor)"
+    from: servo
+    timeseries: { x: t, 'y': gap_mrad, series: situation, unit: mrad, legend: top, dash: [floor, 'floor −'] }
+    filters: '(situation == "twin" || situation == "floor" || situation == "floor −")'
+  - type: timeseries
+    name: 'Servo · torque, real vs twin'
+    from: servo
+    timeseries: { x: t, 'y': tau_nm, series: situation, unit: N·m, legend: top }
+    filters: '(situation == "real" || situation == "twin")'
+  - type: kpi
+    name: End effector · each device
+    from: devices
+    groupBy: { property: device }
+    kpi:
+      value: { property: gate_used }
+      compare: { against: gate_limit, better: lower }
+    filters: 'type == "eef"'
+  - type: trajectory
+    name: Tool path · real vs twin (XZ)
+    from: eef
+    filters: 'situation != "floor"'
+    trajectory: { x: x_mm, 'y': z_mm, series: situation, target: target, t: t, trail: true }
+  - type: timeseries
+    name: 'Tool · twin − real'
+    from: eef
+    timeseries: { x: t, 'y': gap_mm, series: situation, unit: mm, legend: top }
+    filters: 'situation == "twin" || situation == "floor"'
