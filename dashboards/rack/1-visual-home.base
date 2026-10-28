@@ -1,5 +1,5 @@
 # sim2real · proposal 1-visual-home · scale rack: Space: the robot in 3D and its cameras, every view sim vs real, a badge per device
-# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# Built by dashboards/build.py (2026-10-28); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
 # REAL rack data.
 data: devices.json
 properties:
@@ -40,7 +40,7 @@ datasets: { devices: devices.json, scene: scene.json, servo: samples_servo.json,
 links: [{ from: servo.run_set, to: scene.run_set }]
 layout:
   panels:
-    - text: "## Visual home · 1-DOF rack\n**Scale: 1-DOF · One Dof Test Rack · REAL data.** 8 motors, real held-out runs (Oct 23-25) against each station's twin (bam_rack_twin, replayed; RMS reproduced exactly). One real camera (CAN 14's RealSense); no sim render of the rack exists, so no camera can be wiped yet. Green = twin within 1.5× the device's own run-to-run floor. The 3D draws the twin as a ghost with its error ×20."
+    - text: "## Visual home · 1-DOF rack\n**Scale: 1-DOF · One Dof Test Rack · REAL data.** 8 motors, real held-out runs (Oct 23-25) against each station's twin (bam_rack_twin, replayed; RMS reproduced exactly). One real camera (CAN 14's RealSense); no sim render of the rack exists, so no camera can be wiped yet. Green = twin within 1.5× the device's own run-to-run floor. The 3D draws the twin as a ghost with its error ×20. Click a device's badge to open its type's standard block (Type catalog) with that device selected."
       w: 12
     - { view: Twinned, w: 3, h: 3 }
     - view: 'Calibrated?'

@@ -1,5 +1,5 @@
 {
- "built": "2026-10-28T02:53:04Z",
+ "built": "2026-10-28T16:24:19Z",
  "default": {
   "proposal": "1-visual-home",
   "scale": "rack"
@@ -60,5 +60,71 @@
   "rack": "CAN 14 · s01 · 10-24",
   "arm": "UR5e · coordinated tape (stand-in)",
   "suite": "UR5e · coordinated tape (stand-in)"
+ },
+ "click_through": {
+  "rack": {
+   "devices": {
+    "CAN 14": "servo",
+    "CAN 15": "servo",
+    "CAN 1": "servo",
+    "CAN 4": "servo",
+    "CAN 21": "servo",
+    "CAN 11": "servo",
+    "CAN 12": "servo",
+    "CAN 13": "servo",
+    "RealSense 218622274411": "camera"
+   },
+   "rails": [
+    "servo"
+   ],
+   "blocks": {
+    "servo": "Servo · standard block",
+    "camera": "Camera · standard block"
+   }
+  },
+  "arm": {
+   "devices": {
+    "J1 shoulder pan": "servo",
+    "J2 shoulder lift": "servo",
+    "J3 elbow": "servo",
+    "J4 wrist 1": "servo",
+    "J5 wrist 2": "servo",
+    "J6 wrist 3": "servo",
+    "Tool (EEF)": "eef"
+   },
+   "rails": [
+    "servo"
+   ],
+   "blocks": {
+    "servo": "Servo · standard block",
+    "eef": "End effector · standard block"
+   }
+  },
+  "suite": {
+   "devices": {
+    "J1 shoulder pan": "servo",
+    "J2 shoulder lift": "servo",
+    "J3 elbow": "servo",
+    "J4 wrist 1": "servo",
+    "J5 wrist 2": "servo",
+    "J6 wrist 3": "servo",
+    "Tool (EEF)": "eef",
+    "Scene camera": "camera",
+    "Wrist camera": "camera",
+    "Wrist IMU": "imu",
+    "Wrist F/T": "ft"
+   },
+   "rails": [
+    "servo",
+    "camera"
+   ],
+   "blocks": {
+    "servo": "Servo · standard block",
+    "eef": "End effector · standard block",
+    "camera": "Camera · standard block",
+    "imu": "IMU · standard block",
+    "ft": "F/T · standard block"
+   }
+  }
  }
 }

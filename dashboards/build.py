@@ -54,6 +54,7 @@ ERROR_SCALE = 20  # the 3D card draws the twin's error against the real device t
 DISPLAY_EVERY = 2  # rack runs are logged at 91-95 Hz; every 2nd row (~47 Hz) is plenty for a time series card
 PALETTE = {"target": "#8b9099", "real": "#2a78d6", "twin": "#e8743b", "real B": "#8fb8ea", f"twin ×{ERROR_SCALE}": "#e8743b",
            "floor": "#9aa0a6", "floor −": "#9aa0a6"}
+RAIL_TYPES = ("servo", "camera")  # the types whose Type catalog block has a device picker in the rail (dataset_entries)
 TONES = {"pass": "good", "fail": "bad", "partial": "warn", "not_run": "muted"}
 
 # acceptance.py's K2 allocation (agent default, "Zach to confirm"): shoulder 2 mm at 0.55 m, elbow 2 mm at 0.3 m, wrist
@@ -771,7 +772,7 @@ def dataset_entries(scale: str, ctx: dict, *, run_rail: bool, device_rails: bool
         if run_rail and scale == "rack" and type_ == "servo":
             facets.append({"property": "run_set", "as": "select", "label": "Runs"})
             filters.append(f'run_set == "{defaults["run_set"]}"')
-        if device_rails and type_ in ("servo", "camera"):
+        if device_rails and type_ in RAIL_TYPES:
             facets.append({"property": "device", "as": "select", "label": ctx["type_titles"][type_]})
             filters.append(f'device == "{defaults[type_]}"')
         if facets:
@@ -795,7 +796,8 @@ def page_visual_home(scale: str, ctx: dict, proposal: dict) -> dict:
     if "eef" in ctx["types"]:
         datasets["eef"] = "samples_eef.json"
         links.append({"from": "eef.run_set", "to": "scene.run_set"})
-    panels = [banner(scale, proposal, "Green = twin within 1.5× the device's own run-to-run floor. The 3D draws the twin as a ghost with its error ×20.")]
+    panels = [banner(scale, proposal, "Green = twin within 1.5× the device's own run-to-run floor. The 3D draws the twin as a ghost with its error ×20. "
+                                       "Click a device's badge to open its type's standard block (Type catalog) with that device selected.")]
     panels += [{"view": "Twinned", "w": 3, "h": 3},
                {"view": "Calibrated?", "w": 9, "h": 3, "title": "Calibrated? Each device's share of its fidelity gate (≤ 1 passes)"},
                {"view": "Playback", "w": 12}]
@@ -1102,7 +1104,13 @@ def write_scale(scale: str, data: dict) -> dict:
         (folder / f"{proposal['id']}.base").write_text(text, encoding="utf-8")
         pages.append(f"{scale}/{proposal['id']}.base")
     first_run = next((row["run"] for row in data["runs"] if row.get("run")), None)
-    return {"counts": counts, "pages": pages, "first_run": first_run,
+    # WHY the host reads this and not the .base: the badge click (Visual home -> Type catalog) is wired in host.js, which
+    # needs each device's type, which types have a device rail on the Type catalog (a rail is the page's own selection,
+    # `?<type>.device=`), and the heading of each type's block (what it scrolls to)
+    click_through = {"devices": {d["device"]: d["type"] for d in data["devices"]},
+                     "rails": [type_ for type_ in types if type_ in RAIL_TYPES],
+                     "blocks": {type_: f"{titles[type_]} · standard block" for type_ in types + (["camera"] if scale == "rack" else [])}}
+    return {"counts": counts, "pages": pages, "first_run": first_run, "click_through": click_through,
             "verdicts": {d["device"]: d["verdict"] for d in data["devices"]}}
 
 
@@ -1111,7 +1119,8 @@ def main() -> int:
              "suite": write_scale("suite", arm_scale(with_suite=True))}
     manifest = {"built": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "default": {"proposal": "1-visual-home", "scale": "rack"},
                 "proposals": PROPOSALS, "scales": [{"id": key, **{k: v for k, v in value.items() if k != "banner"}} for key, value in SCALES.items()],
-                "first_run": {scale: info["first_run"] for scale, info in built.items()}}
+                "first_run": {scale: info["first_run"] for scale, info in built.items()},
+                "click_through": {scale: info["click_through"] for scale, info in built.items()}}
     (HERE / "proposals.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     for scale, info in built.items():
         print(scale, info["counts"])

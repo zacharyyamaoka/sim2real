@@ -1,5 +1,5 @@
 # sim2real · proposal 5-error-budget · scale suite: Consequence: the tool's error at the top, split into what each joint and sensor costs
-# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# Built by dashboards/build.py (2026-10-28); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
 # SIM STAND-IN: no real run exists at this scale.
 data: budget.json
 properties:

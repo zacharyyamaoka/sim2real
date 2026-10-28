@@ -1,5 +1,5 @@
 # sim2real · proposal 1-visual-home · scale suite: Space: the robot in 3D and its cameras, every view sim vs real, a badge per device
-# Built by dashboards/build.py (2026-10-27); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# Built by dashboards/build.py (2026-10-28); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
 # SIM STAND-IN: no real run exists at this scale.
 data: devices.json
 properties:
@@ -48,7 +48,7 @@ links:
   - { from: eef.run_set, to: scene.run_set }
 layout:
   panels:
-    - text: "## Visual home · Full sensor suite\n**Scale: full sensor suite · SIM STAND-IN: no real sensor suite exists.** UR5e + scene camera + wrist camera + wrist IMU + wrist F/T in MuJoCo; 'real' = the perturbed model (frames say SYNTHETIC REAL). Green = twin within 1.5× the device's own run-to-run floor. The 3D draws the twin as a ghost with its error ×20."
+    - text: "## Visual home · Full sensor suite\n**Scale: full sensor suite · SIM STAND-IN: no real sensor suite exists.** UR5e + scene camera + wrist camera + wrist IMU + wrist F/T in MuJoCo; 'real' = the perturbed model (frames say SYNTHETIC REAL). Green = twin within 1.5× the device's own run-to-run floor. The 3D draws the twin as a ghost with its error ×20. Click a device's badge to open its type's standard block (Type catalog) with that device selected."
       w: 12
     - { view: Twinned, w: 3, h: 3 }
     - view: 'Calibrated?'
