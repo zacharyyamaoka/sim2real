@@ -32,6 +32,11 @@ Build the data (about 20 s; the twin replays are optional and take about 1.5 min
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/build_app.py
     python3 -I /home/bam/sim2real/tools/build_pages.py
     uv run --no-project --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/app/tests/test_trajectory_contract.py --data --robotdx
+
+The run tables (`runs.json`, `devices.json`, and per run `samples`, `poses`, `diff_samples`, `diff_poses`) are data-ui's
+robotics contract v1 tables (`vendor/data-ui/gallery/robotics/CONTRACT.md`, CONTRACT §32), checked against its 13 schemas
+as they are written. `tools/trajectory.py` computes difference(a, b) and reproduces data-ui's fixture exactly.
 
 ## Layout
 

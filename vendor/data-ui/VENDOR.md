@@ -2,17 +2,21 @@
 
 A built copy of data-ui, never edited here. Re-vendor it from data-ui; do not patch it in place.
 
-- **Source:** `/home/bam/data-ui` `integrate/packet` @ `dd53748` (2026-10-29, "merge lane/p0-blockers @ 7996720"): main 56e08be +
-  lane/dashboard-cards + lane/legend-toggle + lane/live + PEP 0010 P0 (#1 the clock spans the filtered rows, #9 two-clause rail
-  filter, #13 src after load, #14 each rail's own radio group, the table's last row). **A trial: not merged to data-ui main**
-  (main is still 56e08be on 2026-10-29). Before it: `lane/dashboard-cards` @ `dbe1bd7`.
+- **Source:** `/home/bam/data-ui` `integrate/packet` @ `6f4a72e` (2026-10-29, "merge lane/p1a-contract @ ece6a76": PEP 0010
+  P1a, the robotics contract barrier, CONTRACT §32), on top of dd53748 (main 56e08be + lane/dashboard-cards + lane/legend-toggle +
+  lane/live + PEP 0010 P0). **A trial: not merged to data-ui main** (main is still 56e08be on 2026-10-29). Built green: `node
+  build.mjs`, 479 of 480 unit tests pass (`node --test tests/unit/*.test.mjs tools/facets.test.mjs`, 0 fail), and
+  `tools/test_robotics_fixture.py` 5/5. Before it: dd53748, before that `lane/dashboard-cards` @ `dbe1bd7`.
 - **How it was built:** `git -C /home/bam/data-ui archive dd53748 | tar -x -C <scratch>`, `node_modules` linked read-only from
-  `/home/bam/data-ui/.wt/packet/node_modules` (the same package-lock.json), `node build.mjs` in the scratch copy. Nothing in
+  `/home/bam/data-ui/.wt/p1a-contract/node_modules` (the same package-lock.json), `node build.mjs` in the scratch copy. Nothing in
   `/home/bam/data-ui` was written.
 - **`dist/`:** the build's `dist/` without `site/` and the `*.map` source maps (13 MB). `dist/manifest.json` still lists the maps'
   hashes; the pages never load them. `dist/LICENSES.md` names every bundled npm package and its licence.
 - **`gallery/sim-to-real/`:** from `gallery/examples/sim-to-real/` at the same sha: `samples.json`, `media.json` + `media/`,
   `motors.json`, README (CAN 14's 10-23 staircase and its real RealSense clip, read by `dashboards/build.py`).
+- **`gallery/robotics/`:** the producer-facing contract at the same sha: `CONTRACT.md`, the 13 `schemas/*.schema.json` +
+  `channels.json`, `fixture.py` and `fixtures/difference/` (seed 20261029). `tools/trajectory.py` validates every table the app
+  writes against these schemas and `app/tests/test_trajectory_contract.py` runs the fixture.
 - **`gallery/pid-tuning/media/ur5e_links.glb`:** from `gallery/examples/pid-tuning/media/` (Menagerie's UR5e meshes, BSD-3-Clause).
 
 To update: rebuild data-ui (or a newer branch), then replace `dist/` and `gallery/` wholesale and record the new commit here.

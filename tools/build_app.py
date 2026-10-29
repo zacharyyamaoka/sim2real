@@ -19,8 +19,12 @@ held-out run per station played by its "full" twin, dashboards/source/rack_repla
   <dep>/devices.json                     stations with their proven window (the 1-DOF workspace) and run counts
   <dep>/gates.json, diagnostics.json     the gates layer: the rack's gate matrix and every diagnostic row (PEP 0010 §10)
   <dep>/run_gates.json                   per-run diagnostic rows for every run (the gates layer's run verdicts)
-  <dep>/runs/<slug>/samples.json         t x situation rows: real, target and every model, display units (PEP 0010 §4)
-  <dep>/runs/<slug>/diff.json            difference(a, b) rows: each model against real, real against target
+  <dep>/runs/<slug>/samples.json         t x situation rows: real, target and every model, display units
+  <dep>/runs/<slug>/poses.json           the output link's orientation in the joint's own frame (explicit frame id)
+  <dep>/runs/<slug>/diff_samples.json    difference(a, b): each situation against the target, each model against real
+  <dep>/runs/<slug>/diff_poses.json      the same pairs on the output link's pose
+  (runs.json, devices.json and every per-run table above are data-ui robotics CONTRACT.md v1 tables, checked against its
+  schemas before they are written; tools/trajectory.py computes difference(a, b), pinned to data-ui's fixture)
   <dep>/runs/<slug>/diagnostics.json     that run's diagnostic rows
   <dep>/runs/<slug>/run.json             that run's one runs.json row (the run page's header)
 """
@@ -43,7 +47,10 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from robotdx.diagnostics import Limits, evaluate
-from robotdx.diagnostics.data import Trajectory, difference
+from robotdx.diagnostics.data import Trajectory
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import trajectory as traj  # noqa: E402  (sim2real's difference(a, b) and the robotics contract tables; pinned to data-ui's fixture)
 from robotdx.diagnostics.rows import result_row
 from robotdx.diagnostics.stock import BoxConfig, FaultCodesConfig, ModelErrorConfig, RateConfig, TrackingErrorConfig
 from robotdx.diagnostics.stock.health import Stamps
@@ -245,13 +252,14 @@ def deg(values, i):
     return None if values is None else num(math.degrees(values[i]) if math.isfinite(values[i]) else math.nan, 6)
 
 
-def sample_rows(situations: list[dict], device: str) -> list[dict]:
+def sample_rows(situations: list[dict], device: str, run_id: str) -> list[dict]:
+    """samples.json rows (contract §2/§3): t × situation for one device, display units, at most 100 Hz by picking rows."""
     rows = []
     for s in situations:
         t = s["t"]
         qdd = accel(t, s["qd"]) if s.get("qd") is not None else None
         for i in picks(t):
-            row = {"t": num(t[i], 6), "situation": s["situation"], "source": s["source"], "device": device, "q_deg": deg(s["q"], i),
+            row = {"t": num(t[i], 6), "run": run_id, "situation": s["situation"], "source": s["source"], "device": device, "q_deg": deg(s["q"], i),
                    "qd_deg_s": deg(s["qd"], i) if s.get("qd") is not None else None, "qdd_deg_s2": deg(qdd, i) if qdd is not None else None}
             for key, column in (("tau", "tau_nm"), ("i_q", "i_q_a"), ("temp", "temp_c"), ("v", "v_bus_v")):
                 if s.get(key) is not None:
@@ -260,26 +268,63 @@ def sample_rows(situations: list[dict], device: str) -> list[dict]:
     return rows
 
 
-def diff_rows(situations: list[dict], device: str) -> list[dict]:
-    """difference(a, b) (PEP 0010 §4.4, robotdx.diagnostics.data.difference): b(t_i) - a(t_i) on a's own samples, never
-    extrapolated. Pairs: each model against real (a = model, b = real), and real against the target (a = real, b = target)."""
+def pairs_of(names_sources: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """The pairs a producer writes (contract §5): each situation against the target, and each sim situation against real."""
+    names = [n for n, _ in names_sources]
+    out = [(n, TARGET) for n, _ in names_sources if n != TARGET and TARGET in names]
+    out += [(n, REAL) for n, src in names_sources if src == "sim" and REAL in names]
+    return out
 
-    by = {s["situation"]: s for s in situations}
-    pairs = [(name, REAL) for name, s in by.items() if s["source"] == "sim"]
-    if TARGET in by:
-        pairs.append((REAL, TARGET))
-    rows = []
-    for a_name, b_name in pairs:
-        a, b = by[a_name], by[b_name]
-        good_a, good_b = np.isfinite(a["q"]), np.isfinite(b["q"])
-        if good_a.sum() < 2 or good_b.sum() < 2:
-            continue
-        t, e = difference((a["t"][good_a], a["q"][good_a]), (b["t"][good_b], b["q"][good_b]))
-        index = picks(t) if t.size else []
-        for i in index:
-            rows.append({"t": num(t[i], 6), "situation": a_name, "reference": b_name, "pair": f"{a_name} vs {b_name}",
-                         "source": a["source"], "device": device, "e_q_mrad": num(1e3 * e[i], 5)})
-    return rows
+
+def diff_tables(samples: list[dict], poses: list[dict]) -> tuple[list[dict], list[dict]]:
+    """diff_samples and diff_poses rows: trajectory.difference_*(a, b) for every pair, on the samples as written (the display
+    rows: the rack logs at ~94 Hz, under the 100 Hz cap, so they are its own samples)."""
+    by = defaultdict(list)
+    for row in samples:
+        by[row["situation"]].append(row)
+    pose_by = defaultdict(list)
+    for row in poses:
+        pose_by[row["situation"]].append(row)
+    situations = [(name, rows[0]["source"]) for name, rows in by.items()]
+    d_samples, d_poses = [], []
+    for a, b in pairs_of(situations):
+        d_samples += traj.difference_samples(by[a], by[b])
+        d_poses += traj.difference_poses(pose_by[a], pose_by[b])
+    return d_samples, d_poses
+
+
+def pose_rows(samples: list[dict], device: str) -> list[dict]:
+    """poses.json rows for the joint's output link: frame = the joint's own (origin on the axis, z along it, angle 0 at the
+    board's zero), so the position stays at the origin and the orientation is the angle about z. WHY no lever tip: the
+    rack's lever lengths are not measured (acceptance.py's class levers are agent defaults), and a pose is never guessed."""
+    frame = f"{device.replace(' ', '').lower()}_joint"
+    out = []
+    for row in samples:
+        q = row.get("q_deg")
+        half = None if q is None else math.radians(q) / 2.0
+        out.append({"t": row["t"], "run": row["run"], "situation": row["situation"], "source": row["source"], "body": "output_link",
+                    "frame": frame, "x_mm": 0.0, "y_mm": 0.0, "z_mm": 0.0,
+                    "quat_w": None if half is None else math.cos(half), "quat_x": None if half is None else 0.0,
+                    "quat_y": None if half is None else 0.0, "quat_z": None if half is None else math.sin(half)})
+    return out
+
+
+def write_contract(path: Path, name: str, rows: list[dict], title: str, source: str, hints: dict | None = None, **top) -> int:
+    """A contract table ({schema: {fields}, rows}) checked against data-ui's schema before it is written; a breach stops the build.
+    `hints` adds data-ui's display keys (display, colors, digits, note) to a field, and declares the app's own columns."""
+    hints = hints or {}
+    extra = [{"name": k, "type": v.get("type", "string"), **{kk: vv for kk, vv in v.items() if kk != "type"}} for k, v in hints.items()]
+    document = traj.contract_table(name, rows, title=title, source=source, extra_fields=extra, **top)
+    for field in document["schema"]["fields"]:
+        for k, v in hints.get(field["name"], {}).items():
+            if k not in ("type", "unit"):
+                field.setdefault(k, v)
+    problems = traj.validate(name, document)
+    if problems:
+        raise SystemExit(f"{path}: breaks the robotics contract: {problems[:5]}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
+    return len(rows)
 
 
 def coverage_rows(record: dict, run_id: str, device: str, kind: str, day: str, hz: float) -> list[dict]:
@@ -547,7 +592,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
     while total_seconds * hz > COVER_BUDGET * 0.93 and hz > 1:  # leave room for the w = 0 extremes
         hz /= 1.25
 
-    runs, coverage, run_gate_rows = [], [], []
+    runs, coverage, run_gate_rows, run_rows = [], [], [], []
     for path, loaded in found:
         meta, arrays = loaded["meta"], loaded["arrays"]
         device = f"CAN {meta['can_id']}"
@@ -594,6 +639,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
             "run": slug, "title": title, "started": started.isoformat(timespec="seconds"), "day": day, "session": session, "device": device,
             "kind": kind, "class": (replay or {}).get("class"), "duration_s": num(t[-1] - t[0], 4), "samples": int(t.size),
             "rate_hz": num(1.0 / float(np.median(np.diff(t))), 4) if t.size > 1 else None,
+            "display_hz": num(min(1.0 / float(np.median(np.diff(t))), MAX_DISPLAY_HZ) / max(1, math.ceil((1.0 / float(np.median(np.diff(t)))) / MAX_DISPLAY_HZ - 1e-9)), 4) if t.size > 1 else None,
             "kp": num((gains["kp"] or 0) * kp_scale, 4) if gains["kp"] is not None else None, "ki": gains["ki"],
             "kd": num((gains["kd"] or 0) * kd_scale, 4) if gains["kd"] is not None else None, "ilimit": num(il_eff, 4),
             "gains": (f"kp {num(gains['kp'], 4):g} · ki {num(gains['ki'], 4):g} · kd {num(gains['kd'], 4):g}" if None not in (gains["kp"], gains["ki"], gains["kd"]) else "unknown")
@@ -601,7 +647,8 @@ def build_deployment(entry: dict, replays: dict) -> dict:
                      + (f" (×{kp_scale:g} / ×{kd_scale:g})" if (kp_scale, kd_scale) != (1.0, 1.0) else ""),
             "situations": names, "models": len(models),
             "compare": f"real + {len(models)} model{'s' if len(models) != 1 else ''}" if models else ("real vs target" if TARGET in names else "real only"),
-            "page": url, "npz": str(path), "basis": "real", "round": (replay or {}).get("round"),
+            "page": url, "url": url, "npz": str(path), "basis": "real", "round": (replay or {}).get("round"),
+            "deployment": dep_id, "devices": [device], "label": title,
             "clock_offset_s": num(clock_offset, 6),
         }
         diagnostics = run_diagnostics(dep_id, slug, title, device, situations, arrays, floor)
@@ -617,18 +664,26 @@ def build_deployment(entry: dict, replays: dict) -> dict:
 
         run_dir = dep_dir / "runs" / slug
         src = f"{path} (bam_rack_twin.hardware)" + (f"; models: {replay['source_file']}" if replay else "")
-        write(run_dir / "samples.json", f"Samples · {title}", src, SAMPLE_PROPS, sample_rows(situations, device))
-        write(run_dir / "diff.json", f"Differences · {title}", src + "; difference(a, b), robotdx.diagnostics.data", DIFF_PROPS, diff_rows(situations, device))
+        samples = sample_rows(situations, device, slug)
+        poses = pose_rows(samples, device)
+        d_samples, d_poses = diff_tables(samples, poses)
+        write_contract(run_dir / "samples.json", "samples", samples, f"Samples · {title}", src, SAMPLE_HINTS)
+        write_contract(run_dir / "poses.json", "poses", poses, f"Output link · {title}", src + "; the joint's own frame, orientation about z")
+        write_contract(run_dir / "diff_samples.json", "diff_samples", d_samples, f"Differences · {title}", src + "; difference(a, b), tools/trajectory.py (data-ui fixture)", SAMPLE_HINTS)
+        write_contract(run_dir / "diff_poses.json", "diff_poses", d_poses, f"Output link differences · {title}", src + "; difference(a, b), tools/trajectory.py")
         write(run_dir / "diagnostics.json", f"Diagnostics · {title}", "robotdx.diagnostics (io-diagnostics), computed from this run", DX_PROPS, diagnostics)
-        write(run_dir / "run.json", f"Run · {title}", src, RUN_PROPS, [row])
+        run_rows.append((run_dir / "run.json", title, src, row))
         coverage += coverage_rows(loaded, slug, device, kind, day, hz)
 
     runs.sort(key=lambda r: r["started"], reverse=True)  # newest first, as written: the table's sort says it too
+    for run_path, title, src, row in run_rows:  # after every row is complete (verdicts), one runs.json row per run page
+        write_contract(run_path, "runs", [row], f"Run · {title}", src, RUN_HINTS)
     counts = Counter(r["device"] for r in runs)
     devices = []
     for device, component in sorted(by_device.items(), key=lambda kv: int(kv[0].split()[1])):
         env = envelopes.get(device, {})
         devices.append({"device": device, "station": component.get("station"), "type": "servo", "runs": counts.get(device, 0),
+                        "label": f"{device} · {component.get('station')}", "parent": dep_id, "order": int(device.split()[1]),
                         "q_min_deg": num(math.degrees(env["q_min_rad"]), 4) if env.get("q_min_rad") is not None else None,
                         "q_max_deg": num(math.degrees(env["q_max_rad"]), 4) if env.get("q_max_rad") is not None else None,
                         "qd_max_deg_s": num(math.degrees(env["qd_max_rad_s"]), 4) if env.get("qd_max_rad_s") is not None else None,
@@ -653,10 +708,12 @@ def build_deployment(entry: dict, replays: dict) -> dict:
     write_decompositions(dep_dir, entry)
     stamp = now()
     source = f"{', '.join(entry['archive'])} (real runs, bam_rack_twin.hardware); built {stamp} by tools/build_app.py"
-    write(dep_dir / "runs.json", f"Runs · {entry['title']}", source, RUN_PROPS, runs)
+    write_contract(dep_dir / "runs.json", "runs", runs, f"Runs · {entry['title']}", source, RUN_HINTS)
     write(dep_dir / "coverage.json", f"Coverage · {entry['title']}", source + f"; every run at {hz:.3g} Hz (w = 1) plus each run's argmin/argmax rows (w = 0)",
           COVER_PROPS, coverage, display_hz=hz)
-    write(dep_dir / "devices.json", f"Stations · {entry['title']}", f"{entry['record']}; windows from bam_rack_twin TAPE_STATIONS", DEVICE_PROPS, devices)
+    write_contract(dep_dir / "devices.json", "devices", devices, f"Stations · {entry['title']}", f"{entry['record']}; windows from bam_rack_twin TAPE_STATIONS",
+                   {"station": {}, "runs": {"type": "integer"}, "kp": {"type": "number", "unit": "board"}, "ki": {"type": "number", "unit": "board"},
+                    "kd": {"type": "number", "unit": "board"}})
     write(dep_dir / "gates.json", f"Gate matrix · {entry['title']}", "robotdx.diagnostics via tools/diagnostics_run_rack.py", GATE_PROPS, cells)
     write(dep_dir / "diagnostics.json", f"Diagnostics · {entry['title']}", "robotdx.diagnostics via tools/diagnostics_run_rack.py (PEP 0010 §10 rows)", DX_PROPS, diagnostics)
     write(dep_dir / "run_gates.json", f"Run diagnostics · {entry['title']}", "robotdx.diagnostics, computed per run by tools/build_app.py", DX_PROPS, run_gate_rows)
@@ -687,6 +744,7 @@ SAMPLE_PROPS = {"t": {"unit": "s", "digits": 4}, "q_deg": {"unit": "°", "digits
                 "v_bus_v": {"unit": "V", "digits": 3}, "source": {"display": "badge", "colors": SOURCE_SLOT}}
 DIFF_PROPS = {"t": {"unit": "s", "digits": 4}, "e_q_mrad": {"unit": "mrad", "digits": 4, "note": "reference − situation at the situation's own sample times"},
               "source": {"display": "badge", "colors": SOURCE_SLOT}}
+SAMPLE_HINTS = {"source": {"display": "badge", "colors": {"real": 1, "sim": 2, "target": 0}}}
 RUN_PROPS = {"started": {"type": "datetime"}, "duration_s": {"unit": "s", "digits": 3}, "rate_hz": {"unit": "Hz", "digits": 3},
              "tracking_mrad": {"unit": "mrad", "digits": 3, "note": "RMS(real − target), robotdx stock.tracking_error"},
              "best_model_mrad": {"unit": "mrad", "digits": 3, "note": "the closest model's RMS(real − model)"},
@@ -695,6 +753,17 @@ RUN_PROPS = {"started": {"type": "datetime"}, "duration_s": {"unit": "s", "digit
 COVER_PROPS = {"t": {"unit": "s"}, "q_deg": {"unit": "°"}, "qd_deg_s": {"unit": "°/s"}, "qdd_deg_s2": {"unit": "°/s²"}, "tau_nm": {"unit": "N·m"},
                "w": {"note": "1 = a grid row (counts are time spent); 0 = a run's argmin/argmax row (kept for exact min/max)"},
                "q_lo_deg": {"unit": "°"}, "q_hi_deg": {"unit": "°"}, "qd_hi_deg_s": {"unit": "°/s"}, "qd_lo_deg_s": {"unit": "°/s"}}
+# runs.json: the contract's columns plus the app's own (title, gains, verdicts, the page link), each declared with its unit
+RUN_HINTS = {"title": {}, "day": {}, "session": {}, "device": {}, "class": {}, "samples": {"type": "integer"}, "kp": {"type": "number", "unit": "board"},
+             "ki": {"type": "number", "unit": "board"}, "kd": {"type": "number", "unit": "board"}, "ilimit": {"type": "number", "unit": "N·m"},
+             "gains": {}, "models": {"type": "integer"}, "compare": {}, "page": {"display": "link"}, "npz": {}, "round": {},
+             "clock_offset_s": {"type": "number", "unit": "s"},
+             "tracking_mrad": {"type": "number", "unit": "mrad", "digits": 3, "note": "RMS(real − target), robotdx stock.tracking_error"},
+             "best_model": {}, "best_model_mrad": {"type": "number", "unit": "mrad", "digits": 3, "note": "the closest model's RMS(real − model)"},
+             "verdict": {"display": "badge", "colors": {"pass": 3, "warn": 4, "partial": 4, "fail": 8, "not_run": 0},
+                         "note": "the closest model's whole-run RMS against 1.5x the station's floor (not the T2 moves/holds split); not_run = no model played this run"},
+             "kind": {"display": "badge", "colors": {k: 0 for k in ("waypoints", "sine", "tape", "gravity", "friction", "chirp", "hardstop", "thermal", "staircase", "impact", "?")}},
+             "basis": {"display": "badge", "colors": {"real": 1}}, "duration_s": {"digits": 3}, "rate_hz": {"digits": 3}}
 DEVICE_PROPS = {"q_min_deg": {"unit": "°"}, "q_max_deg": {"unit": "°"}, "qd_max_deg_s": {"unit": "°/s"}}
 GATE_PROPS = {"verdict": {"display": "badge", "colors": VERDICT_SLOT}}
 WHY_PROPS = {"status": {"display": "badge", "colors": VERDICT_SLOT}, "moves_x": {"unit": "×", "digits": 3}, "hold_x": {"unit": "×", "digits": 3},

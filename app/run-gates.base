@@ -12,7 +12,7 @@ properties:
   duration_s: { displayName: Duration }
   gains: { displayName: Gains (board) }
   compare: { displayName: Situations }
-  pair: { displayName: Pair }
+  reference: { displayName: Against }
   subject: { displayName: Subject }
   message: { displayName: What it measured }
   evidence: { displayName: Evidence }
@@ -48,9 +48,9 @@ datasets:
       - { property: situation, label: Show }
       - { property: source, label: Family }
   diff:
-    data: 'data/{deployment}/runs/{run}/diff.json'
+    data: 'data/{deployment}/runs/{run}/diff_samples.json'
     label: Errors
-    facets: [{ property: pair, label: Error pairs }]
+    facets: [{ property: reference, label: Error against }]
   run: { data: 'data/{deployment}/runs/{run}/run.json', label: Run }
   dx:
     data: 'data/{deployment}/runs/{run}/diagnostics.json'
@@ -65,7 +65,8 @@ layout:
       w: 12
     - { view: Diagnostics of this run, w: 12, h: 3, toolbar: compact }
     - { view: Angle · real vs models, w: 12, h: 4 }
-    - { view: Error · each against its reference, w: 12, h: 3 }
+    - { view: 'Error against the target (target − each)', w: 6, h: 3 }
+    - { view: 'Model error against real (real − model)', w: 6, h: 3 }
     - { view: Speed, w: 6, h: 3 }
     - { view: Torque, w: 6, h: 3 }
     - { view: Acceleration (derived), w: 6, h: 3 }
@@ -85,9 +86,15 @@ views:
     from: samples
     timeseries: { x: t, 'y': q_deg, series: situation, unit: '°', legend: top, dash: [target] }
   - type: timeseries
-    name: Error · each against its reference
+    name: 'Error against the target (target − each)'
     from: diff
-    timeseries: { x: t, 'y': e_q_mrad, series: pair, unit: mrad, legend: top, dash: [target] }
+    timeseries: { x: t, 'y': e_q_mrad, series: situation, unit: mrad, legend: top, dash: [target] }
+    filters: 'reference == "target"'
+  - type: timeseries
+    name: 'Model error against real (real − model)'
+    from: diff
+    timeseries: { x: t, 'y': e_q_mrad, series: situation, unit: mrad, legend: top, dash: [target] }
+    filters: 'reference == "real"'
   - type: timeseries
     name: Speed
     from: samples
