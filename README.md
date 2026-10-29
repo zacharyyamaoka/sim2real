@@ -12,6 +12,27 @@ every page is a `.base` dashboard or an analysis over datasets the producers wri
   T1-T11), pidtuna, traj_compare, Rerun recordings.
 - **Catalog:** robotparts.dev holds the part, its datasheet and the published summary; this repo holds the drill-down.
 
+## The app (home page)
+
+`python3 /home/bam/sim2real/serve.py` serves the app at `/app/` (`/` redirects there): **deployments → one deployment
+(its runs newest first, coverage) → one run (playback of real vs every model on one clock)**, each with a **Gates layer**
+switch in the header that adds the diagnostics computed from the same runs. The five proposals stay at `/dashboards/`.
+
+| path | what |
+|---|---|
+| `app/registry.json` | the deployments registry (start: the One Dof Test Rack, its bam_rack_twin record and archive days) |
+| `app/*.base` | the pages, written by `tools/build_pages.py` (playback page, and `-gates` = the same page plus the gates layer) |
+| `app/index.html`, `app.js`, `app.css` | the host: routes (`?d=` / `&run=` / `&layer=gates`), the lockup, the rail on the right |
+| `app/data/` | generated, gitignored |
+| `app/tests/test_app_flow.py` | Playwright click-through (deployment → rack → run → playback, colours, order, gates toggle) |
+
+Build the data (about 20 s; the twin replays are optional and take about 1.5 min):
+
+    /home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/build_app.py
+    python3 -I /home/bam/sim2real/tools/build_pages.py
+    uv run --no-project --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py
+
 ## Layout
 
 | path | what |
