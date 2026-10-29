@@ -14,12 +14,14 @@
     "/archive/datasets/bam_rig/rack_2026-10-23",
     "/archive/datasets/bam_rig/rack_2026-10-24",
     "/archive/datasets/bam_rig/rack_2026-10-25",
-    "/archive/datasets/bam_rig/rack_2026-10-28"
+    "/archive/datasets/bam_rig/rack_2026-10-28",
+    "/archive/datasets/bam_rig/rack_2026-10-29"
    ],
-   "acceptance": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/acceptance_calibration.json",
-   "why": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why.json",
+   "acceptance": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/acceptance_followup.json",
+   "why": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why_2.json",
    "scored": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_scored.json",
-   "earlier_floors": "/archive/datasets/bam_rig/rack_2026-10-24/analysis/floors.json"
+   "earlier_floors": "/archive/datasets/bam_rig/rack_2026-10-24/analysis/floors.json",
+   "why_calibration": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why.json"
   }
  ]
 }

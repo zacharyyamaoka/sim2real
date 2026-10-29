@@ -30,6 +30,7 @@ from __future__ import annotations
 import datetime as dt
 import importlib.util
 import json
+import re
 import math
 import shutil
 import sys
@@ -402,7 +403,8 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
     scored = json.loads(Path(entry["scored"]).read_text())["stations"]
     earlier = json.loads(Path(entry["earlier_floors"]).read_text())
     by_slug = {r["run"]: r for r in runs}
-    rows, grew, overfit = [], [], []
+    v1 = json.loads(Path(entry["why_calibration"]).read_text())["stations"] if entry.get("why_calibration") else {}
+    rows, grew, overfit, rules = [], [], [], []
     for sid, station in doc["stations"].items():
         can = int(sid.removeprefix("can"))
         t2 = station["t2"]
@@ -410,23 +412,39 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
         lt = station.get("limiting_term") or {}
         ev = lt.get("evidence") or {}
         dec = ev.get("residual_decomposition_after") or ev.get("residual_decomposition_before") or {}
-        shares = dec.get("unique_r2") or {}
         family = lt.get("remaining_largest_family")
         name = lt.get("name") or ""
+        summary = station.get("summary") or ""
+        if "variants" in t2:  # v2 (follow-up) rows: the declared pick against the twin today (C), the decomposition keyed by variant
+            after, before = t2["variants"][t2["declared_pick"]], t2["variants"].get("C", {})
+            per_variant = ev.get("residual_decomposition") or {}
+            dec = per_variant.get(t2["declared_pick"]) or {}
+            m = re.search(r"follows (.+?) most \((\d+)% on its own", summary)
+            family = m.group(1) if m else family
+            if not name:
+                sentences = [x for x in summary.split(". ") if x and not x.startswith(("passes", "fails", "The held-out torque gap"))]
+                name = (f"{family} (the held-out gap's largest term); " if family else "") + (sentences[0] if sentences else "")
+        shares = dec.get("unique_r2") or {}
         term_family = next((f for f in shares if f.split(" ")[0] in name.lower()), None) or ("inertia" if "inertia" in name else None)
         shown = term_family or family
         share = shares.get(shown) if shown else None
         # the floor on the new day against the 10-24 floor (the same T1 ruler), and the pick against the deployed twin
         new_floor = (t2.get("floor") or {}).get("floor_mrad") or (scored.get(sid, {}).get("floor") or {}).get("floor_mrad")
+        pick_rule = None
+        if "declared_pick" in t2 and t2["declared_pick"] != t2.get("safer_pick"):
+            declared, safer = t2["variants"][t2["declared_pick"]], t2["variants"][t2["safer_pick"]]
+            pick_rule = (can, t2["declared_pick"], declared["moves_over_floor"], t2["safer_pick"], safer["moves_over_floor"])
         old_floor = (earlier.get(str(can)) or {}).get("floor_mrad")
-        floor_growth = new_floor / old_floor if new_floor and old_floor and sid in scored else None
+        floor_growth = new_floor / old_floor if new_floor and old_floor and sid in scored else None  # CAN 11: its final-controller floor
         if floor_growth and floor_growth > 1:
             grew.append(f"CAN {can} {old_floor:.2f} → {new_floor:.2f} mrad")
         is_overfit = None
         if sid in scored:
             variants = scored[sid]["variants"]
             pick = scored[sid]["pick"]
-            ident = ev.get("identification_objective_mrad") or {}
+            # the calibration round's identification objectives (v1 why file): v2 re-scored CAN 1 and 11 but the round's picks stand as they were
+            ident = ((((v1.get(sid) or {}).get("limiting_term") or {}).get("evidence") or {}).get("identification_objective_mrad")
+                     or ev.get("identification_objective_mrad") or {})
             if pick in variants and "A" in variants and pick in ident and "A" in ident:
                 better_ident = ident[pick] < ident["A"]
                 worse_held = variants[pick]["split"]["moves_over_floor"] > variants["A"]["split"]["moves_over_floor"]
@@ -443,7 +461,6 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
             offset = run_row.get("clock_offset_s") or 0.0
             t0, t1 = window["t0_s"] + offset, window["t1_s"] + offset
             link = f"{APP_URL}?d={dep_id}&run={slug}&why={sid}#t={t0:.3f}&tr={t0:.3f},{t1:.3f}"
-        summary = station.get("summary") or ""
         reason = summary.split(". ", 1)[1] if ". " in summary else summary
         rows.append({
             "device": f"CAN {can}", "station": sid, "status": "pass" if station["status"].startswith("pass") or "passes" in summary[:40] else "fail",
@@ -457,15 +474,24 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
             "floor_mrad": num(new_floor, 4), "floor_before_mrad": num(old_floor, 4) if sid in scored else None,
             "floor_growth_x": num(floor_growth, 3), "overfit_pick": is_overfit,
             "worst_run": slug, "worst_window": f"{window['t0_s']:.2f}-{window['t1_s']:.2f} s (tape clock), {window['rms_mrad']:.2f} mrad RMS" if window else None,
-            "page": link, "order": can})
+            "page": link, "order": can,
+            "pick": t2.get("declared_pick") or t2.get("pick"), "safer_pick": t2.get("safer_pick"),
+            "pick_rule": (f"declared {pick_rule[1]} {pick_rule[2]:.2f}× vs held-out-safer {pick_rule[3]} {pick_rule[4]:.2f}×" if pick_rule else None)})
+        if pick_rule:
+            rules.append(pick_rule)
     rows.sort(key=lambda r: (r["status"] == "pass", -(r["moves_x"] or 0)))
     caveats = [
         {"caveat": "Floors grew on the new day", "detail": f"{len(grew)} of {len(scored)} refit stations have a larger T1 floor than on 10-24 ("
                    + "; ".join(grew) + "), so every × floor ratio looks better than it would against the old floor.", "stations": len(grew)},
-        {"caveat": f"{len(overfit)} picks were overfit", "detail": "The calibrated twin beat the deployed twin on identification but did worse on the "
+        {"caveat": f"{len(overfit)} picks were overfit (calibration round)", "detail": "The calibrated twin beat the deployed twin on identification but did worse on the "
                    "held-out tapes: " + "; ".join(overfit) + ". The pick rule chooses on identification only, so these passes or fails lean on a twin "
                    "the held-out data did not prefer.", "stations": len(overfit)},
     ]
+    for can, declared, d_moves, safer, s_moves in rules:
+        caveats.append({"caveat": f"The declared pick rule picked the worse twin on CAN {can}",
+                        "detail": f"The held-out-safer twin ({safer}) scores {s_moves:.2f}× moves; the declared pick ({declared}) scores {d_moves:.2f}×, and that is "
+                                  f"the number this panel shows. Which pick rule counts (declared: the lower identification mean; safer: no identification "
+                                  f"family worse by > 5 %) is Zach's decision, pending.", "stations": 1})
     return rows, caveats
 
 
@@ -476,8 +502,13 @@ def write_decompositions(dep_dir: Path, entry: dict) -> None:
     for sid, station in doc["stations"].items():
         ev = (station.get("limiting_term") or {}).get("evidence") or {}
         rows = []
-        for when, key in (("before (deployed twin)", "residual_decomposition_before"), ("after (calibrated twin)", "residual_decomposition_after")):
-            dec = ev.get(key) or {}
+        t2 = station.get("t2") or {}
+        if "residual_decomposition" in ev:  # v2: one decomposition per variant; the twin today (C) and the declared pick
+            pairs = [(f"before (twin today, C)", ev["residual_decomposition"].get("C") or {}),
+                     (f"after (declared pick, {t2.get('declared_pick')})", ev["residual_decomposition"].get(t2.get("declared_pick")) or {})]
+        else:
+            pairs = [("before (deployed twin)", ev.get("residual_decomposition_before") or {}), ("after (calibrated twin)", ev.get("residual_decomposition_after") or {})]
+        for when, dec in pairs:
             for family, share in (dec.get("unique_r2") or {}).items():
                 rows.append({"chart": "torque gap", "what": family, "share": num(share, 4), "when": when})
             if dec.get("unexplained") is not None:
@@ -532,6 +563,10 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         gains = gains_at(by_device.get(device, {}), started.astimezone(dt.timezone.utc) if wall_s else None)
         kp_scale = float(args.get("kp_scale_cmd", args.get("kp_scale", 1.0)) or 1.0)
         kd_scale = float(args.get("kd_scale_cmd", args.get("kd_scale", 1.0)) or 1.0)
+        # WHY ilimit x the command's scale (bam_rack_twin followup_1029.py): CAN 11's il0.25 / il0.5 sessions ran on board ilimit 0.8
+        # with ilimit_scale 0.3125 / 0.625; the integral saw 0.25 / 0.5 N.m. A run with no scale argument used the board's limit.
+        il_scale = args.get("ilimit_scale_cmd", args.get("ilimit_scale"))
+        il_eff = None if gains["ilimit"] is None else gains["ilimit"] * (1.0 if il_scale is None else float(il_scale))
         replay = replays.get(str(path))
         if replay is not None:
             situations = model_situations(replay)
@@ -560,8 +595,9 @@ def build_deployment(entry: dict, replays: dict) -> dict:
             "kind": kind, "class": (replay or {}).get("class"), "duration_s": num(t[-1] - t[0], 4), "samples": int(t.size),
             "rate_hz": num(1.0 / float(np.median(np.diff(t))), 4) if t.size > 1 else None,
             "kp": num((gains["kp"] or 0) * kp_scale, 4) if gains["kp"] is not None else None, "ki": gains["ki"],
-            "kd": num((gains["kd"] or 0) * kd_scale, 4) if gains["kd"] is not None else None, "ilimit": gains["ilimit"],
+            "kd": num((gains["kd"] or 0) * kd_scale, 4) if gains["kd"] is not None else None, "ilimit": num(il_eff, 4),
             "gains": (f"kp {num(gains['kp'], 4):g} · ki {num(gains['ki'], 4):g} · kd {num(gains['kd'], 4):g}" if None not in (gains["kp"], gains["ki"], gains["kd"]) else "unknown")
+                     + (f" · il {num(il_eff, 3):g}" if il_eff is not None and gains["ki"] else "")
                      + (f" (×{kp_scale:g} / ×{kd_scale:g})" if (kp_scale, kd_scale) != (1.0, 1.0) else ""),
             "situations": names, "models": len(models),
             "compare": f"real + {len(models)} model{'s' if len(models) != 1 else ''}" if models else ("real vs target" if TARGET in names else "real only"),

@@ -42,6 +42,7 @@ import numpy as np  # noqa: E402
 import presliding_round2 as R2  # noqa: E402
 import presliding_round3 as R3  # noqa: E402
 import calibration_round as CAL  # noqa: E402
+import followup_1029 as FU  # noqa: E402
 from bam_rack_twin import __version__ as PACKAGE_VERSION  # noqa: E402
 from bam_rack_twin.budget import q_rms_mrad  # noqa: E402
 from bam_rack_twin.hardware.tape import TAPE_STATIONS  # noqa: E402
@@ -147,6 +148,56 @@ def calibration_runs(can: int, scenes: Path, workers: int, scored: dict, direct_
     return list(records.values())
 
 
+FU_SHORT = {1: {"C1": "twin C1 · fast inertia"}, 11: {"A": "twin A · deployed", "C": "twin C · calibrated"}}
+
+
+def followup_runs(can: int, scenes: Path, workers: int, log) -> list[dict]:
+    """followup_1029.py's ``score`` replays (2026-10-29 follow-ups): CAN 1's calibration held-out tapes played by C1 (its inertia pinned by the
+    fast runs), CAN 11's held-out tapes at its final controller (il0.5) played by A (the declared pick) and C (the held-out-safer pick).
+    Each twin is rebuilt by followup_1029.twins_can1/11 (digests checked) and checked against followup_scored_can<N>.json."""
+
+    ident = json.loads(FU._path("identified", can).read_text(encoding="utf-8"))
+    scored = json.loads(FU._path("scored", can).read_text(encoding="utf-8"))
+    held = CAL.held_out(1) if can == 1 else FU.held_out_can11()
+    twins = FU.twins_can1(ident) if can == 1 else FU.twins_can11(ident)
+    keys = sorted(held)
+    replayer = S.r4._replayer(can, {key: item["run"] for key, item in held.items()}, scenes, workers)
+    stored = {label: {row["run"]: row["q_rms_mrad"] for row in variant["rows"]} for label, variant in scored["variants"].items()}
+    records = {}
+    for key in keys:
+        item, run = held[key], held[key]["run"]
+        records[key] = {"run_path": str(key), "can": can, "device": f"CAN {can}", "label": item.get("detail"), "class": item["class"], "seed": item["seed"],
+                        "prelude_s": float(item["prelude_s"]), "floor_mrad": scored["floor"]["floor_mrad"], "pick": scored["declared_pick"],
+                        "round": "follow-up 2026-10-29", "t": floats(run.t - run.t[0]), "q_target_rad": floats(run.q_target),
+                        "qd_target_rad_s": floats(run.qd_target), "q_rad": floats(run.q), "qd_rad_s": floats(run.qd), "tau_nm": floats(run.tau),
+                        "mode": floats(run.mode), "v_bus_v": floats(run.voltage), "models": {}}
+    for label, name in FU_SHORT[can].items():
+        replays = dict(zip(keys, S.r4.replay_pairs(replayer, [(twins[label], key) for key in keys]), strict=True))
+        rows, _ = CAL.D._variant_rows(held, replays)
+        for row in rows:
+            expected = stored[label].get(row["run"])
+            replay = replays[row["run"]]
+            records[row["run"]]["models"][name] = {
+                "label": f"{label} (follow-up; {'declared pick' if label == scored['declared_pick'] else ''}{' / ' if label == scored['declared_pick'] and label == scored['safer_pick'] else ''}{'held-out-safer pick' if label == scored['safer_pick'] else ''}; {twins[label].digest()})",
+                "q_rad": floats(replay.q), "qd_rad_s": floats(replay.qd), "tau_nm": floats(replay.tau), "q_rms_mrad": row["q_rms_mrad"],
+                "expected_q_rms_mrad": expected, "split": row["split"],
+                "oracle": "ok" if expected is not None and abs(row["q_rms_mrad"] - expected) <= ORACLE_TOLERANCE_MRAD else "mismatch"}
+        log(f"can{can} follow-up {label}: " + ", ".join(f"{Path(k).stem} {records[k]['models'][name]['q_rms_mrad']:.2f}" for k in keys))
+    return list(records.values())
+
+
+def merged(runs: list[dict]) -> list[dict]:
+    """One record per run: a run replayed by two rounds (CAN 1's calibration tapes) carries every model."""
+
+    out: dict[str, dict] = {}
+    for record in runs:
+        if record["run_path"] in out:
+            out[record["run_path"]]["models"].update(record["models"])
+        else:
+            out[record["run_path"]] = record
+    return list(out.values())
+
+
 def envelopes() -> dict:
     """Each station's proven travel window and speed ceiling (bam_rack_twin.hardware.tape.TAPE_STATIONS): the 1-DOF workspace."""
 
@@ -176,9 +227,13 @@ def main(argv=None) -> int:
         direct_doc = json.loads(CAL.DIRECT.read_text(encoding="utf-8"))
         for can in arguments.calibration_cans:
             runs += calibration_runs(can, Path(scenes), workers, cal_scored, direct_doc, lambda line: print(line, flush=True))
+        for can in (1, 11):
+            runs += followup_runs(can, Path(scenes), workers, lambda line: print(line, flush=True))
+    runs = merged(runs)
     document = {"schema": SCHEMA, "generated_at": datetime.datetime.now().astimezone().replace(microsecond=0).isoformat(),
                 "source": f"bam_rack_twin {PACKAGE_VERSION} at {PACKAGE}; docs/presliding_round3.py score builds; read-only replay, no hardware",
-                "scored_file": str(SCORED), "calibration_scored_file": str(CAL.SCORED), "envelopes": envelopes(), "runs": runs}
+                "scored_file": str(SCORED), "calibration_scored_file": str(CAL.SCORED),
+                "followup_scored_files": [str(FU._path("scored", c)) for c in (1, 11)], "envelopes": envelopes(), "runs": runs}
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
     staging = arguments.out.with_name(arguments.out.name + ".partial")
     staging.write_text(json.dumps(document, allow_nan=False) + "\n", encoding="utf-8")
