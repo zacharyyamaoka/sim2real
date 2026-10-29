@@ -10,8 +10,9 @@ const params = new URLSearchParams(location.search);
 const dep = SAFE.test(params.get('d') || '') ? params.get('d') : null;
 const run = dep && SAFE.test(params.get('run') || '') ? params.get('run') : null;
 const gates = params.get('layer') === 'gates';
+const station = run && /^can\d+$/.test(params.get('why') || '') ? params.get('why') : null;  // opened from "Why it fails"
 const level = run ? 'run' : dep ? 'deployment' : 'deployments';
-const base = level === 'deployments' ? 'deployments.base' : `${level}${gates ? '-gates' : ''}.base`;
+const base = level === 'deployments' ? 'deployments.base' : station && !gates ? 'run-why.base' : `${level}${gates ? '-gates' : ''}.base`;
 
 // Every .base this page loads is rewritten before data-ui reads it:
 // 1. `{deployment}` and `{run}` in its data paths (WHY: data-ui has no per-run dataset template yet, PEP 0010 P3);
@@ -37,7 +38,7 @@ window.fetch = async (input, init) => {
   if (!response.ok || !/\.base(?:[?#]|$)/.test(url)) return response;
   const slots = resolveTokens(document.getElementById('dash') || document.body).css;
   const text = (await response.text())
-    .replaceAll('{deployment}', dep || '').replaceAll('{run}', run || '')
+    .replaceAll('{deployment}', dep || '').replaceAll('{run}', run || '').replaceAll('{station}', station || '')
     .replace(MIX, (mix, at, all) => quoted(hex(mix.replace(SLOT, (_m, name) => slots[name])), all[at - 1]))
     .replace(SLOT, (_match, name, at, all) => quoted(hex(slots[name]), all[at - 1]));
   return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers });
@@ -93,7 +94,7 @@ if (dep && !depRow) {
   const dash = document.createElement('data-dashboard');
   dash.id = 'dash';
   dash.dataset.level = level;
-  dash.dataset.layer = gates ? 'gates' : 'playback';
+  dash.dataset.layer = gates ? 'gates' : station ? 'why' : 'playback';
   dash.setAttribute('aria-label', document.title);
   dash.setAttribute('src', `/app/${base}`);  // WHY set before connecting: a src set after load is ignored
   page.append(dash);

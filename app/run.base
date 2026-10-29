@@ -24,11 +24,15 @@ style:
     twin H · + dwell: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
     twin R · rate-state: 'color-mix(in srgb, var(--data-series-2) 80%, black)'
     twin · full: var(--data-series-2)
+    twin A · deployed: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
+    twin C · calibrated: var(--data-series-2)
     twin D · LuGre vs real: var(--data-series-2)
     twin G · LuGre re-fit vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
     twin H · + dwell vs real: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
     twin R · rate-state vs real: 'color-mix(in srgb, var(--data-series-2) 80%, black)'
     twin · full vs real: var(--data-series-2)
+    twin A · deployed vs real: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
+    twin C · calibrated vs real: var(--data-series-2)
     real vs target: var(--data-series-1)
 clock: { data: samples, time: t }
 datasets:
@@ -108,5 +112,5 @@ views:
           type: nominal
           title: null
           scale:
-            domain: [real, target, twin D · LuGre, twin G · LuGre re-fit, twin H · + dwell, twin R · rate-state, twin · full]
-            range: [var(--data-series-1), '#8b9099', var(--data-series-2), 'color-mix(in srgb, var(--data-series-2) 62%, black)', 'color-mix(in srgb, var(--data-series-2) 55%, white)', 'color-mix(in srgb, var(--data-series-2) 80%, black)', var(--data-series-2)]
+            domain: [real, target, twin D · LuGre, twin G · LuGre re-fit, twin H · + dwell, twin R · rate-state, twin · full, twin A · deployed, twin C · calibrated]
+            range: [var(--data-series-1), '#8b9099', var(--data-series-2), 'color-mix(in srgb, var(--data-series-2) 62%, black)', 'color-mix(in srgb, var(--data-series-2) 55%, white)', 'color-mix(in srgb, var(--data-series-2) 80%, black)', var(--data-series-2), 'color-mix(in srgb, var(--data-series-2) 55%, white)', var(--data-series-2)]

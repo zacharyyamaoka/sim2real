@@ -36,13 +36,14 @@ REAL = "var(--data-series-1)"
 PATH = "color-mix(in srgb, var(--data-series-1) 10%, transparent)"
 SIM = "var(--data-series-2)"
 MUTED = "#8b9099"
-MODELS = ["twin D · LuGre", "twin G · LuGre re-fit", "twin H · + dwell", "twin R · rate-state", "twin · full"]
-SIM_SHADES = [SIM, f"color-mix(in srgb, {SIM} 62%, black)", f"color-mix(in srgb, {SIM} 55%, white)", f"color-mix(in srgb, {SIM} 80%, black)", SIM]
+MODELS = ["twin D · LuGre", "twin G · LuGre re-fit", "twin H · + dwell", "twin R · rate-state", "twin · full", "twin A · deployed", "twin C · calibrated"]
+SIM_SHADES = [SIM, f"color-mix(in srgb, {SIM} 62%, black)", f"color-mix(in srgb, {SIM} 55%, white)", f"color-mix(in srgb, {SIM} 80%, black)", SIM,
+              f"color-mix(in srgb, {SIM} 55%, white)", SIM]
 PALETTE = {"real": REAL, "target": MUTED, **dict(zip(MODELS, SIM_SHADES))}
 PALETTE.update({f"{model} vs real": shade for model, shade in zip(MODELS, SIM_SHADES)})
 PALETTE["real vs target"] = REAL
 STYLE = {"chrome": "minimal", "numbers": {"digits": 3, "compact": True}, "palette": PALETTE}
-TONES = {"pass": "good", "warn": "warn", "fail": "bad", "not_run": "muted"}
+TONES = {"pass": "good", "warn": "warn", "partial": "warn", "fail": "bad", "not_run": "muted"}
 RUN_DATA = "data/{deployment}/runs/{run}"
 DEP_DATA = "data/{deployment}"
 
@@ -104,6 +105,11 @@ def deployment_page() -> dict:
     page = {
         "data": f"{DEP_DATA}/runs.json",
         "properties": {"title": {"displayName": "Run"}, "started": {"displayName": "Started"}, "device": {"displayName": "Station"},
+                       "status": {"displayName": "T2"}, "moves_x": {"displayName": "Moves ÷ floor (gate 1.5)"}, "hold_x": {"displayName": "Hold ÷ floor (gate 1.5)"},
+                       "gate_x": {"displayName": "Gate"}, "moves_before_x": {"displayName": "Moves, twin before"}, "hold_before_x": {"displayName": "Hold, twin before"},
+                       "limiting_term": {"displayName": "Limiting term"}, "evidence": {"displayName": "Evidence share"}, "why": {"displayName": "Why (the study)"},
+                       "floor_growth_x": {"displayName": "Floor grew"}, "overfit_pick": {"displayName": "Overfit pick"}, "round": {"displayName": "Round"},
+                       "worst_window": {"displayName": "Worst window"}, "caveat": {"displayName": "Caveat"}, "detail": {"displayName": "What it means"},
                        "kind": {"displayName": "Kind"}, "duration_s": {"displayName": "Duration"}, "gains": {"displayName": "Gains (board)"},
                        "compare": {"displayName": "Situations"}, "tracking_mrad": {"displayName": "Real vs target"},
                        "best_model": {"displayName": "Closest model"}, "best_model_mrad": {"displayName": "Model vs real"},
@@ -120,6 +126,8 @@ def deployment_page() -> dict:
                          "facets": [{"property": "device", "as": "select", "label": "Coverage station"}], "filters": 'device == "CAN 12"'},
             "coverage_all": {"data": f"{DEP_DATA}/coverage.json", "label": "Coverage, every station"},
             "devices": {"data": f"{DEP_DATA}/devices.json", "label": "Stations"},
+            "why": {"data": f"{DEP_DATA}/why.json", "label": "Why it fails"},
+            "caveats": {"data": f"{DEP_DATA}/caveats.json", "label": "Caveats"},
         },
         # WHY linked: the runs rail and a selection in the runs table narrow every coverage panel (many-run comparison)
         "links": [{"from": "coverage_all.run", "to": "runs.run"}, {"from": "devices.device", "to": "runs.device"}],
@@ -129,6 +137,12 @@ def deployment_page() -> dict:
                      "Blue is real, orange is a model, grey dashed is the target.", "w": 12},
             {"view": "Runs shown", "w": 3, "h": 2}, {"view": "Hours shown", "w": 3, "h": 2}, {"view": "Stations shown", "w": 3, "h": 2},
             {"view": "Runs with models", "w": 3, "h": 2},
+            {"text": "### Why it fails\nOne row per station from the calibration round (bam_rack_twin calibration_why.json): T2 on the held-out tapes, moves and hold "
+                     "offset each against **1.5× the floor** (after the round, with the twin before it beside it), the limiting term in the study's words, and how "
+                     "much of the held-out torque gap that term's family explains on its own. **Click a row** to play its worst held-out window. "
+                     "Read it with the two caveats below them: they change how good the ratios look.", "w": 12},
+            {"view": "Why it fails", "w": 12, "h": 4},
+            {"view": "Caveats", "w": 12, "h": 4, "toolbar": "none"},
             {"view": "Runs", "w": 12, "h": 5, "title": "Runs · newest first", "toolbar": "compact"},
             {"text": "### Coverage\nWhere the runs went. Every path is drawn faint (10 %), so the dark bands are where the rack spends its time; "
                      "the dashed box is each station's proven window (bam_rack_twin TAPE_STATIONS: travel × speed ceiling; stations with no recorded window have none). "
@@ -146,6 +160,12 @@ def deployment_page() -> dict:
             {"type": "kpi", "name": "Stations shown", "from": "runs", "kpi": {"label": "Stations", "value": {"property": "device", "summary": "Unique"}}},
             {"type": "kpi", "name": "Runs with models", "from": "runs", "filters": "models > 0",
              "kpi": {"label": "Runs replayed by a model", "value": {"property": "run", "summary": "Count"}}},
+            {"type": "table", "name": "Why it fails", "from": "why", "open": {"mode": "link", "url": "page"},
+             "order": ["device", "status", "moves_x", "hold_x", "moves_before_x", "floor_growth_x", "overfit_pick", "limiting_term", "evidence", "why",
+                       "worst_window", "hold_before_x", "round"]},
+            # WHY tall rows and a wide detail column: the caveats are read in full, never clipped behind a hover
+            {"type": "table", "name": "Caveats", "from": "caveats", "order": ["caveat", "detail"], "rowHeight": "extra",
+             "columnSize": {"caveat": 200, "detail": 900}},
             {"type": "table", "name": "Runs", "from": "runs", "select": "run",
              "order": ["title", "started", "device", "kind", "duration_s", "gains", "compare", "tracking_mrad", "best_model", "best_model_mrad", "page"],
              "sort": [{"property": "started", "direction": "DESC"}]},
@@ -269,7 +289,7 @@ def run_page() -> dict:
                        "encoding": {"x": {"field": "q_deg", "type": "quantitative", "bin": {"maxbins": 50}, "title": "q (°)"},
                                     "y": {"aggregate": "count", "type": "quantitative", "title": "samples"},
                                     "color": {"field": "situation", "type": "nominal", "title": None,
-                                              "scale": {"domain": list(PALETTE)[:7], "range": [PALETTE[k] for k in list(PALETTE)[:7]]}}}}},
+                                              "scale": {"domain": [k for k in PALETTE if " vs " not in k], "range": [v for k, v in PALETTE.items() if " vs " not in k]}}}}},
         ],
     }
 
@@ -289,9 +309,44 @@ def run_gates_page() -> dict:
     return page
 
 
+def run_why_page() -> dict:
+    """The run page opened from "Why it fails": the station's row and its residual decomposition beside the playback."""
+
+    page = copy.deepcopy(run_page())
+    page["datasets"]["why"] = {"data": f"{DEP_DATA}/why.json", "label": "Why", "filters": 'station == "{station}"'}
+    page["datasets"]["decomposition"] = {"data": f"{DEP_DATA}/why/{{station}}.json", "label": "Residual decomposition"}
+    page["properties"].update({"limiting_term": {"displayName": "Limiting term"}, "evidence": {"displayName": "Evidence share"},
+                               "moves_x": {"displayName": "Moves ÷ floor"}, "hold_x": {"displayName": "Hold ÷ floor"}, "worst_window": {"displayName": "Worst window"},
+                               "why": {"displayName": "Why (the study)"}})
+    overlay = [
+        {"text": "### Why this station fails\nThe playback opens on the worst held-out window (the shaded range). The bars are the study's residual "
+                 "decomposition on the held-out tapes: how much of the torque the rack needed beyond the twin each term family explains on its own "
+                 "(unique R²), and where the move error sits. Blue and orange stay real and model; the bars are neither, so they are grey.", "w": 12},
+        {"view": "This station", "w": 12, "h": 2, "toolbar": "none"},
+        {"view": "Torque gap by term family", "w": 6, "h": 3}, {"view": "Move error by phase", "w": 6, "h": 3},
+    ]
+    page["layout"]["panels"] = page["layout"]["panels"][:2] + overlay + page["layout"]["panels"][2:]
+
+    def bars(name, chart, title):
+        return {"type": "chart", "name": name, "from": "decomposition", "filters": f'chart == "{chart}"',
+                "chart": {"mark": "bar", "encoding": {"y": {"field": "what", "type": "nominal", "title": None, "sort": "-x"},
+                                                      "x": {"field": "share", "type": "quantitative", "title": title, "axis": {"format": "%"}},
+                                                      "yOffset": {"field": "when", "type": "nominal"},
+                                                      "color": {"field": "when", "type": "nominal", "title": None,
+                                                                "scale": {"domain": ["before (deployed twin)", "after (calibrated twin)"], "range": ["#b8bcc4", "#6b7079"]}}}}}
+
+    page["views"] += [
+        {"type": "table", "name": "This station", "from": "why", "order": ["device", "moves_x", "hold_x", "limiting_term", "evidence", "worst_window", "why"]},
+        bars("Torque gap by term family", "torque gap", "share of the held-out torque gap (unique R²)"),
+        bars("Move error by phase", "move error", "share of the moving q error"),
+    ]
+    return page
+
+
 PAGES = {"deployments.base": ("deployments", deployments_page), "deployment.base": ("one deployment: runs + coverage", deployment_page),
          "deployment-gates.base": ("one deployment + the gates layer", deployment_gates_page), "run.base": ("one run: playback", run_page),
-         "run-gates.base": ("one run + the gates layer", run_gates_page)}
+         "run-gates.base": ("one run + the gates layer", run_gates_page),
+         "run-why.base": ("one run opened from Why it fails: playback + the station's residual decomposition", run_why_page)}
 
 
 def main() -> int:
