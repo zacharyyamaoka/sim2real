@@ -12,3 +12,6 @@ dashboards/*/*.json
 dashboards/*/media/
 dashboards/source/*.json
 dashboards/source/media/
+
+# The app (tools/build_app.py, tools/twin_replays.py): generated data is not committed
+app/data/
