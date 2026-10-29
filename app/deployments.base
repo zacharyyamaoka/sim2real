@@ -1,0 +1,69 @@
+# sim2real app · deployments
+# Written by tools/build_pages.py (do not edit by hand); data by tools/build_app.py. Grammar: vendor/data-ui
+# (PEP 0004 dashboards, PEP 0005 cards). The host (app/app.js) fills {deployment} and {run}. REAL rack data; models are bam_rack_twin replays.
+data: data/deployments.json
+properties:
+  title: { displayName: Deployment }
+  kind: { displayName: Kind }
+  where: { displayName: Where }
+  stations: { displayName: Stations }
+  runs: { displayName: Runs }
+  runs_with_models: { displayName: Runs with models }
+  hours: { displayName: Hours }
+  days: { displayName: Days }
+  last_run: { displayName: Last run }
+  gate_summary: { displayName: Gates }
+  page: { displayName: Open }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    real: var(--data-series-1)
+    target: '#8b9099'
+    twin D · LuGre: var(--data-series-2)
+    twin G · LuGre re-fit: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
+    twin H · + dwell: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
+    twin R · rate-state: 'color-mix(in srgb, var(--data-series-2) 80%, black)'
+    twin · full: var(--data-series-2)
+    twin D · LuGre vs real: var(--data-series-2)
+    twin G · LuGre re-fit vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
+    twin H · + dwell vs real: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
+    twin R · rate-state vs real: 'color-mix(in srgb, var(--data-series-2) 80%, black)'
+    twin · full vs real: var(--data-series-2)
+    real vs target: var(--data-series-1)
+layout:
+  panels:
+    - text: "## Deployments\nEvery machine we run sim to real on. Each is unique; the numbers above the list roll up across all of them. Click one to open its runs."
+      w: 12
+    - { view: Deployments, w: 3, h: 2 }
+    - { view: Runs, w: 3, h: 2 }
+    - { view: Hours of data, w: 3, h: 2 }
+    - { view: Stations, w: 3, h: 2 }
+    - { view: All deployments, w: 12, h: 2, title: All deployments }
+views:
+  - type: kpi
+    name: Deployments
+    kpi:
+      label: Deployments
+      value: { property: id, summary: Count }
+  - type: kpi
+    name: Runs
+    kpi:
+      label: 'Real runs, all deployments'
+      value: { property: runs, summary: Sum }
+  - type: kpi
+    name: Hours of data
+    kpi:
+      label: Hours of real data
+      value: { property: hours, summary: Sum }
+  - type: kpi
+    name: Stations
+    kpi:
+      label: Stations (devices)
+      value: { property: stations, summary: Sum }
+  - type: table
+    name: All deployments
+    open: { mode: link, url: page }
+    order: [title, kind, where, stations, runs, runs_with_models, hours, days, last_run, gate_summary]
+    sort:
+      - { property: last_run, direction: DESC }

@@ -1,0 +1,112 @@
+# sim2real app · one run: playback
+# Written by tools/build_pages.py (do not edit by hand); data by tools/build_app.py. Grammar: vendor/data-ui
+# (PEP 0004 dashboards, PEP 0005 cards). The host (app/app.js) fills {deployment} and {run}. REAL rack data; models are bam_rack_twin replays.
+data: 'data/{deployment}/runs/{run}/samples.json'
+properties:
+  situation: { displayName: Situation }
+  source: { displayName: Family }
+  title: { displayName: Run }
+  started: { displayName: Started }
+  device: { displayName: Station }
+  kind: { displayName: Kind }
+  duration_s: { displayName: Duration }
+  gains: { displayName: Gains (board) }
+  compare: { displayName: Situations }
+  pair: { displayName: Pair }
+style:
+  chrome: minimal
+  numbers: { digits: 3, compact: true }
+  palette:
+    real: var(--data-series-1)
+    target: '#8b9099'
+    twin D · LuGre: var(--data-series-2)
+    twin G · LuGre re-fit: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
+    twin H · + dwell: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
+    twin R · rate-state: 'color-mix(in srgb, var(--data-series-2) 80%, black)'
+    twin · full: var(--data-series-2)
+    twin D · LuGre vs real: var(--data-series-2)
+    twin G · LuGre re-fit vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
+    twin H · + dwell vs real: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
+    twin R · rate-state vs real: 'color-mix(in srgb, var(--data-series-2) 80%, black)'
+    twin · full vs real: var(--data-series-2)
+    real vs target: var(--data-series-1)
+clock: { data: samples, time: t }
+datasets:
+  samples:
+    data: 'data/{deployment}/runs/{run}/samples.json'
+    label: Samples
+    facets:
+      - { property: situation, label: Show }
+      - { property: source, label: Family }
+  diff:
+    data: 'data/{deployment}/runs/{run}/diff.json'
+    label: Errors
+    facets: [{ property: pair, label: Error pairs }]
+  run: { data: 'data/{deployment}/runs/{run}/run.json', label: Run }
+links: [{ from: diff.situation, to: samples.situation }]
+layout:
+  panels:
+    - { view: Run, w: 12, h: 2, toolbar: none }
+    - { view: Playback, w: 12 }
+    - { view: Angle · real vs models, w: 12, h: 4 }
+    - { view: Error · each against its reference, w: 12, h: 3 }
+    - { view: Speed, w: 6, h: 3 }
+    - { view: Torque, w: 6, h: 3 }
+    - { view: Acceleration (derived), w: 6, h: 3 }
+    - { view: Current · real, w: 6, h: 3 }
+    - { view: Board temperature · real, w: 6, h: 3 }
+    - { view: Angle histogram · this run, w: 6, h: 3 }
+views:
+  - type: table
+    name: Run
+    from: run
+    order: [title, started, device, kind, duration_s, gains, compare]
+  - type: playback
+    name: Playback
+    playback: { speeds: [0.25, 0.5, 1, 2, 4], range: true, readout: true }
+  - type: timeseries
+    name: Angle · real vs models
+    from: samples
+    timeseries: { x: t, 'y': q_deg, series: situation, unit: '°', legend: top, dash: [target] }
+  - type: timeseries
+    name: Error · each against its reference
+    from: diff
+    timeseries: { x: t, 'y': e_q_mrad, series: pair, unit: mrad, legend: top, dash: [target] }
+  - type: timeseries
+    name: Speed
+    from: samples
+    timeseries: { x: t, 'y': qd_deg_s, series: situation, unit: '°/s', legend: top, dash: [target] }
+  - type: timeseries
+    name: Torque
+    from: samples
+    timeseries: { x: t, 'y': tau_nm, series: situation, unit: N·m, legend: top, dash: [target] }
+    filters: 'source != "target"'
+  - type: timeseries
+    name: Acceleration (derived)
+    from: samples
+    timeseries: { x: t, 'y': qdd_deg_s2, series: situation, unit: '°/s²', legend: top, dash: [target] }
+  - type: timeseries
+    name: Current · real
+    from: samples
+    timeseries: { x: t, 'y': i_q_a, series: situation, unit: A, legend: top, dash: [target] }
+    filters: 'situation == "real"'
+  - type: timeseries
+    name: Board temperature · real
+    from: samples
+    timeseries: { x: t, 'y': temp_c, series: situation, unit: '°C', legend: top, dash: [target] }
+    filters: 'situation == "real"'
+  - type: chart
+    name: Angle histogram · this run
+    from: samples
+    chart:
+      mark: { type: line, interpolate: step }
+      encoding:
+        x: { field: q_deg, type: quantitative, bin: { maxbins: 50 }, title: 'q (°)' }
+        'y': { aggregate: count, type: quantitative, title: samples }
+        color:
+          field: situation
+          type: nominal
+          title: null
+          scale:
+            domain: [real, target, twin D · LuGre, twin G · LuGre re-fit, twin H · + dwell, twin R · rate-state, twin · full]
+            range: [var(--data-series-1), '#8b9099', var(--data-series-2), 'color-mix(in srgb, var(--data-series-2) 62%, black)', 'color-mix(in srgb, var(--data-series-2) 55%, white)', 'color-mix(in srgb, var(--data-series-2) 80%, black)', var(--data-series-2)]

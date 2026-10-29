@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim2real</title>
+<meta name="description" content="sim2real: deployments, their runs and coverage, and every run played back real against its models, with the gates layer on top.">
+<link rel="icon" type="image/svg+xml" href="/brand/icons/sim2real-app.svg">
+<link rel="stylesheet" href="/vendor/data-ui/dist/data-ui.css">
+<link rel="stylesheet" href="/app/app.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="/app/" aria-label="sim2real home: deployments">
+    <img class="lockup lockup-light" src="/brand/logos/sim2real-logo-lockup.svg" alt="sim2real">
+    <img class="lockup lockup-dark" src="/brand/logos/sim2real-logo-lockup-dark.svg" alt="sim2real">
+  </a>
+  <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
+  <span class="grow"></span>
+  <button class="layer" id="layer" type="button" aria-pressed="false" hidden>
+    <span class="knob" aria-hidden="true"></span><span>Gates layer</span>
+  </button>
+  <a class="aside-link" href="/dashboards/" title="The five dashboard proposals (Oct 27-28)">Proposals</a>
+</header>
+<main id="page"></main>
+<script type="module" src="/app/app.js"></script>
+</body>
+</html>

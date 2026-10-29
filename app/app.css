@@ -1,0 +1,56 @@
+/* The sim2real app host: a thin header (lockup, where you are, the gates-layer switch) around one data-ui dashboard. */
+/* WHY every variable is --s2r-*: data-ui falls back to shadcn names (--muted, --accent, --border), so a host --muted would
+   repaint its tables. The accent is neutral so blue keeps one meaning (real); green and red mean pass/fail only. */
+:root {
+  --s2r-page: #f6f6f7; --s2r-ink: #18181b; --s2r-muted: #71717a; --s2r-line: #e4e4e7; --s2r-panel: #ffffff; --s2r-accent: #3f3f46;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --s2r-page: #0c0c0e; --s2r-ink: #ececef; --s2r-muted: #9a9aa3; --s2r-line: #2c2c31; --s2r-panel: #151518; --s2r-accent: #d4d4d8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --s2r-page: #0c0c0e; --s2r-ink: #ececef; --s2r-muted: #9a9aa3; --s2r-line: #2c2c31; --s2r-panel: #151518; --s2r-accent: #d4d4d8;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--s2r-page); color: var(--s2r-ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--s2r-line); background: var(--s2r-panel);
+  position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+.brand { display: inline-flex; align-items: center; flex: none; }
+.lockup { height: 28px; width: auto; display: block; }
+.lockup-dark { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lockup-light { display: none; } :root:not([data-theme="light"]) .lockup-dark { display: block; } }
+:root[data-theme="dark"] .lockup-light { display: none; }
+:root[data-theme="dark"] .lockup-dark { display: block; }
+.crumbs { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 14px; flex-wrap: wrap; }
+.crumbs a { color: var(--s2r-muted); text-decoration: none; }
+.crumbs a:hover { color: var(--s2r-ink); text-decoration: underline; }
+.crumbs [aria-current] { font-weight: 600; }
+.crumbs .sep { color: var(--s2r-muted); }
+.grow { flex: 1; }
+.layer { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; color: var(--s2r-ink); background: var(--s2r-page);
+  border: 1px solid var(--s2r-line); border-radius: 999px; padding: 4px 12px 4px 6px; cursor: pointer; }
+.layer[hidden] { display: none; }
+.layer .knob { width: 26px; height: 15px; border-radius: 999px; background: var(--s2r-line); position: relative; transition: background .15s; }
+.layer .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--s2r-panel);
+  box-shadow: 0 0 0 1px var(--s2r-muted); transition: left .15s; }
+.layer[aria-pressed="true"] .knob { background: var(--s2r-accent); }
+.layer[aria-pressed="true"] .knob::after { left: 13px; }
+.layer:focus-visible, .aside-link:focus-visible { outline: 2px solid var(--s2r-accent); outline-offset: 2px; }
+.aside-link { color: var(--s2r-muted); font-size: 12.5px; text-decoration: none; border: 1px solid var(--s2r-line); border-radius: 6px; padding: 3px 8px; }
+.aside-link:hover { color: var(--s2r-ink); }
+main { padding: 12px 16px 48px; }
+data-dashboard { display: block; }
+.empty { color: var(--s2r-muted); }
+/* Zach (2026-10-28): "A single dashboard with filters on the right that change what the panels show". data-ui puts its rail
+   on the left (PEP 0010 Q4 keeps it there for now), so the host moves it right; a `rail: right` key is a listed data-ui gap. */
+data-dashboard .dd-body.dd-has-rail { grid-template-columns: minmax(0, 1fr) auto; }
+data-dashboard .dd-body.dd-has-rail > .dd-rail { order: 2; padding-right: 0; padding-left: 6px; }
+@media (max-width: 760px) {
+  data-dashboard .dd-body.dd-has-rail { grid-template-columns: minmax(0, 1fr); }
+  data-dashboard .dd-body.dd-has-rail > .dd-rail { order: 0; padding-left: 0; }
+  .lockup { height: 24px; }
+}

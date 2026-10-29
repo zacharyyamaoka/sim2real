@@ -1,9 +1,10 @@
-"""Serve the sim2real dashboard proposals on 127.0.0.1 and print the URL. Never opens a browser.
+"""Serve the sim2real app (and the dashboard proposals) on 127.0.0.1 and print the URL. Never opens a browser.
 
     python3 /home/bam/sim2real/serve.py            (a free port in 4700-4799)
     python3 /home/bam/sim2real/serve.py --port 4712
 
-Stdlib only. Serves this repo's root so the pages reach vendor/data-ui beside dashboards/.
+Stdlib only. Serves this repo's root: / redirects to the app (/app/: deployments -> runs -> run, built by tools/build_app.py),
+the five proposals stay at /dashboards/, and the pages reach vendor/data-ui and brand/ beside them.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PORTS = range(4700, 4800)
-TYPES = {".base": "text/plain; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".glb": "model/gltf-binary",
+TYPES = {".svg": "image/svg+xml", ".base": "text/plain; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".glb": "model/gltf-binary",
          ".mp4": "video/mp4", ".json": "application/json", ".css": "text/css", ".md": "text/plain; charset=utf-8"}
 
 
@@ -103,7 +104,7 @@ def main() -> int:
     if port in listening_ports():
         raise SystemExit(f"port {port} is already in use (someone else owns it); omit --port to take a free one")
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), functools.partial(Handler, directory=str(ROOT)))
-    print(f"sim2real dashboards: http://127.0.0.1:{port}/dashboards/  (pid {os.getpid()}, Ctrl-C to stop)", flush=True)
+    print(f"sim2real: http://127.0.0.1:{port}/app/  (proposals: /dashboards/; pid {os.getpid()}, Ctrl-C to stop)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
