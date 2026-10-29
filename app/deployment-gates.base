@@ -62,6 +62,7 @@ style:
     twin C · calibrated vs real: var(--data-series-2)
     twin C1 · fast inertia vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
     real vs target: var(--data-series-1)
+  families: { property: source, colors: { real: 1, sim: 2, target: muted } }
 datasets:
   runs:
     data: 'data/{deployment}/runs.json'

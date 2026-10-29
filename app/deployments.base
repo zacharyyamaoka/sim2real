@@ -37,6 +37,7 @@ style:
     twin C · calibrated vs real: var(--data-series-2)
     twin C1 · fast inertia vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
     real vs target: var(--data-series-1)
+  families: { property: source, colors: { real: 1, sim: 2, target: muted } }
 layout:
   panels:
     - text: "## Deployments\nEvery machine we run sim to real on. Each is unique; the numbers above the list roll up across all of them. Click one to open its runs."

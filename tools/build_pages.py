@@ -42,7 +42,9 @@ SIM_SHADES = [SIM, f"color-mix(in srgb, {SIM} 62%, black)", f"color-mix(in srgb,
 PALETTE = {"real": REAL, "target": MUTED, **dict(zip(MODELS, SIM_SHADES))}
 PALETTE.update({f"{model} vs real": shade for model, shade in zip(MODELS, SIM_SHADES)})
 PALETTE["real vs target"] = REAL
-STYLE = {"chrome": "minimal", "numbers": {"digits": 3, "compact": True}, "palette": PALETTE}
+# style.families (CONTRACT §32): the family picks the hue when a series has no palette entry; real blue, sim orange, target muted
+STYLE = {"chrome": "minimal", "numbers": {"digits": 3, "compact": True}, "palette": PALETTE,
+         "families": {"property": "source", "colors": {"real": 1, "sim": 2, "target": "muted"}}}
 TONES = {"pass": "good", "warn": "warn", "partial": "warn", "fail": "bad", "not_run": "muted"}
 RUN_DATA = "data/{deployment}/runs/{run}"
 DEP_DATA = "data/{deployment}"
@@ -263,12 +265,15 @@ def run_page() -> dict:
             # the contract's difference(a, b) rows (tools/trajectory.py): situation = a, reference = b, e_q_mrad = b − a
             "diff": {"data": f"{RUN_DATA}/diff_samples.json", "label": "Errors", "facets": [{"property": "reference", "label": "Error against"}]},
             "run": {"data": f"{RUN_DATA}/run.json", "label": "Run"},
+            # the output link's marker 100 mm out along its x axis, in the joint's own frame (tools/build_app.py MARKER_BODY)
+            "poses": {"data": f"{RUN_DATA}/poses.json", "label": "Poses", "filters": 'body == "marker_100mm"'},
         },
         # WHY linked: hiding a situation on the rail hides its error line too
-        "links": [{"from": "diff.situation", "to": "samples.situation"}],
+        "links": [{"from": "diff.situation", "to": "samples.situation"}, {"from": "poses.situation", "to": "samples.situation"}],
         "layout": {"panels": [
             {"view": "Run", "w": 12, "h": 2, "toolbar": "none"},
             {"view": "Playback", "w": 12},
+            {"view": "Output link · 3D in its joint frame", "w": 7, "h": 5}, {"view": "Output link · top (down the joint axis)", "w": 5, "h": 5},
             {"view": "Angle · real vs models", "w": 12, "h": 4},
             {"view": "Error against the target (target − each)", "w": 6, "h": 3}, {"view": "Model error against real (real − model)", "w": 6, "h": 3},
             {"view": "Speed", "w": 6, "h": 3}, {"view": "Torque", "w": 6, "h": 3},
@@ -278,6 +283,12 @@ def run_page() -> dict:
         "views": [
             {"type": "table", "name": "Run", "from": "run", "order": ["title", "started", "device", "kind", "duration_s", "gains", "compare"]},
             {"type": "playback", "name": "Playback", "playback": {"speeds": [0.25, 0.5, 1, 2, 4], "range": True, "readout": True}},
+            # WHY trail with a 1 s decay: a run sweeps the same arc many times; the trail shows where it is now and the last second
+            {"type": "trajectory3d", "name": "Output link · 3D in its joint frame", "from": "poses",
+             "trajectory3d": {"series": "situation", "family": "source", "unit": "mm", "show": "trail", "decay": 1.0, "projection": "perspective",
+                              "axes": "auto", "density": 20}},
+            {"type": "trajectory3d", "name": "Output link · top (down the joint axis)", "from": "poses",
+             "trajectory3d": {"series": "situation", "family": "source", "unit": "mm", "show": "trail", "decay": 1.0, "projection": "top", "axes": "auto"}},
             ts("Angle · real vs models", "samples", "q_deg", "°"),
             ts("Error against the target (target − each)", "diff", "e_q_mrad", "mrad", filters='reference == "target"'),
             ts("Model error against real (real − model)", "diff", "e_q_mrad", "mrad", filters='reference == "real"'),

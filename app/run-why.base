@@ -42,6 +42,7 @@ style:
     twin C · calibrated vs real: var(--data-series-2)
     twin C1 · fast inertia vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
     real vs target: var(--data-series-1)
+  families: { property: source, colors: { real: 1, sim: 2, target: muted } }
 clock: { data: samples, time: t }
 datasets:
   samples:
@@ -55,9 +56,12 @@ datasets:
     label: Errors
     facets: [{ property: reference, label: Error against }]
   run: { data: 'data/{deployment}/runs/{run}/run.json', label: Run }
+  poses: { data: 'data/{deployment}/runs/{run}/poses.json', label: Poses, filters: 'body == "marker_100mm"' }
   why: { data: 'data/{deployment}/why.json', label: Why, filters: 'station == "{station}"' }
   decomposition: { data: 'data/{deployment}/why/{station}.json', label: Residual decomposition }
-links: [{ from: diff.situation, to: samples.situation }]
+links:
+  - { from: diff.situation, to: samples.situation }
+  - { from: poses.situation, to: samples.situation }
 layout:
   panels:
     - { view: Run, w: 12, h: 2, toolbar: none }
@@ -67,6 +71,8 @@ layout:
     - { view: This station, w: 12, h: 2, toolbar: none }
     - { view: Torque gap by term family, w: 6, h: 3 }
     - { view: Move error by phase, w: 6, h: 3 }
+    - { view: Output link · 3D in its joint frame, w: 7, h: 5 }
+    - { view: Output link · top (down the joint axis), w: 5, h: 5 }
     - { view: Angle · real vs models, w: 12, h: 4 }
     - { view: 'Error against the target (target − each)', w: 6, h: 3 }
     - { view: 'Model error against real (real − model)', w: 6, h: 3 }
@@ -84,6 +90,29 @@ views:
   - type: playback
     name: Playback
     playback: { speeds: [0.25, 0.5, 1, 2, 4], range: true, readout: true }
+  - type: trajectory3d
+    name: Output link · 3D in its joint frame
+    from: poses
+    trajectory3d:
+      series: situation
+      family: source
+      unit: mm
+      show: trail
+      decay: 1.0
+      projection: perspective
+      axes: auto
+      density: 20
+  - type: trajectory3d
+    name: Output link · top (down the joint axis)
+    from: poses
+    trajectory3d:
+      series: situation
+      family: source
+      unit: mm
+      show: trail
+      decay: 1.0
+      projection: top
+      axes: auto
   - type: timeseries
     name: Angle · real vs models
     from: samples

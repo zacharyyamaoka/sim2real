@@ -2,11 +2,12 @@
 
 A built copy of data-ui, never edited here. Re-vendor it from data-ui; do not patch it in place.
 
-- **Source:** `/home/bam/data-ui` `integrate/packet` @ `6f4a72e` (2026-10-29, "merge lane/p1a-contract @ ece6a76": PEP 0010
-  P1a, the robotics contract barrier, CONTRACT §32), on top of dd53748 (main 56e08be + lane/dashboard-cards + lane/legend-toggle +
-  lane/live + PEP 0010 P0). **A trial: not merged to data-ui main** (main is still 56e08be on 2026-10-29). Built green: `node
-  build.mjs`, 479 of 480 unit tests pass (`node --test tests/unit/*.test.mjs tools/facets.test.mjs`, 0 fail), and
-  `tools/test_robotics_fixture.py` 5/5. Before it: dd53748, before that `lane/dashboard-cards` @ `dbe1bd7`.
+- **Source:** `/home/bam/data-ui` `integrate/packet` @ `a0b229b` (2026-10-29, "merge lane/p1b-scene3d @ 47785cb": PEP 0010 P1b,
+  scene3d primitives and stage plus the trajectory3d viewer, CONTRACT §32), on top of 6f4a72e (P1a, the robotics contract) and
+  dd53748 (main 56e08be + dashboard-cards + legend-toggle + live + P0). **A trial: not merged to data-ui main** (main is still
+  56e08be on 2026-10-29). Built green: `node build.mjs`; unit tests 505 of 506 pass, 0 fail (`node --test tests/unit/*.test.mjs
+  tools/facets.test.mjs`); `tools/test_robotics_fixture.py` and `tools/test_check_robotics.py` (with jsonschema, pyyaml) OK.
+  The robotics contract files are byte-identical to 6f4a72e's. Before: 6f4a72e, dd53748, `lane/dashboard-cards` @ `dbe1bd7`.
 - **How it was built:** `git -C /home/bam/data-ui archive dd53748 | tar -x -C <scratch>`, `node_modules` linked read-only from
   `/home/bam/data-ui/.wt/p1a-contract/node_modules` (the same package-lock.json), `node build.mjs` in the scratch copy. Nothing in
   `/home/bam/data-ui` was written.

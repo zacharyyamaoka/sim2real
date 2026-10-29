@@ -10,6 +10,7 @@ started. Needs the app's data (tools/build_app.py). Asserts, measured in the pag
 - the gates layer toggles on (the station gate matrix appears, URL layer=gates) and off again;
 - a run with models opens from its Open link, and its legend's real swatch is blue and every model swatch orange
   (hue measured from the rendered swatch colour; green and red are reserved for pass/fail);
+- the two trajectory3d panels (3D and the top face) draw a non-blank canvas with a real (blue) and a model (orange) series;
 - a legend click hides that series on the chart and a second click shows it again (pixels of its colour counted);
 - Play moves the clock (the readout and the playhead advance);
 - "Why it fails" lists the 8 stations, and clicking CAN 1 opens its worst held-out window (the clock at the window's start) with the
@@ -175,6 +176,40 @@ def main() -> int:
             # re-shown it is drawn last, on top
             check(pressed == "false" and back > 50 and hidden < 0.1 * back and key.get_attribute("aria-pressed") == "true",
                   f"a legend click hides the series and a second shows it (twin D pixels {shown} -> {hidden} -> {back})")
+
+            # 4c. the trajectory3d panels (data-ui P1b): the output link's marker arc in its joint frame, drawn on a WebGL canvas.
+            # Measured from a screenshot of the canvas itself (a WebGL buffer cannot be read back after it is shown), decoded in the
+            # page: how many pixels differ from the canvas background, and how many are real blue and model orange
+            measure_js = """async ([png, colours]) => {
+                const img = new Image(); img.src = 'data:image/png;base64,' + png; await img.decode();
+                const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+                const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
+                const bg = [d[0], d[1], d[2]]; const near = (i, rgb, tol) => Math.abs(d[i] - rgb[0]) + Math.abs(d[i + 1] - rgb[1]) + Math.abs(d[i + 2] - rgb[2]) < tol;
+                const out = {ink: 0}; for (const k of Object.keys(colours)) out[k] = 0;
+                // WHY the top-right corner is skipped: the view cube's RGB axes (Z blue, X red) sit there and match the series' hues
+                for (let i = 0; i < d.length; i += 4) { const x = (i / 4) % c.width, y = Math.floor(i / 4 / c.width);
+                  if (x > 0.75 * c.width && y < 0.3 * c.height) continue;
+                  if (!near(i, bg, 24)) out.ink++; for (const [k, rgb] of Object.entries(colours)) if (near(i, rgb, 60)) out[k]++; }
+                return out; }"""
+            import base64
+            # WHY seek first: at t = 0 a decay trail is only each series' head; 4 s in it is a second of arc per series
+            page.evaluate("location.hash = 't=4'")
+            page.wait_for_timeout(1000)
+            for title in ("Output link · 3D in its joint frame", "Output link · top (down the joint axis)"):
+                p3 = panel(page, title)
+                p3.scroll_into_view_if_needed()
+                p3.locator("canvas").first.wait_for(timeout=30000)
+                page.wait_for_timeout(1500)
+                canvas = max(p3.locator("canvas").all(), key=lambda c: (c.bounding_box() or {"width": 0})["width"] * (c.bounding_box() or {"height": 0})["height"])
+                png = base64.b64encode(canvas.screenshot()).decode()
+                found = page.evaluate(measure_js, [png, {"real": [0x2a, 0x78, 0xd6], "model": [0xeb, 0x68, 0x34]}])
+                box = canvas.bounding_box()
+                check(found["ink"] > 0.002 * box["width"] * box["height"] and found["real"] > 20 and found["model"] > 20,
+                      f"{title}: a non-blank canvas with a real (blue) and a model (orange) series drawn ({found})")
+            panel(page, "Output link · 3D in its joint frame").scroll_into_view_if_needed()
+            page.wait_for_timeout(500)
+            still("5b-trajectory3d")
+            angle.scroll_into_view_if_needed()
 
             # 5. playback
             readout = page.locator(".dv-pb-time").first

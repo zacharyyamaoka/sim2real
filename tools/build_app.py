@@ -293,19 +293,29 @@ def diff_tables(samples: list[dict], poses: list[dict]) -> tuple[list[dict], lis
     return d_samples, d_poses
 
 
+# WHY a marker at a nominal 100 mm (2026-10-29, the trajectory3d panel): the output link's own origin sits on the axis, so its
+# path is a point; a marker 100 mm out along the link's x axis draws the arc the joint swept. It is a display marker, named
+# for its radius, never a measured lever (the rack's lever lengths are unmeasured): its err_mm is 100 mm × the angle error.
+MARKER_BODY = "marker_100mm"
+MARKER_MM = 100.0
+
+
 def pose_rows(samples: list[dict], device: str) -> list[dict]:
     """poses.json rows for the joint's output link: frame = the joint's own (origin on the axis, z along it, angle 0 at the
     board's zero), so the position stays at the origin and the orientation is the angle about z. WHY no lever tip: the
-    rack's lever lengths are not measured (acceptance.py's class levers are agent defaults), and a pose is never guessed."""
+    rack's lever lengths are not measured (acceptance.py's class levers are agent defaults), and a pose is never guessed.
+    Plus MARKER_BODY: the same link, a marker MARKER_MM along its x axis (see MARKER_BODY)."""
     frame = f"{device.replace(' ', '').lower()}_joint"
     out = []
-    for row in samples:
-        q = row.get("q_deg")
-        half = None if q is None else math.radians(q) / 2.0
-        out.append({"t": row["t"], "run": row["run"], "situation": row["situation"], "source": row["source"], "body": "output_link",
-                    "frame": frame, "x_mm": 0.0, "y_mm": 0.0, "z_mm": 0.0,
-                    "quat_w": None if half is None else math.cos(half), "quat_x": None if half is None else 0.0,
-                    "quat_y": None if half is None else 0.0, "quat_z": None if half is None else math.sin(half)})
+    for body, radius in (("output_link", 0.0), (MARKER_BODY, MARKER_MM)):
+        for row in samples:
+            q = row.get("q_deg")
+            if q is None:
+                continue  # no angle, no pose (positions are required; a pose row is never made from 0)
+            angle = math.radians(q)
+            out.append({"t": row["t"], "run": row["run"], "situation": row["situation"], "source": row["source"], "body": body, "frame": frame,
+                        "x_mm": radius * math.cos(angle), "y_mm": radius * math.sin(angle), "z_mm": 0.0,
+                        "quat_w": math.cos(angle / 2), "quat_x": 0.0, "quat_y": 0.0, "quat_z": math.sin(angle / 2)})
     return out
 
 
