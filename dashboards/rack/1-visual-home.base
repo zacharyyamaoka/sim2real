@@ -1,5 +1,5 @@
 # sim2real · proposal 1-visual-home · scale rack: Space: the robot in 3D and its cameras, every view sim vs real, a badge per device
-# Built by dashboards/build.py (2026-10-28); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# Built by dashboards/build.py (2026-10-29); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
 # REAL rack data.
 data: devices.json
 properties:
@@ -52,7 +52,14 @@ style:
     Scene camera: var(--data-series-5)
     Wrist camera: var(--data-series-7)
 clock: { data: scene, time: t, loop: true }
-datasets: { devices: devices.json, scene: scene.json, servo: samples_servo.json, media: media.json }
+datasets:
+  devices: devices.json
+  scene:
+    data: scene_runs.json
+    facets: [{ property: run_set, as: select, label: Run set }]
+    filters: 'run_set == "8 motors · held-out waypoints"'
+  servo: samples_servo.json
+  media: media.json
 links: [{ from: servo.run_set, to: scene.run_set }]
 layout:
   panels:
@@ -144,4 +151,4 @@ views:
     name: 'Joint gap · twin − real, every servo'
     from: servo
     timeseries: { x: t, 'y': gap_mrad, series: device, unit: mrad, legend: top }
-    filters: 'situation == "twin" && run_set == "8 motors · held-out waypoints"'
+    filters: 'situation == "twin"'

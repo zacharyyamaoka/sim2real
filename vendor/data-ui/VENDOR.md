@@ -2,26 +2,28 @@
 
 A built copy of data-ui, never edited here. Re-vendor it from data-ui; do not patch it in place.
 
-- **Source:** `/home/bam/data-ui`, branch `lane/dashboard-cards` @ `dbe1bd7` (2026-10-27, "docs: the dashboards report lists
-  the judge round-1 fixes"). The brief named `50932e9`; the lane had moved 8 commits on (the judge round-1 fixes, PEP
-  0008's one-clock driver), so the tip was taken. **Not merged to data-ui main** at the time of vendoring.
-- **How it was built:** `git -C /home/bam/data-ui archive lane/dashboard-cards | tar -x -C <scratch>`, `node_modules`
-  linked read-only from `/home/bam/data-ui/.wt/dashboard-cards/node_modules`, `node build.mjs` in the scratch copy.
-  Nothing in `/home/bam/data-ui` was written.
-- **`dist/`:** the build's `dist/` without `site/` and without the `*.map` source maps (5.8 MB instead of 78 MB).
-  `dist/manifest.json` still lists the maps' hashes; the pages never load them. `dist/LICENSES.md` names every bundled
-  npm package and its licence.
-- **`gallery/sim-to-real/`:** inputs `dashboards/build.py` reads for CAN 14 (data-ui's own sim-to-real case, built by its
-  `source/build_replays.py` from the real rack archive): `samples.json` (the 10-23 staircase, real vs the 10-23 twins),
-  `media.json` + `media/` (the real RealSense clips), `motors.json`, and its README for provenance.
-- **`gallery/pid-tuning/media/ur5e_links.glb`:** Menagerie's UR5e visual meshes as one GLB (data-ui's pid-tuning case,
-  `source/build_robot.py`; BSD-3-Clause meshes), used by the 3D card at the 6-DOF and full-suite scales.
+- **Source:** `/home/bam/data-ui` `integrate/packet` @ `dd53748` (2026-10-29, "merge lane/p0-blockers @ 7996720"): main 56e08be +
+  lane/dashboard-cards + lane/legend-toggle + lane/live + PEP 0010 P0 (#1 the clock spans the filtered rows, #9 two-clause rail
+  filter, #13 src after load, #14 each rail's own radio group, the table's last row). **A trial: not merged to data-ui main**
+  (main is still 56e08be on 2026-10-29). Before it: `lane/dashboard-cards` @ `dbe1bd7`.
+- **How it was built:** `git -C /home/bam/data-ui archive dd53748 | tar -x -C <scratch>`, `node_modules` linked read-only from
+  `/home/bam/data-ui/.wt/packet/node_modules` (the same package-lock.json), `node build.mjs` in the scratch copy. Nothing in
+  `/home/bam/data-ui` was written.
+- **`dist/`:** the build's `dist/` without `site/` and the `*.map` source maps (13 MB). `dist/manifest.json` still lists the maps'
+  hashes; the pages never load them. `dist/LICENSES.md` names every bundled npm package and its licence.
+- **`gallery/sim-to-real/`:** from `gallery/examples/sim-to-real/` at the same sha: `samples.json`, `media.json` + `media/`,
+  `motors.json`, README (CAN 14's 10-23 staircase and its real RealSense clip, read by `dashboards/build.py`).
+- **`gallery/pid-tuning/media/ur5e_links.glb`:** from `gallery/examples/pid-tuning/media/` (Menagerie's UR5e meshes, BSD-3-Clause).
 
-To update: rebuild data-ui (or a newer lane), then replace `dist/` wholesale and record the new commit here.
+To update: rebuild data-ui (or a newer branch), then replace `dist/` and `gallery/` wholesale and record the new commit here.
 
-## Re-vendor when lane/dashboard-cards lands on data-ui main (noted 2026-10-28)
+## What this vendor let sim2real drop (2026-10-29)
 
-The data-ui agent: the lane has moved past dbe1bd7 to 0412c55+ (one driver per instance, Back/Forward fixes, and repeated
-sources now need explicit ids). Re-vendor from main once it lands, and re-run `dashboards/build.py` plus the checks. The
-13 gaps found here are filed at `/home/bam/data-ui/reports/backlog-sim2real-gaps-2026-10-28.md`. #1 (the clock ignores
-filters) and #13 (`src` set after load) come first.
+- `dashboards/host.js` no longer creates `<data-dashboard>` with its src already set: it sets src after connecting (P0 #13).
+- `dashboards/build.py`'s Visual home (rack) is no longer pinned to one run set: a Run set picker on the 3D rows, and the clock
+  spans the picked set (4.48 s for the 8 motors, 35.99 s for CAN 14's staircase; P0 #1).
+- `app/app.js` switches the gates layer by setting the dashboard's src in place (no page reload; P0 #13).
+- Legends toggle (legend-toggle): app/tests/test_app_flow.py checks a click hides a series and a second click shows it.
+
+Unchanged and re-checked: the host's colour-slot resolution (`resolveTokens` + `toRgb`, quoted hex) and the rail-on-the-right CSS
+(`.dd-body.dd-has-rail` / `.dd-rail` are the same classes).

@@ -94,6 +94,13 @@ def contrast(a, b) -> float:
 def wait_for_legends(page):
     page.wait_for_function("() => document.querySelectorAll('.dv-timeseries-key, .dv-scene3d-key').length > 0", timeout=30000)
     page.wait_for_timeout(2500)  # every card draws its own legend; give the slow ones (3D, video) their turn
+    # WHY a condition and not more sleep (re-vendor to data-ui dd53748, 2026-10-29): the Joint gap card sometimes drew its legend after
+    # the fixed wait (a different card failed on each run with an empty list); wait for its keys, and let the assertion judge them
+    try:
+        page.wait_for_function("""() => [...document.querySelectorAll('.dd-panel')].some(p => (p.querySelector('.dd-panel-h')?.textContent || '')
+            .includes('Joint gap') && p.querySelectorAll('.dv-timeseries-key').length > 0)""", timeout=20000)
+    except Exception:
+        pass  # no such card on this page, or it never drew: the check below reports it
 
 
 def family_of(name: str) -> str | None:

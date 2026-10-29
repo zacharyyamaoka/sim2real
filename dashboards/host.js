@@ -56,12 +56,11 @@ if (proposal.id === '4-run-inspector' && !hash.has('s.runs') && manifest.first_r
   hash.set('s.runs', `run:${encodeURIComponent(manifest.first_run[scale.id])}`);
   history.replaceState(history.state, '', `${location.pathname}${location.search}#${hash.toString()}`);
 }
-// WHY created here with its src already set: <data-dashboard> loads on connect; a src set after an upgrade is ignored
 const dash = document.createElement('data-dashboard');
 dash.id = 'dash';
 dash.setAttribute('aria-label', `${proposal.title} · ${scale.short}`);
-dash.setAttribute('src', src);
 document.getElementById('page').append(dash);
+dash.setAttribute('src', src);  // set after connecting: data-ui reloads on a src change since dd53748 (PEP 0010 P0 #13)
 // the system scheme or the page's own theme switch: re-read the .base so its palette is resolved again (rails, selections and the clock stay)
 const redraw = () => dash.reload();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);

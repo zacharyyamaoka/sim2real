@@ -1,5 +1,5 @@
 # sim2real · proposal 4-run-inspector · scale suite: Time: pick a run from the tree, every channel real vs twin on one clock
-# Built by dashboards/build.py (2026-10-28); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# Built by dashboards/build.py (2026-10-29); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
 # SIM STAND-IN: no real run exists at this scale.
 data: runs.json
 properties:

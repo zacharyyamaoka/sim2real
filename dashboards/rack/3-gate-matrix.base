@@ -1,5 +1,5 @@
 # sim2real · proposal 3-gate-matrix · scale rack: Acceptance: devices x gates, each cell a pass/fail you can open
-# Built by dashboards/build.py (2026-10-28); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
+# Built by dashboards/build.py (2026-10-29); data-ui grammar: vendor/data-ui (PEP 0004 dashboards, PEP 0005 cards).
 # REAL rack data.
 data: gates.json
 properties:

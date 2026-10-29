@@ -808,9 +808,13 @@ def dataset_entries(scale: str, ctx: dict, *, run_rail: bool, device_rails: bool
 
 def page_visual_home(scale: str, ctx: dict, proposal: dict) -> dict:
     n = len(ctx["devices"])
-    # WHY one run set per page and no run picker: a dashboard's clock spans every row of its clock dataset, filters or
-    # not, so a picker over a 4.5 s set and a 36 s set left a 36 s clock (data-ui gap list)
+    # The rack has two run sets (8 motors' held-out waypoints, CAN 14's staircase): a picker on the 3D rows, linked to the servo
+    # rows. Since data-ui dd53748 (PEP 0010 P0 #1) the clock spans only the rows the filters leave, so a 4.5 s set no longer
+    # inherits the 36 s set's clock; before it, this page was pinned to one set.
     datasets = {"devices": "devices.json", "scene": "scene.json", "servo": "samples_servo.json"}
+    if scale == "rack":
+        datasets["scene"] = {"data": "scene_runs.json", "facets": [{"property": "run_set", "as": "select", "label": "Run set"}],
+                             "filters": f'run_set == "{ctx["defaults"]["run_set"]}"'}
     links = [{"from": "servo.run_set", "to": "scene.run_set"}]
     if ctx["media"]:
         datasets["media"] = "media.json"
@@ -843,7 +847,7 @@ def page_visual_home(scale: str, ctx: dict, proposal: dict) -> dict:
         views.append(timeseries("Tool gap · twin − real", "eef", "gap_mm", "mm", filters='situation == "twin" || situation == "floor"'))
     panels.append({"view": "Joint gap · twin − real, every servo", "w": 12 if scale != "arm" else 8, "h": 3})
     views.append(timeseries("Joint gap · twin − real, every servo", "servo", "gap_mrad", "mrad",
-                            filters=f'situation == "twin" && run_set == "{ctx["defaults"]["run_set"]}"', series="device"))
+                            filters='situation == "twin"' if scale == "rack" else f'situation == "twin" && run_set == "{ctx["defaults"]["run_set"]}"', series="device"))
     if scale == "arm":
         panels.append({"view": "Tool gap · twin − real", "w": 4, "h": 3})
         views.append(timeseries("Tool gap · twin − real", "eef", "gap_mm", "mm", filters='situation == "twin" || situation == "floor"'))
