@@ -68,7 +68,7 @@ layout:
     - { view: Playback, w: 12 }
     - text: "### Why this station fails\nThe playback opens on the worst held-out window (the shaded range). The bars are the study's residual decomposition on the held-out tapes: how much of the torque the rack needed beyond the twin each term family explains on its own (unique R²), and where the move error sits. Blue and orange stay real and model; the bars are neither, so they are grey."
       w: 12
-    - { view: This station, w: 12, h: 2, toolbar: none }
+    - { view: This station, w: 12, h: 4, toolbar: none }
     - { view: Torque gap by term family, w: 6, h: 3 }
     - { view: Move error by phase, w: 6, h: 3 }
     - { view: Output link · 3D in its joint frame, w: 7, h: 5 }
@@ -168,7 +168,10 @@ views:
   - type: table
     name: This station
     from: why
-    order: [device, moves_x, hold_x, limiting_term, evidence, worst_window, why]
+    order: [explain]
+    rowHeight: extra
+    sort:
+      - { property: order, direction: ASC }
   - type: chart
     name: Torque gap by term family
     from: decomposition

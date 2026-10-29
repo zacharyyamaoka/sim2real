@@ -32,8 +32,6 @@ import data_ui_base  # noqa: E402
 # Members of the sim family keep the hue and change lightness (data-ui has no per-member line style yet: a listed gap).
 # The host resolves var() and color-mix() per theme before data-ui reads the file (app.js), as dashboards/host.js does.
 REAL = "var(--data-series-1)"
-# WHY a fixed 10 % for every path: data-ui's chart has no opacity: auto (max(1/n, 0.04), PEP 0010 §2) yet; a listed gap
-PATH = "color-mix(in srgb, var(--data-series-1) 10%, transparent)"
 SIM = "var(--data-series-2)"
 MUTED = "#8b9099"
 MODELS = ["twin D · LuGre", "twin G · LuGre re-fit", "twin H · + dwell", "twin R · rate-state", "twin · full", "twin A · deployed", "twin C · calibrated", "twin C1 · fast inertia"]
@@ -64,7 +62,7 @@ def deployments_page() -> dict:
         "properties": {"title": {"displayName": "Deployment"}, "kind": {"displayName": "Kind"}, "where": {"displayName": "Where"},
                        "stations": {"displayName": "Stations"}, "runs": {"displayName": "Runs"}, "runs_with_models": {"displayName": "Runs with models"},
                        "hours": {"displayName": "Hours"}, "days": {"displayName": "Days"}, "last_run": {"displayName": "Last run"},
-                       "gate_summary": {"displayName": "Gates"}, "page": {"displayName": "Open"}},
+                       "gate_summary": {"displayName": "Gates"}, "gates_source": {"displayName": "Gates from"}, "page": {"displayName": "Open"}},
         "style": STYLE,
         "layout": {"panels": [
             {"text": "## Deployments\nEvery machine we run sim to real on. Each is unique; the numbers above the list roll up across all of them. Click one to open its runs.", "w": 12},
@@ -78,7 +76,7 @@ def deployments_page() -> dict:
             {"type": "kpi", "name": "Hours of data", "kpi": {"label": "Hours of real data", "value": {"property": "hours", "summary": "Sum"}}},
             {"type": "kpi", "name": "Stations", "kpi": {"label": "Stations (devices)", "value": {"property": "stations", "summary": "Sum"}}},
             {"type": "table", "name": "All deployments", "open": {"mode": "link", "url": "page"},
-             "order": ["title", "kind", "where", "stations", "runs", "runs_with_models", "hours", "days", "last_run", "gate_summary"],
+             "order": ["title", "kind", "where", "stations", "runs", "runs_with_models", "hours", "days", "last_run", "gate_summary", "gates_source"],
              "sort": [{"property": "last_run", "direction": "DESC"}]},
         ],
     }
@@ -107,9 +105,12 @@ def deployment_page() -> dict:
     page = {
         "data": f"{DEP_DATA}/runs.json",
         "properties": {"title": {"displayName": "Run"}, "started": {"displayName": "Started"}, "device": {"displayName": "Station"},
-                       "status": {"displayName": "T2"}, "moves_x": {"displayName": "Moves ÷ floor (gate 1.5)"}, "hold_x": {"displayName": "Hold ÷ floor (gate 1.5)"},
+                       "status": {"displayName": "Cell"}, "explain": {"displayName": "Why it fails"}, "measured": {"displayName": "Number vs limit"},
+                       "floor_rules": {"displayName": "Floor rules"}, "next": {"displayName": "Next"}, "category": {"displayName": "Kind of step"},
+                       "kind": {"displayName": "Evidence"}, "dated": {"displayName": "Dated"}, "file": {"displayName": "File"}, "note": {"displayName": "Note"},
+                       "gate": {"displayName": "Gate"}, "moves_x": {"displayName": "Moves ÷ floor (gate 1.5)"}, "hold_x": {"displayName": "Hold ÷ floor (gate 1.5)"},
                        "gate_x": {"displayName": "Gate"}, "moves_before_x": {"displayName": "Moves, twin before / today"}, "hold_before_x": {"displayName": "Hold, twin before"},
-                       "limiting_term": {"displayName": "Limiting term"}, "evidence": {"displayName": "Evidence share"}, "why": {"displayName": "Why (the study)"},
+                       "limiting_term": {"displayName": "Limiting term"}, "evidence": {"displayName": "Evidence and uncertainty"}, "why": {"displayName": "Why"},
                        "floor_growth_x": {"displayName": "Floor grew"}, "overfit_pick": {"displayName": "Overfit pick"}, "pick_rule": {"displayName": "Pick rule"}, "round": {"displayName": "Round"},
                        "worst_window": {"displayName": "Worst window"}, "caveat": {"displayName": "Caveat"}, "detail": {"displayName": "What it means"},
                        "kind": {"displayName": "Kind"}, "duration_s": {"displayName": "Duration"}, "gains": {"displayName": "Gains (board)"},
@@ -128,7 +129,9 @@ def deployment_page() -> dict:
                          "facets": [{"property": "device", "as": "select", "label": "Coverage station"}], "filters": 'device == "CAN 12"'},
             "coverage_all": {"data": f"{DEP_DATA}/coverage.json", "label": "Coverage, every station"},
             "devices": {"data": f"{DEP_DATA}/devices.json", "label": "Stations"},
-            "why": {"data": f"{DEP_DATA}/why.json", "label": "Why it fails"},
+            "why": {"data": f"{DEP_DATA}/why.json", "label": "Why it fails",
+                    "facets": [{"property": "status", "label": "Cell"}, {"property": "blocked_on_zach", "label": "Blocked on Zach"}, {"property": "gate_id", "label": "Gate"}]},
+            "evidence": {"data": f"{DEP_DATA}/evidence.json", "label": "Evidence files"},
             "caveats": {"data": f"{DEP_DATA}/caveats.json", "label": "Caveats"},
         },
         # WHY linked: the runs rail and a selection in the runs table narrow every coverage panel (many-run comparison)
@@ -139,14 +142,15 @@ def deployment_page() -> dict:
                      "Blue is real, orange is a model, grey dashed is the target.", "w": 12},
             {"view": "Runs shown", "w": 3, "h": 2}, {"view": "Hours shown", "w": 3, "h": 2}, {"view": "Stations shown", "w": 3, "h": 2},
             {"view": "Runs with models", "w": 3, "h": 2},
-            {"text": "### Why it fails\nOne row per station from the calibration round and its 10-29 follow-ups (bam_rack_twin calibration_why_2.json): T2 on the held-out tapes, moves and hold "
-                     "offset each against **1.5× the floor** (after the round, with the twin before it beside it), the limiting term in the study's words, and how "
-                     "much of the held-out torque gap that term's family explains on its own. **Click a row** to play its worst held-out window. "
-                     "Read it with the caveats below it: they change how good the ratios look, and one is a decision still open.", "w": 12},
-            {"view": "Why it fails", "w": 12, "h": 4},
+            {"text": "### Why it fails\nOne row per gate cell the newest acceptance does not pass (and each pass that turns on the floor rule), "
+                     "grouped by station: the number against its limit, why in plain words, the evidence and its uncertainty, both floor rules where they differ, "
+                     "and the next discriminating test or what is **blocked on Zach**. A row with a run behind it opens that run's playback "
+                     "(T2: its worst held-out window). The files it was built from, with their dates, are under **Evidence files**.", "w": 12},
+            {"views": ["Why it fails", "Why it fails · columns"], "w": 12, "h": 7},
+            {"view": "Evidence files", "w": 12, "h": 3, "toolbar": "none"},
             {"view": "Caveats", "w": 12, "h": 5, "toolbar": "none"},
             {"view": "Runs", "w": 12, "h": 5, "title": "Runs · newest first", "toolbar": "compact"},
-            {"text": "### Coverage\nWhere the runs went. Every path is drawn faint (10 %), so the dark bands are where the rack spends its time; "
+            {"text": "### Coverage\nWhere the runs went. Every path is drawn at 1/n opacity (n = the station's runs, or every run on Angle over time; never under 0.04, which an 8-bit canvas still draws), so the dark bands are where the rack spends its time; "
                      "the dashed box is each station's proven window (bam_rack_twin TAPE_STATIONS: travel × speed ceiling; stations with no recorded window have none). "
                      "Counts are grid samples, so ÷ the grid rate is seconds. The station panels follow **Coverage station** on the rail (CAN 12 first).", "w": 12},
             {"view": "Phase space · every run", "w": 7, "h": 5},
@@ -162,9 +166,14 @@ def deployment_page() -> dict:
             {"type": "kpi", "name": "Stations shown", "from": "runs", "kpi": {"label": "Stations", "value": {"property": "device", "summary": "Unique"}}},
             {"type": "kpi", "name": "Runs with models", "from": "runs", "filters": "models > 0",
              "kpi": {"label": "Runs replayed by a model", "value": {"property": "run", "summary": "Count"}}},
-            {"type": "table", "name": "Why it fails", "from": "why", "open": {"mode": "link", "url": "page"},
-             "order": ["device", "status", "moves_x", "hold_x", "moves_before_x", "floor_growth_x", "overfit_pick", "pick_rule", "limiting_term", "evidence", "why",
-                       "worst_window", "hold_before_x", "round"]},
+            # WHY one wrapped column (Codex audit 2026-10-29): the explanation must be readable without scrolling sideways at 1280 and 390 px;
+            # a table of many columns put Limiting term / Evidence / Why off-screen. The columns stay one tab away.
+            {"type": "table", "name": "Why it fails", "from": "why", "open": {"mode": "link", "url": "page"}, "order": ["explain"],
+             "groupBy": {"property": "device"}, "sort": [{"property": "rank", "direction": "ASC"}, {"property": "order", "direction": "ASC"}], "rowHeight": "extra"},
+            {"type": "table", "name": "Why it fails · columns", "from": "why", "open": {"mode": "link", "url": "page"},
+             "order": ["device", "gate", "status", "measured", "why", "evidence", "floor_rules", "next", "category", "source"], "groupBy": {"property": "device"},
+             "rowHeight": "extra", "columnSize": {"device": 80, "gate": 140, "status": 80, "measured": 170, "why": 360, "evidence": 360, "floor_rules": 240, "next": 280}},
+            {"type": "table", "name": "Evidence files", "from": "evidence", "order": ["kind", "dated", "note", "file"]},
             # WHY tall rows and a wide detail column: the caveats are read in full, never clipped behind a hover
             {"type": "table", "name": "Caveats", "from": "caveats", "order": ["caveat", "detail"], "rowHeight": "extra",
              "columnSize": {"caveat": 200, "detail": 900}},
@@ -175,7 +184,8 @@ def deployment_page() -> dict:
              "chart": {"mark": {"type": "line", "strokeWidth": 1, "interpolate": "linear"},
                        "encoding": {"x": {"field": "q_deg", "type": "quantitative", "title": "q (°)"}, "y": {"field": "qd_deg_s", "type": "quantitative", "title": "qd (°/s)"},
                                     "detail": {"field": "run", "type": "nominal"}, "order": {"field": "t", "type": "quantitative"},
-                                    "color": {"field": "layer", "type": "nominal", "title": None, "scale": {"domain": ["path", "workspace"], "range": [PATH, MUTED]}}}}},
+                                    "color": {"field": "layer", "type": "nominal", "title": None, "scale": {"domain": ["path", "workspace"], "range": [REAL, MUTED]}},
+                                    "opacity": {"field": "path_opacity", "type": "quantitative", "scale": None, "legend": None}}}},
             {"type": "chart", "name": "Time at (q, qd)", "from": "coverage",
              "chart": {"transform": [{"filter": W}], "mark": "rect",
                        "encoding": {"x": {"field": "q_deg", "type": "quantitative", "bin": {"maxbins": 60}, "title": "q (°)"},
@@ -187,7 +197,8 @@ def deployment_page() -> dict:
             histogram("Acceleration histogram", "qdd_deg_s2", "qdd (°/s², derived)"),
             {"type": "chart", "name": "Angle over time · every run", "from": "coverage_all", "filters": 'layer == "path"',
              "chart": {"mark": {"type": "line", "strokeWidth": 1},
-                       "encoding": {"color": {"value": PATH}, "x": {"field": "t", "type": "quantitative", "title": "t from run start (s)"},
+                       "encoding": {"color": {"value": REAL}, "opacity": {"field": "path_opacity_all", "type": "quantitative", "scale": None, "legend": None},
+                                    "x": {"field": "t", "type": "quantitative", "title": "t from run start (s)"},
                                     "y": {"field": "q_deg", "type": "quantitative", "title": "q (°)"},
                                     "detail": {"field": "run", "type": "nominal"}}}},
         ],
@@ -335,7 +346,7 @@ def run_why_page() -> dict:
         {"text": "### Why this station fails\nThe playback opens on the worst held-out window (the shaded range). The bars are the study's residual "
                  "decomposition on the held-out tapes: how much of the torque the rack needed beyond the twin each term family explains on its own "
                  "(unique R²), and where the move error sits. Blue and orange stay real and model; the bars are neither, so they are grey.", "w": 12},
-        {"view": "This station", "w": 12, "h": 2, "toolbar": "none"},
+        {"view": "This station", "w": 12, "h": 4, "toolbar": "none"},
         {"view": "Torque gap by term family", "w": 6, "h": 3}, {"view": "Move error by phase", "w": 6, "h": 3},
     ]
     page["layout"]["panels"] = page["layout"]["panels"][:2] + overlay + page["layout"]["panels"][2:]
@@ -349,7 +360,7 @@ def run_why_page() -> dict:
                                                                 "scale": {"domain": ["before (deployed twin)", "after (calibrated twin)"], "range": ["#b8bcc4", "#6b7079"]}}}}}
 
     page["views"] += [
-        {"type": "table", "name": "This station", "from": "why", "order": ["device", "moves_x", "hold_x", "limiting_term", "evidence", "worst_window", "why"]},
+        {"type": "table", "name": "This station", "from": "why", "order": ["explain"], "rowHeight": "extra", "sort": [{"property": "order", "direction": "ASC"}]},
         bars("Torque gap by term family", "torque gap", "share of the held-out torque gap (unique R²)"),
         bars("Move error by phase", "move error", "share of the moving q error"),
     ]

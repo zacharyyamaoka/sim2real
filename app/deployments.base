@@ -13,6 +13,7 @@ properties:
   days: { displayName: Days }
   last_run: { displayName: Last run }
   gate_summary: { displayName: Gates }
+  gates_source: { displayName: Gates from }
   page: { displayName: Open }
 style:
   chrome: minimal
@@ -71,6 +72,6 @@ views:
   - type: table
     name: All deployments
     open: { mode: link, url: page }
-    order: [title, kind, where, stations, runs, runs_with_models, hours, days, last_run, gate_summary]
+    order: [title, kind, where, stations, runs, runs_with_models, hours, days, last_run, gate_summary, gates_source]
     sort:
       - { property: last_run, direction: DESC }

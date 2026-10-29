@@ -13,8 +13,9 @@ started. Needs the app's data (tools/build_app.py). Asserts, measured in the pag
 - the two trajectory3d panels (3D and the top face) draw a non-blank canvas with a real (blue) and a model (orange) series;
 - a legend click hides that series on the chart and a second click shows it again (pixels of its colour counted);
 - Play moves the clock (the readout and the playhead advance);
-- "Why it fails" lists the 8 stations, and clicking CAN 1 opens its worst held-out window (the clock at the window's start) with the
-  residual-decomposition plots.
+- the gate matrix is the newest acceptance file's, cell by cell (found independently by generated_at), and the page names it;
+- "Why it fails" has one row per cell that acceptance does not pass, each with a number, a why and a next step; its explanation
+  cells sit inside the viewport at 1280 and 390 px; a T2 row opens its worst held-out window with the decomposition plots.
 With --record it also writes a video of the click-through and stills of each step for the report.
 """
 
@@ -69,15 +70,39 @@ def hue(css: str) -> tuple[float, float]:
     return h * 360, s
 
 
+def newest_acceptance() -> tuple[Path, dict]:
+    """The newest bam_rack_twin acceptance file in the archive, by its own generated_at: read here independently of the producer."""
+    best = None
+    for path in Path("/archive/datasets/bam_rig").glob("rack_2026-*/analysis/acceptance*.json"):
+        doc = json.loads(path.read_text())
+        if isinstance(doc, dict) and str(doc.get("schema", "")).startswith("bam_rack_twin.acceptance/") and doc.get("generated_at"):
+            if best is None or doc["generated_at"] > best[1]["generated_at"]:
+                best = (path, doc)
+    return best
+
+
+def gates_match_newest() -> tuple[bool, str]:
+    """The gate matrix the app shows (gates.json) against the newest acceptance, cell by cell."""
+    path, doc = newest_acceptance()
+    want = {(f"CAN {can}", g["id"]): g["status"] for can, st in doc["stations"].items() for g in st["gates"]}
+    shown = {(c["device"], c["gate"].split()[0]): c["verdict"] for c in json.loads((REPO / "app/data/one-dof-test-rack/gates.json").read_text())["rows"]}
+    differ = sorted(k for k in want.keys() | shown.keys() if want.get(k) != shown.get(k))
+    passing = sum(1 for v in want.values() if v == "pass")
+    return not differ, f"{path.name} ({doc['generated_at']}): {passing}/{len(want)} pass; differing cells {differ[:5]}"
+
+
 def panel(page, title: str):
-    """A view panel by its title (a text panel can mention the same words, so match the panel header, not the body)."""
-    return page.locator(".dd-panel").filter(has=page.locator(".dd-panel-h", has_text=title)).first
+    """A view panel by its title (a text panel can mention the same words, so match the panel header, not the body); a tabbed
+    panel has no header, so its tab's name counts too."""
+    return page.locator(".dd-panel").filter(has=page.locator(f".dd-panel-h:has-text('{title}'), [role=tab][data-name='{title}']")).first
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--record", type=Path, help="write the click-through video and stills here")
     args = parser.parse_args()
+    ok, detail = gates_match_newest()
+    check(ok, f"the gate matrix shown is the newest acceptance, cell by cell: {detail}")
     port = free_port()
     server = subprocess.Popen([sys.executable, str(REPO / "serve.py"), "--port", str(port)], stdout=subprocess.PIPE, text=True)
     base = f"http://127.0.0.1:{port}"
@@ -231,15 +256,40 @@ def main() -> int:
             page.wait_for_timeout(2000)
             still("7-run-gates")
 
-            # 6. why it fails: one row per station; CAN 1's row opens its worst held-out window in playback
+            # 6. why it fails: one row per gate cell the newest acceptance does not pass, explained without scrolling sideways
             page.goto(f"{base}/app/?d=one-dof-test-rack")
             why = panel(page, "Why it fails")
             why.locator("tbody tr").first.wait_for(timeout=30000)
             page.wait_for_timeout(1500)
             why.scroll_into_view_if_needed()
             still("8-why-it-fails")
-            stations = why.locator("tbody tr").evaluate_all("rows => rows.map(r => r.querySelector('td')?.textContent.trim())")
-            check(sorted(stations) == sorted(f"CAN {c}" for c in (1, 4, 11, 12, 13, 14, 15, 21)), f"the Why it fails panel lists the 8 stations ({stations})")
+            newest_path, newest_doc = newest_acceptance()
+            open_cells = {(f"CAN {can}", g["id"]) for can, st in newest_doc["stations"].items() for g in st["gates"] if g["status"] != "pass"}
+            rows = json.loads((REPO / "app/data/one-dof-test-rack/why.json").read_text())["rows"]
+            listed = {(r["device"], r["gate_id"]) for r in rows if r["status"] != "pass"}
+            check(listed == open_cells and all(r.get("next") and r.get("why") and r.get("measured") for r in rows),
+                  f"Why it fails has one row per cell {newest_path.name} does not pass ({len(listed)} of {len(open_cells)}), each with a number, a why and a next step")
+            check(("CAN 12", "T3") in listed and next(r for r in rows if (r["device"], r["gate_id"]) == ("CAN 12", "T3"))["status"] == "fail",
+                  "CAN 12 T3 is listed as a fail (the stale acceptance had it passing)")
+            check(sum(1 for r in rows if r["next"].startswith("blocked on Zach")) > 0 and any(r.get("floor_rules") and "pending" in r["floor_rules"] for r in rows),
+                  "rows name what is blocked on Zach, and the floor rules where the verdict depends on them")
+            # the explanation sits inside the viewport, no sideways scroll, at 1280 and 390 px
+            for width in (1280, 390):
+                page.set_viewport_size({"width": width, "height": 900})
+                page.wait_for_timeout(1200)
+                why.scroll_into_view_if_needed()
+                page.wait_for_timeout(800)
+                boxes = why.locator("tbody td").evaluate_all(
+                    "tds => tds.filter(td => td.textContent.includes('Why:')).slice(0, 6).map(td => { const r = td.getBoundingClientRect(); return [r.left, r.right, innerWidth]; })")
+                check(len(boxes) >= 3 and all(left >= 0 and right <= vw + 0.5 for left, right, vw in boxes),
+                      f"at {width} px the explanation cells sit inside the viewport ({[(round(a), round(b)) for a, b, _ in boxes[:3]]}, width {boxes[0][2] if boxes else '?'})")
+                if width == 390:
+                    still("8c-why-390")
+            page.set_viewport_size({"width": 1440, "height": 900})
+            page.wait_for_timeout(1000)
+            evidence_text = panel(page, "Evidence files").inner_text()
+            check(newest_path.name in evidence_text.replace("…", "") or newest_doc["generated_at"] in evidence_text,
+                  f"the page names its gates' source and date ({newest_path.name}, {newest_doc['generated_at']})")
             panel(page, "Caveats").scroll_into_view_if_needed()
             page.wait_for_timeout(500)
             still("8b-caveats")
@@ -250,18 +300,21 @@ def main() -> int:
             check(all(s in gains for s in ("can11_hold_kp100", "can11_hold_kp150", "can11_hold_kp200", "can11_hold_il0.25", "can11_hold_il0.5"))
                   and len({gains[s] for s in ("can11_hold_kp100", "can11_hold_kp150", "can11_hold_kp200", "can11_hold_il0.25", "can11_hold_il0.5")}) == 5,
                   "the 10-29 CAN 11 gain steps each show their own board gains (" + "; ".join(gains.get(s, "?") for s in ("can11_hold_kp100", "can11_hold_kp150", "can11_hold_kp200", "can11_hold_il0.25", "can11_hold_il0.5")) + ")")
-            expected = next(r for r in json.loads((REPO / "app/data/one-dof-test-rack/why.json").read_text())["rows"] if r["device"] == "CAN 1")
+            # a row with a worst window opens playback there (CAN 1 passes T2 since the follow-up, so the first such row now: CAN 11 T2)
+            expected = next(r for r in rows if r["gate_id"] == "T2" and r.get("page") and "tr=" in r["page"])
             t0, t1 = (float(x) for x in re.search(r"tr=([\d.]+),([\d.]+)", expected["page"]).groups())
-            row = why.locator("tbody tr").filter(has=page.locator("td", has_text=re.compile(r"^\s*CAN 1\s*$"))).first
-            row.locator("td").nth(2).click()
-            page.wait_for_url(re.compile(r"why=can1(#|&|$)"), timeout=20000)
+            why.scroll_into_view_if_needed()
+            cell = why.locator("tbody td", has_text=re.compile(rf"^\s*T2 fidelity — {expected['status']}")).filter(has_text=expected["measured"].split(" ·")[0]).first
+            cell.click()
+            page.wait_for_url(re.compile(rf"why={expected['station']}(#|&|$)"), timeout=20000)
             readout = page.locator(".dv-pb-time").first
             readout.wait_for(timeout=30000)
             panel(page, "Torque gap by term family").wait_for(timeout=30000)
             page.wait_for_timeout(2500)
             now = float(re.match(r"[\d.]+", readout.inner_text()).group())
-            check(expected["worst_run"] in page.url and abs(now - t0) < 0.05,
-                  f"CAN 1 opens its worst held-out window ({expected['worst_run']}, clock {now:.2f} s, window {t0:.2f}-{t1:.2f} s)")
+            worst = re.search(r"run=([^&#]+)", expected["page"]).group(1)
+            check(worst in page.url and abs(now - t0) < 0.05,
+                  f"{expected['device']} T2 opens its worst held-out window ({worst}, clock {now:.2f} s, window {t0:.2f}-{t1:.2f} s)")
             check(panel(page, "Torque gap by term family").locator("canvas, svg").count() > 0 and panel(page, "Move error by phase").count() == 1,
                   "the run opened from Why shows the residual-decomposition plots")
             still("9-why-run")
