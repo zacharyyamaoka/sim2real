@@ -104,7 +104,7 @@ def shell_checks(page, where: str) -> None:
     m = page.evaluate("""() => {
         const r = (s) => { const el = document.querySelector(s); if (!el) return null; const b = el.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; };
         return {bar: r('header.top .bar'), word: r('header.top .wordmark'), find: r('header.top form.find'), acct: r('header.top .quick .acct'),
-                q: document.querySelectorAll('header.top input#site-q[type=search]').length, crumbs: [...document.querySelectorAll('.trail nav.crumbs a')].map(a => a.textContent.trim()),
+                q: document.querySelectorAll('header.top input#site-q[type=search]').length, crumbs: [...document.querySelectorAll('.trail nav.crumbs a:not(.back)')].map(a => a.textContent.trim()),
                 vw: innerWidth};
     }""")
     centred = m["find"] and abs((m["find"][0] + m["find"][1]) / 2 - (m["bar"][0] + m["bar"][1]) / 2) < 2
@@ -136,7 +136,7 @@ def main() -> int:
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
 
     vendored = SITE / "vendor" / "catalog_workbench"
-    manifest = json.loads((vendored / "MANIFEST.json").read_text())
+    manifest = json.loads((vendored / "MANIFEST.json").read_text())["files"]
     pin = json.loads((vendored / "VENDOR.json").read_text())
     edited = sorted(name for name, digest in manifest.items() if sha((vendored / name).read_bytes()) != digest)
     check(not edited and sha((vendored / "MANIFEST.json").read_bytes()) == pin["manifest_sha256"],
@@ -261,7 +261,7 @@ def main() -> int:
             check("t2~heldout" in page.url, f"a run with models opens ({href})")
             run_tabs = page.evaluate("[...document.querySelectorAll('nav.tabs [role=tab]')].map(t => t.textContent.trim())")
             check(run_tabs == ["Playback", "Gates", "Why it fails", "Diagnostics", "Evidence"], f"the run page's tabs ({run_tabs})")
-            crumbs = page.evaluate("[...document.querySelectorAll('.trail nav.crumbs a')].map(a => a.textContent.trim())")
+            crumbs = page.evaluate("[...document.querySelectorAll('.trail nav.crumbs a:not(.back)')].map(a => a.textContent.trim())")
             check(crumbs[:2] == ["Home", "One Dof Test Rack"] and re.fullmatch(r"CAN \d+", crumbs[2] or "") and len(crumbs) == 4,
                   f"the run's trail is Home › deployment › station › run ({' › '.join(crumbs)})")
             angle = panel(page, "Angle · real vs models")

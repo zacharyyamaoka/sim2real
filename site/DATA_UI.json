@@ -1,0 +1,6 @@
+{
+ "what": "the data-ui kit sim2real already vendors (vendor/data-ui/dist, VENDOR.md), served at /static/data-ui/; never edited, never re-vendored by the site",
+ "source": "`/home/bam/data-ui` `integrate/packet` @ `a0b229b` (2026-10-29, \"merge lane/p1b-scene3d @ 47785cb\": PEP 0010 P1b,",
+ "manifest_sha256": "52546d240b8cdf2ed24802008502e49534e0f97d8560b7a86ee41df61b13abd5",
+ "files": 140
+}
