@@ -17,11 +17,10 @@
     "/archive/datasets/bam_rig/rack_2026-10-28",
     "/archive/datasets/bam_rig/rack_2026-10-29"
    ],
-   "acceptance": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/acceptance_followup.json",
-   "why": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why_2.json",
    "scored": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_scored.json",
    "earlier_floors": "/archive/datasets/bam_rig/rack_2026-10-24/analysis/floors.json",
-   "why_calibration": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why.json"
+   "why_calibration": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why.json",
+   "note_evidence": "The acceptance, why, triage, pooled-floor and warm files are found as the newest of each kind by their own date (tools/build_app.py newest()); scored, earlier_floors and why_calibration name the calibration round's files the caveats are about."
   }
  ]
 }

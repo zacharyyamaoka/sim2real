@@ -531,6 +531,9 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
             "worst_run": slug, "worst_window": f"{window['t0_s']:.2f}-{window['t1_s']:.2f} s (tape clock), {window['rms_mrad']:.2f} mrad RMS" if window else None,
             "page": link, "order": can,
             "pick": t2.get("declared_pick") or t2.get("pick"), "safer_pick": t2.get("safer_pick"),
+            "cis": "; ".join(f"{p['name']} {p['value']:.3g} [{p['ci95'][0]:.3g}, {p['ci95'][1]:.3g}]" for p in
+                             (((station.get("identified") or {}).get("parameters") if isinstance(station.get("identified"), dict) else station.get("identified")) or [])
+                             if isinstance(p, dict) and p.get("ci95") and isinstance(p.get("value"), (int, float)))[:400] or None,
             "pick_rule": (f"declared {pick_rule[1]} {pick_rule[2]:.2f}× vs held-out-safer {pick_rule[3]} {pick_rule[4]:.2f}×" if pick_rule else None)})
         if pick_rule:
             rules.append(pick_rule)
@@ -572,6 +575,181 @@ def write_decompositions(dep_dir: Path, entry: dict) -> None:
                 rows.append({"chart": "move error", "what": phase, "share": num(share, 4), "when": when})
         write(dep_dir / "why" / f"{sid}.json", f"Residual decomposition · CAN {sid[3:]}", f"{entry['why']} limiting_term.evidence",
               {"share": {"digits": 3}}, rows)
+
+
+# ---------------------------------------------------------------------------------------------------- the newest evidence, found, never pinned
+
+
+def newest(entry: dict, pattern: str, stamp_key: str, schema_prefix: str | None = None) -> tuple[Path, str] | tuple[None, None]:
+    """The newest file matching `pattern` in any archive day's analysis/ folder, by its own `stamp_key` (an ISO time inside the
+    file). WHY by the file's stamp and never a pinned path (Codex audit 2026-10-29): the registry pinned acceptance_followup.json
+    while acceptance_warm4.json had landed, so the app showed 22/88 cells passing instead of 28/88 and CAN 12 T3 as a pass."""
+
+    best = (None, None)
+    for day in entry["archive"]:
+        for path in sorted((Path(day) / "analysis").glob(pattern)):
+            try:
+                doc = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            stamp = doc.get(stamp_key) if isinstance(doc, dict) else None
+            if not stamp or (schema_prefix and not str(doc.get("schema", "")).startswith(schema_prefix)):
+                continue
+            if best[1] is None or stamp > best[1]:
+                best = (path, stamp)
+    return best
+
+
+def evidence_sources(entry: dict) -> dict:
+    """Every evidence file the gates layer and Why it fails read: the newest of each kind, with its own date."""
+
+    found = {"acceptance": newest(entry, "acceptance*.json", "generated_at", "bam_rack_twin.acceptance/"),
+             "why": newest(entry, "calibration_why*.json", "written_at"),
+             "triage": newest(entry, "gates_triage*.json", "written_at"),
+             "floors_pooled": newest(entry, "floors_pooled*.json", "written_at")}
+    warm = {}
+    for day in entry["archive"]:
+        for path in sorted((Path(day) / "analysis").glob("warm*_scored.json")):
+            doc = json.loads(path.read_text())
+            for sid, station in doc.get("stations", {}).items():
+                if sid not in warm or doc["scored_at"] > warm[sid][1]:
+                    warm[sid] = (path, doc["scored_at"], station)
+    found["warm"] = warm
+    return found
+
+
+GATE_NAMES = {"T1": "floor", "T2": "fidelity", "T3": "torque", "T4": "static accuracy", "T5": "encoder-blind terms", "T6": "drive gain",
+              "T7": "envelope", "T8": "thermal", "T9": "warm and cold", "T10": "live re-identification", "T11": "provenance"}
+
+
+def _fmt(value) -> str:
+    if value is None:
+        return "no number"
+    if isinstance(value, (int, float)):
+        return f"{value:.3g}"
+    return str(value)
+
+
+def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_rows: list[dict]) -> list[dict]:
+    """One row per (station, gate) the newest acceptance does not pass: the number against its limit, the reason in plain words,
+    the evidence and its uncertainty, both floor rules where they differ (the floor decision is Zach's, pending), and the next
+    discriminating test or "blocked on Zach: <action>". T2 rows carry the why file's limiting term and worst-window link."""
+
+    acc_path, acc_stamp = sources["acceptance"]
+    acceptance = json.loads(acc_path.read_text())["stations"]
+    triage_path, triage_stamp = sources["triage"]
+    triage = {(c["station"], c["gate"]): c for c in json.loads(triage_path.read_text())["cells"]} if triage_path else {}
+    zach = {}
+    if triage_path:
+        for action, cells in json.loads(triage_path.read_text()).get("zach_actions", {}).items():
+            for cell in cells:
+                zach.setdefault(tuple(cell.split()), action)
+    pooled = json.loads(sources["floors_pooled"][0].read_text())["stations"] if sources["floors_pooled"][0] else {}
+    t2_by = {r["station"]: r for r in t2_rows}
+    by_slug = {r["run"]: r for r in runs}
+    rows = []
+    for can, station in acceptance.items():
+        sid = f"can{can}"
+        for gate in station["gates"]:
+            status = gate.get("status")
+            gid = gate["id"]
+            if status == "pass" and gid not in ("T2", "T9"):
+                continue
+            tri = triage.get((sid, gid), {})
+            value, target = gate.get("value"), gate.get("target")
+            reason = gate.get("detail") or ""
+            evidence, floors, link = [], None, None
+            if gid == "T2" and sid in t2_by:
+                t2 = t2_by[sid]
+                term, story = t2.get("limiting_term") or "", t2.get("why") or ""
+                reason = story if term and term.split(";")[-1].strip()[:40] in story else (f"limiting term: {term}. " if term else "") + story
+                evidence.append(t2.get("evidence") or "")
+                if t2.get("cis"):
+                    evidence.append("identified, 95 % CI: " + t2["cis"])
+                if t2.get("unexplained") is not None and t2["unexplained"] >= 0.5:
+                    evidence.append(f"{100 * t2['unexplained']:.0f} % of the held-out torque gap follows no term the decomposition tests: unexplained, not attributed")
+                if t2.get("evidence", "").startswith("no residual decomposition"):
+                    evidence.append(f"CAN {can} has no residual decomposition: it was carried (no new held-out tapes since 10-28), so nothing attributes its gap")
+                link = t2.get("page")
+                p2 = (pooled.get(sid) or {}).get("t2") or {}
+                if p2.get("session") and p2.get("pooled"):
+                    a, b = p2["session"], p2["pooled"]
+                    floors = (f"session floor: moves {a['moves_over_floor']:.2f}×, hold {a['hold_offset_over_floor']:.2f}× ({'pass' if a['passes'] else 'fail'}) · "
+                              f"pooled floor: moves {b['moves_over_floor']:.2f}×, hold {b['hold_offset_over_floor']:.2f}× ({'pass' if b['passes'] else 'fail'})")
+            if gid == "T9" and sid in sources["warm"]:
+                path, stamp, warm = sources["warm"][sid]
+                t9 = warm["t9"]
+                reason = (f"warm, the twin ({warm['twin']}) misses by {t9['warm_twin_median_mrad']:.2f} mrad against the warm floor's "
+                          f"{t9['warm_floor_mrad']:.2f} mrad = {t9['warm_over_floor']:.2f}×; cold it is {t9['cold_over_floor']:.2f}×. The twin moved "
+                          f"{t9['twin_warm_over_cold']:.2f}× warm vs cold, the floor {t9['floor_warm_over_cold']:.2f}×. " + reason)
+                evidence.append(f"{len(t9.get('warm_runs_mrad', {}))} warm runs, worst session: {t9.get('worst_session')} ({path.name}, {stamp})")
+                runs_mrad = t9.get("warm_runs_mrad") or {}
+                if runs_mrad:
+                    worst_run = max(runs_mrad, key=runs_mrad.get)
+                    try:
+                        slug = slug_of(worst_run)
+                        if slug in by_slug:
+                            link = f"{APP_URL}?d={dep_id}&run={slug}&why={sid}"
+                    except ValueError:
+                        pass
+                p9 = (pooled.get(sid) or {}).get("t9") or {}
+                sess = p9.get("sessions") or []
+                if sess:
+                    w = sess[-1]
+                    if w.get("session_floor_mrad") and w.get("pooled_floor_mrad"):
+                        a = w["twin_mrad"] / w["session_floor_mrad"]
+                        b = w["twin_mrad"] / w["pooled_floor_mrad"]
+                        floors = (f"session floor {w['session_floor_mrad']:.2f} mrad: {a:.2f}× ({'pass' if a <= 1.5 else 'fail'}) · "
+                                  f"pooled floor {w['pooled_floor_mrad']:.2f} mrad: {b:.2f}× ({'pass' if b <= 1.5 else 'fail'})")
+            if gid == "T10" and sid in sources["warm"] and (sources["warm"][sid][2].get("t10") or {}).get("value") is not None:
+                path, stamp, warm = sources["warm"][sid]
+                t10 = warm["t10"]
+                restored = t10.get("restored_over_floor", (t10.get("v2") or {}).get("restored_over_floor"))
+                note = (t10.get("v2") or {}).get("why") or ""
+                reason = (f"after the heating drift, the live re-identification left the twin at {_fmt(restored)}× the warm floor (stale twin "
+                          f"{_fmt(t10.get('stale_over_floor'))}×; gate 1.5×){': ' + note if note else ''}. " + reason)
+                evidence.append(f"warm session scored in {path.name} ({stamp})")
+            if not reason.strip() and tri.get("what_closes_it"):
+                reason = tri["what_closes_it"]
+            elif tri.get("what_closes_it"):
+                evidence.append(f"triage ({tri.get('category')}): {tri['what_closes_it']}")
+            if tri and tri.get("status") != status:
+                evidence.append(f"the triage ({triage_stamp}) saw this cell as {tri.get('status')}; the newest acceptance ({acc_stamp}) says {status}")
+            if not tri:
+                evidence.append(f"not in the triage ({triage_stamp}): it predates this result")
+            # the next discriminating step
+            action = zach.get((sid, gid)) or tri.get("zach_action")
+            if tri.get("category") == "Zach" and action:
+                nxt = f"blocked on Zach: {action}"
+            elif tri.get("category") == "impossible as defined":
+                nxt = f"impossible as defined: the gate needs redefining for this station (Zach's call). {tri.get('what_closes_it', '')}"
+            elif tri.get("plan") and tri.get("status") == status:
+                nxt = f"{tri.get('category')}: run {', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}"
+            elif tri.get("plan"):
+                nxt = f"the planned run ({', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}) has been run and the cell is now {status}: needs re-triage"
+            elif tri.get("what_closes_it"):
+                nxt = f"{tri.get('category')}{' (no rack time)' if tri.get('category') == 'modelling' else ''}: {tri['what_closes_it']}"
+            else:
+                nxt = "not triaged yet"
+            flips = bool(floors) and ("(pass)" in floors.split("·")[0]) != ("(pass)" in floors.split("·")[1])
+            if flips:
+                floors += " — the verdict depends on the floor rule, which is Zach's decision, pending"
+            if status == "pass":
+                if not flips:
+                    continue  # a pass under both floor rules is not a failure to explain
+                nxt = "blocked on Zach: decide the floor rule (the session floor the gates use today, or the pooled same-tape floor)"
+                evidence.insert(0, "passes on the session floor the gates use today; fails on the pooled floor")
+            measured = f"{_fmt(value)} · limit: {target or 'none written'}"
+            why_text = (reason.strip() or "no reason written").rstrip(".") + "."
+            explain = (f"{GATE_NAMES.get(gid) and gid + ' ' + GATE_NAMES[gid] or gid} — {status}: {measured}. Why: {why_text} "
+                       f"Evidence: {'; '.join(e for e in evidence if e) or 'no evidence written'}." + (f" Floor rules: {floors}." if floors else "") + f" Next: {nxt}.")
+            rows.append({"explain": explain, "rank": {"fail": 0, "partial": 1, "pass": 1, "not_run": 2}.get(status, 3), "station": sid, "device": f"CAN {can}", "gate_id": gid, "gate": f"{gid} {GATE_NAMES.get(gid, gate.get('name', ''))}",
+                         "status": status, "measured": f"{_fmt(value)} · limit: {target or 'none written'}", "value": value if isinstance(value, (int, float)) else None,
+                         "why": reason.strip() or "no reason written", "evidence": "; ".join(e for e in evidence if e) or "no evidence written",
+                         "floor_rules": floors, "next": nxt, "category": tri.get("category"), "blocked_on_zach": nxt.startswith("blocked on Zach"),
+                         "page": link, "order": int(can) * 100 + int(gid[1:]), "source": f"{acc_path.name} ({acc_stamp})"})
+    rows.sort(key=lambda r: ({"fail": 0, "partial": 1, "pass": 2, "not_run": 3}.get(r["status"], 4), int(r["device"].split()[1]), int(r["gate_id"][1:])))
+    return rows
 
 
 # ---------------------------------------------------------------------------------------------------- one deployment
@@ -699,6 +877,15 @@ def build_deployment(entry: dict, replays: dict) -> dict:
                         "qd_max_deg_s": num(math.degrees(env["qd_max_rad_s"]), 4) if env.get("qd_max_rad_s") is not None else None,
                         "kp": component.get("moteus_config", {}).get("kp"), "ki": component.get("moteus_config", {}).get("ki"),
                         "kd": component.get("moteus_config", {}).get("kd")})
+    # WHY a per-row opacity (Codex audit 2026-10-29, "draw all of the runs with 1/n opacity"): data-ui's chart draws a row's opacity
+    # column but runs no Vega-Lite transform on its large-data path, so n cannot be counted in the page; the producer writes it. n is
+    # the station's runs (the joint panels show one station) or every run (Angle over time), floored at 0.04 as PEP 0010 §2 and
+    # trajectory3d's opacity: auto do: an 8-bit canvas draws 1/337 as nothing (measured on CAN 13: 0 blue pixels). A rail filter does
+    # not recount n: a listed data-ui gap.
+    per_station = Counter(r["device"] for r in runs)
+    for row in coverage:
+        row["path_opacity"] = num(max(1.0 / max(per_station.get(row["device"], 1), 1), 0.04), 4)
+        row["path_opacity_all"] = num(max(1.0 / max(len(runs), 1), 0.04), 4)
     # the workspace as a closed outline in the same (q, qd) columns: one path per station, drawn grey by the `layer` column
     # (w = 0, so histograms that sum w never count it; the box plots filter it out)
     for d in devices:
@@ -708,12 +895,21 @@ def build_deployment(entry: dict, replays: dict) -> dict:
                    (d["q_min_deg"], d["qd_max_deg_s"]), (d["q_min_deg"], -d["qd_max_deg_s"])]
         for i, (q, qd) in enumerate(corners):
             coverage.append({"run": f"workspace · {d['device']}", "device": d["device"], "kind": "workspace", "day": None, "t": float(i), "w": 0,
-                             "q_deg": q, "qd_deg_s": qd, "qdd_deg_s2": None, "tau_nm": None, "layer": "workspace"})
+                             "q_deg": q, "qd_deg_s": qd, "qdd_deg_s2": None, "tau_nm": None, "layer": "workspace", "path_opacity": 1.0, "path_opacity_all": 1.0})
     _, diagnostics, matrix = deployment_gates(dep_dir)
-    cells = acceptance_cells(Path(entry["acceptance"])) if entry.get("acceptance") else _
-    why_rows, caveats = why(entry, dep_id, runs)
-    write(dep_dir / "why.json", f"Why it fails · {entry['title']}", f"{entry['why']} (calibration round); caveats derived from {entry['scored']} and {entry['earlier_floors']}",
-          WHY_PROPS, why_rows)
+    sources = evidence_sources(entry)
+    entry = {**entry, "why": str(sources["why"][0] or entry.get("why"))}
+    cells = acceptance_cells(sources["acceptance"][0])
+    t2_rows, caveats = why(entry, dep_id, runs)
+    why_rows = failed_cells(entry, dep_id, runs, sources, t2_rows)
+    write(dep_dir / "why.json", f"Why it fails · {entry['title']}", f"one row per failed, partial or unrun gate cell of {sources['acceptance'][0]}; "
+          f"reasons from {sources['why'][0]}, {sources['triage'][0]}, warm*_scored.json, {sources['floors_pooled'][0]}", WHY_PROPS, why_rows)
+    write(dep_dir / "why_t2.json", f"T2 by station · {entry['title']}", f"{entry['why']}", WHY_PROPS, t2_rows)
+    passing_now = sum(1 for c in cells if c["verdict"] == "pass")
+    write(dep_dir / "evidence.json", f"Evidence files · {entry['title']}", "the newest of each kind, found by its own date (tools/build_app.py newest())", {},
+          [{"kind": kind, "file": str(path), "dated": stamp, "note": (f"{passing_now} of {len(cells)} gate cells pass" if kind == "acceptance" else None)}
+           for kind, (path, stamp) in ((k, sources[k]) for k in ("acceptance", "why", "triage", "floors_pooled")) if path]
+          + [{"kind": f"warm T9 · {sid}", "file": str(p), "dated": st, "note": None} for sid, (p, st, _) in sorted(sources["warm"].items())])
     write(dep_dir / "caveats.json", f"Caveats · {entry['title']}", f"derived from {entry['scored']} and {entry['earlier_floors']}", {}, caveats)
     write_decompositions(dep_dir, entry)
     stamp = now()
@@ -735,7 +931,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         "hours": num(sum(r["duration_s"] or 0 for r in runs) / 3600.0, 3), "samples": sum(r["samples"] for r in runs),
         "days": len(days), "first_run": runs[-1]["started"] if runs else None, "last_run": runs[0]["started"] if runs else None,
         "gate_cells": len(cells), "gate_cells_passing": passing, "gates_passing": num(passing / len(cells), 3) if cells else None,
-        "gate_summary": f"{passing} of {len(cells)} cells pass", "page": f"{APP_URL}?d={dep_id}", "basis": "real",
+        "gate_summary": f"{passing} of {len(cells)} cells pass", "gates_source": f"{sources['acceptance'][0].name} ({sources['acceptance'][1]})", "page": f"{APP_URL}?d={dep_id}", "basis": "real",
     }
     print(f"{dep_id}: {len(runs)} runs ({summary['runs_with_models']} with models), {len(coverage)} coverage rows at {hz:.3g} Hz, "
           f"{len(run_gate_rows)} run diagnostics, gates {passing}/{len(cells)}; {time.perf_counter() - started_at:.0f} s")
@@ -776,7 +972,7 @@ RUN_HINTS = {"title": {}, "day": {}, "session": {}, "device": {}, "class": {}, "
              "basis": {"display": "badge", "colors": {"real": 1}}, "duration_s": {"digits": 3}, "rate_hz": {"digits": 3}}
 DEVICE_PROPS = {"q_min_deg": {"unit": "°"}, "q_max_deg": {"unit": "°"}, "qd_max_deg_s": {"unit": "°/s"}}
 GATE_PROPS = {"verdict": {"display": "badge", "colors": VERDICT_SLOT}}
-WHY_PROPS = {"status": {"display": "badge", "colors": VERDICT_SLOT}, "moves_x": {"unit": "×", "digits": 3}, "hold_x": {"unit": "×", "digits": 3},
+WHY_PROPS = {"status": {"display": "badge", "colors": VERDICT_SLOT}, "blocked_on_zach": {"type": "checkbox"}, "moves_x": {"unit": "×", "digits": 3}, "hold_x": {"unit": "×", "digits": 3},
              "gate_x": {"unit": "×"}, "moves_before_x": {"unit": "×", "digits": 3}, "hold_before_x": {"unit": "×", "digits": 3},
              "evidence_share": {"digits": 3, "note": "unique R²: the share of the held-out torque gap (rack − twin) this term family explains on its own"},
              "floor_growth_x": {"unit": "×", "digits": 3, "note": "the new day's T1 floor ÷ the 10-24 floor: above 1 makes every × floor ratio look better"},
