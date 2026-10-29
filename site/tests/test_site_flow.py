@@ -266,6 +266,98 @@ def shell_checks(page, where: str) -> None:
           f"{round(abs((m['find'][0] + m['find'][1]) / 2 - (m['bar'][0] + m['bar'][1]) / 2), 1) if m['find'] else '?'} px)")
 
 
+# ---- audit round 2 (2026-10-29, gaps 2 and 3): every number on a failure explanation is the displayed result's -----------------
+NUM = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)")
+RATIO = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s?[×x](?![\w])")
+LABELLED = re.compile(r"\[from [^\]\[]*?\.json[^\]\[]*?\]")
+
+
+def cell_numbers(can: str, gate: dict, facts: dict) -> list[float]:
+    """Every number the acceptance file itself states for this cell: its value, limit, judged statistics and limits, its target and
+    detail, and the station's facts' own *_source lines (where the study named its model and the other numbers it saw)."""
+    out = []
+    for v in [gate.get("value"), gate.get("limit")] + [x for j in gate.get("judged") or [] for x in (j.get("value"), j.get("limit"))]:
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            out.append(float(v))
+    texts = [str(gate.get("target") or ""), str(gate.get("detail") or "")] + [str(v) for k, v in facts.items() if k.endswith("_source")]
+    out += [float(x) for t in texts for x in NUM.findall(t)]
+    return out
+
+
+def matches(printed: str, allowed: list[float]) -> bool:
+    """`printed` equals one allowed value at the precision it was printed with."""
+    decimals = len(printed.split(".")[1]) if "." in printed else 0
+    x = float(printed)
+    return any(abs(x - v) <= 0.5 * 10 ** -decimals + 1e-9 for v in allowed)
+
+
+def explanation_checks(data: Path, path: Path, doc: dict, out: Path) -> None:
+    """Gaps 2 and 3 of the round-2 audit, read from the archive here (an oracle outside tools/build_app.py)."""
+    rows = json.loads((data / "why.json").read_text())["rows"]
+    bad_head, bad_stat, unlabelled, none_written, repeated, no_model = [], [], [], [], [], []
+    for r in rows:
+        can = r["device"].split()[1]
+        station = doc["stations"][can]
+        gate = next(g for g in station["gates"] if g["id"] == r["gate_id"])
+        allowed = cell_numbers(can, gate, station["facts"])
+        strict = [float(v) for v in [gate.get("value"), gate.get("limit")] + [x for j in gate.get("judged") or [] for x in (j.get("value"), j.get("limit"))]
+                  if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        cell = f"{r['device']} {r['gate_id']}"
+        head = re.sub(r"\bT\d+\b", "", r["explain"].split(" Why:")[0])
+        for text in (r["measured"], head):
+            wrong = [n for n in NUM.findall(text) if not matches(n, strict)]
+            if wrong:
+                bad_head.append(f"{cell}: {wrong} in {text!r}")
+        want = [(j["name"], j["value"], j["limit"], j["passes"]) for j in gate.get("judged") or []]
+        got = [(j["name"], j["value"], j["limit"], j["passes"]) for j in r.get("statistic") or []]
+        if got != want or r.get("limit") != gate.get("limit"):
+            bad_stat.append(f"{cell}: {got} / {r.get('limit')} vs {want} / {gate.get('limit')}")
+        for field in ("why", "evidence", "floor_rules", "next"):
+            rest = LABELLED.sub("", r.get(field) or "")
+            stray = [n for n in RATIO.findall(rest) if not matches(n, allowed)]
+            if stray:
+                unlabelled.append(f"{cell} {field}: {stray}")
+        if "none written" in r["measured"] + r["explain"]:
+            none_written.append(cell)
+        for block in LABELLED.findall(" ".join(str(r.get(f) or "") for f in ("why", "evidence", "floor_rules", "next", "earlier"))):
+            if not re.search(r"\d{4}-\d{2}-\d{2}", block) or "model" not in block:
+                unlabelled.append(f"{cell}: a labelled block without its date or model: {block[:80]}")
+        sentences = {f: {x.strip().lower() for x in re.split(r"(?<=[.;:])\s+", str(r.get(f) or "")) if len(x.strip()) >= 25} for f in ("why", "evidence", "next")}
+        dup = (sentences["why"] & sentences["evidence"]) | (sentences["why"] & sentences["next"]) | (sentences["evidence"] & sentences["next"])
+        if dup:
+            repeated.append(f"{cell}: {sorted(dup)[0][:70]}")
+        if not r.get("model"):
+            no_model.append(cell)
+    check(not bad_head, f"every number in each explanation's headline and statistic is the displayed acceptance's ({path.name}) for that cell "
+                        f"({len(rows)} rows; wrong: {bad_head[:3]})")
+    check(not bad_stat, f"each row's judged statistics and limit are the acceptance's judged entries and limit, exactly ({bad_stat[:3]})")
+    check(not unlabelled, f"no ratio from another file appears unlabelled: any number the acceptance does not state sits in a [from <file>.json, <date>, model ...] block ({unlabelled[:3]})")
+    check(not none_written, f"no row says 'limit: none written' ({none_written[:5]})")
+    check(not repeated, f"Why, Evidence and Next never repeat the same sentence ({repeated[:3]})")
+    check(not no_model, f"every row names the model of the result it shows ({no_model[:5]})")
+    pick = lambda d, g: next(r for r in rows if (r["device"], r["gate_id"]) == (d, g))  # noqa: E731
+    for d, g in (("CAN 21", "T9"), ("CAN 14", "T10"), ("CAN 21", "T2")):
+        r = pick(d, g)
+        print(f"     {d} {g}: {r['measured']}")
+
+    # gap 4: coverage paths at exactly 1/n, and the page says what is drawn
+    n_runs = {}
+    for r in json.loads((data / "runs.json").read_text())["rows"]:
+        n_runs[r["device"]] = n_runs.get(r["device"], 0) + 1
+    total = sum(n_runs.values())
+    off = set()
+    for r in json.loads((data / "coverage.json").read_text())["rows"]:
+        if r.get("layer") == "workspace":
+            continue
+        n = n_runs[r["device"]]
+        if abs(r["path_opacity"] - 1 / n) > 1e-3 / n or abs(r["path_opacity_all"] - 1 / total) > 1e-3 / total:
+            off.add((r["device"], r["path_opacity"], round(1 / n, 6)))
+    check(not off, f"every coverage path is drawn at exactly 1/n (n = its station's runs; 1/{total} on Angle over time), no floor ({sorted(off)[:3]})")
+    texts = {name: (out / "views" / name).read_text() for name in ("station-coverage.base", "deployment-coverage.base")}
+    honest = {name: "1/n" in t and "0.04" not in t and "Runs per cell" in t and "fade" in t for name, t in texts.items()}
+    check(all(honest.values()), f"the coverage pages say what is drawn: exact 1/n, no floor, and that the Runs per cell voxels count runs where paths fade out ({honest})")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -284,6 +376,7 @@ def main() -> int:
     differ = sorted(k for k in want.keys() | shown.keys() if want.get(k) != shown.get(k))
     check(not differ, f"the gate matrix shown is the newest acceptance, cell by cell: {path.name} ({doc['generated_at']}): "
                       f"{sum(1 for v in want.values() if v == 'pass')}/{len(want)} pass; differing cells {differ[:5]}")
+    explanation_checks(data, path, doc, out)
     whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
 
