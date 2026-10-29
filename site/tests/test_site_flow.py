@@ -4,7 +4,8 @@
     uv run --no-project --with playwright python /home/bam/sim2real-worktrees/catalog-workbench/site/tests/test_site_flow.py
     uv run --no-project --with playwright python /home/bam/sim2real-worktrees/catalog-workbench/site/tests/test_site_flow.py --record /abs/capture/dir
 
-A port of app/tests/test_app_flow.py's 25 checks onto the migrated site (every one keeps its meaning; where a step moved,
+Since 2026-10-29 also a station's Schedule tab (bam_rack_twin.schedule's plan, before anything runs), its checks written before
+the tab. A port of app/tests/test_app_flow.py's 25 checks onto the migrated site (every one keeps its meaning; where a step moved,
 the check says where to), plus the checks that the shell IS the workbench's: the same bar (wordmark, one centred search,
 Account), the same trail, record pages with tabs, and every side panel resizable (data-resizable, dragged and measured).
 Spatial claims are measured with getBoundingClientRect in headless Chromium, at 1280 and 390 px.
@@ -414,6 +415,62 @@ def main() -> int:
                   "the run's Why it fails tab shows the station's residual-decomposition plots")
             still("10-run-why")
 
+            # 8b. a station's Schedule tab (2026-10-29, bam_rack_twin.schedule): the plan before anything runs - targets grey dashed,
+            # the twin's orange model curve, coverage heatmaps train vs held-out, and the run commands; every run "not run yet"
+            sched_dir = data / "schedule" / "can11"
+            summary = json.loads((sched_dir / "summary.json").read_text())
+            check(summary["schema"] == "bam_rack_twin.schedule/1" and summary["station"] == "can11" and summary["status"] == "not run yet",
+                  f"CAN 11's schedule is served beside the deployment's data ({summary['trajectories']} trajectories, {summary['runs']} runs, not run yet)")
+            sys.path.insert(0, str(REPO / "vendor" / "data-ui" / "dist" / "python"))
+            import data_ui_base  # noqa: PLC0415
+            view = data_ui_base.loads((out / "views" / "station-schedule.base").read_text())
+            planned = next(v for v in view["views"] if v["name"] == "Planned trajectories")
+            dash = planned["chart"]["encoding"]["strokeDash"]
+            colors = planned["chart"]["encoding"]["color"]["scale"]
+            check(dash["field"] == "series" and colors["domain"][0] == "target" and colors["range"][0] == "#8b9099"
+                  and all(r == "var(--data-series-2)" or "data-series-2" in r for r in colors["range"][1:]),
+                  "the planned trajectories draw the target grey dashed and each model orange (the site's colour convention)")
+            page.goto(f"{base}/{DEP}/can11/")
+            page.wait_for_load_state("load")
+            st_tabs = page.evaluate("[...document.querySelectorAll('nav.tabs [role=tab]')].map(t => t.textContent.trim())")
+            check("Schedule" in st_tabs, f"CAN 11's station page has a Schedule tab ({st_tabs})")
+            open_tab(page, "schedule")
+            sched = page.locator("[role=tabpanel][data-tab=schedule]")
+            commands = sched.locator(".s2r-commands pre")
+            n_commands = commands.count()
+            texts = commands.all_inner_texts()
+            check(n_commands == len(summary["commands"]) and all("--plan /" in t and "\n" not in t.strip() for t in texts),
+                  f"the Schedule tab lists one one-line run command per plan ({n_commands} of {len(summary['commands'])})")
+            check(sched.get_by_text("not run yet").count() > 0 and sched.locator(".s2r-commands [data-runner=runnable]").count() >= 1
+                  and sched.locator(".s2r-commands [data-runner=unsupported]").count() >= 1,
+                  "the Schedule tab says the schedule has not run yet, and which plans the runner can play today")
+            heat = {name: panel(page, name) for name in ("Coverage · q × qd · train", "Coverage · q × qd · held-out",
+                                                         "Coverage · qd × qdd · train", "Coverage · qd × qdd · held-out")}
+            lines = panel(page, "Planned trajectories")
+            lines.wait_for(timeout=30000)
+            for item in heat.values():
+                item.wait_for(timeout=30000)
+            page.wait_for_timeout(3000)
+            drawn = {name: item.locator("canvas, svg").count() > 0 and item.evaluate("el => el.getBoundingClientRect().height") > 120 for name, item in heat.items()}
+            check(all(drawn.values()) and lines.locator("canvas, svg").count() > 0,
+                  f"the planned trajectories and four coverage heatmaps are drawn ({drawn})")
+            boxes = {name: item.evaluate("el => { const b = el.getBoundingClientRect(); return [b.left, b.right, b.top]; }") for name, item in heat.items()}
+            side = boxes["Coverage · q × qd · train"][1] <= boxes["Coverage · q × qd · held-out"][0] + 1 and \
+                abs(boxes["Coverage · q × qd · train"][2] - boxes["Coverage · q × qd · held-out"][2]) < 2
+            check(side, f"train and held-out coverage sit side by side, train left ({boxes['Coverage · q × qd · train']} | {boxes['Coverage · q × qd · held-out']})")
+            legend = lines.inner_text()
+            check("target" in legend and "model" in legend, "the planned trajectories' legend names the target and the model")
+            rail = page.evaluate("""() => { const d = [...document.querySelectorAll('[data-tab=schedule] data-dashboard .dd-body.dd-has-rail')]
+                .find(b => b.offsetParent); if (!d) return null; const r = d.querySelector(':scope > .dd-rail').getBoundingClientRect();
+                return {rail_right: r.right, panels_left: d.querySelector(':scope > .dd-main').getBoundingClientRect().left}; }""")
+            check(rail is not None and rail["rail_right"] <= rail["panels_left"] + 1,
+                  f"the Schedule tab's filter rail sits left of its panels ({rail})")
+            runs_panel = panel(page, "Planned runs")
+            runs_panel.locator("tbody tr").first.wait_for(timeout=30000)
+            row_text = runs_panel.locator("tbody tr").first.inner_text()
+            check("not run yet" in row_text, f"every planned run's status reads not run yet ({row_text[:80]!r})")
+            still("8b-schedule")
+
             # 9. the Analysis area: Why it fails as one readable report
             page.goto(f"{base}/analysis/why-it-fails/")
             report_cells = page.evaluate("[...document.querySelectorAll('.s2r-why [data-cell]')].map(r => r.dataset.cell)")
@@ -423,7 +480,7 @@ def main() -> int:
 
             # 10. a phone: no sideways scroll anywhere on the click path, the search still in the bar
             page.set_viewport_size({"width": 390, "height": 844})
-            for url in ("/", f"/{DEP}/", f"/{DEP}/runs/{run_slug}/", f"/{DEP}/can12/", "/analysis/why-it-fails/"):
+            for url in ("/", f"/{DEP}/", f"/{DEP}/runs/{run_slug}/", f"/{DEP}/can12/", f"/{DEP}/can11/#schedule", "/analysis/why-it-fails/"):
                 page.goto(base + url)
                 page.wait_for_load_state("load")
                 page.wait_for_timeout(1500)
