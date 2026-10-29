@@ -1,0 +1,38 @@
+{
+ "density-ramp": [
+  68,
+  91,
+  505,
+  430
+ ],
+ "quantised-silhouette": [
+  65,
+  52,
+  463,
+  472
+ ],
+ "outlined-dither": [
+  50,
+  50,
+  463,
+  472
+ ],
+ "clipped-dither": [
+  78,
+  52,
+  463,
+  472
+ ],
+ "polar-dither": [
+  56,
+  52,
+  463,
+  472
+ ],
+ "tooth-pixels": [
+  57,
+  52,
+  463,
+  472
+ ]
+}
