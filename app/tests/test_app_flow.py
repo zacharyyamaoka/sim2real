@@ -10,7 +10,9 @@ started. Needs the app's data (tools/build_app.py). Asserts, measured in the pag
 - the gates layer toggles on (the station gate matrix appears, URL layer=gates) and off again;
 - a run with models opens from its Open link, and its legend's real swatch is blue and every model swatch orange
   (hue measured from the rendered swatch colour; green and red are reserved for pass/fail);
-- Play moves the clock (the readout and the playhead advance).
+- Play moves the clock (the readout and the playhead advance);
+- "Why it fails" lists the 8 stations, and clicking CAN 1 opens its worst held-out window (the clock at the window's start) with the
+  residual-decomposition plots.
 With --record it also writes a video of the click-through and stills of each step for the report.
 """
 
@@ -66,7 +68,8 @@ def hue(css: str) -> tuple[float, float]:
 
 
 def panel(page, title: str):
-    return page.locator(".dd-panel", has_text=title).first
+    """A view panel by its title (a text panel can mention the same words, so match the panel header, not the body)."""
+    return page.locator(".dd-panel").filter(has=page.locator(".dd-panel-h", has_text=title)).first
 
 
 def main() -> int:
@@ -173,6 +176,31 @@ def main() -> int:
             page.locator(".dd-panel", has_text="Diagnostics of this run").first.wait_for(timeout=30000)
             page.wait_for_timeout(2000)
             still("7-run-gates")
+
+            # 6. why it fails: one row per station; CAN 1's row opens its worst held-out window in playback
+            page.goto(f"{base}/app/?d=one-dof-test-rack")
+            why = panel(page, "Why it fails")
+            why.locator("tbody tr").first.wait_for(timeout=30000)
+            page.wait_for_timeout(1500)
+            why.scroll_into_view_if_needed()
+            still("8-why-it-fails")
+            stations = why.locator("tbody tr").evaluate_all("rows => rows.map(r => r.querySelector('td')?.textContent.trim())")
+            check(sorted(stations) == sorted(f"CAN {c}" for c in (1, 4, 11, 12, 13, 14, 15, 21)), f"the Why it fails panel lists the 8 stations ({stations})")
+            expected = next(r for r in json.loads((REPO / "app/data/one-dof-test-rack/why.json").read_text())["rows"] if r["device"] == "CAN 1")
+            t0, t1 = (float(x) for x in re.search(r"tr=([\d.]+),([\d.]+)", expected["page"]).groups())
+            row = why.locator("tbody tr").filter(has=page.locator("td", has_text=re.compile(r"^\s*CAN 1\s*$"))).first
+            row.locator("td").nth(2).click()
+            page.wait_for_url(re.compile(r"why=can1(#|&|$)"), timeout=20000)
+            readout = page.locator(".dv-pb-time").first
+            readout.wait_for(timeout=30000)
+            panel(page, "Torque gap by term family").wait_for(timeout=30000)
+            page.wait_for_timeout(2500)
+            now = float(re.match(r"[\d.]+", readout.inner_text()).group())
+            check(expected["worst_run"] in page.url and abs(now - t0) < 0.05,
+                  f"CAN 1 opens its worst held-out window ({expected['worst_run']}, clock {now:.2f} s, window {t0:.2f}-{t1:.2f} s)")
+            check(panel(page, "Torque gap by term family").locator("canvas, svg").count() > 0 and panel(page, "Move error by phase").count() == 1,
+                  "the run opened from Why shows the residual-decomposition plots")
+            still("9-why-run")
             check(not errors, f"no page errors ({errors[:3]})")
             context.close()
             browser.close()
