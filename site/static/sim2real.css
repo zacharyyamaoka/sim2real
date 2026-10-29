@@ -123,3 +123,10 @@
 .s2r-dash data-dashboard { display: block; }
 /* WHY: Zach (2026-10-29): "The filter bar should always be on the left hand side" - data-ui's own rail placement, so the
    host no longer reorders it (the 10-28 "filters on the right" override is gone). */
+
+/* a station's Schedule tab: one block per plan, its command on one scrolling line */
+.s2r-commands { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 6px 0 16px; }
+.s2r-command { min-width: 0; }
+.s2r-command p { margin: 0 0 4px; }
+.s2r-command small { color: var(--ink2); overflow-wrap: anywhere; }
+.s2r-command pre { margin: 0; padding: 6px 8px; background: var(--rule2, #f1f2f4); border-radius: 4px; overflow-x: auto; white-space: pre; font-size: 12px; max-width: 100%; }

@@ -11,6 +11,7 @@ deployment_gates_page, run_page, run_why_page), so a panel can never drift betwe
     station-coverage.base     a station's Coverage tab: the coverage panels scoped to the station
     run.base                  a run's Playback tab (unchanged)
     run-why.base              a run's Why it fails tab: its station's decomposition bars (the playback stays one tab away)
+    station-schedule.base     a station's Schedule tab: the test schedule's targets, model curves, coverage and runs (not run yet)
 
 Paths are rooted at /data/ (the site's copy of app/data); `{deployment}`, `{run}`, `{station}` and `{device}` are filled
 by static/sim2real.js from the page's record, as app/app.js did (data-ui has no per-run dataset template yet, PEP 0010 P3).
@@ -149,6 +150,82 @@ def run_why() -> dict:
     return doc
 
 
+MODEL = "var(--data-series-2)"
+SCHEDULE_SERIES = {  # the schedule's curve series: the target grey (dashed), every model orange, lighter or darker per condition
+    "target": "#8b9099",
+    "model · fb": MODEL,
+    "model · ff_weakfb": "color-mix(in srgb, var(--data-series-2) 62%, black)",
+    "model · fb kp×0.5": "color-mix(in srgb, var(--data-series-2) 70%, white)",
+    "model · fb kp×0.25": "color-mix(in srgb, var(--data-series-2) 45%, white)",
+    "model · open_loop_torque": "color-mix(in srgb, var(--data-series-2) 80%, black)",
+}
+
+
+def _heat(name: str, plane: str, split: str, x_title: str, y_title: str, symlog: tuple[bool, bool]) -> dict:
+    axis = lambda field, title, log: {"field": field, "type": "quantitative", "title": title,  # noqa: E731
+                                      **({"scale": {"type": "symlog", "constant": 1}} if log else {})}
+    return {"type": "chart", "name": name, "from": "cells", "filters": f'plane == "{plane}" && split == "{split}"',
+            "chart": {"mark": {"type": "rect", "stroke": "var(--rule2, #e3e5e8)", "strokeWidth": 0.3},
+                      "encoding": {"x": axis("x0", x_title, symlog[0]), "x2": {"field": "x1"}, "y": axis("y0", y_title, symlog[1]), "y2": {"field": "y1"},
+                                   "color": {"field": "state", "type": "nominal", "title": None,
+                                             "scale": {"domain": ["visited", "reachable, not visited"], "range": ["var(--data-series-1)", "#d5d8de"]}},
+                                   "tooltip": [{"field": "samples", "type": "quantitative", "title": "samples"}]}}}
+
+
+def station_schedule() -> dict:
+    """A station's Schedule tab: bam_rack_twin.schedule's plan before anything runs (site/build.py links it under data/<dep>/schedule/)."""
+    root = "/data/{deployment}/schedule/{station}/"
+    return {
+        "data": root + "runs.json",
+        "properties": {"run": {"displayName": "Run"}, "trajectory": {"displayName": "Trajectory"}, "family": {"displayName": "Family"},
+                       "code": {"displayName": "Code"}, "group": {"displayName": "Set"}, "split": {"displayName": "Split"},
+                       "held_out_set": {"displayName": "Held-out set"}, "mode": {"displayName": "Mode"}, "kp_level": {"displayName": "kp ×"},
+                       "runner": {"displayName": "Runner"}, "status": {"displayName": "Status"}, "duration_s": {"displayName": "Seconds"},
+                       "torque_peak_nm": {"displayName": "Peak torque (N·m, predicted)"}, "model_q_rms_mrad": {"displayName": "Model vs target (mrad)"},
+                       "fb_share": {"displayName": "FB share (model)"}, "guard": {"displayName": "First guard (model)"},
+                       "trajectories": {"displayName": "Trajectories"}, "runs": {"displayName": "Runs"}, "seconds_each": {"displayName": "Seconds each"},
+                       "run_seconds": {"displayName": "Seconds, all runs"}, "note": {"displayName": "What it is"}},
+        "style": {"chrome": "minimal", "numbers": {"digits": 3, "compact": True}, "palette": dict(SCHEDULE_SERIES)},
+        "datasets": {
+            "runs": {"data": root + "runs.json", "label": "Planned runs",
+                     "facets": [{"property": "group", "label": "Set"}, {"property": "family", "label": "Family"}, {"property": "split", "label": "Split"},
+                                {"property": "mode", "label": "Mode"}]},
+            "curves": {"data": root + "curves.json", "label": "Targets and model curves"},
+            "cells": {"data": root + "cells.json", "label": "Coverage cells"},
+            "families": {"data": root + "families.json", "label": "Families"},
+        },
+        "links": [{"from": "curves.trajectory", "to": "runs.trajectory"}],
+        "layout": {"panels": [
+            {"text": "### Planned · not run yet\nThe schedule bam_rack_twin.schedule wrote for {device}: every trajectory's **target** (grey, dashed) and the "
+                     "twin of record's **model** of it (orange), before any run. The rail narrows it by set, family, split and mode.", "w": 12},
+            {"view": "Planned trajectories", "w": 12, "h": 5},
+            {"view": "Coverage · q × qd · train", "w": 6, "h": 4}, {"view": "Coverage · q × qd · held-out", "w": 6, "h": 4},
+            {"view": "Coverage · qd × qdd · train", "w": 6, "h": 4}, {"view": "Coverage · qd × qdd · held-out", "w": 6, "h": 4},
+            {"view": "Families", "w": 12, "h": 4},
+            {"view": "Planned runs", "w": 12, "h": 6},
+        ]},
+        "views": [
+            {"type": "chart", "name": "Planned trajectories", "from": "curves",
+             "chart": {"mark": {"type": "line", "strokeWidth": 1.1, "interpolate": "linear"},
+                       "encoding": {"x": {"field": "t", "type": "quantitative", "title": "t from the start of the run (s)"},
+                                    "y": {"field": "q_deg", "type": "quantitative", "title": "q from the origin (°)"},
+                                    "detail": {"field": "trajectory", "type": "nominal"},
+                                    "color": {"field": "series", "type": "nominal", "title": None,
+                                              "scale": {"domain": list(SCHEDULE_SERIES), "range": list(SCHEDULE_SERIES.values())}},
+                                    "strokeDash": {"field": "series", "type": "nominal", "legend": None,
+                                                   "scale": {"domain": list(SCHEDULE_SERIES), "range": [[5, 3]] + [[1, 0]] * (len(SCHEDULE_SERIES) - 1)}}}}},
+            _heat("Coverage · q × qd · train", "q_qd", "train", "q (°)", "qd (°/s)", (False, True)),
+            _heat("Coverage · q × qd · held-out", "q_qd", "held-out", "q (°)", "qd (°/s)", (False, True)),
+            _heat("Coverage · qd × qdd · train", "qd_qdd", "train", "qd (°/s)", "qdd (°/s²)", (True, True)),
+            _heat("Coverage · qd × qdd · held-out", "qd_qdd", "held-out", "qd (°/s)", "qdd (°/s²)", (True, True)),
+            {"type": "table", "name": "Families", "from": "families", "order": ["code", "family", "group", "runner", "trajectories", "runs", "seconds_each",
+                                                                                 "run_seconds", "note"]},
+            {"type": "table", "name": "Planned runs", "from": "runs", "order": ["run", "status", "split", "held_out_set", "mode", "kp_level", "runner",
+                                                                                "duration_s", "torque_peak_nm", "model_q_rms_mrad", "fb_share", "guard"]},
+        ],
+    }
+
+
 PAGES = {
     "deployment-runs.base": ("a deployment's Runs tab", deployment_runs),
     "deployment-gates.base": ("a deployment's Gates tab", deployment_gates),
@@ -158,6 +235,7 @@ PAGES = {
     "station-coverage.base": ("a station's Coverage tab", station_coverage),
     "run.base": ("a run's Playback tab", run_playback),
     "run-why.base": ("a run's Why it fails tab: its station's residual decomposition", run_why),
+    "station-schedule.base": ("a station's Schedule tab: the test schedule before anything runs (bam_rack_twin.schedule)", station_schedule),
 }
 
 

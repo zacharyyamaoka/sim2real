@@ -31,6 +31,10 @@ CACHE = pathlib.Path.home() / ".cache" / "sim2real"
 
 # The app's data: env SIM2REAL_DATA, else this checkout's app/data (tools/build_app.py writes it)
 DATA = pathlib.Path(os.environ.get("SIM2REAL_DATA") or REPO / "app" / "data")
+# Test schedules (bam_rack_twin.schedule build --out <root>/<deployment>/<station>): env SIM2REAL_SCHEDULES, else the rack archive's.
+# WHY read from the producer's folder and not copied into app/data: a schedule is a plan, written before any run; the site shows it
+# as "not run yet" next to the station's real runs, and a new build of the schedule is seen at the next site build.
+SCHEDULES = pathlib.Path(os.environ.get("SIM2REAL_SCHEDULES") or "/archive/datasets/bam_rig/schedules")
 
 # robotparts' static shell, byte for byte (the workbench ships the Python frame; the scripts and styles that run it are
 # still robotparts', as for the object database). WHY main @ 115e020: it is the robotparts.dev that is live
@@ -150,6 +154,7 @@ class Deployment:
     diagnostics: list[dict]
     run_gates: dict = field(default_factory=dict)   # run slug -> its rows of run_gates.json
     decompositions: set = field(default_factory=set)  # station keys with why/<station>.json
+    schedules: dict = field(default_factory=dict)  # station key -> its test schedule's summary.json (data/<dep>/schedule/<station>/)
 
     @property
     def id(self) -> str:
@@ -210,6 +215,28 @@ class Site:
         return next(d for d in self.deployments if d.id == dep_id)
 
 
+def _schedules(folder: pathlib.Path) -> dict:
+    """{station key: summary} for every schedule the build linked under data/<dep>/schedule/<station>/."""
+    out = {}
+    for path in sorted(folder.glob("*/summary.json")) if folder.is_dir() else []:
+        out[path.parent.name] = json.loads(path.read_text())
+    return out
+
+
+def link_schedules(root: pathlib.Path, data: pathlib.Path) -> int:
+    """Link <root>/<dep>/<station>/site into data/<dep>/schedule/<station> for every deployment the data holds. Returns how many."""
+    linked = 0
+    for dep in (root.iterdir() if root.is_dir() else []):
+        if not (data / dep.name).is_dir():
+            continue
+        for station in sorted(dep.iterdir()):
+            if (station / "site" / "summary.json").is_file():
+                (data / dep.name / "schedule").mkdir(exist_ok=True)
+                os.symlink((station / "site").resolve(), data / dep.name / "schedule" / station.name)
+                linked += 1
+    return linked
+
+
 def load(data: pathlib.Path = DATA) -> Site:
     """The app's tables, as the site serves them (site/build.py writes `data` with every old /app/ link rewritten)."""
     deployments = []
@@ -222,5 +249,5 @@ def load(data: pathlib.Path = DATA) -> Site:
         deployments.append(Deployment(row=row, folder=folder, runs=_rows(folder / "runs.json"), devices=_rows(folder / "devices.json"),
                                       gates=_rows(folder / "gates.json"), why=_rows(folder / "why.json"), evidence=_rows(folder / "evidence.json"),
                                       caveats=_rows(folder / "caveats.json"), diagnostics=_rows(folder / "diagnostics.json"),
-                                      run_gates=dict(run_gates), decompositions=decompositions))
+                                      run_gates=dict(run_gates), decompositions=decompositions, schedules=_schedules(folder / "schedule")))
     return Site(data=data, deployments=deployments)

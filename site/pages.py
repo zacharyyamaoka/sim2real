@@ -303,6 +303,54 @@ def station_coverage(site, st: Station) -> str:
     return dashboard("/views/station-coverage.base", f"{st.device}: coverage")
 
 
+def station_schedule(site, st: Station) -> str:
+    """The station's test schedule before anything runs (bam_rack_twin.schedule): what it plans, how well it covers the envelope,
+    what it cannot cover, and the one-line command per plan. The numbers are the producer's summary.json; the plots are data-ui's."""
+    s = st.deployment.schedules[st.key]
+    cov, rt, gate, note = s["coverage"], s["run_time"], s["coverage_gate"], s["note_targets"]
+    head = kpis([("Status", "not run yet"), ("Trajectories", str(s["trajectories"])), ("Runs", str(s["runs"])),
+                 ("Train / held-out runs", f'{s["split_counts"]["train"]} / {s["split_counts"]["held_out"]}'),
+                 ("Runnable today", f'{rt["runnable_today_min"]} min'), ("Every mode", f'{rt["all_modes_min"]} min'),
+                 ("Train coverage", f'{cov["train"]} %'), ("Held-out coverage", f'{cov["held_out"]} %')])
+    lede = (f'<p class="lede"><strong>Planned, not run yet.</strong> {e(s["station"].upper().replace("CAN", "CAN "))}\'s schedule {e(s["digest"])} from '
+            f'<code>bam_rack_twin.schedule</code>: {s["trajectories"]} trajectories of {len(s["families"])} families, every target inside the '
+            f'range, speed, accel and predicted torque. Train runs visit {cov["train"]} % of the {s["reachable_cells"]} reachable (q, qd, qdd) cells '
+            f'(v1 gate {gate["minimum_pct"]:g} %: {"passes" if gate["passes"] else "fails"}); held out: the whole kp × 0.5 level (H1, '
+            f'{s["held_out_sets"]["H1"]} runs) and operate seeds 3-5 under every mode (H2, {s["held_out_sets"]["H2"]} runs). '
+            f'Twin: {e(s.get("twin") or "none")}.</p>')
+    rows = []
+    for c in s["commands"]:
+        zach = " · needs Zach" if c["needs_zach"] else ""
+        rows.append(f'<div class="s2r-command" data-runner="{e(c["runner"])}"><p>{chip("not_run", "runnable today" if c["runner"] == "runnable" else "not runnable yet")} '
+                    f'<b>{e(c["plan_name"])}</b> · {c["runs"]} runs · ~{c["minutes"]} min{e(zach)}<br><small>{e(c["label"])}. '
+                    f'Dry run: {e(c["dry_run"][:220])}. {e(c["why"]) if c["runner"] != "runnable" else ""}</small></p>'
+                    f'<pre>{e(c["command"])}</pre></div>')
+    commands = f'<h2>Run commands, one per plan</h2><div class="s2r-commands">{"".join(rows)}</div>'
+    missing = []
+    if not note["passes"]["reachable"]:
+        missing.append(f'the note\'s ≥ 200 train samples in 95 % of reachable cells: {note["reachable_with_200_train_pct"]} % today')
+    if not note["passes"]["deployment_weighted"]:
+        missing.append(f'deployment-weighted coverage (H2 samples in cells with ≥ 200 train samples): {note["deployment_weighted_pct"]} % against 99 %')
+    band = s["effects"]["band_power_pct"]
+    missing.append(f'spectral power at 3-8 Hz: {band["3_8_hz"]} % of the train targets\' power (the accel envelope keeps high-frequency amplitudes to millimetres)')
+    for item in s["skipped"]:
+        missing.append(f'{item["family"]} variant {item["variant"]}: {item["reason"]}')
+    for item in s["rejected"]:
+        missing.append(f'{item["family"]} variant {item["variant"]}: rejected ({"; ".join(item["reasons"])})')
+    for name, mode in s["modes"].items():
+        if mode["runner"]["status"] != "runnable":
+            missing.append(f'{name}: {mode["runner"]["reason"]}')
+    gaps = "<h2>What it does not cover</h2><ul>" + "".join(f"<li>{e(m)}</li>" for m in missing) + "</ul>"
+    ff = s["modes"].get("ff", {})
+    safety = ""
+    if ff.get("protects"):
+        safety = ("<h2>FF only: what protects it, and what does not</h2><p>Planned, marked needs Zach; the safe stand-in is ff_weakfb "
+                  f"(model fb share median {num(s.get('fb_share_ff_weakfb_median'))} in the twin).</p><ul>"
+                  + "".join(f"<li>{e(x)}</li>" for x in ff["protects"]) + "</ul><p><strong>Not protected:</strong></p><ul>"
+                  + "".join(f"<li>{e(x)}</li>" for x in ff["unprotected"]) + "</ul>")
+    return (head + lede + dashboard("/views/station-schedule.base", f"{st.device}: test schedule") + commands + gaps + safety)
+
+
 def station_evidence(site, st: Station) -> str:
     row = st.row
     fields = table(["Field", "Value"], [[e(k), e(num(v) if not isinstance(v, (list, dict)) else json.dumps(v))] for k, v in row.items()],

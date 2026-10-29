@@ -5,6 +5,7 @@
 
 Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing here is in git):
 
+    OUT/data/<dep>/schedule/<station>/   a station's test schedule (bam_rack_twin.schedule), linked from SIM2REAL_SCHEDULES
     OUT/data/        the app's tables: the ones holding links copied with every old /app/?d=… link rewritten to the
                      site's path, everything else (each run's folder, coverage, dx) linked, never copied (3.8 GB)
     OUT/static/      robotparts' shell.js, site.js and site.css (pinned, byte for byte), analysis.css, the vendored
@@ -121,10 +122,12 @@ def build(data: pathlib.Path, out: pathlib.Path) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     (out / MARKER).write_text("sim2real site build folder: site/build.py clears everything here\n")
     rewritten = write_data(data, out / "data")
+    schedules = adapter.link_schedules(adapter.SCHEDULES, out / "data")
     site = adapter.load(out / "data")
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
+              "schedules": schedules, "schedules_root": str(adapter.SCHEDULES),
               "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments),
               "seconds": round(time.monotonic() - started, 1)}
     (out / ".sim2real-build.json").write_text(json.dumps(result, indent=1) + "\n")

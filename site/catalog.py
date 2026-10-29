@@ -99,6 +99,9 @@ STATION = Kind(
           Tab("gates", "Gates", body=pages.station_gates),
           Tab("why", "Why it fails", body=pages.station_why),
           Tab("coverage", "Coverage", body=pages.station_coverage),
+          # WHY a tab and not a run (2026-10-29, Zach: "I should be able to generate it and view it within sim2real, its just that we will
+          # not have run it yet"): a schedule is the plan for the station's next runs, so it sits beside its real runs, only where one exists
+          Tab("schedule", "Schedule", body=pages.station_schedule, has=lambda site, st: st.key in st.deployment.schedules, empty="hide"),
           Tab("evidence", "Evidence", body=pages.station_evidence)),
     header=pages.station_header,
     crumbs=lambda site, st: [ROOT_CRUMB, (st.deployment.row["title"], deployment_url(st.deployment.id)), (st.device, st.url)],
