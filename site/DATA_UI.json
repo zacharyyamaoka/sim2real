@@ -1,6 +1,6 @@
 {
  "what": "the data-ui kit sim2real already vendors (vendor/data-ui/dist, VENDOR.md), served at /static/data-ui/; never edited, never re-vendored by the site",
- "source": "`/home/bam/data-ui` `integrate/packet` @ `a0b229b` (2026-10-29, \"merge lane/p1b-scene3d @ 47785cb\": PEP 0010 P1b,",
- "manifest_sha256": "52546d240b8cdf2ed24802008502e49534e0f97d8560b7a86ee41df61b13abd5",
+ "source": "`/home/bam/data-ui` `integrate/packet` @ `006e9d5` (2026-10-29, \"test(p5): load_table follows a descriptor's path\": PEP 0010 P3 navigation, CONTRACT §33 / PEP 0013; Add to dashboard, §34; P5 diagnostics and gates, §35; on top of P1b scene3d, P2 coverage, P4 parts and the kit gaps). **A trial: not merged to data-ui main.** Before: `a0b229b` (P1b), linked from the main checkout.",
+ "manifest_sha256": "94a854d38f2b158ba6866b9bfbc2d7a65a97c418d9f647649e63cc311f042afb",
  "files": 140
 }

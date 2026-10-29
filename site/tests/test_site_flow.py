@@ -35,7 +35,9 @@ SITE = Path(__file__).resolve().parents[1]
 REPO = SITE.parent
 sys.path.insert(0, str(SITE))
 sys.path.insert(1, str(SITE / "vendor"))
-EXE = "/home/bam/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell"
+# WHY the newest installed shell, not a pinned build: 1243 was cleaned out of the cache on 2026-10-29 and the run died at launch
+EXE = str(max(Path.home().glob(".cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell"),
+              key=lambda p: int(p.parts[-3].rsplit("-", 1)[1])))
 REAL_HUES = (195.0, 230.0)  # data-ui series slot 1, blue
 SIM_HUES = (8.0, 40.0)  # data-ui series slot 2, orange, and its lighter/darker members
 DEP = "one-dof-test-rack"
