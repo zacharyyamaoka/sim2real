@@ -458,8 +458,12 @@ def main() -> int:
             side = boxes["Coverage · q × qd · train"][1] <= boxes["Coverage · q × qd · held-out"][0] + 1 and \
                 abs(boxes["Coverage · q × qd · train"][2] - boxes["Coverage · q × qd · held-out"][2]) < 2
             check(side, f"train and held-out coverage sit side by side, train left ({boxes['Coverage · q × qd · train']} | {boxes['Coverage · q × qd · held-out']})")
-            legend = lines.inner_text()
-            check("target" in legend and "model" in legend, "the planned trajectories' legend names the target and the model")
+            # data-ui charts draw on canvas, so the colours are measured in the pixels, not read from a legend's text
+            lines.scroll_into_view_if_needed()
+            page.wait_for_timeout(800)
+            canvas = max(lines.locator("canvas").all(), key=lambda c: (c.bounding_box() or {"width": 0})["width"] * (c.bounding_box() or {"height": 0})["height"])
+            found = page.evaluate(measure_js, [base64.b64encode(canvas.screenshot()).decode(), {"target": [0x8b, 0x90, 0x99], "model": [0xeb, 0x68, 0x34]}])
+            check(found["target"] > 50 and found["model"] > 50, f"the planned trajectories draw grey target pixels and orange model pixels ({found})")
             rail = page.evaluate("""() => { const d = [...document.querySelectorAll('[data-tab=schedule] data-dashboard .dd-body.dd-has-rail')]
                 .find(b => b.offsetParent); if (!d) return null; const r = d.querySelector(':scope > .dd-rail').getBoundingClientRect();
                 return {rail_right: r.right, panels_left: d.querySelector(':scope > .dd-main').getBoundingClientRect().left}; }""")
