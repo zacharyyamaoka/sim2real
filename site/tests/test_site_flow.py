@@ -250,6 +250,13 @@ def main() -> int:
             page.wait_for_timeout(800)
             check(not matrix.is_visible() and panel(page, "Runs · newest first").is_visible(), "the Runs tab hides the gate matrix again")
 
+            # WHY: Zach (2026-10-29): "The filter bar should always be on the left hand side" - measured, not class-asserted
+            rail_side = page.evaluate("""() => { const d = [...document.querySelectorAll('data-dashboard .dd-body.dd-has-rail')]
+                .find(b => b.offsetParent); const r = d.querySelector(':scope > .dd-rail').getBoundingClientRect();
+                return {rail_right: r.right, panels_left: d.querySelector(':scope > .dd-main').getBoundingClientRect().left}; }""")
+            check(rail_side["rail_right"] <= rail_side["panels_left"] + 1,
+                  f"the filter rail sits left of the panels (rail ends {rail_side['rail_right']:.0f} px, panels start {rail_side['panels_left']:.0f} px)")
+
             # 6. a run with models, from its Open link
             page.locator(".dd-rail label", has_text="real + 4 models").first.click()
             page.wait_for_timeout(1500)

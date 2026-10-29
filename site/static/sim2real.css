@@ -121,11 +121,5 @@
 /* the tab dashboards */
 .s2r-dash { display: block; min-height: 40px; margin-top: 8px; }
 .s2r-dash data-dashboard { display: block; }
-/* Zach (2026-10-28): "A single dashboard with filters on the right that change what the panels show". data-ui puts its rail
-   on the left (PEP 0010 Q4 keeps it there for now), so the host moves it right (a listed data-ui gap: `rail: right`). */
-data-dashboard .dd-body.dd-has-rail { grid-template-columns: minmax(0, 1fr) auto; }
-data-dashboard .dd-body.dd-has-rail > .dd-rail { order: 2; padding-right: 0; padding-left: 6px; }
-@media (max-width: 760px) {
-  data-dashboard .dd-body.dd-has-rail { grid-template-columns: minmax(0, 1fr); }
-  data-dashboard .dd-body.dd-has-rail > .dd-rail { order: 0; padding-left: 0; }
-}
+/* WHY: Zach (2026-10-29): "The filter bar should always be on the left hand side" - data-ui's own rail placement, so the
+   host no longer reorders it (the 10-28 "filters on the right" override is gone). */
