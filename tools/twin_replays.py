@@ -1,5 +1,7 @@
 """Many-way twin replays for the sim2real app: every held-out T2 run on CAN 12 and 13 (2026-10-28) played by each of the four
-friction models bam_rack_twin compared that day (D, G, H, R), plus each station's proven travel window.
+friction models bam_rack_twin compared that day (D, G, H, R); every new held-out tape of the 2026-10-29 calibration round on CAN
+1/4/11/14/15/21 played by the station's deployed twin (A) and its calibration-round twin (C), each checked against
+calibration_scored.json the same way; plus each station's proven travel window.
 
 Software replay only. Reads the archive (/archive/datasets/bam_rig) and the bam_rack_twin package; never opens a serial port,
 an fdcanusb or a CAN bus; writes nothing under bam_ws or /archive (twin scenes go to a temporary directory). Run it with the
@@ -39,6 +41,7 @@ sys.path.insert(0, str(PACKAGE / "docs"))
 import numpy as np  # noqa: E402
 import presliding_round2 as R2  # noqa: E402
 import presliding_round3 as R3  # noqa: E402
+import calibration_round as CAL  # noqa: E402
 from bam_rack_twin import __version__ as PACKAGE_VERSION  # noqa: E402
 from bam_rack_twin.budget import q_rms_mrad  # noqa: E402
 from bam_rack_twin.hardware.tape import TAPE_STATIONS  # noqa: E402
@@ -102,6 +105,48 @@ def station_runs(can: int, scenes: Path, workers: int, scored: dict, log) -> lis
     return list(records.values())
 
 
+CAL_SHORT = {"A": "twin A · deployed", "C": "twin C · calibrated"}
+
+
+def calibration_runs(can: int, scenes: Path, workers: int, scored: dict, direct_doc: dict, log) -> list[dict]:
+    """calibration_round.py's ``score`` replays (2026-10-29 round) for one station: every new held-out tape played whole (prelude
+    included, the round's ruler) by the deployed twin (A) and this round's fit (C), each rebuilt by ``twins_of`` (it checks the digests)."""
+
+    sid = f"can{can}"
+    ident = json.loads((CAL.ANALYSIS / f"calibration_can{can}.json").read_text(encoding="utf-8"))
+    held = CAL.held_out(can)
+    twins = CAL.twins_of(can, direct_doc, ident)
+    keys = sorted(held)
+    replayer = S.r4._replayer(can, {key: item["run"] for key, item in held.items()}, scenes, workers)
+    floor = scored["stations"][sid]["floor"]
+    stored = {label: {row["run"]: row["q_rms_mrad"] for row in variant["rows"]} for label, variant in scored["stations"][sid]["variants"].items()}
+    records = {}
+    for key in keys:
+        item = held[key]
+        run = item["run"]
+        records[key] = {"run_path": str(key), "can": can, "device": f"CAN {can}", "label": item.get("detail"), "class": item["class"], "seed": item["seed"],
+                        "prelude_s": float(item["prelude_s"]), "floor_mrad": floor["floor_mrad"], "pick": scored["stations"][sid]["pick"],
+                        "round": "calibration 2026-10-29", "t": floats(run.t - run.t[0]), "q_target_rad": floats(run.q_target), "qd_target_rad_s": floats(run.qd_target),
+                        "q_rad": floats(run.q), "qd_rad_s": floats(run.qd), "tau_nm": floats(run.tau), "mode": floats(run.mode), "v_bus_v": floats(run.voltage),
+                        "models": {}}
+    for label in ("A", "C"):
+        started = time.time()
+        replays = dict(zip(keys, S.r4.replay_pairs(replayer, [(twins[label], key) for key in keys]), strict=True))
+        rows, _ = CAL.D._variant_rows(held, replays)
+        for row in rows:
+            key, value = row["run"], row["q_rms_mrad"]
+            expected = stored[label].get(key)
+            replay = replays[key]
+            records[key]["models"][CAL_SHORT[label]] = {
+                "label": f"{label} ({'the deployed twin before this round' if label == 'A' else 'this round' + chr(39) + 's fit'}; {twins[label].digest()})",
+                "q_rad": floats(replay.q), "qd_rad_s": floats(replay.qd), "tau_nm": floats(replay.tau), "q_rms_mrad": value,
+                "expected_q_rms_mrad": expected, "oracle": "ok" if expected is not None and abs(value - expected) <= ORACLE_TOLERANCE_MRAD else "mismatch",
+                "split": row["split"]}
+        log(f"{sid} calibration {label}: {len(keys)} runs in {time.time() - started:.0f} s; "
+            + ", ".join(f"{Path(k).stem} {records[k]['models'][CAL_SHORT[label]]['q_rms_mrad']:.2f}" for k in keys))
+    return list(records.values())
+
+
 def envelopes() -> dict:
     """Each station's proven travel window and speed ceiling (bam_rack_twin.hardware.tape.TAPE_STATIONS): the 1-DOF workspace."""
 
@@ -119,6 +164,7 @@ def main(argv=None) -> int:
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--workers", type=int, default=MAX_WORKERS)
     parser.add_argument("--cans", type=int, nargs="*", default=[13, 12])
+    parser.add_argument("--calibration-cans", type=int, nargs="*", default=list(CAL.FIT_CANS))
     arguments = parser.parse_args(argv)
     workers = max(1, min(MAX_WORKERS, arguments.workers))
     scored = json.loads(SCORED.read_text(encoding="utf-8"))
@@ -126,9 +172,13 @@ def main(argv=None) -> int:
     with tempfile.TemporaryDirectory(prefix="sim2real_twin_scenes_") as scenes:
         for can in arguments.cans:
             runs += station_runs(can, Path(scenes), workers, scored, lambda line: print(line, flush=True))
+        cal_scored = json.loads(CAL.SCORED.read_text(encoding="utf-8"))
+        direct_doc = json.loads(CAL.DIRECT.read_text(encoding="utf-8"))
+        for can in arguments.calibration_cans:
+            runs += calibration_runs(can, Path(scenes), workers, cal_scored, direct_doc, lambda line: print(line, flush=True))
     document = {"schema": SCHEMA, "generated_at": datetime.datetime.now().astimezone().replace(microsecond=0).isoformat(),
                 "source": f"bam_rack_twin {PACKAGE_VERSION} at {PACKAGE}; docs/presliding_round3.py score builds; read-only replay, no hardware",
-                "scored_file": str(SCORED), "envelopes": envelopes(), "runs": runs}
+                "scored_file": str(SCORED), "calibration_scored_file": str(CAL.SCORED), "envelopes": envelopes(), "runs": runs}
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
     staging = arguments.out.with_name(arguments.out.name + ".partial")
     staging.write_text(json.dumps(document, allow_nan=False) + "\n", encoding="utf-8")

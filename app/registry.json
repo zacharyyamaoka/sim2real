@@ -15,7 +15,11 @@
     "/archive/datasets/bam_rig/rack_2026-10-24",
     "/archive/datasets/bam_rig/rack_2026-10-25",
     "/archive/datasets/bam_rig/rack_2026-10-28"
-   ]
+   ],
+   "acceptance": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/acceptance_calibration.json",
+   "why": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why.json",
+   "scored": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_scored.json",
+   "earlier_floors": "/archive/datasets/bam_rig/rack_2026-10-24/analysis/floors.json"
   }
  ]
 }

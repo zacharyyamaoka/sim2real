@@ -367,6 +367,127 @@ def deployment_gates(dep_dir: Path) -> tuple[list[dict], list[dict], dict]:
     return cells, diagnostics, gates["matrix"]
 
 
+# ---------------------------------------------------------------------------------------------------- why it fails (calibration round)
+
+GATE_ORDER = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"]
+
+
+def acceptance_cells(path: Path) -> list[dict]:
+    """The station gate matrix from bam_rack_twin's acceptance file (every gate T1-T11 as that pipeline judged it from the runs)."""
+
+    stations = json.loads(path.read_text())["stations"]
+    cells = []
+    for can, station in stations.items():
+        for gate in station["gates"]:
+            verdict = gate.get("status") or gate.get("verdict")
+            value = gate.get("value")
+            cells.append({"device": f"CAN {can}", "gate": f"{gate['id']} {gate.get('name', '')}".strip(), "verdict": verdict,
+                          "value": num(value, 4) if isinstance(value, (int, float)) else None, "value_text": None if isinstance(value, (int, float)) else value,
+                          "target": gate.get("target"), "message": gate.get("detail") or None, "order": GATE_ORDER.index(gate["id"]) if gate["id"] in GATE_ORDER else 99,
+                          "passed": 1 if verdict == "pass" else 0, "cell": 1, "source": str(path)})
+    return cells
+
+
+def slug_of(path: str) -> str:
+    rel = Path(path).relative_to("/archive/datasets/bam_rig").with_suffix("")
+    return str(rel).removeprefix("rack_").replace("/", "~")
+
+
+def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """One row per station: T2 moves/hold against the 1.5 gate (before -> after), the limiting term in the study's words, the share of
+    the held-out torque gap its term family explains on its own, and a link to the worst held-out window in playback. Plus the two
+    caveats, derived (the why file does not state them): the floors grew on the new day, and three picks were overfit."""
+
+    doc = json.loads(Path(entry["why"]).read_text())
+    scored = json.loads(Path(entry["scored"]).read_text())["stations"]
+    earlier = json.loads(Path(entry["earlier_floors"]).read_text())
+    by_slug = {r["run"]: r for r in runs}
+    rows, grew, overfit = [], [], []
+    for sid, station in doc["stations"].items():
+        can = int(sid.removeprefix("can"))
+        t2 = station["t2"]
+        after, before = t2.get("after") or {}, t2.get("before") or {}
+        lt = station.get("limiting_term") or {}
+        ev = lt.get("evidence") or {}
+        dec = ev.get("residual_decomposition_after") or ev.get("residual_decomposition_before") or {}
+        shares = dec.get("unique_r2") or {}
+        family = lt.get("remaining_largest_family")
+        name = lt.get("name") or ""
+        term_family = next((f for f in shares if f.split(" ")[0] in name.lower()), None) or ("inertia" if "inertia" in name else None)
+        shown = term_family or family
+        share = shares.get(shown) if shown else None
+        # the floor on the new day against the 10-24 floor (the same T1 ruler), and the pick against the deployed twin
+        new_floor = (t2.get("floor") or {}).get("floor_mrad") or (scored.get(sid, {}).get("floor") or {}).get("floor_mrad")
+        old_floor = (earlier.get(str(can)) or {}).get("floor_mrad")
+        floor_growth = new_floor / old_floor if new_floor and old_floor and sid in scored else None
+        if floor_growth and floor_growth > 1:
+            grew.append(f"CAN {can} {old_floor:.2f} → {new_floor:.2f} mrad")
+        is_overfit = None
+        if sid in scored:
+            variants = scored[sid]["variants"]
+            pick = scored[sid]["pick"]
+            ident = ev.get("identification_objective_mrad") or {}
+            if pick in variants and "A" in variants and pick in ident and "A" in ident:
+                better_ident = ident[pick] < ident["A"]
+                worse_held = variants[pick]["split"]["moves_over_floor"] > variants["A"]["split"]["moves_over_floor"]
+                is_overfit = bool(better_ident and worse_held)
+                if is_overfit:
+                    overfit.append(f"CAN {can} (identification {ident['A']:.2f} → {ident[pick]:.2f} mrad, held-out moves "
+                                   f"{variants['A']['split']['moves_over_floor']:.2f}× → {variants[pick]['split']['moves_over_floor']:.2f}×)")
+        worst = (station.get("worst") or [{}])[0]
+        window = (worst.get("windows") or [{}])[0]
+        slug = slug_of(worst["run"]) if worst.get("run") else None
+        run_row = by_slug.get(slug)
+        link = None
+        if run_row and window:
+            offset = run_row.get("clock_offset_s") or 0.0
+            t0, t1 = window["t0_s"] + offset, window["t1_s"] + offset
+            link = f"{APP_URL}?d={dep_id}&run={slug}&why={sid}#t={t0:.3f}&tr={t0:.3f},{t1:.3f}"
+        summary = station.get("summary") or ""
+        reason = summary.split(". ", 1)[1] if ". " in summary else summary
+        rows.append({
+            "device": f"CAN {can}", "station": sid, "status": "pass" if station["status"].startswith("pass") or "passes" in summary[:40] else "fail",
+            "round": "carried (10-28 tapes)" if "carried" in station["status"] else "calibration 10-29",
+            "moves_x": num(after.get("moves_over_floor"), 3), "hold_x": num(after.get("hold_offset_over_floor"), 3), "gate_x": 1.5,
+            "moves_before_x": num(before.get("moves_over_floor"), 3), "hold_before_x": num(before.get("hold_offset_over_floor"), 3),
+            "limiting_term": name, "why": reason, "evidence_family": shown, "evidence_share": num(share, 3),
+            "unexplained": num(dec.get("unexplained"), 3),
+            "evidence": (f"{shown}: {100 * share:.0f} % of the held-out torque gap on its own; {100 * dec['unexplained']:.0f} % unexplained"
+                         if share is not None and dec.get("unexplained") is not None else "no residual decomposition in the why file"),
+            "floor_mrad": num(new_floor, 4), "floor_before_mrad": num(old_floor, 4) if sid in scored else None,
+            "floor_growth_x": num(floor_growth, 3), "overfit_pick": is_overfit,
+            "worst_run": slug, "worst_window": f"{window['t0_s']:.2f}-{window['t1_s']:.2f} s (tape clock), {window['rms_mrad']:.2f} mrad RMS" if window else None,
+            "page": link, "order": can})
+    rows.sort(key=lambda r: (r["status"] == "pass", -(r["moves_x"] or 0)))
+    caveats = [
+        {"caveat": "Floors grew on the new day", "detail": f"{len(grew)} of {len(scored)} refit stations have a larger T1 floor than on 10-24 ("
+                   + "; ".join(grew) + "), so every × floor ratio looks better than it would against the old floor.", "stations": len(grew)},
+        {"caveat": f"{len(overfit)} picks were overfit", "detail": "The calibrated twin beat the deployed twin on identification but did worse on the "
+                   "held-out tapes: " + "; ".join(overfit) + ". The pick rule chooses on identification only, so these passes or fails lean on a twin "
+                   "the held-out data did not prefer.", "stations": len(overfit)},
+    ]
+    return rows, caveats
+
+
+def write_decompositions(dep_dir: Path, entry: dict) -> None:
+    """Per station: each term family's unique share of the held-out torque gap (before and after this round) and where the move error lives."""
+
+    doc = json.loads(Path(entry["why"]).read_text())
+    for sid, station in doc["stations"].items():
+        ev = (station.get("limiting_term") or {}).get("evidence") or {}
+        rows = []
+        for when, key in (("before (deployed twin)", "residual_decomposition_before"), ("after (calibrated twin)", "residual_decomposition_after")):
+            dec = ev.get(key) or {}
+            for family, share in (dec.get("unique_r2") or {}).items():
+                rows.append({"chart": "torque gap", "what": family, "share": num(share, 4), "when": when})
+            if dec.get("unexplained") is not None:
+                rows.append({"chart": "torque gap", "what": "unexplained", "share": num(dec["unexplained"], 4), "when": when})
+            for phase, share in (dec.get("moving_q_error_share") or {}).items():
+                rows.append({"chart": "move error", "what": phase, "share": num(share, 4), "when": when})
+        write(dep_dir / "why" / f"{sid}.json", f"Residual decomposition · CAN {sid[3:]}", f"{entry['why']} limiting_term.evidence",
+              {"share": {"digits": 3}}, rows)
+
+
 # ---------------------------------------------------------------------------------------------------- one deployment
 
 
@@ -401,11 +522,11 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         device = f"CAN {meta['can_id']}"
         rel = path.relative_to(Path(entry["archive"][0]).parent).with_suffix("")
         slug = str(rel).removeprefix("rack_").replace("/", "~")
-        day = rel.parts[0].removeprefix("rack_")
         session = "/".join(p for p in rel.parts[1:-1] if p != "runs")
         wall = arrays.get("wall")
         wall_s = float(wall[0]) if wall is not None and np.isfinite(wall[0]) else None
         started = dt.datetime.fromtimestamp(wall_s, tz=TZ) if wall_s else dt.datetime.fromtimestamp(path.stat().st_mtime, tz=TZ)
+        day = started.date().isoformat()  # WHY the wall clock: the 10-29 calibration sessions sit in the rack_2026-10-28 folder
         kind = meta.get("kind") or (meta.get("args") or {}).get("kind") or "?"
         args = meta.get("args") or {}
         gains = gains_at(by_device.get(device, {}), started.astimezone(dt.timezone.utc) if wall_s else None)
@@ -415,8 +536,12 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         if replay is not None:
             situations = model_situations(replay)
             real_s = situations[0]
-            if real_s.get("i_q") is None:  # twin_replays carries no current or temperature: take them from the npz, prelude dropped
-                keep = (arrays["t"] - arrays["t"][0]) >= float(replay.get("prelude_s") or 0.0) - 1e-9
+            # WHY the page clock's offset: the 10-28 T2 replays start at the tape (prelude dropped); the calibration round's replays and
+            # every unreplayed run start at the npz's first row, so a window on the tape clock is t + prelude there
+            whole = replay.get("round") is not None or replay.get("origin") == "rack_replays"
+            clock_offset = float(replay.get("prelude_s") or meta.get("prelude_s") or 0.0) if whole and replay.get("origin") != "rack_replays" else 0.0
+            if real_s.get("i_q") is None:  # twin_replays carries no current or temperature: take them from the npz (prelude dropped if the replay did)
+                keep = np.ones(arrays["t"].size, bool) if whole else (arrays["t"] - arrays["t"][0]) >= float(replay.get("prelude_s") or 0.0) - 1e-9
                 for key, column in (("i_q", "i_q"), ("temp", "temp_c")):
                     if column in arrays and int(keep.sum()) == real_s["t"].size:
                         real_s[key] = arrays[column][keep]
@@ -424,6 +549,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         else:
             situations = situations_for(loaded)
             floor = None
+            clock_offset = float(meta.get("prelude_s") or 0.0)
         names = [s["situation"] for s in situations]
         models = [s["situation"] for s in situations if s["source"] == "sim"]
         title = f"{session} · {path.stem}"
@@ -439,7 +565,8 @@ def build_deployment(entry: dict, replays: dict) -> dict:
                      + (f" (×{kp_scale:g} / ×{kd_scale:g})" if (kp_scale, kd_scale) != (1.0, 1.0) else ""),
             "situations": names, "models": len(models),
             "compare": f"real + {len(models)} model{'s' if len(models) != 1 else ''}" if models else ("real vs target" if TARGET in names else "real only"),
-            "page": url, "npz": str(path), "basis": "real",
+            "page": url, "npz": str(path), "basis": "real", "round": (replay or {}).get("round"),
+            "clock_offset_s": num(clock_offset, 6),
         }
         diagnostics = run_diagnostics(dep_id, slug, title, device, situations, arrays, floor)
         tracking = next((d for d in diagnostics if d["diagnostic"] == "stock.tracking_error"), None)
@@ -481,7 +608,13 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         for i, (q, qd) in enumerate(corners):
             coverage.append({"run": f"workspace · {d['device']}", "device": d["device"], "kind": "workspace", "day": None, "t": float(i), "w": 0,
                              "q_deg": q, "qd_deg_s": qd, "qdd_deg_s2": None, "tau_nm": None, "layer": "workspace"})
-    cells, diagnostics, matrix = deployment_gates(dep_dir)
+    _, diagnostics, matrix = deployment_gates(dep_dir)
+    cells = acceptance_cells(Path(entry["acceptance"])) if entry.get("acceptance") else _
+    why_rows, caveats = why(entry, dep_id, runs)
+    write(dep_dir / "why.json", f"Why it fails · {entry['title']}", f"{entry['why']} (calibration round); caveats derived from {entry['scored']} and {entry['earlier_floors']}",
+          WHY_PROPS, why_rows)
+    write(dep_dir / "caveats.json", f"Caveats · {entry['title']}", f"derived from {entry['scored']} and {entry['earlier_floors']}", {}, caveats)
+    write_decompositions(dep_dir, entry)
     stamp = now()
     source = f"{', '.join(entry['archive'])} (real runs, bam_rack_twin.hardware); built {stamp} by tools/build_app.py"
     write(dep_dir / "runs.json", f"Runs · {entry['title']}", source, RUN_PROPS, runs)
@@ -499,7 +632,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         "hours": num(sum(r["duration_s"] or 0 for r in runs) / 3600.0, 3), "samples": sum(r["samples"] for r in runs),
         "days": len(days), "first_run": runs[-1]["started"] if runs else None, "last_run": runs[0]["started"] if runs else None,
         "gate_cells": len(cells), "gate_cells_passing": passing, "gates_passing": num(passing / len(cells), 3) if cells else None,
-        "gate_summary": matrix.get("message"), "page": f"{APP_URL}?d={dep_id}", "basis": "real",
+        "gate_summary": f"{passing} of {len(cells)} cells pass", "page": f"{APP_URL}?d={dep_id}", "basis": "real",
     }
     print(f"{dep_id}: {len(runs)} runs ({summary['runs_with_models']} with models), {len(coverage)} coverage rows at {hz:.3g} Hz, "
           f"{len(run_gate_rows)} run diagnostics, gates {passing}/{len(cells)}; {time.perf_counter() - started_at:.0f} s")
@@ -509,7 +642,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
 # ---------------------------------------------------------------------------------------------------- column declarations
 
 SOURCE_SLOT = {"real": 1, "sim": 2, "target": 0}  # data-ui badge slots: 1 blue = real, 2 orange = sim, 0 muted = target
-VERDICT_SLOT = {"pass": 3, "warn": 4, "fail": 8, "not_run": 0}  # green and red mean pass/fail only
+VERDICT_SLOT = {"pass": 3, "warn": 4, "partial": 4, "fail": 8, "not_run": 0}  # green and red mean pass/fail only
 # WHY every kind muted: an unlisted badge value gets a hashed slot, and "waypoints" landed on green, which means pass here
 KIND_SLOT = {kind: 0 for kind in ("waypoints", "sine", "tape", "gravity", "friction", "chirp", "hardstop", "thermal", "staircase", "impact", "?")}
 SAMPLE_PROPS = {"t": {"unit": "s", "digits": 4}, "q_deg": {"unit": "°", "digits": 5}, "qd_deg_s": {"unit": "°/s", "digits": 4},
@@ -528,6 +661,11 @@ COVER_PROPS = {"t": {"unit": "s"}, "q_deg": {"unit": "°"}, "qd_deg_s": {"unit":
                "q_lo_deg": {"unit": "°"}, "q_hi_deg": {"unit": "°"}, "qd_hi_deg_s": {"unit": "°/s"}, "qd_lo_deg_s": {"unit": "°/s"}}
 DEVICE_PROPS = {"q_min_deg": {"unit": "°"}, "q_max_deg": {"unit": "°"}, "qd_max_deg_s": {"unit": "°/s"}}
 GATE_PROPS = {"verdict": {"display": "badge", "colors": VERDICT_SLOT}}
+WHY_PROPS = {"status": {"display": "badge", "colors": VERDICT_SLOT}, "moves_x": {"unit": "×", "digits": 3}, "hold_x": {"unit": "×", "digits": 3},
+             "gate_x": {"unit": "×"}, "moves_before_x": {"unit": "×", "digits": 3}, "hold_before_x": {"unit": "×", "digits": 3},
+             "evidence_share": {"digits": 3, "note": "unique R²: the share of the held-out torque gap (rack − twin) this term family explains on its own"},
+             "floor_growth_x": {"unit": "×", "digits": 3, "note": "the new day's T1 floor ÷ the 10-24 floor: above 1 makes every × floor ratio look better"},
+             "overfit_pick": {"note": "the calibrated twin won identification but lost on the held-out tapes"}, "page": {"display": "link"}}
 DX_PROPS = {"verdict": {"display": "badge", "colors": VERDICT_SLOT}, "evidence": {"display": "link"}, "value": {"digits": 4}, "warn_hi": {"digits": 4}, "error_hi": {"digits": 4}}
 DEP_PROPS = {"first_run": {"type": "datetime"}, "last_run": {"type": "datetime"}, "hours": {"unit": "h", "digits": 3}, "page": {"display": "link"},
              "gates_passing": {"digits": 3}, "basis": {"display": "badge", "colors": {"real": 1}}}
