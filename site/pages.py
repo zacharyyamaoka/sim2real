@@ -153,12 +153,13 @@ def why_rows(dep: Deployment, rows: list[dict], heading_level: int = 3, with_dev
     return f'<div class="s2r-why">{"".join(out)}</div>'
 
 
-def dashboard(src: str, label: str, own_url: bool = False) -> str:
+def dashboard(src: str, label: str, own_url: bool = False, fallback: str = "") -> str:
     """A data-ui dashboard that loads when its tab is first shown (static/sim2real.js makes the element). WHY lazy: the
     coverage set is 35 MB and a run has six tables; only the open tab's are fetched. Only the first tab's dashboard owns
-    the URL (#t=… is its clock), so an old #t= link still lands on the Playback."""
+    the URL (#t=… is its clock), so an old #t= link still lands on the Playback. `fallback` is static HTML shown until the
+    dashboard replaces it (and without JavaScript): the gate matrix reads at once, then becomes data-ui's."""
     own = " data-own-url" if own_url else ""
-    return (f'<div class="s2r-dash" data-src="{e(src)}" aria-label="{e(label)}"{own}>'
+    return (f'<div class="s2r-dash" data-src="{e(src)}" aria-label="{e(label)}"{own}>{fallback}'
             f'<noscript><p>This panel is a data-ui dashboard ({a(src, src)}); it needs JavaScript.</p></noscript></div>')
 
 
@@ -224,8 +225,10 @@ def deployment_runs(site, dep: Deployment) -> str:
 
 
 def deployment_gates(site, dep: Deployment) -> str:
-    return (f"<h2>Where it fails</h2>{matrix(dep, 'Stations × gates, from the newest acceptance')}\n"
-            + dashboard("/views/deployment-gates.base", f"{dep.row['title']}: gates"))
+    # WHY one matrix: data-ui's gate_matrix (CONTRACT §35) replaces the static one once the kit loads; the static one stays
+    # as what reads before that and without JavaScript
+    return "<h2>Where it fails</h2>" + dashboard("/views/deployment-gates.base", f"{dep.row['title']}: gates",
+                                                 fallback=matrix(dep, "Stations × gates, from the newest acceptance"))
 
 
 def deployment_why(site, dep: Deployment) -> str:
@@ -286,7 +289,8 @@ def station_gates(site, st: Station) -> str:
     dx_table = table(["Diagnostic", "Verdict", "Value", "Unit", "What it measured", "Evidence"],
                      [[e(d.get("title")), chip(d.get("verdict")), e(num(d.get("value"))), e(d.get("unit") or ""), e(d.get("message") or ""), file_link(d.get("evidence"))] for d in dx],
                      caption=f"Station diagnostics (robotdx.diagnostics, tools/diagnostics_run_rack.py)") if dx else ""
-    return gates_table(st.deployment, st.device) + dx_table
+    return (gates_table(st.deployment, st.device) + dx_table
+            + dashboard("/views/station-gates.base", f"{st.device}: gate history, T2 per run and every run's checks"))
 
 
 def station_why(site, st: Station) -> str:
@@ -362,6 +366,24 @@ def station_evidence(site, st: Station) -> str:
 
 # --- a run ------------------------------------------------------------------------------------------------------------
 
+T4_LIMIT = re.compile(r"p90\s*<=\s*([\d.]+)\s*mrad")
+
+
+def limits(dep: Deployment, device: str) -> dict:
+    """The station's gate limits the run page draws (threshold_band, path_overlay; static/sim2real.js fills them into run.base):
+    T4's stop allocation (its limit text, "p90 <= 3.6 mrad at the output"), T2's 1.5x floor (a model's whole-run error limit,
+    the producer's error_hi on this station's model rows) and the allocation at the 100 mm marker as the tube's radius.
+    None where the station has no such number: the view then draws no limit."""
+    t4 = next((g for g in dep.gates_of(device) if g["gate"].startswith("T4")), None)
+    m = T4_LIMIT.search((t4 or {}).get("target") or "")
+    t4_mrad = float(m.group(1)) if m else None
+    t2 = next((g["error_hi"] for rows in dep.run_gates.values() for g in rows
+               if g.get("device") == device and g.get("diagnostic") == "stock.model_error" and g.get("error_hi")), None)
+    neg = lambda v: -v if v is not None else None  # noqa: E731
+    return {"t4_lo_mrad": neg(t4_mrad), "t4_hi_mrad": t4_mrad, "t2_lo_mrad": neg(t2), "t2_hi_mrad": t2,
+            "t4_tube_mm": round(t4_mrad * 0.1, 4) if t4_mrad else None}
+
+
 def run_title(row: dict) -> str:
     return f"{row['device']} · {row['title']}"
 
@@ -370,7 +392,7 @@ def run_header(site: Site, row: dict) -> str:
     dep = site.deployment(row["deployment"])
     best = (f'{e(row["best_model"])} {num(row.get("best_model_mrad"))} mrad from real' if row.get("best_model") else "no model replayed this run")
     verdict = row.get("verdict")
-    return f"""{record_json(deployment=row["deployment"], run=row["run"], station=station_key(row["device"]), device=row["device"])}
+    return f"""{record_json(deployment=row["deployment"], run=row["run"], station=station_key(row["device"]), device=row["device"], **limits(dep, row["device"]))}
 <h1>{e(run_title(row))}</h1>
 <p class="sub">{e(when(row.get("started")))} · {e(row.get("kind") or "")} · {num(row.get("duration_s"))} s · {e(row.get("gains") or "")} · {e(row.get("compare") or "")}</p>
 <p class="s2r-runline"><span class="s2r-real">real</span> vs target {num(row.get("tracking_mrad"))} mrad · closest model: {best}{(" · twinned? " + chip(verdict)) if verdict else ""}</p>
@@ -443,9 +465,10 @@ def home_body(site: Site) -> str:
                        f'<span class="pic" data-thumb>{strip_svg(st.deployment, st.device)}</span>') for st in site.stations)
     groups.append(Group("stations", "Stations", "/stations/", len(tiles), tiles))
     frame = tile_home("sim2real: how close each twin is to its real hardware", "Choose", groups)
+    # the matrix is data-ui's gate_matrix (CONTRACT §35) once the kit loads; the static one reads first and without JavaScript
     where = "".join(f"""<h2 id="where-h">Where it fails · {e(dep.row["title"])}</h2>
 {standing_line(dep)}
-<div id="where">{matrix(dep)}</div>""" for dep in deps)
+<div id="where">{dashboard(f"/views/gate-matrix.base?deployment={dep.id}", f"{dep.row['title']}: stations × gates", fallback=matrix(dep))}</div>""" for dep in deps)
     newest = sorted(site.runs, key=lambda r: r["started"], reverse=True)[:NEWEST]
     runs = table(["Started", "Run", "Station", "Kind", "Situations"],
                  [[e(when(r["started"])), a(run_url(r), r["title"]), a(station_url(r["deployment"], r["device"]), r["device"]), e(r.get("kind") or ""), e(r.get("compare") or "")]

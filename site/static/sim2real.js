@@ -72,6 +72,25 @@
     };
     // and a bare # starts a YAML comment, so an unquoted value gets quotes
     var quoted = function (value, before) { return before === "'" || before === '"' ? value : "'" + value + "'"; };
+    // The page's record, then the .base URL's query (?deployment=…, the home's matrix), fill {name}. WHY an empty field is
+    // left alone: on a page that is no run, `{run}` is data-ui's own per-pick placeholder (CONTRACT §33), filled from the
+    // runs table's pick. A number (a gate's limit) replaces its quotes too, so YAML reads a number; null draws no limit.
+    var fill = function (text, url) {
+      var values = {};
+      Object.keys(record).forEach(function (k) { values[k] = record[k]; });
+      try { new URL(url, location.href).searchParams.forEach(function (v, k) { values[k] = v; }); } catch (e) { /* keep the record's */ }
+      Object.keys(values).forEach(function (k) {
+        var v = values[k], token = "{" + k + "}";
+        if (v === "" || v === undefined) return;
+        if (v === null || typeof v === "number") {
+          var literal = v === null ? "null" : String(v);
+          text = text.split("'" + token + "'").join(literal).split('"' + token + '"').join(literal).split(token).join(literal);
+        } else {
+          text = text.split(token).join(String(v));
+        }
+      });
+      return text;
+    };
     var nativeFetch = window.fetch.bind(window);
     window.fetch = function (input, init) {
       return nativeFetch(input, init).then(function (response) {
@@ -79,8 +98,7 @@
         if (!response.ok || !/\.base(?:[?#]|$)/.test(url) || url.indexOf("/views/") === -1) return response;
         return response.text().then(function (text) {
           var slotsCss = kit.resolveTokens(document.querySelector("data-dashboard") || document.body).css;
-          var out = text.split("{deployment}").join(record.deployment || "").split("{run}").join(record.run || "")
-            .split("{station}").join(record.station || "").split("{device}").join(record.device || "")
+          var out = fill(text, url)
             .replace(MIX, function (mix, at, all) { return quoted(hex(mix.replace(SLOT, function (_m, name) { return slotsCss[name]; })), all[at - 1]); })
             .replace(SLOT, function (_m, name, at, all) { return quoted(hex(slotsCss[name]), all[at - 1]); });
           return new Response(out, { status: response.status, statusText: response.statusText, headers: response.headers });

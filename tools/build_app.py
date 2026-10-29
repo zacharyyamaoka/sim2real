@@ -319,6 +319,19 @@ def pose_rows(samples: list[dict], device: str) -> list[dict]:
     return out
 
 
+# WHY err_mm on the pose rows (data-ui CONTRACT §35, path_overlay: "the producer writes the number (an error column is the
+# difference rows' err_mm, written onto the pose rows): the view never computes an error"): the run page colours each path by
+# its distance from the target at that instant, the diff_poses row of (situation, body, t) against the target; 0 on the target.
+POSE_HINTS = {"err_mm": {"type": "number", "unit": "mm", "description": "distance from the target at t (diff_poses err_mm against target); 0 on the target"}}
+
+
+def pose_errors(poses: list[dict], d_poses: list[dict]) -> None:
+    err = {(r["situation"], r["body"], r["t"]): r["err_mm"] for r in d_poses if r.get("reference") == TARGET}
+    has_target = any(r["situation"] == TARGET for r in poses)
+    for row in poses:
+        row["err_mm"] = (0.0 if row["situation"] == TARGET else err.get((row["situation"], row["body"], row["t"]))) if has_target else None
+
+
 def write_contract(path: Path, name: str, rows: list[dict], title: str, source: str, hints: dict | None = None, **top) -> int:
     """A contract table ({schema: {fields}, rows}) checked against data-ui's schema before it is written; a breach stops the build.
     `hints` adds data-ui's display keys (display, colors, digits, note) to a field, and declares the app's own columns."""
@@ -855,8 +868,9 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         samples = sample_rows(situations, device, slug)
         poses = pose_rows(samples, device)
         d_samples, d_poses = diff_tables(samples, poses)
+        pose_errors(poses, d_poses)
         write_contract(run_dir / "samples.json", "samples", samples, f"Samples · {title}", src, SAMPLE_HINTS)
-        write_contract(run_dir / "poses.json", "poses", poses, f"Output link · {title}", src + "; the joint's own frame, orientation about z")
+        write_contract(run_dir / "poses.json", "poses", poses, f"Output link · {title}", src + "; the joint's own frame, orientation about z", POSE_HINTS)
         write_contract(run_dir / "diff_samples.json", "diff_samples", d_samples, f"Differences · {title}", src + "; difference(a, b), tools/trajectory.py (data-ui fixture)", SAMPLE_HINTS)
         write_contract(run_dir / "diff_poses.json", "diff_poses", d_poses, f"Output link differences · {title}", src + "; difference(a, b), tools/trajectory.py")
         write(run_dir / "diagnostics.json", f"Diagnostics · {title}", "robotdx.diagnostics (io-diagnostics), computed from this run", DX_PROPS, diagnostics)

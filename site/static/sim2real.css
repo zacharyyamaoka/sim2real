@@ -11,7 +11,10 @@
   --data-series-1: #2a78d6; --data-series-2: #eb6834;
   --s2r-pass: #1d7a3a; --s2r-pass-bg: #e3f3e7; --s2r-fail: #b42318; --s2r-fail-bg: #fbe7e4;
   --s2r-warn: #a15c07; --s2r-warn-bg: #fdf0d9; --s2r-none: #8b9099; --s2r-none-bg: #eef0f2;
-  --data-good: var(--s2r-pass); --data-bad: var(--s2r-fail);
+  /* WHY warn too (data-ui 006e9d5's status tones, CONTRACT §35): left alone, robotparts' --warn (#a8320c, a red-orange) became
+     the gate matrix's partial cells, one step from fail's red and close to a model's orange; the site's own amber keeps
+     warn its own colour */
+  --data-good: var(--s2r-pass); --data-bad: var(--s2r-fail); --data-warn: var(--s2r-warn);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

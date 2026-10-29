@@ -12,9 +12,19 @@ deployment_gates_page, run_page, run_why_page), so a panel can never drift betwe
     run.base                  a run's Playback tab (unchanged)
     run-why.base              a run's Why it fails tab: its station's decomposition bars (the playback stays one tab away)
     station-schedule.base     a station's Schedule tab: the test schedule's targets, model curves, coverage and runs (not run yet)
+    station-gates.base        a station's Gates tab: its gate history against every cell, and every run's checks with their
+                              evidence in the peek
+    gate-matrix.base          the home's matrix (stations x T1-T11), the deployment named in its URL (?deployment=)
+
+data-ui 006e9d5 (CONTRACT §33, §35; PEP 0010 P3, P5): the Runs tabs read one run's samples per pick (`{run}` is data-ui's own
+placeholder there, filled from the runs table's pick, so the host leaves it alone on a page that is no run); the gate views
+are the stock hints (gate_matrix, threshold_band, kpi_trend, rollup_tree, evidence, path_overlay, verdict voxels), as the
+"Playback + Gates" twins write them (data-ui gallery/examples/robotics-deployments-gates, robotics-arm-gates), on the rows
+site/overlays.py writes.
 
 Paths are rooted at /data/ (the site's copy of app/data); `{deployment}`, `{run}`, `{station}` and `{device}` are filled
-by static/sim2real.js from the page's record, as app/app.js did (data-ui has no per-run dataset template yet, PEP 0010 P3).
+by static/sim2real.js from the page's record (or the .base URL's query), as app/app.js did; a record field left empty is left
+for data-ui (the Runs tabs' `{run}`).
 """
 
 from __future__ import annotations
@@ -75,13 +85,140 @@ def text_starts(panel: dict, *heads: str) -> bool:
 def deployment_runs() -> dict:
     page = build_pages.deployment_page()
     runs = {"Runs shown", "Hours shown", "Stations shown", "Runs with models", "Runs"}
-    return subset(page, lambda i, p: i == 0 or bool(set(panel_views(p)) & runs))
+    doc = subset(page, lambda i, p: i == 0 or bool(set(panel_views(p)) & runs))
+    return picked_run(doc)
+
+
+def picked_run(doc: dict) -> dict:
+    """PEP 0010 P3 (CONTRACT §33): a click on a runs-table row picks the run, and only its samples are read, from the file
+    `{run}` names; Back and Forward restore the pick and t (a pick is a history entry). WHY one-way: the run pick names the
+    file, and the samples' own rail (Show) never narrows the runs."""
+    doc["datasets"]["samples"] = {"data": "data/{deployment}/runs/{run}/samples.json", "label": "Samples of the picked run",
+                                  "facets": [{"property": "situation", "label": "Show"}]}
+    doc.setdefault("links", []).append({"from": "runs.run", "to": "samples.run", "direction": "one-way"})
+    doc["clock"] = {"data": "samples", "time": "t"}
+    doc["views"] += [{"type": "playback", "name": "Playback · the picked run", "playback": {"speeds": [0.25, 0.5, 1, 2, 4], "readout": True}},
+                     build_pages.ts("Angle · the picked run", "samples", "q_deg", "°")]
+    doc["layout"]["panels"] += [{"text": "### The picked run\nClick a row above to play that run here (only its samples are read); "
+                                         "Back and Forward step through your picks. **Open ↗** opens its own page with every panel.", "w": 12},
+                                {"view": "Playback · the picked run", "w": 12}, {"view": "Angle · the picked run", "w": 12, "h": 4}]
+    return doc
+
+
+GATE_IDS = [f"T{i}" for i in range(1, 12)]
+STATION_ORDER = ["CAN 1", "CAN 4", "CAN 11", "CAN 12", "CAN 13", "CAN 14", "CAN 15", "CAN 21"]
+
+
+def gate_matrix(name: str = "Stations × gates", dataset: str = "gates") -> dict:
+    """gate_matrix (CONTRACT §35): one row per station, one column per gate T1-T11 in order (each drawn even where no row has
+    it), a cell its verdict as a glyph and a word in the status vocabulary's tone (RobotDx's order: pass, warn / partial,
+    not run, fail). A cell opens the gate's row in the side peek, with its why one link away."""
+    return {"type": "tracker", "name": name, "from": dataset, "groupBy": {"property": "device"}, "groupOrder": STATION_ORDER,
+            "sort": [{"property": "order", "direction": "ASC"}],
+            "tracker": {"state": "verdict", "column": "gate_id", "columns": GATE_IDS, "label": "gate"},
+            "display": {"verdict": "status", "why_url": "link"},
+            "record": {"sections": [{"name": "Verdict", "properties": ["gate", "verdict", "value", "value_text", "target", "message"]},
+                                    {"name": "Why", "properties": ["why_url"]}, {"name": "Provenance", "properties": ["source"]}]}}
+
+
+def kpi_trend(name: str, label: str, filters: str, group: bool = False) -> dict:
+    """kpi_trend (CONTRACT §35): the newest acceptance file's cells passing, its history as the sparkline, every cell the target."""
+    view = {"type": "kpi", "name": name, "from": "history", "filters": filters,
+            "kpi": {"label": label, "value": {"property": "passing"}, "spark": {"x": "dated", "y": "passing"}, "target": "cells",
+                    "compare": {"against": "target", "better": "higher"}}}
+    if group:
+        # WHY no groupOrder: with one, data-ui makes the first station a big headline card (KPI README), and no station is the headline
+        view["groupBy"] = {"property": "device"}
+    return view
 
 
 def deployment_gates() -> dict:
     page = build_pages.deployment_gates_page()
     overlay = {"Gate cells passing", "Runs a model twins", "Passing per gate", "Stations × gates", "Run verdicts", "Station diagnostics"}
-    return subset(page, lambda i, p: text_starts(p, "## Gates layer") or bool(set(panel_views(p)) & overlay))
+    doc = subset(page, lambda i, p: text_starts(p, "## Gates layer") or bool(set(panel_views(p)) & overlay))
+    doc["datasets"]["history"] = {"data": "data/{deployment}/gate_history.json", "label": "Gate history"}
+    # rollup_tree: the rack, its plates and stations; each node the worst gate under it (the Max of RobotDx's ranks)
+    doc["datasets"]["components"] = {"data": "data/{deployment}/components.json", "label": "The rack", "tree": {"parent": "parent"},
+                                     "rollup": {"from": "gates", "values": {"worst": {"property": "rank", "summary": "Max"}}}}
+    doc["links"].append({"from": "gates.device", "to": "components.id"})
+    doc["views"] = [v for v in doc["views"] if v["name"] not in ("Gate cells passing", "Stations × gates")]
+    doc["views"] += [kpi_trend("Gate cells passing", "Gate cells passing (newest acceptance)", 'scope == "rack"'),
+                     kpi_trend("Passing per station · history", "cells passing", 'scope == "station"', group=True),
+                     gate_matrix(),
+                     {"type": "table", "name": "The rack", "from": "components", "tree": {"parent": "parent"}, "fold": "open",
+                      "order": ["label", "kind", "worst"], "columnSize": {"label": 210, "kind": 64, "worst": 96}, "display": {"worst": "status"}}]
+    # the matrix's peek reads its gate rows' fields by these names ("Twinned?" is the runs' verdict, not a gate's)
+    doc["properties"].update({"label": {"displayName": "Component"}, "worst": {"displayName": "Worst gate"}, "verdict": {"displayName": "Verdict"},
+                              "value_text": {"displayName": "Value (text)"}, "target": {"displayName": "Limit"},
+                              "message": {"displayName": "What it measured"}, "why_url": {"displayName": "Why it fails"},
+                              "source": {"displayName": "Acceptance file"}})
+    # the trend wide enough to read its dates; the matrix full width, then the tree beside the stations' trends
+    size = {"Gate cells passing": (5, 3), "Runs a model twins": (3, 3), "Passing per gate": (4, 3), "Stations × gates": (12, 4)}
+    panels = []
+    for p in doc["layout"]["panels"]:
+        name = next((n for n in panel_views(p) if n in size), None)
+        if name:
+            p = {**p, "view": name, "w": size[name][0], "h": size[name][1]}
+        panels.append(p)
+        if name == "Stations × gates":
+            panels += [{"view": "The rack", "w": 5, "h": 5}, {"view": "Passing per station · history", "w": 7, "h": 5}]
+    doc["layout"]["panels"] = panels
+    return doc
+
+
+def station_gates() -> dict:
+    """A station's Gates tab below its gate table: its gate history, and every run's checks with their evidence. WHY no T2 plot
+    here: a station's model runs come in bursts (CAN 12: 28 in ten minutes on 10-28, one on 10-25), which a time axis squeezes
+    into one line; T2's band is drawn per model on each run's Playback instead."""
+    return {
+        "data": "/data/{deployment}/run_gates.json",
+        # WHY decimals, not digits: data-ui 006e9d5's table cells ignore a property's `digits` (reported to data-ui); decimals round them
+        "properties": {"title": {"displayName": "Check"}, "verdict": {"displayName": "Verdict"}, "value": {"displayName": "Value", "decimals": 2},
+                       "unit": {"displayName": "Unit"}, "error_hi": {"displayName": "Limit (error above)", "decimals": 2}, "message": {"displayName": "What it measured"},
+                       "evidence": {"displayName": "Evidence (opens the playback there)"}, "t0": {"displayName": "From (s)"}, "t1": {"displayName": "To (s)"},
+                       "source": {"displayName": "Source"}, "record": {"displayName": "Record"}, "started": {"displayName": "Started"}, "run": {"displayName": "Run"}},
+        "style": copy.deepcopy(build_pages.STYLE),
+        "datasets": {
+            "history": {"data": "/data/{deployment}/gate_history.json", "label": "Gate history", "filters": 'scope == "station" && device == "{device}"'},
+            "checks": {"data": "/data/{deployment}/run_gates.json", "label": "Run checks",
+                       "filters": 'device == "{device}" && (diagnostic == "stock.model_error" || diagnostic == "stock.tracking_error")'},
+        },
+        "layout": {"panels": [
+            {"text": "### {device} · gates over time, per run\n**Gate cells passing** per bam_rack_twin acceptance file, against every cell. "
+                     
+                     "**Run checks**: every run's checks by robotdx.diagnostics; a cell opens its evidence, and the link plays the run at its window.", "w": 12},
+            {"view": "Gate cells passing · {device}", "w": 5, "h": 3},
+            {"view": "Run checks", "w": 12, "h": 6},
+        ]},
+        "views": [
+            kpi_trend("Gate cells passing · {device}", "{device} gate cells passing", 'scope == "station"'),
+            # evidence: a cell opens its check; the peek shows the run's other checks and the link that plays its window
+            {"type": "tracker", "name": "Run checks", "from": "checks", "groupBy": {"property": "run", "direction": "DESC"},
+             "sort": [{"property": "title", "direction": "ASC"}],
+             "tracker": {"state": "verdict", "column": "title", "label": "message"},
+             "display": {"verdict": "status", "evidence": "link"},
+             "record": {"sections": [
+                 {"name": "Verdict", "properties": ["title", "verdict", "value", "unit", "error_hi", "message"]},
+                 {"name": "Evidence", "properties": ["evidence", "t0", "t1"],
+                  "view": {"type": "table", "name": "This run's checks", "from": "checks", "filters": "run == this.run",
+                           "order": ["title", "verdict", "value", "unit", "error_hi"], "display": {"verdict": "status"}}},
+                 {"name": "Provenance", "properties": ["source", "record", "started"]}]}},
+        ],
+    }
+
+
+def home_gates() -> dict:
+    """The home's matrix: the deployment the .base URL names (?deployment=, static/sim2real.js fills it)."""
+    return {
+        "data": "/data/{deployment}/gates.json",
+        "properties": {"gate": {"displayName": "Gate"}, "verdict": {"displayName": "Verdict"}, "value": {"displayName": "Value"},
+                       "value_text": {"displayName": "Value (text)"}, "target": {"displayName": "Limit"}, "message": {"displayName": "What it measured"},
+                       "why_url": {"displayName": "Why it fails"}, "source": {"displayName": "Acceptance file"}},
+        "style": {"chrome": "minimal"},
+        "datasets": {"gates": {"data": "/data/{deployment}/gates.json", "label": "Gate cells"}},
+        "layout": {"panels": [{"view": "Stations × gates", "w": 12, "h": 4, "toolbar": "none"}]},
+        "views": [gate_matrix()],
+    }
 
 
 def deployment_why() -> dict:
@@ -96,7 +233,23 @@ COVERAGE = {"Phase space · every run", "Time at (q, qd)", "Angle histogram", "S
 
 def deployment_coverage() -> dict:
     page = build_pages.deployment_page()
-    return subset(page, lambda i, p: text_starts(p, "### Coverage", "### Every station") or bool(set(panel_views(p)) & COVERAGE))
+    return with_voxels(subset(page, lambda i, p: text_starts(p, "### Coverage", "### Every station") or bool(set(panel_views(p)) & COVERAGE)),
+                       "Runs per cell · every station")
+
+
+def with_voxels(doc: dict, name: str) -> dict:
+    """Verdict-scaled voxels (CONTRACT §32, §35): how many runs reached each (q, qd) cell, red for few and green for many. WHY
+    runs per cell: at 1/n opacity a path stops reading past ~200 runs (an 8-bit alpha), and the rack has 1,549; a count does not.
+    Each station is on its own 24 x 24 grid over the range it ran (site/overlays.py), so the rack's stations share one picture."""
+    doc["datasets"]["cells"] = {"data": "data/{deployment}/coverage_cells.json", "label": "Coverage cells"}
+    doc["views"].append({"type": "voxels", "name": name, "from": "cells",
+                         "voxels": {"x": "q_cell", "y": "qd_cell", "z": "z", "cell": 1, "unit": "m", "value": "runs", "scale": "verdict",
+                                    "better": "higher", "projection": "top", "axes": "none"}})
+    doc["layout"]["panels"] += [{"text": f"### {name}\nHow many runs reached each cell of (q, qd), each station on its own 24 × 24 grid over the "
+                                         "range it ran (q across, qd up): green where many runs went, red where few did, nothing where none did. "
+                                         "A count, so it still reads past the ~200 runs where 1/n opacity fades to nothing.", "w": 12},
+                                {"view": name, "w": 12, "h": 6}]
+    return doc
 
 
 def scoped(doc: dict, device_filter: str) -> dict:
@@ -127,11 +280,38 @@ def station_coverage() -> dict:
     doc = subset(page, lambda i, p: text_starts(p, "### Coverage") or bool(set(panel_views(p)) & (COVERAGE - by_station)))
     doc["layout"]["panels"][0] = {"text": "### Coverage · {device}\nWhere this station's runs went. Every path is drawn at 1/n opacity, so the dark "
                                           "bands are where it spends its time; the dashed box is its proven window (travel × speed ceiling) when one is recorded.", "w": 12}
-    return scoped(doc, 'device == "{device}"')
+    return scoped(with_voxels(doc, "Runs per cell · {device}"), 'device == "{device}"')
 
 
 def run_playback() -> dict:
-    return build_pages.run_page()
+    """The run's Playback, plus the gates' limits: T4's stop allocation on the error against the target and T2's 1.5x floor on
+    each model's error against real (threshold_band, one rule pair per series), and the output link coloured by its distance
+    from the target with T4's allocation as a tube round the target's path (path_overlay). The numbers are the station's,
+    filled per page from the record (static/sim2real.js); a station without one draws no limit (null)."""
+    doc = build_pages.run_page()
+    for view in doc["views"]:
+        if view["name"] == "Error against the target (target − each)":
+            view["timeseries"]["limits"] = {"error": ["{t4_lo_mrad}", "{t4_hi_mrad}"]}
+        elif view["name"] == "Model error against real (real − model)":
+            view["timeseries"]["limits"] = {"error": ["{t2_lo_mrad}", "{t2_hi_mrad}"]}
+    # WHY real only beside the target: every model's path lies on the same arc, so painted together the last one drawn hides
+    # the rest; the models' own errors against real are the panel above
+    doc["views"].append({"type": "trajectory3d", "name": "Output link · distance from the target", "from": "poses",
+                         "filters": 'source != "sim"',
+                         "trajectory3d": {"series": "situation", "family": "source", "unit": "mm", "show": "all", "projection": "top",
+                                          "axes": "auto", "color": "err_mm", "tolerance": "{t4_tube_mm}",
+                                          # WHY the target as sparse points: within a millimetre of the real path, its line hid the colours
+                                          "modes": {"target": ["points"]}, "density": 6}})
+    panels = doc["layout"]["panels"]
+    at = next(i for i, p in enumerate(panels) if p.get("view") == "Error against the target (target − each)")
+    panels[at:at] = [{"text": "### Errors against the gates' limits\nThe dashed red rules are this station's limits: **T4's stop allocation** on the "
+                              "error against the target (it binds at the holds; a move may pass it) and **T2's 1.5× floor** on each model's error "
+                              "against real (T2 judges the whole run's RMS, so a moment past it is not a fail). Shaded: beyond the limit.", "w": 12}]
+    at = next(i for i, p in enumerate(panels) if p.get("view") == "Output link · top (down the joint axis)") + 1
+    panels[at:at] = [{"text": "### Distance from the target\nThe real marker's path coloured by how far it is from the target at that instant "
+                              "(the producer's err_mm: blue near, amber far), with T4's stop allocation at the marker as a tube round the target's path.", "w": 12},
+                     {"view": "Output link · distance from the target", "w": 12, "h": 5}]
+    return doc
 
 
 def run_why() -> dict:
@@ -236,6 +416,8 @@ PAGES = {
     "run.base": ("a run's Playback tab", run_playback),
     "run-why.base": ("a run's Why it fails tab: its station's residual decomposition", run_why),
     "station-schedule.base": ("a station's Schedule tab: the test schedule before anything runs (bam_rack_twin.schedule)", station_schedule),
+    "station-gates.base": ("a station's Gates tab: its gate history, every run's checks and their evidence", station_gates),
+    "gate-matrix.base": ("the home's gate matrix: stations x T1-T11 of the deployment the URL names", home_gates),
 }
 
 

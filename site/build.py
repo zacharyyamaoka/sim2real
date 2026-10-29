@@ -6,6 +6,8 @@
 Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing here is in git):
 
     OUT/data/<dep>/schedule/<station>/   a station's test schedule (bam_rack_twin.schedule), linked from SIM2REAL_SCHEDULES
+    OUT/data/<dep>/  + the rows data-ui's gate views read (site/overlays.py): gate ranks and links, the rack tree, the gate
+                     history from the archive's acceptance files, each station's coverage cells
     OUT/data/        the app's tables: the ones holding links copied with every old /app/?d=… link rewritten to the
                      site's path, everything else (each run's folder, coverage, dx) linked, never copied (3.8 GB)
     OUT/static/      robotparts' shell.js, site.js and site.css (pinned, byte for byte), analysis.css, the vendored
@@ -80,7 +82,7 @@ def site_files(site):
     n_runs = len(site.runs)
     yield "index.html", s2r.page(site, "sim2real: how close each twin is to its real hardware", "/", pages.home_body(site), "home",
                                  description="sim2real: every robot run against its virtual runs, the gates per station, and why each one fails.",
-                                 trail=results_line(plural(n_runs, "run"), breadcrumb([s2r.ROOT_CRUMB])))
+                                 trail=results_line(plural(n_runs, "run"), breadcrumb([s2r.ROOT_CRUMB])), data_ui=True)
     yield "deployments/index.html", s2r.page(site, "Deployments: sim2real", "/deployments/", pages.deployments_body(site), "deployments",
                                              trail=breadcrumb([s2r.ROOT_CRUMB, ("Deployments", "/deployments/")]))
     yield "stations/index.html", s2r.page(site, "Stations: sim2real", "/stations/", pages.stations_body(site), "stations",
@@ -123,11 +125,14 @@ def build(data: pathlib.Path, out: pathlib.Path) -> dict:
     (out / MARKER).write_text("sim2real site build folder: site/build.py clears everything here\n")
     rewritten = write_data(data, out / "data")
     schedules = adapter.link_schedules(adapter.SCHEDULES, out / "data")
+    import overlays  # noqa: PLC0415
+    before = adapter.load(out / "data")
+    overlay_counts = overlays.write(out / "data", lambda dep_id, row: pages.cell_href(before.deployment(dep_id), row))
     site = adapter.load(out / "data")
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
-              "schedules": schedules, "schedules_root": str(adapter.SCHEDULES),
+              "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts,
               "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments),
               "seconds": round(time.monotonic() - started, 1)}
     (out / ".sim2real-build.json").write_text(json.dumps(result, indent=1) + "\n")

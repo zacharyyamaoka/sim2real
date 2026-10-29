@@ -141,11 +141,17 @@ GUIDES_JS = """(name) => { const s = (%s)(name); const t = s && s.querySelector(
   return { limits: data.filter((d) => /^limit:/.test(d.guide)).map((d) => ({ guide: d.guide, series: d.series ?? null, value: d.value, py: y(d.value) })),
            zones: data.filter((d) => /^zone:/.test(d.guide)).length, height: h }; }""" % VIEW_JS
 # a KPI card's sparkline points (its Vega line), its big number, label and target text
-KPI_JS = """(name) => { const s = (%s)(name); if (!s) return null; return [...s.querySelectorAll('data-kpi')].map((card) => {
+KPI_JS = r"""(name) => { const s = (%s)(name); if (!s) return null; return [...s.querySelectorAll('data-kpi')].map((card) => {
   const ch = card.querySelector('.dv-kpi-history .dv-view-chart'); const v = ch && ch.vegaView; const pts = []; const rules = [];
   const walk = (n) => { if (!n) return; if (n.marktype === 'line' && n.role === 'mark') for (const i of n.items || []) if (i.datum && i.datum.passing !== undefined) pts.push(i.datum.passing);
     if (n.marktype === 'rule' && n.role === 'mark') for (const i of n.items || []) rules.push(i.y); for (const i of n.items || []) if (i.items) walk(i); };
-  if (v) walk(v.scenegraph().root); const r = (ch || card).getBoundingClientRect();
+  if (v) walk(v.scenegraph().root);
+  // a grouped card draws its history as an SVG sparkline: each reading's mark, read back through its range (aria-label "N readings, lo to hi")
+  const svg = card.querySelector('.dv-kpi-spark svg.dv-spark'); let spark = [];
+  if (svg) { const m = /([\d.]+) to ([\d.]+)/.exec(svg.getAttribute('aria-label') || ''); const ys = [...svg.querySelectorAll('circle')].map((c) => Number(c.getAttribute('cy')));
+    if (m && ys.length) { const lo = Number(m[1]), hi = Number(m[2]), top = Math.min(...ys), bot = Math.max(...ys);
+      spark = ys.map((y) => (bot === top ? lo : Math.round(lo + (bot - y) / (bot - top) * (hi - lo)))); } }
+  if (!pts.length) pts.push(...spark); const r = (ch || svg || card).getBoundingClientRect();
   return { label: (card.querySelector('.dv-kpi-label') || {}).textContent || '', value: (card.querySelector('.dv-kpi-value') || {}).textContent || '',
            text: card.textContent, points: pts, rules: rules.length, width: r.width, height: r.height }; }); }""" % VIEW_JS
 # a tree table's status cells: every row's id and the word and state its `worst` cell draws
@@ -164,6 +170,16 @@ SCENE_JS = """(name) => { const s = (%s)(name); const el = s && s.querySelector(
 RANK = {"pass": 0, "partial": 1, "warn": 1, "not_run": 2, "fail": 4}  # RobotDx's ranks (data-ui STATUS_ORDER), the test's own copy
 RANK_WORD = {0: "pass", 1: "warn", 2: "not run", 4: "fail"}
 TONE = {"pass": "good", "partial": "warn", "warn": "warn", "fail": "bad", "not_run": "muted"}
+
+
+def as_hex(css) -> str | None:
+    """'#B42318' or 'rgb(180, 35, 24)' -> '#b42318' (the scene reports hex, the tokens computed CSS)."""
+    if not isinstance(css, str):
+        return None
+    if css.startswith("#"):
+        return css.lower()[:7]
+    nums = [round(float(x)) for x in re.findall(r"[\d.]+", css)[:3]]
+    return "#" + "".join(f"{v:02x}" for v in nums) if len(nums) == 3 else None
 
 
 def rgb_hue(css: str) -> tuple[float, float]:
@@ -222,15 +238,17 @@ def matrix_check(m, served: dict, where: str) -> None:
     check(spread <= 0.5 and not bare, f"{where}: each gate column is one x in every row (spread {spread:.2f} px) and every cell has a glyph and a name ({len(bare)} bare)")
     tones = {(r["label"], c["column"]): c["tone"] for r in m["rows"] for c in r["cells"] if not c["na"]}
     wrong = sorted(k for k, v in served.items() if tones.get(k) != TONE.get(v))
-    hues = {v: [] for v in ("pass", "fail")}
+    hues = {v: [] for v in ("pass", "partial", "fail")}
     for k, v in served.items():
         if v in hues and k in cells:
-            hues[v].append(rgb_hue(cells[k]["fg"]))
+            hues[v].append(rgb_hue(cells[k]["bg"]))  # the cell is filled in its tone; its glyph is drawn on it in white
     green = all(80 <= h <= 170 and s > 0.2 for h, s in hues["pass"])
-    red = all((h <= 20 or h >= 340) and s > 0.3 for h, s in hues["fail"])
-    check(not wrong and green and red and hues["pass"] and hues["fail"],
-          f"{where}: the cells wear RobotDx's status tones (pass good, partial warn, not run muted, fail bad; {len(wrong)} wrong), "
-          f"measured: pass glyphs green {sorted({round(h) for h, _s in hues['pass']})}, fail glyphs red {sorted({round(h) for h, _s in hues['fail']})}")
+    amber = all(25 <= h <= 55 and s > 0.3 for h, s in hues["partial"])
+    red = all((h <= 15 or h >= 340) and s > 0.3 for h, s in hues["fail"])
+    check(not wrong and green and amber and red and hues["pass"] and hues["fail"] and hues["partial"],
+          f"{where}: the cells wear RobotDx's status tones (pass good, partial warn, not run muted, fail bad; {len(wrong)} wrong), measured fills: "
+          f"pass green {sorted({round(h) for h, _s in hues['pass']})}, partial amber {sorted({round(h) for h, _s in hues['partial']})}, "
+          f"fail red {sorted({round(h) for h, _s in hues['fail']})}")
 
 
 def shell_checks(page, where: str) -> None:
@@ -411,8 +429,8 @@ def main() -> int:
                       f"88 cells its target ({rack_card.get('value')!r}, {rack_card.get('rules')} target rule, {rack_card.get('width', 0):.0f} px wide)")
                 station_cards = page.evaluate(KPI_JS, "Passing per station · history") or []
                 order = ["CAN 1", "CAN 4", "CAN 11", "CAN 12", "CAN 13", "CAN 14", "CAN 15", "CAN 21"]
-                want_station = [[sum(1 for (d, _g), v in cells_.items() if d == dev and v == "pass") for _p, _d, cells_ in history] for dev in order]
-                check([c.get("points") for c in station_cards] == want_station and all("11" in c.get("text", "") for c in station_cards),
+                want_station = {dev: [sum(1 for (d, _g), v in cells_.items() if d == dev and v == "pass") for _p, _d, cells_ in history] for dev in order}
+                check({c.get("label"): c.get("points") for c in station_cards} == want_station and all("target 11" in c.get("text", "") for c in station_cards),
                       f"kpi_trend per station: 8 cards, each its station's cells passing per acceptance file against its 11 cells ({len(station_cards)} cards)")
                 wait_view(page, "The rack", "s.querySelectorAll('td[data-col=worst] .dv-state').length > 0")
                 page.wait_for_timeout(500)
@@ -426,7 +444,8 @@ def main() -> int:
                     want_tree[plate(d["station"])] = max(want_tree.get(plate(d["station"]), 0), worst_dev[d["device"]])
                 got_tree = {}
                 for r in tree:
-                    key = r["label"].split(" · ")[0] if r["label"].startswith("CAN ") else r["label"]
+                    label = re.sub(r"^[▾▸]\s*", "", r["label"])
+                    key = label.split(" · ")[0] if label.startswith("CAN ") else re.sub(r"\d+$", "", label)  # a group's row ends in its count
                     got_tree[key] = r["word"]
                 want_words = {**{k: RANK_WORD[v] for k, v in want_tree.items()}, **{k: RANK_WORD[v] for k, v in worst_dev.items()}}
                 check(got_tree == want_words and all(r["glyph"] and r["shown"] for r in tree),
@@ -592,7 +611,7 @@ def main() -> int:
                 page.wait_for_timeout(1500)
                 sc = page.evaluate(SCENE_JS, "Output link · distance from the target") or {}
                 ov, tube = sc.get("overlay") or {}, sc.get("tube") or {}
-                poses = [r for r in json.loads((data / "runs" / slug / "poses.json").read_text())["rows"] if r["body"] == "marker_100mm" and r["situation"] != "target"]
+                poses = [r for r in json.loads((data / "runs" / slug / "poses.json").read_text())["rows"] if r["body"] == "marker_100mm" and r["source"] == "real"]
                 errs = [r["err_mm"] for r in poses if r.get("err_mm") is not None]
                 check(ov.get("color") == "err_mm" and len(ov.get("segments") or []) > 10 and errs and abs(ov.get("min", -1) - min(errs)) < 1e-9 and abs(ov.get("max", -1) - max(errs)) < 1e-9,
                       f"path_overlay colour: the paths are painted by err_mm over its drawn range ({len(ov.get('segments') or [])} segments, "
@@ -753,21 +772,12 @@ def main() -> int:
             check("not run yet" in row_text, f"every planned run's status reads not run yet ({row_text[:80]!r})")
             still("8b-schedule")
 
-            # 8c. a station's Gates tab (CONTRACT §35): T2's 1.5x floor as each model's band over its whole-run errors, and the run
-            # checks' evidence in the side peek, whose link lands on the run's playback at its window
+            # 8c. a station's Gates tab (CONTRACT §35): the run checks' evidence in the side peek, whose link lands on the run's
+            # playback at its window
             with guard("CAN 12's Gates tab"):
                 page.goto(f"{base}/{DEP}/can12/#gates")
                 page.wait_for_load_state("load")
                 rg = json.loads((data / "run_gates.json").read_text())["rows"]
-                mine = [g for g in rg if g["device"] == "CAN 12" and g["diagnostic"] == "stock.model_error"]
-                wait_view(page, "Model error per run · T2", "!!s.querySelector('.dv-view-timeseries') && !!s.querySelector('.dv-view-timeseries').vegaView")
-                page.wait_for_timeout(1500)
-                g = page.evaluate(GUIDES_JS, "Model error per run · T2") or {}
-                want = {(r["title"], round(r["error_hi"], 6)) for r in mine}
-                got = {(x["series"], round(x["value"], 6)) for x in g.get("limits") or [] if x["guide"] == "limit:error_hi"}
-                check(mine and got == want and all(0 <= x["py"] <= g.get("height", 0) for x in g.get("limits") or []),
-                      f"threshold_band per series on CAN 12's whole-run model errors: each model's T2 limit is its rows' 1.5× floor ({sorted(got)[:2]}… vs {sorted(want)[:2]}…)")
-                still("8c-station-t2")
                 wait_view(page, "Run checks", "s.querySelectorAll('[role=gridcell][data-id]').length > 0")
                 page.wait_for_timeout(800)
                 cell = page.locator("[role=tabpanel][data-tab=gates] [role=gridcell][data-id][data-column='tracking error rms']").first
@@ -799,9 +809,9 @@ def main() -> int:
                 page.goto(f"{base}/{DEP}/#coverage")
                 page.wait_for_load_state("load")
                 name = "Runs per cell · every station"
-                wait_view(page, name, "!!s.querySelector('.dv-scene3d') && !!s.querySelector('.dv-scene3d').scene3d && !!s.querySelector('.dv-scene3d').scene3d.ramp()", timeout=60000)
+                panel(page, name).scroll_into_view_if_needed()  # the scene draws once it is on screen
+                wait_view(page, name, "!!s.querySelector('.dv-scene3d') && !!s.querySelector('.dv-scene3d').scene3d && !!s.querySelector('.dv-scene3d').scene3d.ramp() && s.querySelector('.dv-scene3d').scene3d.renders() > 0", timeout=60000)
                 page.wait_for_timeout(1500)
-                panel(page, name).scroll_into_view_if_needed()
                 sc = page.evaluate(SCENE_JS, name) or {}
                 cov = [r for r in json.loads((data / "coverage.json").read_text())["rows"] if r.get("layer") == "path" and r.get("q_deg") is not None and r.get("qd_deg_s") is not None]
                 lo = {}
@@ -816,11 +826,11 @@ def main() -> int:
                 counts = {k: len(v) for k, v in per_cell.items()}
                 ramp, drawn = sc.get("ramp") or {}, sc.get("cellColours") or []
                 tone = sc.get("tone") or {}
-                ends_ok = bool(ramp) and tone and ramp.get("lo", "").lower() == str(tone.get("bad", "")).lower() and ramp.get("hi", "").lower() == str(tone.get("good", "")).lower()
-                check(ramp and ramp.get("domain") == [min(counts.values()), max(counts.values())] and len(drawn) == len(counts)
+                ends_ok = bool(ramp) and tone and as_hex(ramp.get("lo")) == as_hex(tone.get("bad")) and as_hex(ramp.get("hi")) == as_hex(tone.get("good"))
+                check(ramp and ramp.get("domain") == [0, max(counts.values())] and len(drawn) == len(counts)
                       and sorted(c[3] for c in drawn) == sorted(counts.values()),
-                      f"voxels value: runs counts the whole rack's runs per cell ({len(drawn)} cells drawn of {len(counts)}, domain {ramp.get('domain')} vs "
-                      f"[{min(counts.values())}, {max(counts.values())}] runs; {len(set(r['run'] for r in cov))} runs)")
+                      f"voxels value: runs counts the whole rack's runs per cell, every drawn cell's count equal to coverage.json's ({len(drawn)} cells drawn of "
+                      f"{len(counts)}, ramp 0..{ramp.get('domain', [None, None])[1]} vs the busiest cell's {max(counts.values())} runs; {len(set(r['run'] for r in cov))} runs)")
                 check(ends_ok, f"scale: verdict: few runs in the bad tone, many in the good ({ramp.get('lo')} .. {ramp.get('hi')} vs {tone.get('bad')} .. {tone.get('good')})")
                 still("8e-coverage-voxels")
 
