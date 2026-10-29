@@ -36,9 +36,9 @@ REAL = "var(--data-series-1)"
 PATH = "color-mix(in srgb, var(--data-series-1) 10%, transparent)"
 SIM = "var(--data-series-2)"
 MUTED = "#8b9099"
-MODELS = ["twin D · LuGre", "twin G · LuGre re-fit", "twin H · + dwell", "twin R · rate-state", "twin · full", "twin A · deployed", "twin C · calibrated"]
+MODELS = ["twin D · LuGre", "twin G · LuGre re-fit", "twin H · + dwell", "twin R · rate-state", "twin · full", "twin A · deployed", "twin C · calibrated", "twin C1 · fast inertia"]
 SIM_SHADES = [SIM, f"color-mix(in srgb, {SIM} 62%, black)", f"color-mix(in srgb, {SIM} 55%, white)", f"color-mix(in srgb, {SIM} 80%, black)", SIM,
-              f"color-mix(in srgb, {SIM} 55%, white)", SIM]
+              f"color-mix(in srgb, {SIM} 55%, white)", SIM, f"color-mix(in srgb, {SIM} 62%, black)"]
 PALETTE = {"real": REAL, "target": MUTED, **dict(zip(MODELS, SIM_SHADES))}
 PALETTE.update({f"{model} vs real": shade for model, shade in zip(MODELS, SIM_SHADES)})
 PALETTE["real vs target"] = REAL
@@ -106,9 +106,9 @@ def deployment_page() -> dict:
         "data": f"{DEP_DATA}/runs.json",
         "properties": {"title": {"displayName": "Run"}, "started": {"displayName": "Started"}, "device": {"displayName": "Station"},
                        "status": {"displayName": "T2"}, "moves_x": {"displayName": "Moves ÷ floor (gate 1.5)"}, "hold_x": {"displayName": "Hold ÷ floor (gate 1.5)"},
-                       "gate_x": {"displayName": "Gate"}, "moves_before_x": {"displayName": "Moves, twin before"}, "hold_before_x": {"displayName": "Hold, twin before"},
+                       "gate_x": {"displayName": "Gate"}, "moves_before_x": {"displayName": "Moves, twin before / today"}, "hold_before_x": {"displayName": "Hold, twin before"},
                        "limiting_term": {"displayName": "Limiting term"}, "evidence": {"displayName": "Evidence share"}, "why": {"displayName": "Why (the study)"},
-                       "floor_growth_x": {"displayName": "Floor grew"}, "overfit_pick": {"displayName": "Overfit pick"}, "round": {"displayName": "Round"},
+                       "floor_growth_x": {"displayName": "Floor grew"}, "overfit_pick": {"displayName": "Overfit pick"}, "pick_rule": {"displayName": "Pick rule"}, "round": {"displayName": "Round"},
                        "worst_window": {"displayName": "Worst window"}, "caveat": {"displayName": "Caveat"}, "detail": {"displayName": "What it means"},
                        "kind": {"displayName": "Kind"}, "duration_s": {"displayName": "Duration"}, "gains": {"displayName": "Gains (board)"},
                        "compare": {"displayName": "Situations"}, "tracking_mrad": {"displayName": "Real vs target"},
@@ -137,12 +137,12 @@ def deployment_page() -> dict:
                      "Blue is real, orange is a model, grey dashed is the target.", "w": 12},
             {"view": "Runs shown", "w": 3, "h": 2}, {"view": "Hours shown", "w": 3, "h": 2}, {"view": "Stations shown", "w": 3, "h": 2},
             {"view": "Runs with models", "w": 3, "h": 2},
-            {"text": "### Why it fails\nOne row per station from the calibration round (bam_rack_twin calibration_why.json): T2 on the held-out tapes, moves and hold "
+            {"text": "### Why it fails\nOne row per station from the calibration round and its 10-29 follow-ups (bam_rack_twin calibration_why_2.json): T2 on the held-out tapes, moves and hold "
                      "offset each against **1.5× the floor** (after the round, with the twin before it beside it), the limiting term in the study's words, and how "
                      "much of the held-out torque gap that term's family explains on its own. **Click a row** to play its worst held-out window. "
-                     "Read it with the two caveats below them: they change how good the ratios look.", "w": 12},
+                     "Read it with the caveats below it: they change how good the ratios look, and one is a decision still open.", "w": 12},
             {"view": "Why it fails", "w": 12, "h": 4},
-            {"view": "Caveats", "w": 12, "h": 4, "toolbar": "none"},
+            {"view": "Caveats", "w": 12, "h": 5, "toolbar": "none"},
             {"view": "Runs", "w": 12, "h": 5, "title": "Runs · newest first", "toolbar": "compact"},
             {"text": "### Coverage\nWhere the runs went. Every path is drawn faint (10 %), so the dark bands are where the rack spends its time; "
                      "the dashed box is each station's proven window (bam_rack_twin TAPE_STATIONS: travel × speed ceiling; stations with no recorded window have none). "
@@ -161,7 +161,7 @@ def deployment_page() -> dict:
             {"type": "kpi", "name": "Runs with models", "from": "runs", "filters": "models > 0",
              "kpi": {"label": "Runs replayed by a model", "value": {"property": "run", "summary": "Count"}}},
             {"type": "table", "name": "Why it fails", "from": "why", "open": {"mode": "link", "url": "page"},
-             "order": ["device", "status", "moves_x", "hold_x", "moves_before_x", "floor_growth_x", "overfit_pick", "limiting_term", "evidence", "why",
+             "order": ["device", "status", "moves_x", "hold_x", "moves_before_x", "floor_growth_x", "overfit_pick", "pick_rule", "limiting_term", "evidence", "why",
                        "worst_window", "hold_before_x", "round"]},
             # WHY tall rows and a wide detail column: the caveats are read in full, never clipped behind a hover
             {"type": "table", "name": "Caveats", "from": "caveats", "order": ["caveat", "detail"], "rowHeight": "extra",

@@ -27,6 +27,7 @@ style:
     twin · full: var(--data-series-2)
     twin A · deployed: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
     twin C · calibrated: var(--data-series-2)
+    twin C1 · fast inertia: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
     twin D · LuGre vs real: var(--data-series-2)
     twin G · LuGre re-fit vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
     twin H · + dwell vs real: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
@@ -34,6 +35,7 @@ style:
     twin · full vs real: var(--data-series-2)
     twin A · deployed vs real: 'color-mix(in srgb, var(--data-series-2) 55%, white)'
     twin C · calibrated vs real: var(--data-series-2)
+    twin C1 · fast inertia vs real: 'color-mix(in srgb, var(--data-series-2) 62%, black)'
     real vs target: var(--data-series-1)
 layout:
   panels:

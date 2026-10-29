@@ -205,6 +205,16 @@ def main() -> int:
             still("8-why-it-fails")
             stations = why.locator("tbody tr").evaluate_all("rows => rows.map(r => r.querySelector('td')?.textContent.trim())")
             check(sorted(stations) == sorted(f"CAN {c}" for c in (1, 4, 11, 12, 13, 14, 15, 21)), f"the Why it fails panel lists the 8 stations ({stations})")
+            panel(page, "Caveats").scroll_into_view_if_needed()
+            page.wait_for_timeout(500)
+            still("8b-caveats")
+            caveat_text = panel(page, "Caveats").inner_text()
+            check(all(x in caveat_text for x in ("1.72×", "2.28×", "Zach's decision, pending")),
+                  "the caveats name the pick rule on CAN 11 with both numbers (safer 1.72×, declared 2.28×) and that the rule is pending")
+            gains = {r["session"]: r["gains"] for r in json.loads((REPO / "app/data/one-dof-test-rack/runs.json").read_text())["rows"] if r["device"] == "CAN 11"}
+            check(all(s in gains for s in ("can11_hold_kp100", "can11_hold_kp150", "can11_hold_kp200", "can11_hold_il0.25", "can11_hold_il0.5"))
+                  and len({gains[s] for s in ("can11_hold_kp100", "can11_hold_kp150", "can11_hold_kp200", "can11_hold_il0.25", "can11_hold_il0.5")}) == 5,
+                  "the 10-29 CAN 11 gain steps each show their own board gains (" + "; ".join(gains.get(s, "?") for s in ("can11_hold_kp100", "can11_hold_kp150", "can11_hold_kp200", "can11_hold_il0.25", "can11_hold_il0.5")) + ")")
             expected = next(r for r in json.loads((REPO / "app/data/one-dof-test-rack/why.json").read_text())["rows"] if r["device"] == "CAN 1")
             t0, t1 = (float(x) for x in re.search(r"tr=([\d.]+),([\d.]+)", expected["page"]).groups())
             row = why.locator("tbody tr").filter(has=page.locator("td", has_text=re.compile(r"^\s*CAN 1\s*$"))).first
