@@ -1,0 +1,26 @@
+{
+ "clipped-dither-whole": [
+  83,
+  51,
+  463,
+  473
+ ],
+ "quantised-even": [
+  53,
+  51,
+  463,
+  473
+ ],
+ "clipped-dither": [
+  78,
+  52,
+  463,
+  472
+ ],
+ "quantised-silhouette": [
+  65,
+  52,
+  463,
+  472
+ ]
+}
