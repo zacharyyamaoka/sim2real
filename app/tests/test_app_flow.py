@@ -10,6 +10,7 @@ started. Needs the app's data (tools/build_app.py). Asserts, measured in the pag
 - the gates layer toggles on (the station gate matrix appears, URL layer=gates) and off again;
 - a run with models opens from its Open link, and its legend's real swatch is blue and every model swatch orange
   (hue measured from the rendered swatch colour; green and red are reserved for pass/fail);
+- a legend click hides that series on the chart and a second click shows it again (pixels of its colour counted);
 - Play moves the clock (the readout and the playhead advance);
 - "Why it fails" lists the 8 stations, and clicking CAN 1 opens its worst held-out window (the clock at the window's start) with the
   residual-decomposition plots.
@@ -156,6 +157,24 @@ def main() -> int:
             check(len(real) == 1 and REAL_HUES[0] <= hue(real[0]["color"])[0] <= REAL_HUES[1], f"the real swatch is blue ({real[0]['color'] if real else None})")
             check(len(sims) >= 2 and all(SIM_HUES[0] <= hue(k["color"])[0] <= SIM_HUES[1] and hue(k["color"])[1] > 0.35 for k in sims),
                   "every model swatch is orange (" + ", ".join(f"{k['name']} {k['color']}" for k in sims) + ")")
+
+            # 4b. the legend toggles a series (data-ui legend-toggle, vendored at dd53748): measured as that series' pixels on the chart
+            count_js = """(p, rgb) => { let n = 0; for (const c of p.querySelectorAll('canvas')) { let d; try { d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; } catch { continue; }
+                for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - rgb[0]) + Math.abs(d[i + 1] - rgb[1]) + Math.abs(d[i + 2] - rgb[2]) < 40 && d[i + 3] > 200) n++; } return n; }"""
+            key = angle.locator(".dv-legend-key[data-legend-series='twin D · LuGre']").first
+            twin_d = (0xeb, 0x68, 0x34)
+            shown = angle.evaluate(count_js, list(twin_d))
+            key.click()
+            page.wait_for_timeout(600)
+            hidden = angle.evaluate(count_js, list(twin_d))
+            pressed = key.get_attribute("aria-pressed")
+            key.click()
+            page.wait_for_timeout(600)
+            back = angle.evaluate(count_js, list(twin_d))
+            # WHY the shown-again count is the baseline: before the click twin D is drawn under the other models (the first count is small);
+            # re-shown it is drawn last, on top
+            check(pressed == "false" and back > 50 and hidden < 0.1 * back and key.get_attribute("aria-pressed") == "true",
+                  f"a legend click hides the series and a second shows it (twin D pixels {shown} -> {hidden} -> {back})")
 
             # 5. playback
             readout = page.locator(".dv-pb-time").first

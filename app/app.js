@@ -12,7 +12,6 @@ const run = dep && SAFE.test(params.get('run') || '') ? params.get('run') : null
 const gates = params.get('layer') === 'gates';
 const station = run && /^can\d+$/.test(params.get('why') || '') ? params.get('why') : null;  // opened from "Why it fails"
 const level = run ? 'run' : dep ? 'deployment' : 'deployments';
-const base = level === 'deployments' ? 'deployments.base' : station && !gates ? 'run-why.base' : `${level}${gates ? '-gates' : ''}.base`;
 
 // Every .base this page loads is rewritten before data-ui reads it:
 // 1. `{deployment}` and `{run}` in its data paths (WHY: data-ui has no per-run dataset template yet, PEP 0010 P3);
@@ -78,26 +77,37 @@ if (dep && !depRow) {
 } else if (run && !runRow) {
   page.innerHTML = `<p class="empty">No such run in this deployment. <a href="/app/?d=${encodeURIComponent(dep)}">Back to its runs</a>.</p>`;
 } else {
-  // The gates layer: a second .base over the same data (playback + gate datasets and views); the switch swaps the file.
-  // WHY a reload: a <data-dashboard> ignores a src set after it loaded (data-ui gap #13), and the rails and the clock live in
-  // the URL, which the switch keeps.
+  // The gates layer: a second .base over the same data (playback + gate datasets and views); the switch swaps the file in
+  // place. Since data-ui dd53748 (PEP 0010 P0 #13) a src set after load reloads the panels, so no page reload is needed;
+  // the URL keeps `layer=gates` so the state survives a reload or a shared link.
   const toggle = document.getElementById('layer');
-  if (level !== 'deployments') {
-    toggle.hidden = false;
-    toggle.setAttribute('aria-pressed', String(gates));
-    toggle.addEventListener('click', () => {
-      const next = new URLSearchParams(location.search);
-      if (gates) next.delete('layer'); else next.set('layer', 'gates');
-      location.assign(`${location.pathname}?${next.toString()}${location.hash}`);
-    });
-  }
   const dash = document.createElement('data-dashboard');
   dash.id = 'dash';
   dash.dataset.level = level;
-  dash.dataset.layer = gates ? 'gates' : station ? 'why' : 'playback';
   dash.setAttribute('aria-label', document.title);
-  dash.setAttribute('src', `/app/${base}`);  // WHY set before connecting: a src set after load is ignored
   page.append(dash);
+  let layered = gates;
+  const show = () => {
+    const file = level === 'deployments' ? 'deployments.base' : station && !layered ? 'run-why.base' : `${level}${layered ? '-gates' : ''}.base`;
+    dash.dataset.layer = layered ? 'gates' : station ? 'why' : 'playback';
+    toggle.setAttribute('aria-pressed', String(layered));
+    dash.setAttribute('src', `/app/${file}`);
+  };
+  if (level !== 'deployments') {
+    toggle.hidden = false;
+    toggle.addEventListener('click', () => {
+      layered = !layered;
+      const next = new URLSearchParams(location.search);
+      if (layered) next.set('layer', 'gates'); else next.delete('layer');
+      history.pushState(history.state, '', `${location.pathname}?${next.toString()}${location.hash}`);
+      show();
+    });
+    addEventListener('popstate', () => {
+      const want = new URLSearchParams(location.search).get('layer') === 'gates';
+      if (want !== layered) { layered = want; show(); }
+    });
+  }
+  show();
   const redraw = () => dash.reload();
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
   new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
