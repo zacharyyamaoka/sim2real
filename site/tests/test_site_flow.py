@@ -269,6 +269,7 @@ def shell_checks(page, where: str) -> None:
 # ---- audit round 2 (2026-10-29, gaps 2 and 3): every number on a failure explanation is the displayed result's -----------------
 NUM = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)")
 RATIO = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s?[×x](?![\w])")
+OLDER = re.compile(r"\s*(calibration C\b|the twin of record|not counted|v1\b|v2 replaces|stale\b)")
 LABELLED = re.compile(r"\[from [^\]\[]*?\.json[^\]\[]*?\]")
 
 
@@ -279,8 +280,11 @@ def cell_numbers(can: str, gate: dict, facts: dict) -> list[float]:
     for v in [gate.get("value"), gate.get("limit")] + [x for j in gate.get("judged") or [] for x in (j.get("value"), j.get("limit"))]:
         if isinstance(v, (int, float)) and not isinstance(v, bool):
             out.append(float(v))
+    # WHY the older-model clauses are dropped (mutation 2026-10-30: an unlabelled "3.93×" on CAN 21 T9 passed, because the source line
+    # itself says "calibration C 3.93x"): a number the study reports for another model is exactly what must stay labelled
     texts = [str(gate.get("target") or ""), str(gate.get("detail") or "")] + [str(v) for k, v in facts.items() if k.endswith("_source")]
-    out += [float(x) for t in texts for x in NUM.findall(t)]
+    kept = [c for t in texts for c in re.split(r"[;(]", t) if not OLDER.match(c) or not RATIO.search(c)]
+    out += [float(x) for c in kept for x in NUM.findall(c)]
     return out
 
 
