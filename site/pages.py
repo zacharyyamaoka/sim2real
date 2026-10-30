@@ -141,8 +141,10 @@ def why_rows(dep: Deployment, rows: list[dict], heading_level: int = 3, with_dev
         play = (f'<p class="s2r-play">{a(rewrite_links(w["page"]), "▶ Play the worst window" if "tr=" in w["page"] else "Open the run")}</p>'
                 if w.get("page") else "")
         blocked = ' <span class="s2r-blocked">blocked on Zach</span>' if str(w.get("next", "")).startswith("blocked on Zach") else ""
-        fields = [("Why", w.get("why")), ("Evidence and uncertainty", w.get("evidence")), ("Floor rules", w.get("floor_rules")),
-                  ("Next", w.get("next")), ("Kind of step", w.get("category")), ("Source", w.get("source"))]
+        # WHY Model and Earlier results (Codex audit round 2): each row names the model of the result it shows, and an older file's
+        # different number is shown apart, labelled with its file, date and model, never mixed into Why
+        fields = [("Why", w.get("why")), ("Model", w.get("model")), ("Evidence and uncertainty", w.get("evidence")), ("Floor rules", w.get("floor_rules")),
+                  ("Next", w.get("next")), ("Earlier results", w.get("earlier")), ("Kind of step", w.get("category")), ("Source", w.get("source"))]
         dl = "".join(f"<dt>{e(k)}</dt><dd>{e(v) if k != 'Source' else file_link(v)}</dd>" for k, v in fields if v)
         who = f"{w['device']} · " if with_device else ""
         out.append(f"""<article class="s2r-whyrow s2r-st-{e("warn" if flips else w["status"])}" id="{e(why_anchor(w['device'], w['gate_id']))}" data-cell="{e(w['device'])} {e(w['gate_id'])}">

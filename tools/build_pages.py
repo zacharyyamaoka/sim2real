@@ -150,7 +150,7 @@ def deployment_page() -> dict:
             {"view": "Evidence files", "w": 12, "h": 3, "toolbar": "none"},
             {"view": "Caveats", "w": 12, "h": 5, "toolbar": "none"},
             {"view": "Runs", "w": 12, "h": 5, "title": "Runs · newest first", "toolbar": "compact"},
-            {"text": "### Coverage\nWhere the runs went. Every path is drawn at 1/n opacity (n = the station's runs, or every run on Angle over time; never under 0.04, which an 8-bit canvas still draws), so the dark bands are where the rack spends its time; "
+            {"text": "### Coverage\nWhere the runs went. Every path is drawn at exactly 1/n opacity (n = the station's runs, or every run on Angle over time; no floor), so the dark bands are where the rack spends its time; past about 200 runs a lone path fades out on screen, and **Runs per cell** counts the runs in each cell where paths fade out. "
                      "the dashed box is each station's proven window (bam_rack_twin TAPE_STATIONS: travel × speed ceiling; stations with no recorded window have none). "
                      "Counts are grid samples, so ÷ the grid rate is seconds. The station panels follow **Coverage station** on the rail (CAN 12 first).", "w": 12},
             {"view": "Phase space · every run", "w": 7, "h": 5},

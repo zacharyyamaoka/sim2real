@@ -278,8 +278,9 @@ def station_coverage() -> dict:
     page = build_pages.deployment_page()
     by_station = {"Angle by station", "Speed by station", "Acceleration by station"}
     doc = subset(page, lambda i, p: text_starts(p, "### Coverage") or bool(set(panel_views(p)) & (COVERAGE - by_station)))
-    doc["layout"]["panels"][0] = {"text": "### Coverage · {device}\nWhere this station's runs went. Every path is drawn at 1/n opacity, so the dark "
-                                          "bands are where it spends its time; the dashed box is its proven window (travel × speed ceiling) when one is recorded.", "w": 12}
+    doc["layout"]["panels"][0] = {"text": "### Coverage · {device}\nWhere this station's runs went. Every path is drawn at exactly 1/n opacity "
+                                          "(n = its runs, no floor), so the dark bands are where it spends its time; past about 200 runs a lone path fades out, "
+                                          "and **Runs per cell** below counts the runs in each cell where paths fade out; the dashed box is its proven window (travel × speed ceiling) when one is recorded.", "w": 12}
     return scoped(with_voxels(doc, "Runs per cell · {device}"), 'device == "{device}"')
 
 
