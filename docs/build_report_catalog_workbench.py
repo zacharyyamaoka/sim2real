@@ -26,6 +26,7 @@ import time
 
 MEDIA = pathlib.Path("/home/bam/sim2real/reports/media/catalog-workbench-2026-10-29")
 DUI = MEDIA / "data-ui-006e9d5"
+R2 = MEDIA / "audit-r2"
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 # WHY the newest log by default: the verdict line counts the checks as they stand now (the data-ui section's run, if there is one)
 LOG = pathlib.Path(ARGS[0]) if ARGS else (DUI / "test.log" if (DUI / "test.log").is_file() else MEDIA / "test.log")
@@ -216,6 +217,69 @@ def capture() -> None:
         shutil.rmtree(DUI / "clip")
 
 
+# The CAN 21 T9 row as tools/build_app.py wrote it at f3f59a3, the build the round-2 audit read (why.json is not in git, so its text is kept here)
+R2_BEFORE = {"measured": "4.08 · limit: none written",
+             "Why": "warm, the twin (calibration C) misses by 5.49 mrad against the warm floor's 1.40 mrad = 3.93×; cold it is 1.61×. The twin moved 1.10× warm vs cold, the floor 0.45×.",
+             "Evidence and uncertainty": "5 warm runs, worst session: 10-29 gate session (aligned heating) (warm21_scored.json, 2026-10-29T10:47:39Z); triage (modelling): open: 3.93x (3.45x over the pooled floor). Not heat: the twin misses by ~5 mrad cold and warm (5.00, 5.49) while the rack repeats to 1.4-1.6 mrad; its T2 passes on that floor alone (pooled: moves 2.71x, hold 2.54x); v2 found no friction level that helps",
+             "Floor rules": "session floor 1.40 mrad: 3.93× (fail) · pooled floor 1.59 mrad: 3.45× (fail)",
+             "Next": "modelling (no rack time): open: 3.93x (3.45x over the pooled floor). Not heat: the twin misses by ~5 mrad cold and warm (5.00, 5.49) while the rack repeats to 1.4-1.6 mrad; its T2 passes on that floor alone (pooled: moves 2.71x, hold 2.54x); v2 found no friction level that helps"}
+
+
+def capture_r2() -> None:
+    """The CAN 21 T9 row on Analysis › Why it fails, as built now and with the f3f59a3 text in the same page's row; the server is ours."""
+    from playwright.sync_api import sync_playwright  # noqa: PLC0415
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "site" / "tests"))
+    import test_site_flow as T  # noqa: PLC0415
+    R2.mkdir(parents=True, exist_ok=True)
+    port = T.free_port()
+    server = subprocess.Popen([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1", "--directory", str(SITE_OUT)],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(50):
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        with sync_playwright() as p:
+            browser = p.chromium.launch(executable_path=T.EXE)
+            page = browser.new_page(viewport={"width": 1000, "height": 900})
+            page.goto(f"http://127.0.0.1:{port}/analysis/why-it-fails/")
+            page.wait_for_load_state("load")
+            row = page.locator("[data-cell='CAN 21 T9']")
+            row.scroll_into_view_if_needed()
+            row.screenshot(path=str(R2 / "can21-t9-after.png"))
+            row.evaluate("""(el, before) => {
+                el.querySelector('.s2r-num').textContent = before.measured;
+                const dl = el.querySelector('dl'); dl.textContent = '';
+                for (const [k, v] of Object.entries(before)) { if (k === 'measured') continue;
+                    const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); }
+            }""", R2_BEFORE)
+            row.screenshot(path=str(R2 / "can21-t9-before.png"))
+            browser.close()
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+
+
+def r2_section() -> str:
+    """The round-2 audit's fixes, read from the built why.json and the archive, not typed."""
+    rows = {(r["device"], r["gate_id"]): r for r in json.loads((SITE_OUT / "data" / DEP / "why.json").read_text())["rows"]}
+    table = "".join(f"<tr><td>{e(d)} {e(g)}</td><td>{e(b)}</td><td>{e(rows[(d, g)]['measured'])}</td></tr>" for d, g, b in (
+        ("CAN 21", "T9", "headline 4.08, explanation 3.93×, limit none written"), ("CAN 14", "T10", "headline 2.2, explanation 2.39×, limit none written"),
+        ("CAN 21", "T2", "1.75 beside the split limit; verdict actually moves 1.47× / hold 0.364×")))
+    return f"""<h2 id="audit-round-2">Audit round 2 fixes</h2>
+<p><b>Every number on a failure explanation is now the number of the result shown.</b> The headline comes only from the acceptance cell; prose from any other file carries its file, date and model, and an older number sits in <b>Earlier results</b>.</p>
+<div class="scroll"><table><thead><tr><th>Cell</th><th>Before</th><th>After</th></tr></thead><tbody>{table}</tbody></table></div>
+<div class="two">{fig("audit-r2/can21-t9-before.png", "before · the f3f59a3 row's text, drawn in today's page")}{fig("audit-r2/can21-t9-after.png", "after · the built page")}</div>
+<ul><li><b>Limits:</b> <code>acceptance_limits_explicit.json</code> exports every gate's rule, limit and judged statistics; all 88 statuses and values equal <code>acceptance_limiting.json</code>, and no older file changed.</li>
+<li><b>Prose:</b> Why, Evidence and Next no longer repeat a sentence; an empty Evidence is left out.</li>
+<li><b>Coverage:</b> paths are drawn at exactly 1/n with no floor. Past about 200 runs a lone path fades out, and the page points to Runs per cell.</li>
+<li><b>The ruler can fail:</b> five seeded defects each go red. The first run let an unlabelled 3.93× through, so the check was tightened.</li>
+<li><b>Vendored kit:</b> data-ui main @ d5ede93; the run Gates table uses <code>digits</code>, not the <code>decimals</code> workaround.</li></ul>
+"""
+
+
 def _union(a, b, scroll_y: float) -> dict:
     """The box round two panels, in the document's coordinates (a full-page clip)."""
     ra, rb = a.bounding_box(), b.bounding_box()
@@ -270,6 +334,11 @@ def fig(src: str, cap: str = "") -> str:
 def main():
     if "--capture" in sys.argv:
         capture()
+    if "--capture-r2" in sys.argv:
+        capture_r2()
+    landed = subprocess.run(["git", "-C", "/home/bam/sim2real", "branch", "--merged", "main", "--list", "catalog-workbench"], capture_output=True, text=True).stdout.strip()
+    main_sha = subprocess.run(["git", "-C", "/home/bam/sim2real", "rev-parse", "--short", "main"], capture_output=True, text=True).stdout.strip()
+    where = f"It is on <code>main</code> @ <code>{main_sha}</code>." if landed else "It lives on branch <code>catalog-workbench</code> (worktree <code>/home/bam/sim2real-worktrees/catalog-workbench</code>) and is not merged."
     lines = [l for l in LOG.read_text().splitlines() if l.startswith(("PASS", "FAIL"))] if LOG.is_file() else []
     passed = sum(1 for l in lines if l.startswith("PASS"))
     checks = "".join(f'<li class="{"ok" if l.startswith("PASS") else "bad"}">{e(l)}</li>' for l in lines)
@@ -295,10 +364,11 @@ table {{ border-collapse:collapse; font-size:13.5px; width:100%; }} th, td {{ bo
 </style></head><body><main>
 <h1>sim2real on catalog-workbench</h1>
 <p class="verdict"><b>sim2real now runs on the shared catalog-workbench shell, the same as robotparts and the object database: the same bar, search, Account menu, trail, home tiles and tabbed record pages.</b>
-It lives on branch <code>catalog-workbench</code> (worktree <code>/home/bam/sim2real-worktrees/catalog-workbench</code>) and is not merged. Acceptance: <b>{passed} of {len(lines)}</b> checks pass. The workbench needed no change.</p>
+{where} Acceptance: <b>{passed} of {len(lines)}</b> checks pass. The workbench needed no change.</p>
 <p>Open it (build first, about 1 s):</p><pre>{e(BUILD)}
 {e(LAUNCH)}</pre><p class="mut">then <code>http://127.0.0.1:4710/</code>. It does not use port 4700 (Zach's serve.py).</p>
 
+{r2_section()}
 <h2>The click path: home → deployment → Why it fails → a run</h2>
 <video src="hero/hero.mp4" autoplay muted loop playsinline controls poster="after-final/1-home.png"><img src="hero/hero.gif" alt="click path"></video>
 <p class="mut">25 s, recorded headless from the built site: the home and its Where it fails matrix, the rack tile, the Why it fails tab, a CAN 11 T2 row (it opens the run's playback at its worst held-out window, 2.85 s), Play, then the run's Why it fails tab with the decomposition. <a href="hero/hero.gif">GIF</a>.</p>

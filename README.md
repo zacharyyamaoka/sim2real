@@ -14,7 +14,7 @@ every page is a `.base` dashboard or an analysis over datasets the producers wri
 
 ## The app (home page)
 
-`python3 /home/bam/sim2real/serve.py` serves the app at `/app/` (`/` redirects there): **deployments → one deployment
+`python3 /home/bam/sim2real/serve.py` serves the catalog-workbench site at `/` (build it with `python3 /home/bam/sim2real/site/build.py`) and keeps the old app at `/app/`: **deployments → one deployment
 (its runs newest first, coverage) → one run (playback of real vs every model on one clock)**, each with a **Gates layer**
 switch in the header that adds the diagnostics computed from the same runs. The five proposals stay at `/dashboards/`.
 
