@@ -2,9 +2,9 @@
 
 A built copy of data-ui, never edited here. Re-vendor it from data-ui; do not patch it in place.
 
-- **Source:** `/home/bam/data-ui` `integrate/packet` @ `006e9d5` (2026-10-29, "test(p5): load_table follows a descriptor's path": PEP 0010 P3 navigation, CONTRACT §33 / PEP 0013; Add to dashboard, §34; P5 diagnostics and gates, §35; on top of P1b scene3d, P2 coverage, P4 parts and the kit gaps). **A trial: not merged to data-ui main.** Before: `a0b229b` (P1b), linked from the main checkout.
-- **Built green:** `node build.mjs` (4.3 s); unit tests 652, 651 pass, 1 skipped, 0 fail (`node --test tests/unit/*.test.mjs tools/facets.test.mjs`); `tools/test_robotics_fixture.py` (5), `tools/test_check_robotics.py` (5), `tools/test_check_p3.py` (8), `tools/test_check_p5.py` (6) OK (with jsonschema, pyyaml).
-- **How it was built:** `git -C /home/bam/data-ui archive 006e9d5 | tar -x -C <scratch>`, `node_modules` linked read-only from `/home/bam/data-ui/.wt/p1a-contract/node_modules` (the same package-lock.json as 006e9d5), `node build.mjs` in the scratch copy. Nothing in `/home/bam/data-ui` was written.
+- **Source:** `/home/bam/data-ui` `main` @ `d5ede93` (2026-10-30, "test(perf oracle)": `integrate/packet` merged, the table `digits` fix cd5efe5, CONTRACT §36). Before: `integrate/packet` @ `006e9d5`, a trial.
+- **Built green:** `node build.mjs` (3.7 s); unit tests 756, 755 pass, 1 skipped, 0 fail (`node --test tests/unit/*.test.mjs tools/facets.test.mjs`).
+- **How it was built:** `git -C /home/bam/data-ui archive d5ede93 | tar -x -C <scratch>`, `node_modules` linked read-only from `/home/bam/data-ui/node_modules` (the same package-lock.json as d5ede93), `node build.mjs` in the scratch copy. Nothing in `/home/bam/data-ui` was written.
 - **`dist/`:** the build's `dist/` without `site/` and the `*.map` source maps (13 MB, 142 files). `dist/manifest.json` still lists the maps' hashes; the pages never load them. `dist/LICENSES.md` names every bundled npm package and its licence.
 - **`gallery/sim-to-real/`:** from `gallery/examples/sim-to-real/` at the same sha: `samples.json`, `media.json` + `media/`, `motors.json`, README.
 - **`gallery/robotics/`:** the producer-facing contract at the same sha: `CONTRACT.md`, `schemas/`, `fixture.py` and `fixtures/difference/`.

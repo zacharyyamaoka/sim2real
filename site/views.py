@@ -172,9 +172,8 @@ def station_gates() -> dict:
     into one line; T2's band is drawn per model on each run's Playback instead."""
     return {
         "data": "/data/{deployment}/run_gates.json",
-        # WHY decimals, not digits: data-ui 006e9d5's table cells ignore a property's `digits` (reported to data-ui); decimals round them
-        "properties": {"title": {"displayName": "Check"}, "verdict": {"displayName": "Verdict"}, "value": {"displayName": "Value", "decimals": 2},
-                       "unit": {"displayName": "Unit"}, "error_hi": {"displayName": "Limit (error above)", "decimals": 2}, "message": {"displayName": "What it measured"},
+        "properties": {"title": {"displayName": "Check"}, "verdict": {"displayName": "Verdict"}, "value": {"displayName": "Value", "digits": 3},
+                       "unit": {"displayName": "Unit"}, "error_hi": {"displayName": "Limit (error above)", "digits": 3}, "message": {"displayName": "What it measured"},
                        "evidence": {"displayName": "Evidence (opens the playback there)"}, "t0": {"displayName": "From (s)"}, "t1": {"displayName": "To (s)"},
                        "source": {"displayName": "Source"}, "record": {"displayName": "Record"}, "started": {"displayName": "Started"}, "run": {"displayName": "Run"}},
         "style": copy.deepcopy(build_pages.STYLE),
