@@ -319,6 +319,19 @@ def pose_rows(samples: list[dict], device: str) -> list[dict]:
     return out
 
 
+# WHY err_mm on the pose rows (data-ui CONTRACT §35, path_overlay: "the producer writes the number (an error column is the
+# difference rows' err_mm, written onto the pose rows): the view never computes an error"): the run page colours each path by
+# its distance from the target at that instant, the diff_poses row of (situation, body, t) against the target; 0 on the target.
+POSE_HINTS = {"err_mm": {"type": "number", "unit": "mm", "description": "distance from the target at t (diff_poses err_mm against target); 0 on the target"}}
+
+
+def pose_errors(poses: list[dict], d_poses: list[dict]) -> None:
+    err = {(r["situation"], r["body"], r["t"]): r["err_mm"] for r in d_poses if r.get("reference") == TARGET}
+    has_target = any(r["situation"] == TARGET for r in poses)
+    for row in poses:
+        row["err_mm"] = (0.0 if row["situation"] == TARGET else err.get((row["situation"], row["body"], row["t"]))) if has_target else None
+
+
 def write_contract(path: Path, name: str, rows: list[dict], title: str, source: str, hints: dict | None = None, **top) -> int:
     """A contract table ({schema: {fields}, rows}) checked against data-ui's schema before it is written; a breach stops the build.
     `hints` adds data-ui's display keys (display, colors, digits, note) to a field, and declares the app's own columns."""
@@ -625,128 +638,284 @@ GATE_NAMES = {"T1": "floor", "T2": "fidelity", "T3": "torque", "T4": "static acc
 def _fmt(value) -> str:
     if value is None:
         return "no number"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
     if isinstance(value, (int, float)):
         return f"{value:.3g}"
     return str(value)
 
 
+# WHY every number on a row is the displayed result's (Codex audit round 2, 2026-10-29: CAN 21 T9's headline read 4.08x while its
+# explanation said 3.93x from an older warm file; T2 showed 1.747 beside a split limit it is not judged by). The headline is built
+# only from the acceptance cell (its judged statistics and limits); prose from any other file is wrapped in a
+# "[from <file>, <date>, model <id>, ...]" block, and when that file's own number differs from the one shown, the block says both.
+RATIO_GATES = {"T2", "T3", "T9", "T10"}
+RULE_WORD = {"<=": "≤", ">=": "≥", "==": "needs"}
+LIMIT_UNIT = {"T1": " repeats", "T4": " mrad", "T5": " arcmin", "T6": " %", "T7": " %", "T8": " degC"}
+# the facts line each gate's result was read from (the study that wrote it names its file and model there)
+SOURCE_KEYS = {"T2": ("dataset_source", "t2_split_source"), "T3": ("torque_ratio_source",), "T9": ("warm_cold_source",), "T10": ("live_reid_source",)}
+
+
+def _same(a, b, tol: float = 0.006) -> bool:
+    return isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(a - b) <= tol * max(1.0, abs(b))
+
+
+def _stamp(stamp) -> str:
+    return f"{str(stamp)[:10]} {str(stamp)[11:16]}Z" if stamp else "undated"
+
+
+def labelled(path, stamp, model, text: str, note: str = "") -> str:
+    """Prose from a file other than the displayed acceptance, with its provenance; `note` says whether it is the same result."""
+    return (f"[from {Path(str(path)).name}, {_stamp(stamp)}, model {model or 'not named in that file'}"
+            f"{', ' + note if note else ''}: {text.strip().rstrip('.;')}]")
+
+
+def cited_result(facts: dict, gid: str) -> tuple[Path | None, str | None]:
+    """(result file, model) the acceptance's facts cite for this gate: '<path> (<model>; ...)'."""
+    for key in SOURCE_KEYS.get(gid, ()):
+        line = facts.get(key)
+        m = re.match(r"(\S+\.json)\s*(?:\((.*)\))?", str(line or ""))
+        if m:
+            model = (m.group(2) or "").split(";")[0].strip()
+            if gid == "T10":  # WHY: T10's line opens with the routine, not the twin; T9's line names the twin the routine started from
+                warm = re.match(r"\S+\.json\s*\((.*)\)", str(facts.get("warm_cold_source") or ""))
+                model = warm.group(1).split(";")[0].strip() if warm else model
+            return Path(m.group(1)), model.split(", floor /")[0] or None
+    return None, None
+
+
+def model_of(gid: str, facts: dict, cited_model: str | None) -> str:
+    if cited_model:
+        return cited_model
+    if gid == "T1":
+        return "none: the rack against itself"
+    if gid == "T4" and (facts.get("stop") or {}).get("variant"):
+        return f"controller: {facts['stop']['variant']}"
+    return "not model-scored (a measurement of the rack or its record)"
+
+
+def headline(gid: str, gate: dict) -> str:
+    """The judged statistics beside their own limits, from the acceptance cell only."""
+    unit = "×" if gid in RATIO_GATES else ""
+    judged = gate.get("judged") or []
+    if judged:
+        parts = []
+        for j in judged:
+            if j["rule"] == "==":
+                parts.append(f"{j['name']}: {_fmt(j['value'])} ({'ok' if j['passes'] else 'needs ' + _fmt(j['limit'])})")
+            else:
+                parts.append(f"{j['name']} {_fmt(j['value'])}{unit} {RULE_WORD[j['rule']]} {_fmt(j['limit'])}{unit} {'✓' if j['passes'] else '✗'}")
+        text = " · ".join(parts)
+        value = gate.get("value")
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and not any(_same(value, j["value"], 0.0005) for j in judged if isinstance(j["value"], (int, float))):
+            text += f" (overall {_fmt(value)}{unit}, shown, not judged)"
+        return text
+    limit = gate.get("limit")
+    unit = LIMIT_UNIT.get(gid, unit)
+    return "no judged number" + (f" · limit {_fmt(limit)}{unit}" if limit is not None else "")
+
+
 def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_rows: list[dict]) -> list[dict]:
-    """One row per (station, gate) the newest acceptance does not pass: the number against its limit, the reason in plain words,
-    the evidence and its uncertainty, both floor rules where they differ (the floor decision is Zach's, pending), and the next
-    discriminating test or "blocked on Zach: <action>". T2 rows carry the why file's limiting term and worst-window link."""
+    """One row per (station, gate) the newest acceptance does not pass, plus each pass that flips under the pooled floor: the judged
+    statistics against their limits (headline), why (from the result file the acceptance cites, else the acceptance's own words),
+    the evidence, both floor rules where they differ (Zach's decision, pending), the next step, and any earlier result from an older
+    file, labelled with its file, date and model. Each field says something the others do not."""
 
     acc_path, acc_stamp = sources["acceptance"]
     acceptance = json.loads(acc_path.read_text())["stations"]
     triage_path, triage_stamp = sources["triage"]
-    triage = {(c["station"], c["gate"]): c for c in json.loads(triage_path.read_text())["cells"]} if triage_path else {}
+    triage_doc = json.loads(triage_path.read_text()) if triage_path else {}
+    triage = {(c["station"], c["gate"]): c for c in triage_doc.get("cells", [])}
     zach = {}
-    if triage_path:
-        for action, cells in json.loads(triage_path.read_text()).get("zach_actions", {}).items():
-            for cell in cells:
-                zach.setdefault(tuple(cell.split()), action)
-    pooled = json.loads(sources["floors_pooled"][0].read_text())["stations"] if sources["floors_pooled"][0] else {}
+    for action, cells in triage_doc.get("zach_actions", {}).items():
+        for cell in cells:
+            zach.setdefault(tuple(cell.split()), action)
+    pooled_path, pooled_stamp = sources["floors_pooled"]
+    pooled = json.loads(pooled_path.read_text())["stations"] if pooled_path else {}
+    why_path, why_stamp = sources["why"]
     t2_by = {r["station"]: r for r in t2_rows}
     by_slug = {r["run"]: r for r in runs}
+    loaded: dict[Path, dict] = {}
+
+    def result_doc(path: Path | None) -> dict:
+        if path is None or not path.is_file():
+            return {}
+        if path not in loaded:
+            loaded[path] = json.loads(path.read_text())
+        return loaded[path]
+
     rows = []
     for can, station in acceptance.items():
         sid = f"can{can}"
+        facts = station.get("facts") or {}
         for gate in station["gates"]:
             status = gate.get("status")
             gid = gate["id"]
             if status == "pass" and gid not in ("T2", "T9"):
                 continue
             tri = triage.get((sid, gid), {})
-            value, target = gate.get("value"), gate.get("target")
-            reason = gate.get("detail") or ""
-            evidence, floors, link = [], None, None
-            if gid == "T2" and sid in t2_by:
-                t2 = t2_by[sid]
-                term, story = t2.get("limiting_term") or "", t2.get("why") or ""
-                reason = story if term and term.split(";")[-1].strip()[:40] in story else (f"limiting term: {term}. " if term else "") + story
-                evidence.append(t2.get("evidence") or "")
-                if t2.get("cis"):
-                    evidence.append("identified, 95 % CI: " + t2["cis"])
-                if t2.get("unexplained") is not None and t2["unexplained"] >= 0.5:
-                    evidence.append(f"{100 * t2['unexplained']:.0f} % of the held-out torque gap follows no term the decomposition tests: unexplained, not attributed")
-                if t2.get("evidence", "").startswith("no residual decomposition"):
-                    evidence.append(f"CAN {can} has no residual decomposition: it was carried (no new held-out tapes since 10-28), so nothing attributes its gap")
-                link = t2.get("page")
-                p2 = (pooled.get(sid) or {}).get("t2") or {}
-                if p2.get("session") and p2.get("pooled"):
-                    a, b = p2["session"], p2["pooled"]
+            value = gate.get("value")
+            cited_path, cited_model = cited_result(facts, gid)
+            model = model_of(gid, facts, cited_model)
+            res = result_doc(cited_path)
+            res_station = (res.get("stations") or {}).get(sid) or {}
+            res_stamp = res.get("scored_at") or res.get("written_at")
+            limiting = res_station.get("labels", {}).get("pick")  # a modelling round's pick: t2/t9/t10 keyed by its label
+            why_parts, evidence, earlier = [], [], []
+            floors, session_pass, pooled_pass, link = None, None, None, None
+            judged = {j["name"]: j["value"] for j in gate.get("judged") or []}
+            if cited_path:
+                evidence.append(f"result: {cited_path.name} ({_stamp(res_stamp)}), as {acc_path.name} cites it")
+
+            if gid == "T2":
+                if limiting is not None:
+                    t2 = res_station["t2"][limiting]
+                    a, b = t2["session"]["split"], t2["pooled"]["split"]
+                    session_pass, pooled_pass = a["passes"], b["passes"]
                     floors = (f"session floor: moves {a['moves_over_floor']:.2f}×, hold {a['hold_offset_over_floor']:.2f}× ({'pass' if a['passes'] else 'fail'}) · "
                               f"pooled floor: moves {b['moves_over_floor']:.2f}×, hold {b['hold_offset_over_floor']:.2f}× ({'pass' if b['passes'] else 'fail'})")
-            if gid == "T9" and sid in sources["warm"]:
-                path, stamp, warm = sources["warm"][sid]
-                t9 = warm["t9"]
-                reason = (f"warm, the twin ({warm['twin']}) misses by {t9['warm_twin_median_mrad']:.2f} mrad against the warm floor's "
-                          f"{t9['warm_floor_mrad']:.2f} mrad = {t9['warm_over_floor']:.2f}×; cold it is {t9['cold_over_floor']:.2f}×. The twin moved "
-                          f"{t9['twin_warm_over_cold']:.2f}× warm vs cold, the floor {t9['floor_warm_over_cold']:.2f}×. " + reason)
-                evidence.append(f"{len(t9.get('warm_runs_mrad', {}))} warm runs, worst session: {t9.get('worst_session')} ({path.name}, {stamp})")
-                runs_mrad = t9.get("warm_runs_mrad") or {}
-                if runs_mrad:
-                    worst_run = max(runs_mrad, key=runs_mrad.get)
-                    try:
-                        slug = slug_of(worst_run)
-                        if slug in by_slug:
-                            link = f"{APP_URL}?d={dep_id}&run={slug}&why={sid}"
-                    except ValueError:
-                        pass
-                p9 = (pooled.get(sid) or {}).get("t9") or {}
-                sess = p9.get("sessions") or []
-                if sess:
-                    w = sess[-1]
-                    if w.get("session_floor_mrad") and w.get("pooled_floor_mrad"):
-                        a = w["twin_mrad"] / w["session_floor_mrad"]
-                        b = w["twin_mrad"] / w["pooled_floor_mrad"]
-                        floors = (f"session floor {w['session_floor_mrad']:.2f} mrad: {a:.2f}× ({'pass' if a <= 1.5 else 'fail'}) · "
-                                  f"pooled floor {w['pooled_floor_mrad']:.2f} mrad: {b:.2f}× ({'pass' if b <= 1.5 else 'fail'})")
-            if gid == "T10" and sid in sources["warm"] and (sources["warm"][sid][2].get("t10") or {}).get("value") is not None:
-                path, stamp, warm = sources["warm"][sid]
-                t10 = warm["t10"]
-                restored = t10.get("restored_over_floor", (t10.get("v2") or {}).get("restored_over_floor"))
-                note = (t10.get("v2") or {}).get("why") or ""
-                reason = (f"after the heating drift, the live re-identification left the twin at {_fmt(restored)}× the warm floor (stale twin "
-                          f"{_fmt(t10.get('stale_over_floor'))}×; gate 1.5×){': ' + note if note else ''}. " + reason)
-                evidence.append(f"warm session scored in {path.name} ({stamp})")
-            if not reason.strip() and tri.get("what_closes_it"):
-                reason = tri["what_closes_it"]
-            elif tri.get("what_closes_it"):
-                evidence.append(f"triage ({tri.get('category')}): {tri['what_closes_it']}")
-            if tri and tri.get("status") != status:
-                evidence.append(f"the triage ({triage_stamp}) saw this cell as {tri.get('status')}; the newest acceptance ({acc_stamp}) says {status}")
-            if not tri:
-                evidence.append(f"not in the triage ({triage_stamp}): it predates this result")
-            # the next discriminating step
+                else:
+                    p2 = (pooled.get(sid) or {}).get("t2") or {}
+                    if p2.get("session") and p2.get("pooled"):
+                        a, b = p2["session"], p2["pooled"]
+                        same = _same(a["moves_over_floor"], judged.get("moves")) and _same(a["hold_offset_over_floor"], judged.get("hold offset"))
+                        text = (f"session floor: moves {a['moves_over_floor']:.2f}×, hold {a['hold_offset_over_floor']:.2f}× ({'pass' if a['passes'] else 'fail'}) · "
+                                f"pooled floor: moves {b['moves_over_floor']:.2f}×, hold {b['hold_offset_over_floor']:.2f}× ({'pass' if b['passes'] else 'fail'})")
+                        if same:
+                            floors, session_pass, pooled_pass = labelled(pooled_path, pooled_stamp, None, text, "the same result"), a["passes"], b["passes"]
+                        else:
+                            earlier.append(labelled(pooled_path, pooled_stamp, None, text, "an earlier result"))
+                if sid in t2_by:
+                    t2 = t2_by[sid]
+                    term, story = t2.get("limiting_term") or "", t2.get("why") or ""
+                    reason = story if term and term.split(";")[-1].strip()[:40] in story else (f"limiting term: {term}. " if term else "") + story
+                    extra = [t2.get("evidence") or ""]
+                    if t2.get("cis"):
+                        extra.append("identified, 95 % CI: " + t2["cis"])
+                    if t2.get("unexplained") is not None and t2["unexplained"] >= 0.5:
+                        extra.append(f"{100 * t2['unexplained']:.0f} % of the held-out torque gap follows no term the decomposition tests: unexplained, not attributed")
+                    body = reason.strip().rstrip(".") + ". Evidence there: " + "; ".join(x for x in extra if x)
+                    same = _same(t2.get("moves_x"), judged.get("moves")) and _same(t2.get("hold_x"), judged.get("hold offset"))
+                    if same:
+                        why_parts.append(labelled(why_path, why_stamp, t2.get("pick"), body, "the same result"))
+                        link = t2.get("page")
+                    else:
+                        earlier.append(labelled(why_path, why_stamp, t2.get("pick"), body,
+                                                f"an earlier result: moves {_fmt(t2.get('moves_x'))}×, hold {_fmt(t2.get('hold_x'))}× there"))
+
+            if gid in ("T9", "T10"):
+                if limiting is not None:
+                    cell = res_station[gid.lower()][limiting]
+                    if gid == "T9":
+                        worst = max(cell["sessions"].values(), key=lambda w: w["session_ratio"])
+                        session_pass, pooled_pass = cell["session"] <= 1.5, cell["pooled"] <= 1.5
+                        why_parts.append(f"warm, the twin misses by {worst['twin_mrad']:.2f} mrad against that session's own floor of {worst['session_floor_mrad']:.2f} mrad "
+                                         f"(= {_fmt(cell['session'])}×); over the pooled floor it is {_fmt(cell['pooled'])}×, which "
+                                         + ("passes, so the verdict depends on the floor rule" if pooled_pass else "still fails, so the floor rule does not rescue it"))
+                        floors = (f"session floor: {_fmt(cell['session'])}× ({'pass' if session_pass else 'fail'}) · "
+                                  f"pooled floor: {_fmt(cell['pooled'])}× ({'pass' if pooled_pass else 'fail'})")
+                        evidence.append(f"{len(cell['sessions'])} warm session(s): " + ", ".join(Path(k).name for k in cell["sessions"]))
+                    else:
+                        v2 = cell.get("v2") or {}
+                        why_parts.append(f"the 60 s live routine (v2) changes nothing: {v2.get('why', 'no reason written')} (applied scale {_fmt(v2.get('applied_scale'))}), "
+                                         f"so after the warm drift the twin stays at {cell['restored_mrad']:.2f} mrad = {_fmt(cell['session_ratio'])}× the session floor "
+                                         f"({_fmt(cell['pooled_ratio'])}× the pooled floor)")
+                        evidence.append(f"warm session {Path(cell.get('session', '')).name}")
+                elif res_station.get(gid.lower()):
+                    warm = res_station
+                    if gid == "T9":
+                        t9 = warm["t9"]
+                        body = (f"warm, the twin misses by {t9['warm_twin_median_mrad']:.2f} mrad against the warm floor's {t9['warm_floor_mrad']:.2f} mrad = "
+                                f"{t9['warm_over_floor']:.2f}×; cold it is {t9['cold_over_floor']:.2f}×. The twin moved {t9['twin_warm_over_cold']:.2f}× warm vs cold, "
+                                f"the floor {t9['floor_warm_over_cold']:.2f}×; {len(t9.get('warm_runs_mrad', {}))} warm runs, worst session: {t9.get('worst_session')}")
+                        mine = t9["warm_over_floor"]
+                    else:
+                        t10 = warm["t10"]
+                        mine = t10.get("restored_over_floor", (t10.get("v2") or {}).get("restored_over_floor"))
+                        note = (t10.get("v2") or {}).get("why") or ""
+                        body = (f"after the heating drift, the live re-identification left the twin at {_fmt(mine)}× the warm floor (stale twin "
+                                f"{_fmt(t10.get('stale_over_floor'))}×){': ' + note if note else ''}")
+                    if _same(mine, value):
+                        why_parts.append(labelled(cited_path, res_stamp, warm.get("twin") or cited_model, body, "the same result"))
+                        runs_mrad = (warm.get("t9") or {}).get("warm_runs_mrad") or {}
+                        if gid == "T9" and runs_mrad:
+                            try:
+                                slug = slug_of(max(runs_mrad, key=runs_mrad.get))
+                                link = f"{APP_URL}?d={dep_id}&run={slug}&why={sid}" if slug in by_slug else None
+                            except ValueError:
+                                pass
+                    else:
+                        earlier.append(labelled(cited_path, res_stamp, warm.get("twin"), body, f"an earlier result: {_fmt(mine)}× there"))
+                # the newest warm file by date, when it is not the one the acceptance cites, is an earlier (or other) result: labelled
+                if sid in sources["warm"] and sources["warm"][sid][0] != cited_path:
+                    wpath, wstamp, warm = sources["warm"][sid]
+                    w = warm.get(gid.lower()) or {}
+                    mine = w.get("warm_over_floor") if gid == "T9" else w.get("restored_over_floor", (w.get("v2") or {}).get("restored_over_floor"))
+                    if mine is not None and not _same(mine, value):
+                        earlier.append(labelled(wpath, wstamp, warm.get("twin"), f"{gid} {_fmt(mine)}× (shown: {_fmt(value)}×)", "an earlier result"))
+                if gid == "T9" and floors is None:
+                    p9 = (pooled.get(sid) or {}).get("t9") or {}
+                    sess = p9.get("sessions") or []
+                    if sess and sess[-1].get("session_floor_mrad") and sess[-1].get("pooled_floor_mrad"):
+                        w = sess[-1]
+                        a, b = w["twin_mrad"] / w["session_floor_mrad"], w["twin_mrad"] / w["pooled_floor_mrad"]
+                        text = (f"session floor {w['session_floor_mrad']:.2f} mrad: {a:.2f}× ({'pass' if a <= 1.5 else 'fail'}) · "
+                                f"pooled floor {w['pooled_floor_mrad']:.2f} mrad: {b:.2f}× ({'pass' if b <= 1.5 else 'fail'})")
+                        if _same(a, value):
+                            floors, session_pass, pooled_pass = labelled(pooled_path, pooled_stamp, None, text, "the same result"), a <= 1.5, b <= 1.5
+                        else:
+                            earlier.append(labelled(pooled_path, pooled_stamp, None, text, "an earlier result"))
+
+            # the acceptance's own words when no result file explains the cell (T2's detail restates the headline: skipped)
+            if not why_parts and gate.get("detail") and gid != "T2" and not str(gate["detail"]).startswith("/"):
+                why_parts.append(gate["detail"])
+            # the triage: older than the result for most cells, so its words carry their file, date and whether it saw this number
+            if tri:
+                same_tri = _same(tri.get("value"), value) or tri.get("value") == value
+                tri_note = "the same result" if same_tri else f"written for an earlier result ({_fmt(tri.get('value'))} there, {_fmt(value)} shown)"
+                if tri.get("status") != status:
+                    evidence.append(f"the triage ({_stamp(triage_stamp)}) saw this cell as {tri.get('status')}; {acc_path.name} says {status}")
+            else:
+                evidence.append(f"not in the triage ({_stamp(triage_stamp)}): it predates this result")
             action = zach.get((sid, gid)) or tri.get("zach_action")
+            closes = labelled(triage_path, triage_stamp, None, tri["what_closes_it"], tri_note) if tri.get("what_closes_it") else ""
             if tri.get("category") == "Zach" and action:
                 nxt = f"blocked on Zach: {action}"
             elif tri.get("category") == "impossible as defined":
-                nxt = f"impossible as defined: the gate needs redefining for this station (Zach's call). {tri.get('what_closes_it', '')}"
+                nxt = f"impossible as defined: the gate needs redefining for this station (Zach's call). {closes}"
             elif tri.get("plan") and tri.get("status") == status:
                 nxt = f"{tri.get('category')}: run {', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}"
             elif tri.get("plan"):
                 nxt = f"the planned run ({', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}) has been run and the cell is now {status}: needs re-triage"
-            elif tri.get("what_closes_it"):
-                nxt = f"{tri.get('category')}{' (no rack time)' if tri.get('category') == 'modelling' else ''}: {tri['what_closes_it']}"
+            elif closes:
+                nxt = f"{tri.get('category')}{' (no rack time)' if tri.get('category') == 'modelling' else ''}: {closes}"
             else:
                 nxt = "not triaged yet"
-            flips = bool(floors) and ("(pass)" in floors.split("·")[0]) != ("(pass)" in floors.split("·")[1])
+            flips = floors is not None and session_pass is not None and session_pass != pooled_pass
             if flips:
                 floors += " — the verdict depends on the floor rule, which is Zach's decision, pending"
             if status == "pass":
                 if not flips:
                     continue  # a pass under both floor rules is not a failure to explain
                 nxt = "blocked on Zach: decide the floor rule (the session floor the gates use today, or the pooled same-tape floor)"
-                evidence.insert(0, "passes on the session floor the gates use today; fails on the pooled floor")
-            measured = f"{_fmt(value)} · limit: {target or 'none written'}"
-            why_text = (reason.strip() or "no reason written").rstrip(".") + "."
-            explain = (f"{GATE_NAMES.get(gid) and gid + ' ' + GATE_NAMES[gid] or gid} — {status}: {measured}. Why: {why_text} "
-                       f"Evidence: {'; '.join(e for e in evidence if e) or 'no evidence written'}." + (f" Floor rules: {floors}." if floors else "") + f" Next: {nxt}.")
+                why_parts.insert(0, "passes on the session floor the gates use today; fails on the pooled floor")
+            measured = headline(gid, gate)
+            # WHY the triage's words land in Why only when Next does not already carry them: each field says something different
+            if not why_parts and closes and closes not in nxt:
+                why_parts.append(closes)
+            if not why_parts:
+                why_parts.append(f"no evidence yet; the gate asks: {gate.get('target')}" if status == "not_run" else "the acceptance file gives no reason for this cell")
+            why_text = "; ".join(x.strip().rstrip(".") for x in why_parts if x)
+            ev_text = "; ".join(e for e in evidence if e) or None
+            title = f"{gid} {GATE_NAMES[gid]}" if gid in GATE_NAMES else gid
+            explain = (f"{title} — {status}: {measured}. Why: {why_text}. Model: {model}." + (f" Evidence: {ev_text}." if ev_text else "") + (f" Floor rules: {floors}." if floors else "")
+                       + f" Next: {nxt}." + (f" Earlier: {' '.join(earlier)}." if earlier else ""))
             rows.append({"explain": explain, "rank": {"fail": 0, "partial": 1, "pass": 1, "not_run": 2}.get(status, 3), "station": sid, "device": f"CAN {can}", "gate_id": gid, "gate": f"{gid} {GATE_NAMES.get(gid, gate.get('name', ''))}",
-                         "status": status, "measured": f"{_fmt(value)} · limit: {target or 'none written'}", "value": value if isinstance(value, (int, float)) else None,
-                         "why": reason.strip() or "no reason written", "evidence": "; ".join(e for e in evidence if e) or "no evidence written",
-                         "floor_rules": floors, "next": nxt, "category": tri.get("category"), "blocked_on_zach": nxt.startswith("blocked on Zach"),
+                         "status": status, "measured": measured, "value": value if isinstance(value, (int, float)) and not isinstance(value, bool) else None,
+                         "statistic": [dict(j) for j in gate.get("judged") or []], "limit": gate.get("limit"), "rule": gate.get("target"),
+                         "model": model, "result_file": str(cited_path) if cited_path else None,
+                         "why": why_text, "evidence": ev_text, "floor_rules": floors, "next": nxt, "earlier": " ".join(earlier) or None,
+                         "category": tri.get("category"), "blocked_on_zach": nxt.startswith("blocked on Zach"),
                          "page": link, "order": int(can) * 100 + int(gid[1:]), "source": f"{acc_path.name} ({acc_stamp})"})
     rows.sort(key=lambda r: ({"fail": 0, "partial": 1, "pass": 2, "not_run": 3}.get(r["status"], 4), int(r["device"].split()[1]), int(r["gate_id"][1:])))
     return rows
@@ -855,8 +1024,9 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         samples = sample_rows(situations, device, slug)
         poses = pose_rows(samples, device)
         d_samples, d_poses = diff_tables(samples, poses)
+        pose_errors(poses, d_poses)
         write_contract(run_dir / "samples.json", "samples", samples, f"Samples · {title}", src, SAMPLE_HINTS)
-        write_contract(run_dir / "poses.json", "poses", poses, f"Output link · {title}", src + "; the joint's own frame, orientation about z")
+        write_contract(run_dir / "poses.json", "poses", poses, f"Output link · {title}", src + "; the joint's own frame, orientation about z", POSE_HINTS)
         write_contract(run_dir / "diff_samples.json", "diff_samples", d_samples, f"Differences · {title}", src + "; difference(a, b), tools/trajectory.py (data-ui fixture)", SAMPLE_HINTS)
         write_contract(run_dir / "diff_poses.json", "diff_poses", d_poses, f"Output link differences · {title}", src + "; difference(a, b), tools/trajectory.py")
         write(run_dir / "diagnostics.json", f"Diagnostics · {title}", "robotdx.diagnostics (io-diagnostics), computed from this run", DX_PROPS, diagnostics)
@@ -879,13 +1049,14 @@ def build_deployment(entry: dict, replays: dict) -> dict:
                         "kd": component.get("moteus_config", {}).get("kd")})
     # WHY a per-row opacity (Codex audit 2026-10-29, "draw all of the runs with 1/n opacity"): data-ui's chart draws a row's opacity
     # column but runs no Vega-Lite transform on its large-data path, so n cannot be counted in the page; the producer writes it. n is
-    # the station's runs (the joint panels show one station) or every run (Angle over time), floored at 0.04 as PEP 0010 §2 and
-    # trajectory3d's opacity: auto do: an 8-bit canvas draws 1/337 as nothing (measured on CAN 13: 0 blue pixels). A rail filter does
-    # not recount n: a listed data-ui gap.
+    # the station's runs (the joint panels show one station) or every run (Angle over time), exactly 1/n with no floor (Codex audit
+    # round 2: the 0.04 floor contradicted the page's "1/n"; data-ui 006e9d5's opacity: auto is exact 1/n too). Past ~200 runs an
+    # 8-bit canvas draws a lone path as nothing (data-ui's README; CAN 13 at 1/337: 0 blue pixels), so only overlaps show: the Runs
+    # per cell voxels are the readable count there, and the page says so. A rail filter does not recount n: a listed data-ui gap.
     per_station = Counter(r["device"] for r in runs)
     for row in coverage:
-        row["path_opacity"] = num(max(1.0 / max(per_station.get(row["device"], 1), 1), 0.04), 4)
-        row["path_opacity_all"] = num(max(1.0 / max(len(runs), 1), 0.04), 4)
+        row["path_opacity"] = num(1.0 / max(per_station.get(row["device"], 1), 1), 4)
+        row["path_opacity_all"] = num(1.0 / max(len(runs), 1), 4)
     # the workspace as a closed outline in the same (q, qd) columns: one path per station, drawn grey by the `layer` column
     # (w = 0, so histograms that sum w never count it; the box plots filter it out)
     for d in devices:

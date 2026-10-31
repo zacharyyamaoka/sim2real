@@ -1,0 +1,15 @@
+{
+ "files": {
+  "__init__.py": "d1cb0b16f17cc799aba936f8c5f7bd87f28a894c2e1622149a3dec2fbb18ab43",
+  "analysis.py": "8bd3048ae03311fd50cb15950c674a7e3218ecc94c10951dd4e18f52c697101f",
+  "build.py": "92cc0f088a25e9d64c761a18ef2f50eb0ffa9a09a2b0ee96d44f7ed7c08a353c",
+  "contract.py": "63b35e4e10173f3c5704ba9ece0f989d4bb1279b7fb633c4776060f30f9b1be2",
+  "data_ui.py": "57a7cc58d9a8b923ac4f1db2a3ff5638c42dbd0fd82199847f496e2d06cc8633",
+  "home.py": "96208b06ef7cb7a353337b6215c392f4b4d2275b6b9d1c87853baaff81c70f1a",
+  "html.py": "9042920170cb857d5b775a5a67f25b0e2cd8348d3ea5258edce46355e0fa3750",
+  "record.py": "318f4697f59b407aaed1fab4e3108904703b0810204c0dc0fb673c2d4dc1e9b3",
+  "shell.py": "a8281de261604b5e2391cb48ce134aea98e31ab899063b5f0c0afa4689935ea7",
+  "writer.py": "928e2166bebf04eb0e55c271d53b11078834752b083956e743af819a613eea32"
+ },
+ "format": "catalog-workbench-manifest/1"
+}

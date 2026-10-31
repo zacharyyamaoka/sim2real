@@ -14,7 +14,7 @@ every page is a `.base` dashboard or an analysis over datasets the producers wri
 
 ## The app (home page)
 
-`python3 /home/bam/sim2real/serve.py` serves the app at `/app/` (`/` redirects there): **deployments → one deployment
+`python3 /home/bam/sim2real/serve.py` serves the catalog-workbench site at `/` (build it with `python3 /home/bam/sim2real/site/build.py`) and keeps the old app at `/app/`: **deployments → one deployment
 (its runs newest first, coverage) → one run (playback of real vs every model on one clock)**, each with a **Gates layer**
 switch in the header that adds the diagnostics computed from the same runs. The five proposals stay at `/dashboards/`.
 
@@ -28,7 +28,7 @@ switch in the header that adds the diagnostics computed from the same runs. The 
 
 Build the data (about 20 s; the twin replays are optional and take about 1.5 min):
 
-    /home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
+    /home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43-v5/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/build_app.py
     python3 -I /home/bam/sim2real/tools/build_pages.py
     uv run --no-project --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py

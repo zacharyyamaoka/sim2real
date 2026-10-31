@@ -1,0 +1,135 @@
+/* sim2real's tokens and its own blocks, after robotparts' site.css (the workbench's shell styles, unchanged).
+   WHY these overrides (Zach, 2026-10-28: "train the eye to know what is real and what is sim. Blue and orange ... leaves
+   green and red for elsewhere"):
+   - data-ui's series slots 1 and 2 go back to the kit's own blue and orange: robotparts' palette puts a purple in slot 2,
+     and slot 2 is every model here;
+   - the shell's accent is a neutral ink, so blue keeps one meaning (real); green and red mean pass and fail only, and
+     every verdict also carries a word or a symbol. */
+:root {
+  --band: #3f3f46;
+  --accent: #3f3f46; --accent-bg: #ececef; --on-accent: #ffffff; --hover: #f1f1f3; --brand-rule: #3f3f46;
+  --data-series-1: #2a78d6; --data-series-2: #eb6834;
+  --s2r-pass: #1d7a3a; --s2r-pass-bg: #e3f3e7; --s2r-fail: #b42318; --s2r-fail-bg: #fbe7e4;
+  --s2r-warn: #a15c07; --s2r-warn-bg: #fdf0d9; --s2r-none: #8b9099; --s2r-none-bg: #eef0f2;
+  /* WHY warn too (data-ui 006e9d5's status tones, CONTRACT §35): left alone, robotparts' --warn (#a8320c, a red-orange) became
+     the gate matrix's partial cells, one step from fail's red and close to a model's orange; the site's own amber keeps
+     warn its own colour */
+  --data-good: var(--s2r-pass); --data-bad: var(--s2r-fail); --data-warn: var(--s2r-warn);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --band: #d4d4d8;
+    --accent: #d4d4d8; --accent-bg: #2a2a2f; --on-accent: #0c0c0e; --hover: #1c1c20; --brand-rule: #d4d4d8;
+    --data-series-1: #3987e5; --data-series-2: #d95926;
+    --s2r-pass: #4cc06e; --s2r-pass-bg: #12301c; --s2r-fail: #f2685c; --s2r-fail-bg: #3a1512;
+    --s2r-warn: #f0a548; --s2r-warn-bg: #3a2a0e; --s2r-none: #8a8d96; --s2r-none-bg: #1c1d21;
+  }
+}
+:root[data-theme="dark"] {
+  --band: #d4d4d8;
+  --accent: #d4d4d8; --accent-bg: #2a2a2f; --on-accent: #0c0c0e; --hover: #1c1c20; --brand-rule: #d4d4d8;
+  --data-series-1: #3987e5; --data-series-2: #d95926;
+  --s2r-pass: #4cc06e; --s2r-pass-bg: #12301c; --s2r-fail: #f2685c; --s2r-fail-bg: #3a1512;
+  --s2r-warn: #f0a548; --s2r-warn-bg: #3a2a0e; --s2r-none: #8a8d96; --s2r-none-bg: #1c1d21;
+}
+:root[data-theme="light"] {
+  --band: #3f3f46;
+  --accent: #3f3f46; --accent-bg: #ececef; --on-accent: #ffffff; --hover: #f1f1f3; --brand-rule: #3f3f46;
+  --data-series-1: #2a78d6; --data-series-2: #eb6834;
+  --s2r-pass: #1d7a3a; --s2r-pass-bg: #e3f3e7; --s2r-fail: #b42318; --s2r-fail-bg: #fbe7e4;
+  --s2r-warn: #a15c07; --s2r-warn-bg: #fdf0d9; --s2r-none: #8b9099; --s2r-none-bg: #eef0f2;
+}
+/* WHY underlined in the content only: the accent is a neutral ink, so a link in running text needs its line; the shell's
+   own links (bar, trail, tabs, tiles) keep robotparts' look */
+:is(.phead, .panel, .an-main, .s2r-table, footer, .lede, .s2r-analyses) a:not(.s2r-gchip):not(.s2r-badge):not([role=tab]),
+.s2r-standing a, .s2r-play a, main > p a, main > ul a { text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; }
+.s2r-matrix a { text-decoration: none !important; }
+.wordmark .lockup { height: 40px; }
+
+/* the record header */
+.phead h1 { overflow-wrap: anywhere; }
+.s2r-kpis { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0; }
+.s2r-kpis div { min-width: 0; }
+.s2r-kpis dt { font-size: 11.5px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; }
+.s2r-kpis dd { margin: 0; font-size: 17px; font-weight: 650; }
+.s2r-standing { margin: 6px 0; }
+.s2r-stations { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.s2r-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--rule2); border-radius: 4px; color: var(--ink); }
+.s2r-badge:hover { border-color: var(--ink3); text-decoration: none; }
+.s2r-badge .s2r-strip { margin: 0; }
+.s2r-badge small { color: var(--ink3); }
+.s2r-real { color: var(--data-series-1); font-weight: 650; }
+
+/* verdicts: a word or a symbol, and a colour */
+.s2r-v { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 12px; font-weight: 650; line-height: 18px; white-space: nowrap; }
+.s2r-v.s2r-pass { color: var(--s2r-pass); background: var(--s2r-pass-bg); }
+.s2r-v.s2r-fail { color: var(--s2r-fail); background: var(--s2r-fail-bg); }
+.s2r-v.s2r-warn, .s2r-v.s2r-partial { color: var(--s2r-warn); background: var(--s2r-warn-bg); }
+.s2r-v.s2r-not_run, .s2r-v.s2r-none { color: var(--s2r-none); background: var(--s2r-none-bg); }
+.s2r-blocked { font-size: 12px; font-weight: 650; border: 1px solid var(--ink3); border-radius: 10px; padding: 0 7px; margin-left: 4px; white-space: nowrap; }
+.s2r-gchips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.s2r-gline .s2r-gchips { display: inline-flex; margin: 0 0 0 4px; vertical-align: middle; }
+.s2r-gchip { font: 600 12px/20px var(--mono); padding: 0 6px; border-radius: 4px; border: 1px solid transparent; }
+.s2r-gchip.s2r-pass { color: var(--s2r-pass); background: var(--s2r-pass-bg); }
+.s2r-gchip.s2r-fail { color: var(--s2r-fail); background: var(--s2r-fail-bg); border-color: var(--s2r-fail); }
+.s2r-gchip.s2r-warn, .s2r-gchip.s2r-partial { color: var(--s2r-warn); background: var(--s2r-warn-bg); }
+.s2r-gchip.s2r-not_run { color: var(--s2r-none); background: var(--s2r-none-bg); }
+
+/* the stations x gates matrix */
+.s2r-scroll { overflow-x: auto; max-width: 100%; }
+.s2r-matrix { border-collapse: separate; border-spacing: 3px; margin: 4px 0; }
+.s2r-matrix caption { text-align: left; color: var(--ink2); font-size: 12.5px; padding-bottom: 4px; }
+.s2r-matrix th { font-weight: 600; font-size: 12.5px; text-align: center; padding: 0 2px; }
+.s2r-matrix thead th small { display: block; font-weight: 400; color: var(--ink3); font-size: 10.5px; max-width: 5.5em; line-height: 1.15; }
+.s2r-matrix tbody th { text-align: left; white-space: nowrap; padding-right: 8px; }
+.s2r-matrix tbody th small { display: block; font-weight: 400; color: var(--ink3); font-size: 11px; }
+.s2r-cell { width: 34px; height: 30px; text-align: center; border-radius: 4px; padding: 0; }
+.s2r-cell a { display: block; line-height: 30px; font-weight: 700; color: inherit; }
+.s2r-cell.s2r-pass { background: var(--s2r-pass-bg); color: var(--s2r-pass); }
+.s2r-cell.s2r-fail { background: var(--s2r-fail); color: #fff; }
+.s2r-cell.s2r-warn, .s2r-cell.s2r-partial { background: var(--s2r-warn-bg); color: var(--s2r-warn); }
+.s2r-cell.s2r-not_run, .s2r-cell.s2r-none { background: var(--s2r-none-bg); color: var(--s2r-none); }
+.s2r-cell a:hover { outline: 2px solid var(--ink); border-radius: 4px; }
+.s2r-legend { font-size: 12.5px; color: var(--ink2); }
+
+/* the home tiles' gate strips */
+.s2r-strip { display: block; margin: auto; max-width: 92%; height: auto; }
+.s2r-sq.s2r-pass { fill: var(--s2r-pass); opacity: .45; }
+.s2r-sq.s2r-fail { fill: var(--s2r-fail); }
+.s2r-sq.s2r-warn, .s2r-sq.s2r-partial { fill: var(--s2r-warn); }
+.s2r-sq.s2r-not_run { fill: var(--s2r-none); opacity: .5; }
+
+/* why it fails, in words */
+.s2r-why { display: grid; gap: 10px; margin: 10px 0; }
+.s2r-whyrow { border: 1px solid var(--rule2); border-left: 4px solid var(--s2r-fail); border-radius: 4px; padding: 6px 12px 8px; max-width: 64rem; min-width: 0; }
+.s2r-whyrow.s2r-st-partial, .s2r-whyrow.s2r-st-warn { border-left-color: var(--s2r-warn); }
+.s2r-whyrow.s2r-st-not_run { border-left-color: var(--s2r-none); }
+.s2r-whyrow:target { outline: 2px solid var(--accent); }
+.s2r-whyrow h2, .s2r-whyrow h3, .s2r-whyrow h4 { margin: 4px 0; font-size: 14.5px; }
+.s2r-num { font: 600 13px var(--mono); margin: 2px 0 6px; overflow-wrap: anywhere; }
+.s2r-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 13px; }
+.s2r-dl dt { color: var(--ink3); }
+.s2r-dl dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .s2r-dl { grid-template-columns: minmax(0, 1fr); } .s2r-dl dd { margin-bottom: 4px; } }
+.s2r-play { margin: 6px 0 0; font-weight: 600; }
+.s2r-note { background: var(--accent-bg); padding: 6px 10px; border-radius: 4px; }
+
+/* plain tables */
+.s2r-table { border-collapse: collapse; font-size: 13px; margin: 6px 0 14px; }
+.s2r-table caption { text-align: left; color: var(--ink2); font-size: 12.5px; padding-bottom: 4px; }
+.s2r-table th, .s2r-table td { border-bottom: 1px solid var(--rule2); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+.s2r-table td { overflow-wrap: anywhere; max-width: 40rem; }
+.s2r-caveats li, .s2r-analyses li { margin: 4px 0; max-width: 64rem; }
+
+/* the tab dashboards */
+.s2r-dash { display: block; min-height: 40px; margin-top: 8px; }
+.s2r-dash data-dashboard { display: block; }
+/* WHY: Zach (2026-10-29): "The filter bar should always be on the left hand side" - data-ui's own rail placement, so the
+   host no longer reorders it (the 10-28 "filters on the right" override is gone). */
+
+/* a station's Schedule tab: one block per plan, its command on one scrolling line */
+.s2r-commands { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 6px 0 16px; }
+.s2r-command { min-width: 0; }
+.s2r-command p { margin: 0 0 4px; }
+.s2r-command small { color: var(--ink2); overflow-wrap: anywhere; }
+.s2r-command pre { margin: 0; padding: 6px 8px; background: var(--rule2, #f1f2f4); border-radius: 4px; overflow-x: auto; white-space: pre; font-size: 12px; max-width: 100%; }

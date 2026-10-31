@@ -1,0 +1,8 @@
+{
+ "repo": "/home/bam/catalog-workbench",
+ "commit": "9f483ff50c8592912555253cd5a923cde9966f12",
+ "date": "2026-10-28T08:22:05-07:00",
+ "subject": "tests: every child interpreter runs under the guard; match patterns bind names (judge round 5, items 2 and 3)",
+ "version": "0.3.0",
+ "manifest_sha256": "a7fa363d16efe8316f6080f9897b941fc9f7c023800895efde1a153e2d80bdb1"
+}

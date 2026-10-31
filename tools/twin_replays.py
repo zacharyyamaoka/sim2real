@@ -7,7 +7,7 @@ Software replay only. Reads the archive (/archive/datasets/bam_rig) and the bam_
 an fdcanusb or a CAN bus; writes nothing under bam_ws or /archive (twin scenes go to a temporary directory). Run it with the
 package's own venv (it carries bam_rack_twin, bam_sim and MuJoCo):
 
-    /home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
+    /home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43-v5/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
 
 Writes /home/bam/sim2real/app/data/source/twin_replays.json (gitignored; tools/build_app.py reads it).
 
@@ -35,7 +35,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MUJOCO_GL", "egl")
 
 PACKAGE = Path(os.environ.get("RACK_TWIN_PACKAGE")
-               or "/home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43/src/dev/bam_rack_twin")
+               or "/home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43-v5/src/dev/bam_rack_twin")
 sys.path.insert(0, str(PACKAGE / "docs"))
 
 import numpy as np  # noqa: E402
