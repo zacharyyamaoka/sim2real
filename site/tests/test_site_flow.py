@@ -399,10 +399,39 @@ def portability_checks(out: Path) -> None:
 SCHEDULE_CAN11 = Path("/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/schedule.json")
 
 
+def types_served_checks(out: Path) -> None:
+    """Zach's Nov 5 workflow, as served (no browser; written before the pages, 2026-11-05): every card's page carries its whole
+    ladder (each rung's key, kind and parameter count), its drift warning in Zach's words and its test types; /types/ carries every
+    calibration package. Oracle: type_cards/registry.py, imported here, never the page's own numbers."""
+    from html import unescape  # noqa: PLC0415
+    sys.path.append(str(REPO))
+    from type_cards import registry  # noqa: PLC0415
+
+    missing = []
+    for cid, card in registry.CARDS.items():
+        text = unescape((out / "types" / cid / "index.html").read_text(encoding="utf-8"))
+        for r in card.rungs:
+            if f'data-rung="{r.key}" data-kind="{r.kind}" data-n-params="{r.n_parameters}"' not in text:
+                missing.append(f"{cid} {r.key}")
+        missing += [f"{cid} {t.id}" for t in card.tests if f'data-test="{t.id}"' not in text]
+        if registry.DRIFT_MESSAGE not in text:
+            missing.append(f"{cid} drift message")
+    check(not missing, f"every type card's page serves its whole ladder (key, kind, parameter count), its test types and the drift warning "
+                       f"'{registry.DRIFT_MESSAGE}' ({sum(len(c.rungs) for c in registry.CARDS.values())} rungs on {len(registry.CARDS)} cards; missing {missing[:5]})")
+    listing = unescape((out / "types" / "index.html").read_text(encoding="utf-8"))
+    absent = [p.id for p in registry.CALIBRATION_PACKAGES if f'data-package="{p.id}"' not in listing]
+    check(not absent, f"/types/ serves every calibration package ({len(registry.CALIBRATION_PACKAGES)}; absent {absent})")
+
+
 def types_checks(page, base: str, still) -> None:
-    """The Types area, measured: every card listed, the station -> type link inside the station's header, the five tabs, every
+    """The Types area, measured: every card listed, the station -> type link inside the station's header, the six tabs, every
     metric and parameter row of the Servo card, and CAN 11's planned coverage: the number is schedule.py's own (stored in the
-    producer's schedule.json) and the drawn q × qd cells are its q_qd plane's visited cells, cell by cell."""
+    producer's schedule.json) and the drawn q × qd cells are its q_qd plane's visited cells, cell by cell.
+
+    Since 2026-11-05 (Zach's Nov 5 workflow, written before the pages): /types/ shows each card's ladder and the calibration
+    packages with their code homes; Models shows every rung (key, kind, count, names, references as links, today's marked) and the
+    union of their parameters; Metrics splits the two families and lists every diagnostic and gate (the drift warning in Zach's
+    words); Tests lists every test type by setting; Coverage gives each axis's bin size and the coverage gate CAN 11 passes."""
     sys.path.append(str(REPO))
     from type_cards import registry  # noqa: PLC0415
 
@@ -413,6 +442,16 @@ def types_checks(page, base: str, still) -> None:
           f"/types/ lists every type card of the registry, each linking to its page ({len(listed)} of {len(registry.CARDS)})")
     go = page.evaluate("[...document.querySelectorAll('#sm a.go')].map(a => a.getAttribute('href'))")
     check("/types/" in go, f"the search menu's Go to lists the Types area ({go})")
+    ladders = page.evaluate("[...document.querySelectorAll('.s2r-types [data-type]')].map(r => [r.dataset.type, +r.dataset.rungs, (r.querySelector('[data-col=rungs]') || {}).textContent || ''])")
+    bad = [t for t, n, text in ladders if n != len(registry.CARDS[t].rungs)
+           or not all(f"{r.key} {r.n_parameters:,}" in text for r in registry.CARDS[t].rungs)]
+    check(len(ladders) == len(registry.CARDS) and not bad, f"/types/ shows every card's ladder: each rung's key with its parameter count ({len(ladders)} cards; wrong {bad})")
+    packages = page.evaluate("""[...document.querySelectorAll('.s2r-packages tr[data-package]')].map(r => [r.dataset.package, r.dataset.status,
+        [...r.querySelectorAll('a[href^="/types/"]')].map(a => a.getAttribute('href')), r.textContent])""")
+    want = [[p.id, p.status, [f"/types/{c}/" for c in p.serves]] for p in registry.CALIBRATION_PACKAGES]
+    named = all(Path(h.path).name in text for p, (_i, _s, _h, text) in zip(registry.CALIBRATION_PACKAGES, packages) for h in p.code)
+    check([row[:3] for row in packages] == want and named,
+          f"/types/ lists Zach's calibration packages, the types each serves (linked) and every file its code lives in ({len(packages)} of {len(want)})")
     still("13-types")
 
     page.goto(f"{base}/{DEP}/can11/")
@@ -426,17 +465,59 @@ def types_checks(page, base: str, still) -> None:
     page.wait_for_load_state("load")
     check(page.url.endswith("/types/servo/"), f"the link opens the Servo card ({page.url})")
     tabs = page.evaluate("[...document.querySelectorAll('nav.tabs [role=tab]')].map(t => t.textContent.trim())")
-    check(tabs == ["Metrics", "Model", "Coverage", "View", "Procedure"], f"a type card's tabs are Metrics, Model, Coverage, View, Procedure ({tabs})")
+    # Ruler change, named (2026-11-05): Model became Models (a ladder of rungs) and Tests is new (Zach's "3. Test Type")
+    check(tabs == ["Metrics", "Models", "Tests", "Coverage", "View", "Procedure"], f"a type card's tabs are Metrics, Models, Tests, Coverage, View, Procedure ({tabs})")
     card = registry.CARDS["servo"]
 
     open_tab(page, "metrics")
-    rows = page.evaluate("[...document.querySelectorAll('[data-tab=metrics] tr[data-metric]')].map(r => [r.dataset.metric, r.dataset.family, r.dataset.robotdx || ''])")
-    check(rows == [[m.id, m.family, m.robotdx or ""] for m in card.metrics], f"the Metrics tab shows every metric, its family and its RobotDx id ({len(rows)} of {len(card.metrics)})")
+    rows = page.evaluate("[...document.querySelectorAll('[data-tab=metrics] tr[data-metric]')].map(r => [r.dataset.metric, r.dataset.family, r.dataset.robotdx || '', r.dataset.status])")
+    check(rows == [[m.id, m.family, m.robotdx or "", registry.metric_status(card, m.id)] for m in card.metrics],
+          f"the Metrics tab shows every metric, its family, its RobotDx id and whether a gate reads it ({len(rows)} of {len(card.metrics)})")
+    families = page.evaluate("[...document.querySelectorAll('[data-tab=metrics] table[data-family]')].map(t => [t.dataset.family, [...t.querySelectorAll('tr[data-metric]')].map(r => r.dataset.family)])")
+    check([f for f, _ in families] == ["performance", "fidelity"] and all(all(x == f for x in xs) and xs for f, xs in families),
+          f"the two families sit in their own tables, performance (real vs target) then fidelity (twin vs real) ({[(f, len(xs)) for f, xs in families]})")
+    gate_of = {g.diagnostic: g for g in card.gates}
+    dxs = page.evaluate("[...document.querySelectorAll('[data-tab=metrics] tr[data-diagnostic]')].map(r => [r.dataset.diagnostic, r.dataset.kind, r.dataset.gate || '', r.textContent])")
+    check([row[:3] for row in dxs] == [[d.id, d.kind, gate_of[d.id].id if d.id in gate_of else ""] for d in card.diagnostics],
+          f"every diagnostic (a metric + a threshold) and the gate on it (+ a target) is listed ({len(dxs)} diagnostics, {len(card.gates)} gates)")
+    drift = next((text for _i, kind, _g, text in dxs if kind == "drift"), "")
+    t2 = next((text for _i, _k, g, text in dxs if g and gate_of.get(_i) and gate_of[_i].acceptance == "T2"), "")
+    check(registry.DRIFT_MESSAGE in drift and "1.25" in drift and "T2" in t2 and "1.5" in t2,
+          f"the drift diagnostic warns '{registry.DRIFT_MESSAGE}' past 1.25× its calibrated value, and T2 gates fidelity at 1.5× the floor")
+
     open_tab(page, "model")
-    params = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-param]')].map(r => [r.dataset.param, r.dataset.observable])")
-    check(params == [[p.name, p.observable] for p in card.model.parameters] and ["backlash_rad", "no"] in params,
-          f"the Model tab shows every parameter with whether the outputs see it, backlash encoder-blind ({len(params)} of {len(card.model.parameters)})")
+    ladder = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-rung]')].map(r => [r.dataset.rung, r.dataset.kind, +r.dataset.nParams, r.dataset.current === 'true', r.textContent])")
+    names_shown = all(all(n in text for n in r.parameter_names) for r, (*_x, text) in zip(card.rungs, ladder))
+    check([row[:4] for row in ladder] == [[r.key, r.kind, r.n_parameters, r.current] for r in card.rungs] and names_shown,
+          f"the Models tab shows the servo's ladder: each rung's key, kind, parameter count and names, today's (M4) marked ({[r[0] for r in ladder]})")
+    hrefs = set(page.evaluate("[...document.querySelectorAll('[data-tab=model] a[href^=\"http\"]')].map(a => a.getAttribute('href'))"))
+    cited = {ref.url for r in card.rungs for ref in r.references if ref.url}
+    check(cited <= hrefs and "https://doi.org/10.1126/scirobotics.aau5872" in hrefs,
+          f"every reference the ladder cites is a link to learn the model (Hwangbo 2019 among them; {len(cited & hrefs)} of {len(cited)})")
+    arch = page.locator("[data-tab=model] tr[data-arch='M7']")
+    check(arch.count() == 1 and all(x in arch.inner_text() for x in ("32 × 32 × 32", "softsign", "2,369", "10 ms")),
+          f"the actuator net's architecture is shown: 3 × 32 softsign over 3 samples 10 ms apart, 2,369 weights ({arch.inner_text() if arch.count() else None})")
+    union = []
+    for r in card.rungs:
+        union += [p for p in r.parameters if p.name not in {q.name for q in union}]
+    params = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-param]')].map(r => [r.dataset.param, r.dataset.observable, r.dataset.rung])")
+    first = {}
+    for r in card.rungs:
+        for p in r.parameters:
+            first.setdefault(p.name, r.key)
+    # Ruler change, named (2026-11-05): the table lists every rung's parameters once, in ladder order (today's model's 16 among them)
+    check(params == [[p.name, p.observable, first[p.name]] for p in union] and ["backlash_rad", "no", "M4"] in params
+          and {p.name for p in card.model.parameters} <= {row[0] for row in params},
+          f"the Models tab lists every parameter once with the rung it enters and whether the outputs see it, backlash encoder-blind ({len(params)} of {len(union)})")
     still("14-types-servo-model")
+
+    open_tab(page, "tests")
+    tests = page.evaluate("[...document.querySelectorAll('[data-tab=tests] tr[data-test]')].map(r => [r.dataset.test, r.dataset.setting, r.dataset.recalibration === 'true'])")
+    check(tests == [[t.id, t.setting, t.recalibration] for t in card.tests] and {s for _t, s, _r in tests} == set(registry.SETTINGS),
+          f"the Tests tab lists every test type with its setting (bench, deployed) and whether it recalibrates ({len(tests)} of {len(card.tests)})")
+    served = page.evaluate("[...document.querySelectorAll('[data-tab=tests] [data-package]')].map(r => r.dataset.package)")
+    check(served == [p.id for p in registry.packages_for(card)], f"and the calibration packages that serve the servo ({served})")
+    still("14b-types-servo-tests")
 
     open_tab(page, "coverage")
     sched = json.loads(SCHEDULE_CAN11.read_text())
@@ -445,6 +526,14 @@ def types_checks(page, base: str, still) -> None:
     want = sched["coverage"]["train"]["pct_reachable"]
     check(pct is not None and float(pct) == want and f"{want} %" in row.inner_text() and row.locator(f"a[href='/{DEP}/can11/#schedule']").count() == 1,
           f"the Servo card's Coverage tab shows CAN 11's planned train coverage, schedule.py's own {want} % ({pct}), linked to its Schedule tab")
+    axes = page.evaluate("[...document.querySelectorAll('[data-tab=coverage] tr[data-axis]')].map(r => [r.dataset.axis, r.dataset.binSize || '', r.dataset.marginal === 'true'])")
+    check(axes == [[a.name, "" if a.bin_size is None else f"{a.bin_size:g}", a.marginal] for a in card.coverage.axes],
+          f"each coverage axis shows its bin size and whether it is a marginal ({axes})")
+    gate_el = page.locator("[data-tab=coverage] [data-coverage-gate]")
+    gate_pct = card.coverage.gate_pct
+    check(gate_el.count() == 1 and float(gate_el.get_attribute("data-coverage-gate")) == gate_pct and f"{gate_pct:g} %" in gate_el.inner_text()
+          and row.get_attribute("data-gate") == registry.coverage_gate(card, type("R", (), {"pct": want})()) == "pass",
+          f"the coverage gate (covers >= {gate_pct:g} % of reachable cells) is stated and CAN 11's plan passes it ({row.get_attribute('data-gate')})")
     # WHY per station (2026-11-04, one schedule for every servo): with eight schedules the card drew the first station's map under a
     # hard-coded "CAN 11" label; every planned station now has its own map, named for itself
     maps = page.evaluate("""[...document.querySelectorAll('[data-tab=coverage] figure.s2r-covfig')].map(f => [f.dataset.station, f.querySelector('figcaption').textContent])""")
@@ -466,6 +555,10 @@ def types_checks(page, base: str, still) -> None:
     page.wait_for_load_state("load")
     check(page.locator(".phead").get_by_text("needs").count() > 0 or "dyno" in page.locator(".phead").inner_text().lower(),
           "the Motor card says what it needs before it can be measured (a dyno)")
+    page.goto(f"{base}/types/conveyor/#model")
+    page.wait_for_load_state("load")
+    conveyor = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-rung]')].map(r => r.dataset.rung)")
+    check(conveyor == [r.key for r in registry.CARDS["conveyor"].rungs], f"the Conveyor card (new, for the landing-page examples) shows its ladder ({conveyor})")
 
 
 # a sentence that says the runner cannot do something it can (Codex round 5, gap 1: CAN 11 T4 said "the runner has no path" for gravity
@@ -612,6 +705,7 @@ def main() -> int:
     portability_checks(out)
     schedule_freshness_checks(out, adapter.SCHEDULES)
     served_explanation_checks(out)
+    types_served_checks(out)
     whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
     run_set_checks(data, out)
@@ -1222,7 +1316,8 @@ def main() -> int:
             # 10. a phone: no sideways scroll anywhere on the click path, the search still in the bar
             page.set_viewport_size({"width": 390, "height": 844})
             for url in ("/", f"/{DEP}/", f"/{DEP}/runs/{run_slug}/", f"/{DEP}/can12/", f"/{DEP}/can11/#schedule", "/analysis/why-it-fails/",
-                        f"/{DEP}/#gates", f"/{DEP}/can12/#gates", "/types/", "/types/servo/#coverage", "/types/servo/#model"):
+                        f"/{DEP}/#gates", f"/{DEP}/can12/#gates", "/types/", "/types/servo/#coverage", "/types/servo/#model", "/types/servo/#tests",
+                        "/types/servo/#metrics", "/types/conveyor/#model"):
                 page.goto(base + url)
                 page.wait_for_load_state("load")
                 page.wait_for_timeout(1500)
