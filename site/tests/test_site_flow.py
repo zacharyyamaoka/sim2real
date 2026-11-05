@@ -395,6 +395,72 @@ def portability_checks(out: Path) -> None:
     check(not named, f"no built file, link or command names a .claude/worktrees/ or sim2real-worktrees/ path ({len(named)}: {named[:5]})")
 
 
+SCHEDULE_CAN11 = Path("/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/schedule.json")
+
+
+def types_checks(page, base: str, still) -> None:
+    """The Types area, measured: every card listed, the station -> type link inside the station's header, the five tabs, every
+    metric and parameter row of the Servo card, and CAN 11's planned coverage: the number is schedule.py's own (stored in the
+    producer's schedule.json) and the drawn q × qd cells are its q_qd plane's visited cells, cell by cell."""
+    sys.path.append(str(REPO))
+    from type_cards import registry  # noqa: PLC0415
+
+    page.goto(f"{base}/types/")
+    page.wait_for_load_state("load")
+    listed = page.evaluate("[...document.querySelectorAll('.s2r-types [data-type]')].map(r => [r.dataset.type, r.querySelector('a').getAttribute('href')])")
+    check(sorted(t for t, _h in listed) == sorted(registry.CARDS) and all(h == f"/types/{t}/" for t, h in listed),
+          f"/types/ lists every type card of the registry, each linking to its page ({len(listed)} of {len(registry.CARDS)})")
+    go = page.evaluate("[...document.querySelectorAll('#sm a.go')].map(a => a.getAttribute('href'))")
+    check("/types/" in go, f"the search menu's Go to lists the Types area ({go})")
+    still("13-types")
+
+    page.goto(f"{base}/{DEP}/can11/")
+    page.wait_for_load_state("load")
+    link = page.locator(".phead a.s2r-type-link")
+    box = link.bounding_box() if link.count() == 1 else None
+    head = page.locator(".phead").bounding_box()
+    check(link.count() == 1 and link.get_attribute("href") == "/types/servo/" and box and head and box["y"] >= head["y"] and box["y"] + box["height"] <= head["y"] + head["height"] + 0.5
+          and box["width"] > 0, f"CAN 11's station header links to its type card, the Servo card ({box})")
+    link.click()
+    page.wait_for_load_state("load")
+    check(page.url.endswith("/types/servo/"), f"the link opens the Servo card ({page.url})")
+    tabs = page.evaluate("[...document.querySelectorAll('nav.tabs [role=tab]')].map(t => t.textContent.trim())")
+    check(tabs == ["Metrics", "Model", "Coverage", "View", "Procedure"], f"a type card's tabs are Metrics, Model, Coverage, View, Procedure ({tabs})")
+    card = registry.CARDS["servo"]
+
+    open_tab(page, "metrics")
+    rows = page.evaluate("[...document.querySelectorAll('[data-tab=metrics] tr[data-metric]')].map(r => [r.dataset.metric, r.dataset.family, r.dataset.robotdx || ''])")
+    check(rows == [[m.id, m.family, m.robotdx or ""] for m in card.metrics], f"the Metrics tab shows every metric, its family and its RobotDx id ({len(rows)} of {len(card.metrics)})")
+    open_tab(page, "model")
+    params = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-param]')].map(r => [r.dataset.param, r.dataset.observable])")
+    check(params == [[p.name, p.observable] for p in card.model.parameters] and ["backlash_rad", "no"] in params,
+          f"the Model tab shows every parameter with whether the outputs see it, backlash encoder-blind ({len(params)} of {len(card.model.parameters)})")
+    still("14-types-servo-model")
+
+    open_tab(page, "coverage")
+    sched = json.loads(SCHEDULE_CAN11.read_text())
+    row = page.locator("[data-tab=coverage] tr[data-station='can11']")
+    pct = row.get_attribute("data-train-pct") if row.count() == 1 else None
+    want = sched["coverage"]["train"]["pct_reachable"]
+    check(pct is not None and float(pct) == want and f"{want} %" in row.inner_text() and row.locator(f"a[href='/{DEP}/can11/#schedule']").count() == 1,
+          f"the Servo card's Coverage tab shows CAN 11's planned train coverage, schedule.py's own {want} % ({pct}), linked to its Schedule tab")
+    drawn = page.evaluate("""[...document.querySelectorAll('[data-tab=coverage] svg.s2r-cov rect[data-i]')].map(r => [+r.dataset.i, +r.dataset.j, +r.dataset.samples])""")
+    plane = {(c["i"], c["j"]) for c in sched["coverage"]["planes"]["q_qd"] if c["split"] == "train" and c["samples"] > 0}
+    check({(i, j) for i, j, n in drawn if n > 0} == plane and len(drawn) == 12 * 13,
+          f"its q × qd map draws schedule.py's visited train cells, cell by cell ({sum(1 for d in drawn if d[2] > 0)} drawn, {len(plane)} in the plane, {len(drawn)} cells)")
+    cov_box = page.locator("[data-tab=coverage] svg.s2r-cov").bounding_box()
+    check(cov_box and cov_box["width"] > 200 and cov_box["height"] > 100, f"the map is drawn at a readable size ({cov_box})")
+    still("15-types-servo-coverage")
+    open_tab(page, "procedure")
+    steps = page.evaluate("[...document.querySelectorAll('[data-tab=procedure] [data-step]')].map(r => [r.dataset.step, r.dataset.status])")
+    check([s for s, _ in steps] == [s.key for s in registry.STEPS] and all(st in ("exists", "proposed") for _, st in steps),
+          f"the Procedure tab shows the seven shared steps with this type's tool ({steps})")
+    page.goto(f"{base}/types/motor/")
+    page.wait_for_load_state("load")
+    check(page.locator(".phead").get_by_text("needs").count() > 0 or "dyno" in page.locator(".phead").inner_text().lower(),
+          "the Motor card says what it needs before it can be measured (a dyno)")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -978,10 +1044,15 @@ def main() -> int:
                   f"Analysis › Why it fails lists every open cell ({len(set(report_cells))} rows), beside a resizable contents column")
             still("11-analysis-why")
 
+            # 11. Types (2026-11-04, written before the area): one card per part type from type_cards/registry.py, a station links to
+            # its type card, and the Servo card's Coverage tab shows CAN 11's planned coverage, the number schedule.py computes
+            with guard("the Types area"):
+                types_checks(page, base, still)
+
             # 10. a phone: no sideways scroll anywhere on the click path, the search still in the bar
             page.set_viewport_size({"width": 390, "height": 844})
             for url in ("/", f"/{DEP}/", f"/{DEP}/runs/{run_slug}/", f"/{DEP}/can12/", f"/{DEP}/can11/#schedule", "/analysis/why-it-fails/",
-                        f"/{DEP}/#gates", f"/{DEP}/can12/#gates"):
+                        f"/{DEP}/#gates", f"/{DEP}/can12/#gates", "/types/", "/types/servo/#coverage", "/types/servo/#model"):
                 page.goto(base + url)
                 page.wait_for_load_state("load")
                 page.wait_for_timeout(1500)
