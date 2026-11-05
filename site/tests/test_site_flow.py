@@ -1004,6 +1004,23 @@ def main() -> int:
                   "the run's Why it fails tab shows the station's residual-decomposition plots")
             still("10-run-why")
 
+            # 8a. CAN 11's T4 and T7 rows on the Why it fails page, read as the browser draws them (Codex round 5, gaps 1 and 3)
+            page.goto(f"{base}/analysis/why-it-fails/#can11-T4")
+            page.wait_for_load_state("load")
+            drawn_rows = {}
+            for gid in ("T4", "T7"):
+                art = page.locator(f"article#can11-{gid}")
+                art.wait_for(timeout=30000)
+                art.scroll_into_view_if_needed()
+                drawn_rows[gid] = art.inner_text()
+                if args.record:
+                    art.screenshot(path=str(args.record / f"11-why-can11-{gid}.png"))
+            t4, t7 = drawn_rows["T4"], drawn_rows["T7"]
+            check(not NO_RUNNER_PATH.search(t4 + t7) and "ff_fb" in t4 and "against the runner's 2.64 N.m allowance" in t4
+                  and "4.66 N.m in amplitude" in t4 and "4.66 N.m in amplitude" in t7 and "exceeds" not in t4 + t7,
+                  "the browser draws CAN 11 T4 with the runner's ff_fb / ff_weakfb plans and the planned demand against its allowance, and T7 "
+                  "with 4.66 N.m as gravity's amplitude, never a cap it exceeds")
+
             # 8b. a station's Schedule tab (2026-10-29, bam_rack_twin.schedule): the plan before anything runs - targets grey dashed,
             # the twin's orange model curve, coverage heatmaps train vs held-out, and the run commands; every run "not run yet"
             sched_dir = data / "schedule" / "can11"
@@ -1033,6 +1050,10 @@ def main() -> int:
             check(sched.get_by_text("not run yet").count() > 0 and sched.locator(".s2r-commands [data-runner=runnable]").count() >= 1
                   and sched.locator(".s2r-commands [data-runner=unsupported]").count() >= 1,
                   "the Schedule tab says the schedule has not run yet, and which plans the runner can play today")
+            if args.record:
+                sched.locator(".s2r-commands").first.scroll_into_view_if_needed()
+                sched.locator(".s2r-commands").first.screenshot(path=str(args.record / "12-schedule-commands.png"))
+                page.screenshot(path=str(args.record / "12b-schedule-tab.png"), full_page=False)
             heat = {name: panel(page, name) for name in ("Coverage · q × qd · train", "Coverage · q × qd · held-out",
                                                          "Coverage · qd × qdd · train", "Coverage · qd × qdd · held-out")}
             lines = panel(page, "Planned trajectories")
