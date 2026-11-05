@@ -49,6 +49,27 @@ def wait_runs(page, n: int | None = None) -> None:
     page.wait_for_function(js, arg=n, timeout=30000)
 
 
+CLIP_JS = """([top, bottom, pad]) => { const a = document.querySelector(top), b = document.querySelector(bottom) || a; if (!a) return null;
+  a.scrollIntoView({block: 'start'}); window.scrollBy(0, -90); const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect();
+  const x = Math.max(0, Math.min(r1.left, r2.left) - pad), y = Math.max(0, r1.top - pad);
+  return {x, y, width: Math.min(innerWidth - x, Math.max(r1.right, r2.right) - x + pad), height: Math.min(innerHeight - y, r2.bottom - y + pad)}; }"""
+
+
+def shot(page, path: Path, top: str, bottom: str | None = None, pad: int = 8, height: int | None = None) -> Path:
+    """A still of the page between two elements (CSS selectors), below the sticky bar; `height` caps it."""
+    clip = page.evaluate(CLIP_JS, [top, bottom or top, pad])
+    page.wait_for_timeout(300)
+    clip = page.evaluate(CLIP_JS, [top, bottom or top, pad])
+    if height:
+        # no bottom element: the region is `height` tall from the top one; with one, `height` caps it
+        room = page.evaluate("innerHeight") - clip["y"]
+        clip["height"] = min(room, height) if bottom is None else min(clip["height"], height)
+        if bottom is None:
+            clip["x"], clip["width"] = 0, page.evaluate("innerWidth")
+    page.screenshot(path=str(path), clip=clip)
+    return path
+
+
 def capture(site: Path, media: Path, tree: list[dict], runs_of: Counter) -> dict:
     from playwright.sync_api import sync_playwright  # noqa: PLC0415
 
@@ -92,18 +113,14 @@ def capture(site: Path, media: Path, tree: list[dict], runs_of: Counter) -> dict
             page.goto(f"{base}/{DEP}/")
             wait_runs(page)
             page.wait_for_timeout(1500)
-            page.screenshot(path=str(media / "tree-rail.png"))
-            shots["tree-rail"] = media / "tree-rail.png"
+            shots["tree-rail"] = shot(page, media / "tree-rail.png", "nav.tabs", None, height=620)
             page.locator(f"{RAIL} button.df-node[data-level='0'][data-value='{adapter['id']}']").first.click()
             wait_runs(page, under)
             page.locator(f"{RAIL} button.df-node[data-level='1'][data-value='{can11['id']}']").first.click()
             wait_runs(page, runs_of["CAN 11"])
             page.wait_for_timeout(1500)
-            page.screenshot(path=str(media / "tree-can11.png"))
-            shots["tree-can11"] = media / "tree-can11.png"
-            rail = page.locator(RAIL).first
-            rail.screenshot(path=str(media / "rail-close.png"))
-            shots["rail-close"] = media / "rail-close.png"
+            shots["tree-can11"] = shot(page, media / "tree-can11.png", "nav.tabs", None, height=620)
+            shots["rail-close"] = shot(page, media / "rail-close.png", RAIL, None, height=420)
             page.goto(f"{base}/{DEP}/#gates")
             page.wait_for_function("""() => [...document.querySelectorAll('.dd-panel[data-panel]')].some((s) => { const e = s.querySelector(':scope > data-views');
                 return e && e.view && e.view.name === 'The rack' && s.querySelectorAll('td[data-col=worst] .dv-state').length > 0; })""", timeout=30000)
@@ -120,34 +137,39 @@ def capture(site: Path, media: Path, tree: list[dict], runs_of: Counter) -> dict
             shots["runs-flat"] = media / "runs-flat.png"
             page.goto(f"{base}/{DEP}/can11/")
             page.wait_for_timeout(1200)
-            page.locator(".phead").first.screenshot(path=str(media / "station.png"))
-            shots["station"] = media / "station.png"
+            shots["station"] = shot(page, media / "station.png", ".phead h1", ".phead .s2r-tree", pad=10)
             page.goto(f"{base}/{DEP}/")
             wait_runs(page)
             first = page.locator(".dd-panel a[href*='/runs/']").first.get_attribute("href")
             page.goto(base + first.split("#")[0])
             page.wait_for_timeout(1200)
-            page.locator(".phead").first.screenshot(path=str(media / "run-head.png"))
-            shots["run-head"] = media / "run-head.png"
+            shots["run-head"] = shot(page, media / "run-head.png", ".phead h1", ".phead .s2r-cfg", pad=10)
             page.click("nav.tabs [role=tab][href='#evidence']")
             page.wait_for_timeout(700)
-            page.locator("[role=tabpanel][data-tab=evidence]").screenshot(path=str(media / "run-config.png"))
-            shots["run-config"] = media / "run-config.png"
+            shots["run-config"] = shot(page, media / "run-config.png", "[role=tabpanel][data-tab=evidence] h2", "[role=tabpanel][data-tab=evidence] table", pad=10)
             ctx.close()
             browser.close()
     finally:
         server.terminate()
         server.wait(timeout=10)
-    shutil.move(video, media / "hero.webm")
-    shots["hero"] = media / "hero.webm"
+    shutil.move(video, media / "raw.webm")
+    shots["hero"] = media / "raw.webm"
+    # WHY re-encoded and scaled (the desktop preview opens a media page up to ~1.9 MB): VP9 at CRF 44 keeps the rail's words legible
+    # at about a quarter of Playwright's VP8; the GIF fallback at 480 px, 5 fps; stills as JPEG at 1100 px
     if shutil.which("ffmpeg"):
+        small = media / "hero.webm"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(shots["hero"]), "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "44",
+                        "-row-mt", "1", "-an", str(small)], check=False)
+        if small.is_file() and small.stat().st_size:
+            shots["hero"] = small
         gif = media / "hero.gif"
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(shots["hero"]), "-vf", "fps=6,scale=640:-1:flags=lanczos", str(gif)], check=False)
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(shots["hero"]), "-vf",
+                        "fps=5,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=64[p];[b][p]paletteuse", str(gif)], check=False)
         if gif.is_file():
             shots["gif"] = gif
-        for key in [k for k in shots if shots[k].suffix == ".png"]:  # stills as JPEG: the page stays under the desktop preview's size
+        for key in [k for k in shots if shots[k].suffix == ".png"]:
             jpg = shots[key].with_suffix(".jpg")
-            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(shots[key]), "-q:v", "4", str(jpg)], check=False)
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(shots[key]), "-vf", "scale='min(1100,iw)':-2", "-q:v", "7", str(jpg)], check=False)
             if jpg.is_file():
                 shots[key] = jpg
     return shots
@@ -161,7 +183,8 @@ def render(shots: dict, tree: list[dict], rows: list[dict], tests: dict, shas: d
     env, setting, cfg = Counter(r.get("environment") for r in rows), Counter(r.get("setting") for r in rows), Counter(r.get("config") for r in rows)
     full = cfg.get("full", 0)
     by_id = {n["id"]: n for n in tree}
-    order = sorted(tree, key=lambda n: (n["depth"] > 0, by_id.get(n["parent"], {}).get("label", "") if n["depth"] == 2 else n["label"], n["depth"], n["label"]))
+    number = lambda n: int(n["device"].split()[-1]) if n.get("device") and n["device"].split()[-1].isdigit() else 0  # noqa: E731
+    order = sorted(tree, key=lambda n: (n["depth"] > 0, by_id.get(n["parent"], {}).get("label", "") if n["depth"] == 2 else n["label"], n["depth"], number(n)))
     tree_rows = "".join(
         f'<tr><td style="padding-left:{8 + 18 * n["depth"]}px">{html.escape(n["label"])}</td><td>{html.escape(n["kind"])}</td>'
         f'<td>{n["passing"]} / {n["cells"]}</td><td>{html.escape(n["worst"] or "—")}</td><td>{n["runs"]:,}</td>'
@@ -209,13 +232,13 @@ config snapshot.</p>
 <div><table><tr><th>Setting (type_cards SETTINGS)</th><th>Runs</th></tr>{sets}</table></div></div>
 <p>Every run is a real recording in the rack's own archive days, so it is <b>bench</b> on both: a test run on real hardware, in the office.
 A run outside the registry's archive days, or whose basis is not real, would stay <b>unknown</b>. No run records a type_cards test type, so
-none is shown (the servo card lists no test types yet).</p>
+every run's test type reads <b>not recorded</b> (the servo card lists no test types yet).</p>
 <h2>Configuration snapshots</h2>
 <p><b>{full} of {len(rows):,} runs ({100 * full / len(rows):.0f} %)</b> carry a full one. What every session did record: the code
 (bam_rack_twin version and git head), the plan and its sha256, each run's own command arguments; the gains shown on a run come from the
 record's config_history. A key outside the interlock's 16 (CAN 12's <code>servo.default_accel_limit</code>) was nowhere.</p>
-<div class="grid"><div><h3>A run says so in its header</h3>{img('run-head', 'run header: config not recorded')}</div>
-<div><h3>…and on Evidence, what is recorded</h3>{img('run-config', 'run evidence: configuration')}</div></div>
+<h3>A run says so in its header</h3>{img('run-head', 'run header: config not recorded')}
+<h3>…and on its Evidence tab, what is recorded</h3>{img('run-config', 'run evidence: configuration')}
 <h3>From today, every bam_rack_twin session writes each board's whole config</h3>
 <p>One <code>conf enumerate</code> per board after the config check and before the recorder (read-only: nothing set, written or reset),
 written to <code>board_configs/can&lt;id&gt;.cfg</code> in moteus_tool --dump-config's text (its --restore-config takes it) and named in
