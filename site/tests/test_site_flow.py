@@ -28,6 +28,7 @@ import colorsys
 import contextlib
 import hashlib
 import json
+import math
 import os
 import re
 import socket
@@ -461,6 +462,64 @@ def types_checks(page, base: str, still) -> None:
           "the Motor card says what it needs before it can be measured (a dyno)")
 
 
+# a sentence that says the runner cannot do something it can (Codex round 5, gap 1: CAN 11 T4 said "the runner has no path" for gravity
+# feed-forward after bam_ws 48dd5b4c gave it one)
+NO_RUNNER_PATH = re.compile(r"(runner has no path|no runner path|has no path for|no path for (a|one) (gravity )?feed-forward)", re.I)
+
+
+def served_explanation_checks(out: Path) -> None:
+    """Codex round 5, gap 1 (2026-11-04): the explanations as served, not the producer's constants. Oracle: the delivered schedule of
+    each station (its modes' runner status and its description's gravity amplitude, range and torque allowance). Written before the fix:
+    red on the build that still served gates_triage_2.json's CAN 11 lines."""
+    from html import unescape  # noqa: PLC0415
+
+    page = out / "analysis" / "why-it-fails" / "index.html"
+    html = page.read_text() if page.is_file() else ""
+    articles = {m.group(1): re.sub(r"<[^>]+>", " ", unescape(m.group(2)))
+                for m in re.finditer(r'<article class="s2r-whyrow[^"]*" id="([^"]+)"[^>]*>(.*?)</article>', html, re.S)}
+    claims, served = [], {}
+    for dep_dir in sorted(p for p in (out / "data").iterdir() if (p / "why.json").is_file()):
+        modes = {}
+        for summary in sorted((dep_dir / "schedule").glob("*/summary.json")):
+            doc = json.loads(summary.read_text())
+            modes[summary.parent.name] = doc
+        for r in json.loads((dep_dir / "why.json").read_text())["rows"]:
+            key = f"{r['station']}-{r['gate_id']}"
+            texts = {"why.json": " ".join(str(r.get(f) or "") for f in ("explain", "why", "evidence", "next")), "page": articles.get(key, "")}
+            served[key] = texts
+            sched = modes.get(r["station"])
+            runnable = [m for m, v in (sched or {}).get("modes", {}).items() if m.startswith("ff") and v["runner"]["status"] == "runnable"]
+            for where, text in texts.items():
+                if runnable and NO_RUNNER_PATH.search(text):
+                    claims.append(f"{key} ({where}): {NO_RUNNER_PATH.search(text).group(0)!r} while {runnable} are runnable")
+    check(not claims, f"no served explanation says the runner has no path for a mode its station's schedule marks runnable ({claims[:3]})")
+
+    sched = json.loads((out / "data" / DEP / "schedule" / "can11" / "summary.json").read_text())
+    d = sched["description"]
+    amplitude, allowance = f"{d['gravity_nm']:.2f}", float(d["torque_limit_nm"])
+    gravity_max = d["gravity_nm"] * max(abs(math.sin(x)) for x in d["range_rad"])
+    ff = [m for m in ("ff_fb", "ff_weakfb") if sched["modes"][m]["runner"]["status"] == "runnable"]
+    for gate in ("T4", "T7"):
+        texts = served.get(f"can11-{gate}", {})
+        check(set(texts) == {"why.json", "page"} and all(texts.values()), f"CAN 11 {gate}'s explanation is served in why.json and on the Why it fails page")
+        for where, text in texts.items():
+            bare = [m.group(0) for m in re.finditer(rf"{re.escape(amplitude)} N\.?m(?! in amplitude)[^.;]{{0,40}}", text)]
+            check(not bare and "gravity load" not in text and not re.search(r"gravity[^.;]{0,40}exceeds", text),
+                  f"CAN 11 {gate} ({where}) names {amplitude} N.m only as gravity's amplitude, never a load that exceeds the board ({bare[:2]})")
+        if gate == "T4":
+            for where, text in texts.items():
+                demand = re.search(r"planned demand[^.;]*?peaks at (\d+\.\d+) N\.m against the runner's (\d+\.\d+) N\.m allowance", text)
+                gmax = re.search(rf"{re.escape(amplitude)} N\.m in amplitude[^.;]*?at most (\d+\.\d+) N\.m", text)
+                check(bool(ff) and all(m in text for m in ff) and "feed-forward" in text and "no feed-forward plan" not in text,
+                      f"CAN 11 T4 ({where}) says the runner's {'/'.join(ff)} feed-forward plans exist, not that FF is missing")
+                check(bool(demand) and float(demand.group(1)) < float(demand.group(2)) and abs(float(demand.group(2)) - allowance) < 0.006,
+                      f"CAN 11 T4 ({where}) states the planned demand against the {allowance:.2f} N.m allowance the schedule declares "
+                      f"({demand.groups() if demand else 'no such sentence'})")
+                check(bool(gmax) and abs(float(gmax.group(1)) - gravity_max) < 0.006,
+                      f"CAN 11 T4 ({where}) gives gravity's maximum over the scheduled range as {gravity_max:.2f} N.m "
+                      f"({gmax.group(1) if gmax else 'not stated'})")
+
+
 def station_key_of(device: str) -> str:
     return device.lower().replace(" ", "")
 
@@ -510,6 +569,7 @@ def main() -> int:
     explanation_checks(data, path, doc, out)
     portability_checks(out)
     schedule_freshness_checks(out, adapter.SCHEDULES)
+    served_explanation_checks(out)
     whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
 
