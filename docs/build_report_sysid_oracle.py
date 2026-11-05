@@ -38,8 +38,11 @@ RESULTS = REPO / "sysid" / "results"
 EXAMPLES = landing.EXAMPLES
 
 
-def data_uri(path: Path, mime: str) -> str:
-    return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"
+MIME = {".webp": "image/webp", ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4"}
+
+
+def data_uri(path: Path, mime: str | None = None) -> str:
+    return f"data:{mime or MIME[path.suffix]};base64,{base64.b64encode(path.read_bytes()).decode()}"
 
 
 def capture(site: Path, media: Path) -> dict:
@@ -92,10 +95,10 @@ def capture(site: Path, media: Path) -> dict:
             unstick(page)
             target = page.locator("#oracle")
             target.scroll_into_view_if_needed()
-            shots["oracle"] = media / "oracle.jpg"
-            target.screenshot(path=str(shots["oracle"]), type="jpeg", quality=60)
-            shots["card"] = media / "card.jpg"
-            page.locator("#oracle article[data-example=pendulum_can11]").screenshot(path=str(shots["card"]), type="jpeg", quality=70)
+            shots["oracle"] = media / "oracle.png"
+            target.screenshot(path=str(shots["oracle"]), type="png")
+            shots["card"] = media / "card.png"
+            page.locator("#oracle article[data-example=pendulum_can11]").screenshot(path=str(shots["card"]), type="png")
             for example in EXAMPLES:
                 page.goto(f"{base}/sysid/{example}/")
                 page.wait_for_load_state("load")
@@ -103,19 +106,19 @@ def capture(site: Path, media: Path) -> dict:
                 unstick(page)
                 table = page.locator("table.s2r-ex-full")
                 table.scroll_into_view_if_needed()
-                shots[f"params-{example}"] = media / f"params-{example}.jpg"
-                # WHY quality 45 and a 320 px, 16-colour GIF: the page stays under the desktop preview's ~1.9 MB media-page limit (1.89 MB at 55 / 360 px / 24)
-                table.screenshot(path=str(shots[f"params-{example}"]), type="jpeg", quality=45)
+                shots[f"params-{example}"] = media / f"params-{example}.png"
+                # WHY a 320 px, 16-colour GIF fallback: the page stays under the desktop preview's ~1.9 MB media-page limit
+                table.screenshot(path=str(shots[f"params-{example}"]), type="png")
                 if example in landing.DRIFT_OF:
                     fig = page.locator("#drift ~ figure").first
                     fig.scroll_into_view_if_needed()
-                    shots[f"drift-{example}"] = media / f"drift-{example}.jpg"
-                    fig.screenshot(path=str(shots[f"drift-{example}"]), type="jpeg", quality=70)
+                    shots[f"drift-{example}"] = media / f"drift-{example}.png"
+                    fig.screenshot(path=str(shots[f"drift-{example}"]), type="png")
                 if example == "pendulum_can11":
                     lad = page.locator("#rungs ~ div.s2r-scroll").first
                     lad.scroll_into_view_if_needed()
-                    shots["rungs"] = media / "rungs.jpg"
-                    lad.screenshot(path=str(shots["rungs"]), type="jpeg", quality=65)
+                    shots["rungs"] = media / "rungs.png"
+                    lad.screenshot(path=str(shots["rungs"]), type="png")
             ctx.close()
             phone = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
             page = phone.new_page()
@@ -123,17 +126,20 @@ def capture(site: Path, media: Path) -> dict:
             page.wait_for_load_state("load")
             page.wait_for_timeout(800)
             page.locator("#oracle article").first.scroll_into_view_if_needed()
-            shots["phone"] = media / "phone.jpg"
-            page.screenshot(path=str(shots["phone"]), type="jpeg", quality=55)
+            shots["phone"] = media / "phone.png"
+            page.screenshot(path=str(shots["phone"]), type="png")
             phone.close()
             browser.close()
     finally:
         server.terminate()
         server.wait(timeout=10)
-    for name, path in list(shots.items()):  # stills wider than 1000 px scaled down (the page is read at <= 1120 px)
-        small = path.with_name(path.stem + "-small.jpg")
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(path), "-vf", "scale='min(1000,iw)':-1", "-q:v", "8", str(small)], check=True)
-        shots[name] = small if small.stat().st_size < path.stat().st_size else path
+    # WHY lossless PNG captures encoded once to WebP (<= 1000 px wide; the page is read at <= 1120 px): one lossy pass keeps table text
+    # sharp, and the page stays well under the desktop preview's ~1.9 MB media-page limit (JPEG twice over sat at 1.87 MB)
+    for name, path in list(shots.items()):
+        webp = path.with_suffix(".webp")
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(path), "-vf", "scale='min(1000,iw)':-1", "-c:v", "libwebp", "-quality", "72",
+                        "-compression_level", "6", str(webp)], check=True)
+        shots[name] = webp
     mp4 = media / "hero.mp4"
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-vf", "fps=10,scale=800:-2", "-c:v", "libx264", "-crf", "36", "-preset", "slow",
                     "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(mp4)], check=True)
@@ -176,7 +182,7 @@ def metric_lines(doc: dict) -> str:
 
 
 def render(shots: dict, tests: dict, shas: dict, docs: dict) -> str:
-    img = lambda k, alt: f'<img src="{data_uri(shots[k], "image/jpeg")}" alt="{esc(alt)}" loading="lazy">' if k in shots else ""  # noqa: E731
+    img = lambda k, alt: f'<img src="{data_uri(shots[k])}" alt="{esc(alt)}" loading="lazy">' if k in shots else ""  # noqa: E731
     examples = [docs[x] for x in EXAMPLES if x in docs]
     n_params = sum(d["verdict"]["parameters"] for d in examples)
     n_pass = sum(d["verdict"]["parameters_pass"] for d in examples)
