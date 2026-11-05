@@ -89,8 +89,7 @@ def capture(site: Path, media: Path) -> dict:
             page.goto(f"{base}/")
             page.wait_for_load_state("load")
             page.wait_for_timeout(800)
-            # WHY the bar hidden for element stills: the workbench's sticky bar would sit on top of a tall element's screenshot
-            page.add_style_tag(content=".topbar, header.site, .bar { position: static !important; }")
+            unstick(page)
             target = page.locator("#oracle")
             target.scroll_into_view_if_needed()
             shots["oracle"] = media / "oracle.jpg"
@@ -101,7 +100,7 @@ def capture(site: Path, media: Path) -> dict:
                 page.goto(f"{base}/sysid/{example}/")
                 page.wait_for_load_state("load")
                 page.wait_for_timeout(500)
-                page.add_style_tag(content=".topbar, header.site, .bar { position: static !important; }")
+                unstick(page)
                 table = page.locator("table.s2r-ex-full")
                 table.scroll_into_view_if_needed()
                 shots[f"params-{example}"] = media / f"params-{example}.jpg"
@@ -281,6 +280,16 @@ identification code, and it can fail: every gated parameter's nominal value is o
 </ul>
 <p class="mute">{sha_line}</p>
 </body></html>"""
+
+
+def unstick(page) -> None:
+    """The site's sticky header (header.top, site.css) made static for element stills, checked: Playwright scrolls a tall element
+    under it while it stitches the screenshot, so a sticky bar lands across the table's rows (it covered two UR5e rows when the rule
+    named classes the header does not have)."""
+    page.add_style_tag(content="header.top, .top { position: static !important; }")
+    position = page.evaluate("(() => { const h = document.querySelector('header.top'); return h ? getComputedStyle(h).position : 'none'; })()")
+    if position not in ("static", "none"):
+        raise SystemExit(f"the site header is still {position}: element stills would show it across their rows")
 
 
 def test_count(value: str) -> str:
