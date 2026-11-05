@@ -1,8 +1,8 @@
 """sim2real on catalog-workbench, clicked through headless: the acceptance checks of the migration.
 
-    python3 /home/bam/sim2real-worktrees/catalog-workbench/site/build.py
-    uv run --no-project --with playwright python /home/bam/sim2real-worktrees/catalog-workbench/site/tests/test_site_flow.py
-    uv run --no-project --with playwright python /home/bam/sim2real-worktrees/catalog-workbench/site/tests/test_site_flow.py --record /abs/capture/dir
+    python3 /home/bam/sim2real/site/build.py
+    uv run --no-project --with playwright python /home/bam/sim2real/site/tests/test_site_flow.py
+    uv run --no-project --with playwright python /home/bam/sim2real/site/tests/test_site_flow.py --record /abs/capture/dir
 
 Since data-ui 006e9d5 (2026-10-29, PEP 0010 P3 / P5, CONTRACT §33 and §35) also the views it adopts, each measured as drawn: the
 gate matrix (cells, columns' x, tones), its peek, the KPI trend against its target, the rack roll-up, threshold bands (Vega's own

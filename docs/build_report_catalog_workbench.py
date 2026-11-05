@@ -1,7 +1,7 @@
 """Write the review report of sim2real's move onto catalog-workbench (2026-10-29).
 
-    python3 /home/bam/sim2real-worktrees/catalog-workbench/docs/build_report_catalog_workbench.py
-    uv run --no-project --with playwright python /home/bam/sim2real-worktrees/catalog-workbench/docs/build_report_catalog_workbench.py --capture
+    python3 /home/bam/sim2real/docs/build_report_catalog_workbench.py
+    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_catalog_workbench.py --capture
 
 --capture first records the data-ui 006e9d5 section's stills and its pick-and-Back clip from the built site (served on a free
 port in 4711-4799, stopped by its pid) into data-ui-006e9d5/; its acceptance log is data-ui-006e9d5/test.log (the site test's
@@ -34,7 +34,7 @@ SITE_OUT = pathlib.Path.home() / ".cache" / "sim2real" / "site"
 DEP = "one-dof-test-rack"
 HELD_OUT = "2026-10-28~t2~heldout_can12~runs~s18_can12_sine"
 LAUNCH = "python3 -m http.server 4710 --bind 127.0.0.1 --directory /home/bam/.cache/sim2real/site"
-BUILD = "python3 /home/bam/sim2real-worktrees/catalog-workbench/site/build.py"
+BUILD = "python3 /home/bam/sim2real/site/build.py"
 e = html.escape
 
 PAIRS = [

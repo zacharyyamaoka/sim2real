@@ -9,7 +9,7 @@
    "family": "1-DOF rig of rigs",
    "where": "Zach's bench at home",
    "summary": "Eight moteus servo stations on three plates (GIM43, JMC60), each a 1-DOF joint run against its own bam_rack_twin.",
-   "record": "/home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43-v5/src/dev/bam_rack_twin/records/one-dof-test-rack/deployment.json",
+   "record": "/home/bam/bam_ws/src/dev/bam_rack_twin/records/one-dof-test-rack/deployment.json",
    "archive": [
     "/archive/datasets/bam_rig/rack_2026-10-23",
     "/archive/datasets/bam_rig/rack_2026-10-24",

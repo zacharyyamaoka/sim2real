@@ -28,7 +28,7 @@ switch in the header that adds the diagnostics computed from the same runs. The 
 
 Build the data (about 20 s; the twin replays are optional and take about 1.5 min):
 
-    /home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43-v5/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
+    /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/build_app.py
     python3 -I /home/bam/sim2real/tools/build_pages.py
     uv run --no-project --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py

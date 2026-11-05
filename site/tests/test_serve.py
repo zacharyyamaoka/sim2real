@@ -1,6 +1,6 @@
 """serve.py serves the catalog-workbench site at / and keeps the old app and the proposals beside it.
 
-    python3 /home/bam/sim2real-worktrees/catalog-workbench/site/tests/test_serve.py
+    python3 /home/bam/sim2real/site/tests/test_serve.py
 
 Starts serve.py on a free port in 4711-4799 (never 4700, Zach's), reads each route, stops it by the pid it started.
 """

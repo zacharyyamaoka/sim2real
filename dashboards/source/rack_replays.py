@@ -16,7 +16,7 @@ The oracle: each motor's q RMS (real - twin, on scorecard.score_replay's rows) m
 
 Run with the package's own venv (it carries bam_rack_twin, bam_sim and MuJoCo):
 
-    /home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43-v5/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/dashboards/source/rack_replays.py
+    /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/dashboards/source/rack_replays.py
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ os.environ.setdefault("MUJOCO_GL", "egl")
 
 PACKAGE = Path(
     os.environ.get("RACK_REPLAYS_PACKAGE")
-    or "/home/bam/bam_ws/.claude/worktrees/sim-to-real-motor-models-f1ee43-v5/src/dev/bam_rack_twin"
+    or "/home/bam/bam_ws/src/dev/bam_rack_twin"
 )
 # WHY the docs folder on the path: the round studies that rebuilt the 10-25 twins live there as scripts, not in the package,
 # and reusing them (not a copy) is what makes the rebuilt twin the file's twin. Module level, so worker processes get it too.

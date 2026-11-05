@@ -1,11 +1,11 @@
 """Build sim2real's site: catalog-workbench (vendored, site/vendor/) over the app's data (tools/build_app.py).
 
-    python3 /home/bam/sim2real-worktrees/catalog-workbench/site/build.py [--data PATH] [--out PATH]
+    python3 /home/bam/sim2real/site/build.py [--data PATH] [--out PATH]
     python3 -m http.server 4710 --bind 127.0.0.1 --directory /home/bam/.cache/sim2real/site
 
 Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing here is in git):
 
-    OUT/data/<dep>/schedule/<station>/   a station's test schedule (bam_rack_twin.schedule), linked from SIM2REAL_SCHEDULES
+    OUT/data/<dep>/schedule/<station>/   a station's test schedule (bam_rack_twin.schedule), copied from SIM2REAL_SCHEDULES
     OUT/data/<dep>/  + the rows data-ui's gate views read (site/overlays.py): gate ranks and links, the rack tree, the gate
                      history from the archive's acceptance files, each station's coverage cells
     OUT/data/        the app's tables: the ones holding links copied with every old /app/?d=… link rewritten to the
@@ -118,6 +118,9 @@ def build(data: pathlib.Path, out: pathlib.Path) -> dict:
     import catalog as s2r  # noqa: PLC0415
     import pages  # noqa: PLC0415
 
+    if adapter.in_worktree(data):
+        raise SystemExit(f"refusing to build from {data}: it is inside a worktree, and the site links its run folders to the data "
+                         f"(a worktree's go when it does); build the data in the main checkout ({adapter.DATA}) or pass --data there")
     if not (data / "deployments.json").is_file():
         raise SystemExit(f"no app data at {data}: build it with tools/build_app.py (README), or pass --data")
     clear(out)

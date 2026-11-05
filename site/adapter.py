@@ -20,6 +20,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import tarfile
 from collections import defaultdict
@@ -29,8 +30,27 @@ HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 CACHE = pathlib.Path.home() / ".cache" / "sim2real"
 
-# The app's data: env SIM2REAL_DATA, else this checkout's app/data (tools/build_app.py writes it)
-DATA = pathlib.Path(os.environ.get("SIM2REAL_DATA") or REPO / "app" / "data")
+
+
+def main_checkout(repo: pathlib.Path = REPO) -> pathlib.Path:
+    """The main checkout of this repo (the parent of git's common dir), even when this file runs from a worktree."""
+    try:
+        common = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                check=True, capture_output=True, text=True).stdout.strip()
+        return pathlib.Path(common).parent
+    except (OSError, subprocess.CalledProcessError):
+        return repo
+
+
+# WHY never a worktree (Codex round 3, gap 1, 2026-11-04): the site links its 3.8 GB of run folders to the data instead of
+# copying them, so a build from a worktree's app/data died with the worktree (coverage, every run's samples and the
+# decomposition 404'd on Zach's :4700). The data is the main checkout's app/data (tools/build_app.py there), or SIM2REAL_DATA.
+WORKTREE_MARKS = (".claude/worktrees/", "sim2real-worktrees/")
+DATA = pathlib.Path(os.environ.get("SIM2REAL_DATA") or main_checkout() / "app" / "data")
+
+
+def in_worktree(path: pathlib.Path) -> bool:
+    return any(mark in str(path.resolve()) + "/" for mark in WORKTREE_MARKS)
 # Test schedules (bam_rack_twin.schedule build --out <root>/<deployment>/<station>): env SIM2REAL_SCHEDULES, else the rack archive's.
 # WHY read from the producer's folder and not copied into app/data: a schedule is a plan, written before any run; the site shows it
 # as "not run yet" next to the station's real runs, and a new build of the schedule is seen at the next site build.
@@ -224,17 +244,19 @@ def _schedules(folder: pathlib.Path) -> dict:
 
 
 def link_schedules(root: pathlib.Path, data: pathlib.Path) -> int:
-    """Link <root>/<dep>/<station>/site into data/<dep>/schedule/<station> for every deployment the data holds. Returns how many."""
-    linked = 0
+    """Copy <root>/<dep>/<station>/site into data/<dep>/schedule/<station> for every deployment the data holds. Returns how many.
+    WHY a copy, not a link (2026-11-04): a schedule is rebuilt in place by its producer (bam_rack_twin.schedule build), and a
+    few small tables are cheap; the site then shows the schedule it was built with, and never a dangling link."""
+    copied = 0
     for dep in (root.iterdir() if root.is_dir() else []):
-        if not (data / dep.name).is_dir():
+        if not (data / dep.name).is_dir() or (data / dep.name).is_symlink():
             continue
         for station in sorted(dep.iterdir()):
             if (station / "site" / "summary.json").is_file():
                 (data / dep.name / "schedule").mkdir(exist_ok=True)
-                os.symlink((station / "site").resolve(), data / dep.name / "schedule" / station.name)
-                linked += 1
-    return linked
+                shutil.copytree(station / "site", data / dep.name / "schedule" / station.name)
+                copied += 1
+    return copied
 
 
 def load(data: pathlib.Path = DATA) -> Site:
