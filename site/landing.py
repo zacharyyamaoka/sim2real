@@ -377,6 +377,7 @@ b(h) = b0 + k h. <b>Wear rate</b> recovered from the early-life checks (to hour 
 check's duty of {num(d['wear']['duty_nm_rev_per_h'], 3)} N·m·rev per hour that is {num(d['wear']['rate_recovered_per_nm_rev'] * 1e6, 3)} µrad per N·m·rev.</p>
 <ul class="s2r-ex-wear">
 <li><b>Forecast</b> (the wear-aware twin, at hour {num(d['predicted_at_h'], 3)}): the threshold at hour <b data-predicted="{d['predicted_crossing_h']}">{num(d['predicted_crossing_h'], 4)}</b>, {num(d['remaining_h_at_prediction'], 3)} hours ahead (a gap of {num(d['gap_at_threshold_rad'] * 1e3, 3)} mrad)</li>
+{f'<li><b>Plan by</b> hour <b data-plan-by="{d["plan_by_h"]}">{num(d["plan_by_h"], 4)}</b>: the same forecast at the wear line&#39;s upper 95 % band, the early edge maintenance schedules against</li>' if d.get('plan_by_h') is not None else ''}
 <li><b>Actual crossing</b> in the sim: hour <b data-actual="{d['actual_crossing_h']}">{num(d['actual_crossing_h'], 4)}</b></li>
 <li><b>Plain detector</b> (the servo card's drift check, "{e(d['diagnostic']['message'])}"): warned at hour <b data-alarm="{d['detector_alarm_h']}">{num(d['detector_alarm_h'], 4)}</b>, after the fact</li>
 <li>The card's own trend forecast (the drift ratio's history alone, at hour {num(d['predicted_at_h'], 3)}): {num(d['card_trend_remaining_h'], 3) if d.get('card_trend_remaining_h') is not None else 'no crossing in sight'} hours left</li>
