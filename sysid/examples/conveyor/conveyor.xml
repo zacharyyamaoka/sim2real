@@ -1,0 +1,41 @@
+<!--
+  A belt conveyor as one MJCF: the sysid oracle's conveyor description (2026-11-05).
+
+  WHY a new file: bam_ws has belts only as kinematic scenes (bam_scan_tunnel's MujocoTunnel, bam_color_detection's
+  MujocoConveyor move objects by mocap) and a layout object (bam_robot_descriptions scene_authoring's "conveyor": length 1.6,
+  width 0.55, height 0.72 m, taken here); none has a drive, an encoder or belt dynamics, which is what calibration needs.
+
+  The belt is one slide joint (the belt surface's travel, metres); the drive roller is a hinge with the encoder; a joint
+  equality couples them, belt = r * roller (polycoef[1] is the roller's effective radius r); the VFD is a velocity servo on the
+  roller (kv, its torque limit). WHY solimp 0.9999: at MuJoCo's default impedance the coupling is a 4 Hz spring (10 mm of
+  stretch on a 0.3 m/s step); at 0.9999 it holds to 0.002 mm, a rigid belt, which is what this description claims. The moving mass (belt + carriage + load) is the belt body's; drag is the slide's damping
+  (viscous, N.s/m) and frictionloss (Coulomb, N). Contacts are off: nothing here touches.
+-->
+<mujoco model="sysid_conveyor">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast">
+    <flag contact="disable"/>
+  </option>
+  <worldbody>
+    <body name="conveyor_frame" pos="0 0 0">
+      <geom name="conveyor_legs" type="box" size="0.8 0.275 0.31" pos="0 0 0.31" rgba="0.30 0.32 0.35 1" mass="40"/>
+      <geom name="conveyor_bed" type="box" size="0.8 0.275 0.02" pos="0 0 0.68" rgba="0.075 0.085 0.095 1" mass="5"/>
+      <site name="belt_surface" pos="0 0 0.72" size="0.005"/>
+      <body name="drive_roller" pos="0.8 0 0.67">
+        <joint name="drive_roller" type="hinge" axis="0 1 0" armature="0.004"/>
+        <geom name="drive_roller_geom" type="cylinder" size="0.05 0.275" quat="0.70710678 0.70710678 0 0" mass="2.0" rgba="0.6 0.6 0.62 1"/>
+      </body>
+      <body name="belt" pos="0 0 0.72">
+        <joint name="belt" type="slide" axis="1 0 0" damping="15" frictionloss="5"/>
+        <geom name="belt_carriage" type="box" size="0.05 0.05 0.002" mass="12" rgba="0.1 0.1 0.1 1"/>
+        <site name="belt_marker" pos="0 0 0.003" size="0.004"/>
+      </body>
+    </body>
+  </worldbody>
+  <equality>
+    <joint name="belt_drive" joint1="belt" joint2="drive_roller" polycoef="0 0.05 0 0 0" solref="0.004 1" solimp="0.9999 0.9999 0.001"/>
+  </equality>
+  <actuator>
+    <velocity name="vfd" joint="drive_roller" kv="40" forcerange="-25 25" forcelimited="true"/>
+  </actuator>
+</mujoco>

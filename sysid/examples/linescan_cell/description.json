@@ -1,0 +1,514 @@
+{
+  "schema": "sysid.description/1",
+  "id": "linescan_cell",
+  "title": "Hyperspectral + RGBD line scan",
+  "subtitle": "SWIR line-scan camera + D435 over the belt",
+  "summary": "The scan tunnel's two optical sensors over the conveyor: a 16-band SWIR (925-1675 nm) push-broom line-scan camera triggered by the belt encoder, and a D435 RGBD camera downstream. The description gives the line camera's lens, height and position, the vendor's per-band gain and dark level, and the D435's nominal intrinsics. Calibration finds where the scan line really falls on the belt and its lens scale, each band's radiometric gain and dark level from white / grey / black / dark references, and the D435's intrinsics, pose and depth scale and offset.",
+  "model": {
+    "format": "mjcf-composed",
+    "source": "sysid's conveyor.xml + two MuJoCo cameras (the line camera's row is its centre row)",
+    "parts": [
+      {
+        "id": "conveyor",
+        "path": "sysid/examples/conveyor/conveyor.xml",
+        "prefix": "conv_",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rpy": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "cameras": [
+      {
+        "name": "hsi_line",
+        "pos": [
+          0.0,
+          0.0,
+          1.47
+        ],
+        "look_at": [
+          0.0,
+          0.0,
+          0.72
+        ],
+        "up_hint": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "fovy_deg": 39.2,
+        "resolution": [
+          640,
+          1
+        ],
+        "source": "a 640-pixel SWIR push-broom line (Specim FX17 class): fx 900 px nominal"
+      },
+      {
+        "name": "rgbd",
+        "pos": [
+          0.6,
+          0.0,
+          1.27
+        ],
+        "look_at": [
+          0.45,
+          0.0,
+          0.72
+        ],
+        "fovy_deg": 42.5,
+        "resolution": [
+          640,
+          480
+        ],
+        "source": "a D435 at 640 x 480 (intel_rgbd: baseline 49.9 mm, depth unit 1 mm)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "tunnel",
+      "type": "deployment",
+      "title": "scan tunnel",
+      "parent": null
+    },
+    {
+      "id": "conveyor",
+      "type": "conveyor belt",
+      "title": "belt conveyor (encoder-triggered lines)",
+      "parent": "tunnel",
+      "binds": {
+        "joint": "conv_belt"
+      }
+    },
+    {
+      "id": "hsi_line",
+      "type": "hyperspectral camera",
+      "title": "SWIR line-scan camera, 16 bands",
+      "parent": "tunnel",
+      "binds": {
+        "camera": "hsi_line"
+      }
+    },
+    {
+      "id": "rgbd",
+      "type": "d435",
+      "title": "D435 RGBD",
+      "parent": "tunnel",
+      "binds": {
+        "camera": "rgbd"
+      }
+    }
+  ],
+  "parameters": {
+    "hsi.focal_px": {
+      "unit": "px",
+      "value": 900.0,
+      "source": "the lens (f / pixel pitch) in the description"
+    },
+    "hsi.principal_px": {
+      "unit": "px",
+      "value": 320.0,
+      "source": "the line's centre"
+    },
+    "hsi.height_m": {
+      "unit": "m",
+      "value": 0.75,
+      "source": "the drawing: 750 mm over the belt"
+    },
+    "hsi.across_offset_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the drawing: on the belt's centre line"
+    },
+    "hsi.scan_line_x_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the drawing: the scan line at the tunnel's x = 0"
+    },
+    "hsi.scan_yaw_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the drawing: the line square to the belt"
+    },
+    "hsi.gain_b00": {
+      "unit": "DN per unit reflectance",
+      "value": 3149.5,
+      "source": "the vendor's nominal response at 925 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b01": {
+      "unit": "DN per unit reflectance",
+      "value": 3296.5,
+      "source": "the vendor's nominal response at 975 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b02": {
+      "unit": "DN per unit reflectance",
+      "value": 3439.7,
+      "source": "the vendor's nominal response at 1025 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b03": {
+      "unit": "DN per unit reflectance",
+      "value": 3569.9,
+      "source": "the vendor's nominal response at 1075 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b04": {
+      "unit": "DN per unit reflectance",
+      "value": 3677.6,
+      "source": "the vendor's nominal response at 1125 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b05": {
+      "unit": "DN per unit reflectance",
+      "value": 3754.7,
+      "source": "the vendor's nominal response at 1175 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b06": {
+      "unit": "DN per unit reflectance",
+      "value": 3794.9,
+      "source": "the vendor's nominal response at 1225 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b07": {
+      "unit": "DN per unit reflectance",
+      "value": 3794.9,
+      "source": "the vendor's nominal response at 1275 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b08": {
+      "unit": "DN per unit reflectance",
+      "value": 3754.7,
+      "source": "the vendor's nominal response at 1325 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b09": {
+      "unit": "DN per unit reflectance",
+      "value": 3677.6,
+      "source": "the vendor's nominal response at 1375 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b10": {
+      "unit": "DN per unit reflectance",
+      "value": 3569.9,
+      "source": "the vendor's nominal response at 1425 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b11": {
+      "unit": "DN per unit reflectance",
+      "value": 3439.7,
+      "source": "the vendor's nominal response at 1475 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b12": {
+      "unit": "DN per unit reflectance",
+      "value": 3296.5,
+      "source": "the vendor's nominal response at 1525 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b13": {
+      "unit": "DN per unit reflectance",
+      "value": 3149.5,
+      "source": "the vendor's nominal response at 1575 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b14": {
+      "unit": "DN per unit reflectance",
+      "value": 3006.7,
+      "source": "the vendor's nominal response at 1625 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.gain_b15": {
+      "unit": "DN per unit reflectance",
+      "value": 2874.6,
+      "source": "the vendor's nominal response at 1675 nm (lamp x QE), DN for a perfect white at full light"
+    },
+    "hsi.dark_b00": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b01": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b02": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b03": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b04": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b05": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b06": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b07": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b08": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b09": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b10": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b11": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b12": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b13": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b14": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "hsi.dark_b15": {
+      "unit": "DN",
+      "value": 100.0,
+      "source": "the vendor's nominal dark level"
+    },
+    "rgbd.fx_px": {
+      "unit": "px",
+      "from": "camera:rgbd:fx"
+    },
+    "rgbd.fy_px": {
+      "unit": "px",
+      "from": "camera:rgbd:fy"
+    },
+    "rgbd.cx_px": {
+      "unit": "px",
+      "from": "camera:rgbd:cx"
+    },
+    "rgbd.cy_px": {
+      "unit": "px",
+      "from": "camera:rgbd:cy"
+    },
+    "rgbd.dx_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the drawing's D435 pose (a correction of 0 = as drawn)"
+    },
+    "rgbd.dy_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the drawing's D435 pose (a correction of 0 = as drawn)"
+    },
+    "rgbd.dz_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the drawing's D435 pose (a correction of 0 = as drawn)"
+    },
+    "rgbd.rx_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the drawing's D435 pose (a correction of 0 = as drawn)"
+    },
+    "rgbd.ry_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the drawing's D435 pose (a correction of 0 = as drawn)"
+    },
+    "rgbd.rz_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the drawing's D435 pose (a correction of 0 = as drawn)"
+    },
+    "rgbd.depth_scale": {
+      "unit": "1",
+      "value": 1.0,
+      "source": "the D435's depth unit taken as exact (intel_rgbd D435_DEPTH_SCALE_M)"
+    },
+    "rgbd.depth_offset_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "no depth offset in the description"
+    }
+  },
+  "known": {
+    "bands_nm": [
+      925,
+      975,
+      1025,
+      1075,
+      1125,
+      1175,
+      1225,
+      1275,
+      1325,
+      1375,
+      1425,
+      1475,
+      1525,
+      1575,
+      1625,
+      1675
+    ],
+    "band_fwhm_nm": 30.0,
+    "note": "band centres and widths are the vendor's (not identified here); the belt speed and encoder trigger come from the conveyor example; the target card's printed geometry and the references' reflectance are certified",
+    "target": {
+      "dots_flat_m": [
+        [
+          -0.06,
+          -0.15
+        ],
+        [
+          -0.06,
+          -0.075
+        ],
+        [
+          -0.06,
+          0.0
+        ],
+        [
+          -0.06,
+          0.075
+        ],
+        [
+          -0.06,
+          0.15
+        ],
+        [
+          0.0,
+          -0.15
+        ],
+        [
+          0.0,
+          -0.075
+        ],
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.075
+        ],
+        [
+          0.0,
+          0.15
+        ],
+        [
+          0.06,
+          -0.15
+        ],
+        [
+          0.06,
+          -0.075
+        ],
+        [
+          0.06,
+          0.0
+        ],
+        [
+          0.06,
+          0.075
+        ],
+        [
+          0.06,
+          0.15
+        ]
+      ],
+      "dots_step_m": [
+        [
+          0.12,
+          -0.12
+        ],
+        [
+          0.12,
+          -0.04
+        ],
+        [
+          0.12,
+          0.04
+        ],
+        [
+          0.12,
+          0.12
+        ],
+        [
+          0.18,
+          -0.12
+        ],
+        [
+          0.18,
+          -0.04
+        ],
+        [
+          0.18,
+          0.04
+        ],
+        [
+          0.18,
+          0.12
+        ]
+      ],
+      "step_height_m": 0.04,
+      "references": {
+        "white": 0.95,
+        "grey": 0.5,
+        "black": 0.05,
+        "dark": 0.0
+      }
+    }
+  },
+  "sensors": [
+    {
+      "id": "hsi_line",
+      "kind": "line_scan",
+      "on": "hsi_line",
+      "measures": "16-band DN per pixel per line; dot centres (pixel, belt position at the line)"
+    },
+    {
+      "id": "rgbd",
+      "kind": "rgbd",
+      "on": "rgbd",
+      "measures": "dot centres (u, v) and depth"
+    },
+    {
+      "id": "belt_encoder",
+      "kind": "joint_state",
+      "on": "conv_drive_roller",
+      "measures": "belt travel; it triggers the line camera"
+    }
+  ],
+  "schedule": {
+    "target_passes_train": 6,
+    "target_passes_held_out": 3,
+    "lines_per_m": 1000,
+    "seed": 71,
+    "held_out_materials": [
+      "PET",
+      "HDPE",
+      "PP"
+    ]
+  }
+}

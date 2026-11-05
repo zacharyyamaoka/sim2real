@@ -1,0 +1,158 @@
+{
+  "schema": "sysid.description/1",
+  "id": "pendulum_can11",
+  "title": "One-DOF pendulum arm",
+  "subtitle": "CAN 11 on the One Dof Test Rack",
+  "summary": "The rack's JMC60 plate link: a JMC 60ASM200 + AD60-G10 10:1 gearmotor on a moteus r4.11, a pendulum link with ArUco tags 8-12 that a D405 watches. The model file is the station's twin of record as bam_rack_twin wrote it; the nominal values are the joint description bam_rack_twin.schedule builds CAN 11's test schedule from.",
+  "model": {
+    "format": "mjcf",
+    "path": "/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/twin/scenes/can11_hinge__89b6fde5__dt2000.xml",
+    "sha256": "bb1c7c98c3509e7ddfe3c8d0788e5ea0e1d662471884377c317b223767d21e3d",
+    "source": "bam_rack_twin twin of record lugre-d-M1-e37b0e7d (followup A), the bare hinge bam_rack_twin.schedule build --replay wrote for CAN 11's schedule 581ffd3e"
+  },
+  "record": {
+    "path": "/home/bam/bam_ws/src/dev/bam_rack_twin/records/one-dof-test-rack/deployment.json",
+    "component": "can11",
+    "station": 11
+  },
+  "components": [
+    {
+      "id": "rack",
+      "type": "deployment",
+      "title": "One Dof Test Rack",
+      "parent": null
+    },
+    {
+      "id": "can11",
+      "type": "moteus_servo",
+      "title": "CAN 11 servo (JMC60 plate link, tags 8-12)",
+      "parent": "rack",
+      "binds": {
+        "joint": "can11_hinge",
+        "station": 11
+      }
+    },
+    {
+      "id": "can11_motor",
+      "type": "motor",
+      "title": "JMC 60ASM200 (inferred from Kv/R)",
+      "parent": "can11",
+      "binds": {}
+    },
+    {
+      "id": "can11_gearbox",
+      "type": "gearbox",
+      "title": "StepperOnline AD60-G10-D14, 10:1 planetary",
+      "parent": "can11",
+      "binds": {}
+    },
+    {
+      "id": "can11_driver",
+      "type": "driver",
+      "title": "moteus r4.11, firmware 1.1.2",
+      "parent": "can11",
+      "binds": {}
+    },
+    {
+      "id": "can11_encoder",
+      "type": "encoder",
+      "title": "the board's motor encoder (output frame through 10:1)",
+      "parent": "can11",
+      "binds": {
+        "joint": "can11_hinge"
+      }
+    },
+    {
+      "id": "link_camera",
+      "type": "d405",
+      "title": "D405 on tags 8-12 (the link angle after the gear)",
+      "parent": "rack",
+      "binds": {
+        "observes": "can11_hinge_link"
+      }
+    }
+  ],
+  "parameters": {
+    "can11.gravity_nm": {
+      "unit": "N·m",
+      "from": "bam_rack_twin:describe_station:gravity_nm"
+    },
+    "can11.gravity_bottom_rad": {
+      "unit": "rad",
+      "from": "bam_rack_twin:describe_station:gravity_bottom_rad"
+    },
+    "can11.armature_kg_m2": {
+      "unit": "kg·m²",
+      "from": "bam_rack_twin:describe_station:inertia_kg_m2",
+      "note": "the whole axis inertia of the bare hinge (TwinParameters.armature_kg_m2)"
+    },
+    "can11.frictionloss_nm": {
+      "unit": "N·m",
+      "from": "bam_rack_twin:describe_station:coulomb_nm",
+      "note": "the friction constraint's level: the Coulomb level in M2, the static level Fs in M3 and up"
+    },
+    "can11.damping_nm_s_rad": {
+      "unit": "N·m·s/rad",
+      "from": "mjcf:joint:can11_hinge:damping"
+    },
+    "can11.friction_stribeck_drop_nm": {
+      "unit": "N·m",
+      "value": 0.0,
+      "source": "the description gives no Stribeck curve: M2 at its datasheet values has none"
+    },
+    "can11.friction_stribeck_speed_rad_s": {
+      "unit": "rad/s",
+      "value": null,
+      "source": "no Stribeck curve in the description"
+    },
+    "can11.backlash_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "a rigid twin: the AD60-G10 datasheet bounds backlash (<= 15 arcmin) but states no value"
+    }
+  },
+  "known": {
+    "note": "configuration the description states and identification does not touch (the board's own numbers, the gear split)",
+    "board_pid": "bam_rack_twin.stations: CAN 11's output_pid() (kp 200, ki 16000, kd 4 N.m/rev, ilimit 0.5), conf get 2026-10-29",
+    "board_knobs": "the twin of record's current_loop_hz 200, command_delay_s 0.001, current_limit (0.732 N.m/A, 4 A), hard friction solref",
+    "rotor_inertia_fraction": 0.022,
+    "rotor_inertia_fraction_source": "the record's inertia prior terms: JMC 60ASM200 rotor 1.83e-3 + gearbox input 1.3e-3 kg.m^2 at the output, of a ~0.14 kg.m^2 axis",
+    "output_friction_fraction": 0.5,
+    "output_friction_fraction_source": "assumed: which side of the gap carries the friction no measurement has said (bam_rack_twin twin.py)"
+  },
+  "sensors": [
+    {
+      "id": "encoder",
+      "kind": "joint_state",
+      "on": "can11_hinge",
+      "measures": "motor-side angle and speed at the output (what the board reports)"
+    },
+    {
+      "id": "torque",
+      "kind": "joint_effort",
+      "on": "can11_hinge",
+      "measures": "the firmware's torque (q-current x Kt), what moteus reports"
+    },
+    {
+      "id": "link_camera",
+      "kind": "camera_angle",
+      "on": "can11_hinge_link",
+      "measures": "the link angle after the gear, from tags 8-12 (D405)"
+    }
+  ],
+  "schedule": {
+    "source": "bam_rack_twin.schedule.build_schedule(describe_station(11), seed=0)",
+    "use": "every FB run of the train split identifies; every FB run of the held-out split (H1 excite at kp x 0.5, H2 operate seeds 3-5) scores",
+    "frozen": "/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/schedule.json",
+    "frozen_digest": "581ffd3e61e5b1fc"
+  },
+  "monitoring": {
+    "check_every_h": 12,
+    "horizon_h": 480,
+    "early_life_h": 168,
+    "check": "the held-out H2 operate runs under FB (pickplace, cycle, jog, sweep x seeds 3-5, 77.7 s): the motions the joint makes all day",
+    "fidelity": "link angle (the camera on tags 8-12) twin vs real, RMS over the check, divided by the floor (two noise draws of one run)",
+    "threshold": "settable (type_cards DRIFT_THRESHOLD is 1.25); here the drift ratio at which live fidelity crosses TWINNED_LIMIT x floor, so the warning means the twin has stopped being twinned",
+    "wear": "the backlash carries a linear wear law in deployment hours (type_cards Wear); its rate is fitted on the early-life checks"
+  }
+}

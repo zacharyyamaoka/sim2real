@@ -1,0 +1,102 @@
+{
+  "schema": "sysid.acceptance/1",
+  "written": "2026-11-05, before any identification code: the oracle's ruler (Zach, PROJECT - Sim2Real, Proposed Work Flow Nov 5 2026: 'if we assumed the simulator data was real, we should check that our system ID can match the real values')",
+  "rule": "a parameter passes when |recovered - true| <= tol (abs) or <= tol x |true| (rel); every gated parameter's nominal value must FAIL its own tolerance, so a fit that returns the description unchanged fails; every hidden value is gated; a metric passes when before / after >= its factor on the held-out split. Tolerances are what the use needs (feed-forward, a pick on a moving belt, a 5 mm tool budget), not what a method happens to reach.",
+  "examples": {
+    "pendulum_can11": {
+      "parameters": {
+        "can11.gravity_nm": ["rel", 0.02],
+        "can11.gravity_bottom_rad": ["abs", 0.005],
+        "can11.armature_kg_m2": ["rel", 0.05],
+        "can11.frictionloss_nm": ["rel", 0.1],
+        "can11.friction_stribeck_drop_nm": ["rel", 0.25],
+        "can11.friction_stribeck_speed_rad_s": ["rel", 0.3],
+        "can11.damping_nm_s_rad": ["rel", 0.2],
+        "can11.backlash_rad": ["rel", 0.1]
+      },
+      "metrics": {"held_out_link_fidelity": 4.0},
+      "selected_rung": "M4"
+    },
+    "ur5e": {
+      "parameters": {
+        "*.zero_offset_rad": ["abs", 0.0005],
+        "*.armature_kg_m2": ["rel", 0.1],
+        "*.damping_nm_s_rad": ["rel", 0.2],
+        "*.frictionloss_nm": ["rel", 0.1]
+      },
+      "metrics": {"held_out_tool_position_mm": 5.0, "held_out_torque_rms_nm": 3.0}
+    },
+    "ur5e_2f85": {
+      "parameters": {
+        "*.zero_offset_rad": ["abs", 0.0005],
+        "*.armature_kg_m2": ["rel", 0.1],
+        "*.damping_nm_s_rad": ["rel", 0.2],
+        "*.frictionloss_nm": ["rel", 0.1],
+        "tool.mass_kg": ["rel", 0.05],
+        "tool.com_z_m": ["abs", 0.003],
+        "tool.tcp_x_m": ["abs", 0.0005],
+        "tool.tcp_z_m": ["abs", 0.001],
+        "gripper.actuator_gain": ["rel", 0.05],
+        "gripper.damping": ["rel", 0.15]
+      },
+      "metrics": {"held_out_tcp_position_mm": 5.0, "held_out_torque_rms_nm": 3.0, "held_out_finger_rms_mrad": 3.0}
+    },
+    "conveyor": {
+      "parameters": {
+        "belt.roller_radius_m": ["rel", 0.001],
+        "belt.moving_mass_kg": ["rel", 0.1],
+        "belt.viscous_drag_n_s_m": ["rel", 0.15],
+        "belt.coulomb_drag_n": ["rel", 0.1]
+      },
+      "metrics": {"held_out_belt_position_mm": 5.0}
+    },
+    "dual_arm_cell": {
+      "parameters": {
+        "*_mount.d?_m": ["abs", 0.001],
+        "*_mount.r?_rad": ["abs", 0.001],
+        "head_camera.d?_m": ["abs", 0.002],
+        "head_camera.r?_rad": ["abs", 0.002],
+        "head_camera.f?_px": ["rel", 0.005],
+        "head_camera.c?_px": ["abs", 2.0]
+      },
+      "metrics": {"held_out_reprojection_px": 5.0, "held_out_pick_point_mm": 4.0}
+    },
+    "linescan_cell": {
+      "parameters": {
+        "hsi.focal_px": ["rel", 0.01],
+        "hsi.principal_px": ["abs", 1.0],
+        "hsi.height_m": ["abs", 0.003],
+        "hsi.across_offset_m": ["abs", 0.001],
+        "hsi.scan_line_x_m": ["abs", 0.001],
+        "hsi.scan_yaw_rad": ["abs", 0.002],
+        "hsi.gain_b*": ["rel", 0.02],
+        "hsi.dark_b*": ["abs", 2.0],
+        "rgbd.f?_px": ["rel", 0.005],
+        "rgbd.c?_px": ["abs", 2.0],
+        "rgbd.d?_m": ["abs", 0.002],
+        "rgbd.r?_rad": ["abs", 0.002],
+        "rgbd.depth_scale": ["rel", 0.002],
+        "rgbd.depth_offset_m": ["abs", 0.001]
+      },
+      "metrics": {"held_out_spectral_angle_mrad": 5.0, "held_out_scan_position_mm": 5.0, "held_out_cloud_mm": 5.0}
+    }
+  },
+  "drift": {
+    "backlash_wear": {
+      "example": "pendulum_can11",
+      "rate_rel": 0.1,
+      "crossing_hour_rel": 0.15,
+      "lead_h_min": 48,
+      "detector_within_checks": 1,
+      "recalibrated_ratio_max": 1.1
+    },
+    "camera_knock": {
+      "example": "dual_arm_cell",
+      "false_alarms_max": 0,
+      "detect_within_checks": 1,
+      "recalibrated_ratio_max": 1.15,
+      "shift_translation_abs_m": 0.001,
+      "shift_rotation_abs_rad": 0.001
+    }
+  }
+}

@@ -1,0 +1,349 @@
+{
+  "schema": "sysid.description/1",
+  "id": "dual_arm_cell",
+  "title": "Two arms over the belt",
+  "subtitle": "2 x UR5e + 2F-85, humanoid mount, head camera",
+  "summary": "A humanoid-style sorting cell: two UR5e + 2F-85 mounted on the sides of a torso at shoulder height (each arm's base axis pointing outward), the conveyor from the conveyor example in front, and a D435-class colour camera in the head looking down at the belt. The arms come calibrated from the bench (the UR5e + 2F-85 example); this is the deployment calibration: where each arm is really mounted, and the head camera's intrinsics and pose, from tags on the grippers and on the belt.",
+  "model": {
+    "format": "mjcf-composed",
+    "source": "Menagerie ur5e + 2f85 (bam_arm.cell's attach) x 2, sysid's conveyor.xml, one MuJoCo camera",
+    "parts": [
+      {
+        "id": "conveyor",
+        "path": "sysid/examples/conveyor/conveyor.xml",
+        "prefix": "conv_",
+        "pos": [
+          0.55,
+          0.0,
+          0.0
+        ],
+        "rpy": [
+          0.0,
+          0.0,
+          1.5707963267948966
+        ]
+      },
+      {
+        "id": "left_arm",
+        "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",
+        "prefix": "left_",
+        "pos": [
+          0.0,
+          0.2,
+          1.3
+        ],
+        "rpy": [
+          -1.5707963267948966,
+          0.0,
+          0.0
+        ],
+        "attach": [
+          {
+            "site": "attachment_site",
+            "path": "/home/bam/.cache/like_keras/mujoco_menagerie/robotiq_2f85/2f85.xml",
+            "body": "base_mount",
+            "prefix": "grip_"
+          }
+        ]
+      },
+      {
+        "id": "right_arm",
+        "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",
+        "prefix": "right_",
+        "pos": [
+          0.0,
+          -0.2,
+          1.3
+        ],
+        "rpy": [
+          1.5707963267948966,
+          0.0,
+          0.0
+        ],
+        "attach": [
+          {
+            "site": "attachment_site",
+            "path": "/home/bam/.cache/like_keras/mujoco_menagerie/robotiq_2f85/2f85.xml",
+            "body": "base_mount",
+            "prefix": "grip_"
+          }
+        ]
+      }
+    ],
+    "bodies": [
+      {
+        "name": "torso",
+        "pos": [
+          -0.12,
+          0.0,
+          0.7
+        ],
+        "box": [
+          0.1,
+          0.16,
+          0.7
+        ]
+      }
+    ],
+    "cameras": [
+      {
+        "name": "head_camera",
+        "pos": [
+          0.1,
+          0.0,
+          1.55
+        ],
+        "look_at": [
+          0.55,
+          0.0,
+          0.72
+        ],
+        "fovy_deg": 42.5,
+        "resolution": [
+          640,
+          480
+        ],
+        "source": "a D435 colour stream at 640 x 480 (intel_rgbd's sensor contract), as a MuJoCo fovy camera"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "cell",
+      "type": "deployment",
+      "title": "dual-arm sorting cell",
+      "parent": null
+    },
+    {
+      "id": "torso",
+      "type": "mount",
+      "title": "torso (the two shoulder mounts and the head)",
+      "parent": "cell",
+      "binds": {
+        "body": "torso"
+      }
+    },
+    {
+      "id": "left_arm",
+      "type": "arm + gripper",
+      "title": "left UR5e + 2F-85",
+      "parent": "torso",
+      "binds": {
+        "base_body": "left_base",
+        "marker_body": "left_grip_base"
+      }
+    },
+    {
+      "id": "right_arm",
+      "type": "arm + gripper",
+      "title": "right UR5e + 2F-85",
+      "parent": "torso",
+      "binds": {
+        "base_body": "right_base",
+        "marker_body": "right_grip_base"
+      }
+    },
+    {
+      "id": "conveyor",
+      "type": "conveyor belt",
+      "title": "belt conveyor (calibrated in the conveyor example)",
+      "parent": "cell",
+      "binds": {
+        "joint": "conv_belt"
+      }
+    },
+    {
+      "id": "head_camera",
+      "type": "rgb camera",
+      "title": "head camera (D435-class colour, 640 x 480)",
+      "parent": "torso",
+      "binds": {
+        "camera": "head_camera"
+      }
+    }
+  ],
+  "parameters": {
+    "left_mount.dx_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's left mount pose (a correction of 0 = as drawn)"
+    },
+    "left_mount.dy_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's left mount pose (a correction of 0 = as drawn)"
+    },
+    "left_mount.dz_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's left mount pose (a correction of 0 = as drawn)"
+    },
+    "left_mount.rx_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's left mount pose (a correction of 0 = as drawn)"
+    },
+    "left_mount.ry_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's left mount pose (a correction of 0 = as drawn)"
+    },
+    "left_mount.rz_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's left mount pose (a correction of 0 = as drawn)"
+    },
+    "right_mount.dx_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's right mount pose (a correction of 0 = as drawn)"
+    },
+    "right_mount.dy_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's right mount pose (a correction of 0 = as drawn)"
+    },
+    "right_mount.dz_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's right mount pose (a correction of 0 = as drawn)"
+    },
+    "right_mount.rx_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's right mount pose (a correction of 0 = as drawn)"
+    },
+    "right_mount.ry_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's right mount pose (a correction of 0 = as drawn)"
+    },
+    "right_mount.rz_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's right mount pose (a correction of 0 = as drawn)"
+    },
+    "head_camera.dx_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's head camera pose (a correction of 0 = as drawn)"
+    },
+    "head_camera.dy_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's head camera pose (a correction of 0 = as drawn)"
+    },
+    "head_camera.dz_m": {
+      "unit": "m",
+      "value": 0.0,
+      "source": "the description's head camera pose (a correction of 0 = as drawn)"
+    },
+    "head_camera.rx_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's head camera pose (a correction of 0 = as drawn)"
+    },
+    "head_camera.ry_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's head camera pose (a correction of 0 = as drawn)"
+    },
+    "head_camera.rz_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's head camera pose (a correction of 0 = as drawn)"
+    },
+    "head_camera.fx_px": {
+      "unit": "px",
+      "from": "camera:head_camera:fx"
+    },
+    "head_camera.fy_px": {
+      "unit": "px",
+      "from": "camera:head_camera:fy"
+    },
+    "head_camera.cx_px": {
+      "unit": "px",
+      "from": "camera:head_camera:cx"
+    },
+    "head_camera.cy_px": {
+      "unit": "px",
+      "from": "camera:head_camera:cy"
+    }
+  },
+  "known": {
+    "note": "the arms' joint zeros and TCPs (bench-calibrated, the UR5e + 2F-85 example), the conveyor's radius (the conveyor example) and the tags' printed geometry",
+    "pose_correction": "a pose correction is a world-frame translation (dx, dy, dz) and rotation vector (rx, ry, rz) applied to the drawn pose: R = exp([r]) R_drawn",
+    "gripper_tag": {
+      "size_m": 0.04,
+      "offset_m": [
+        0.0,
+        0.0,
+        0.07
+      ],
+      "note": "a 40 mm tag on the gripper body, 70 mm out along the tool axis, facing the tool's +x"
+    },
+    "belt_tags": {
+      "size_m": 0.06,
+      "positions_m": [
+        [
+          -0.6,
+          -0.12
+        ],
+        [
+          -0.3,
+          0.1
+        ],
+        [
+          0.0,
+          -0.05
+        ],
+        [
+          0.3,
+          0.12
+        ],
+        [
+          0.6,
+          -0.1
+        ],
+        [
+          0.45,
+          0.0
+        ]
+      ],
+      "note": "tags printed on the belt (belt frame: x along travel, y across)"
+    }
+  },
+  "sensors": [
+    {
+      "id": "head_camera",
+      "kind": "camera",
+      "on": "head_camera",
+      "measures": "tag corner pixels (ArUco detections)"
+    },
+    {
+      "id": "arm_encoders",
+      "kind": "joint_state",
+      "on": "both arms",
+      "measures": "joint angles (bench-calibrated)"
+    },
+    {
+      "id": "belt_encoder",
+      "kind": "joint_state",
+      "on": "conv_drive_roller",
+      "measures": "belt travel (calibrated radius)"
+    }
+  ],
+  "schedule": {
+    "arm_poses_train": 30,
+    "arm_poses_held_out": 15,
+    "belt_positions_train": 10,
+    "belt_positions_held_out": 6,
+    "pixel_noise_note": "corner detection",
+    "seed": 61
+  },
+  "monitoring": {
+    "check_every_h": 12,
+    "horizon_h": 480,
+    "check": "the belt tags at 4 belt positions each check (the belt runs past the head camera all day)"
+  }
+}

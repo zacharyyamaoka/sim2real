@@ -1,0 +1,48 @@
+{
+  "schema": "sysid.world/1",
+  "example": "dual_arm_cell",
+  "what": "The hidden truth this example's simulator plays as the real hardware. Only the simulator that makes the measurements reads it (the example's RealWorld); identification never does (sysid/tests/test_oracle.py holds the identify functions to that), and it starts from the description's nominal values.",
+  "seed": 6101,
+  "truth": {
+    "left_mount.dx_m": 0.004,
+    "left_mount.dy_m": -0.006,
+    "left_mount.dz_m": 0.003,
+    "left_mount.rx_rad": 0.012,
+    "left_mount.ry_rad": -0.009,
+    "left_mount.rz_rad": 0.015,
+    "right_mount.dx_m": -0.005,
+    "right_mount.dy_m": 0.004,
+    "right_mount.dz_m": -0.002,
+    "right_mount.rx_rad": -0.01,
+    "right_mount.ry_rad": 0.014,
+    "right_mount.rz_rad": -0.008,
+    "head_camera.dx_m": 0.012,
+    "head_camera.dy_m": -0.008,
+    "head_camera.dz_m": 0.006,
+    "head_camera.rx_rad": 0.02,
+    "head_camera.ry_rad": -0.015,
+    "head_camera.rz_rad": 0.01,
+    "head_camera.fx_px": 629.502,
+    "head_camera.fy_px": 628.268,
+    "head_camera.cx_px": 326.0,
+    "head_camera.cy_px": 235.0
+  },
+  "structure": "the composed cell with each arm's mount and the head camera off their drawn poses and the camera's lens off its nominal K",
+  "noise": {
+    "pixel_px": 0.3
+  },
+  "drift": {
+    "camera_knock": {
+      "hour": 300.0,
+      "shift": {
+        "dx_m": 0.003,
+        "dy_m": -0.002,
+        "dz_m": 0.001,
+        "rx_rad": 0.0,
+        "ry_rad": 0.014,
+        "rz_rad": 0.004
+      },
+      "what": "the head camera knocked out of pose (a bump on its bracket) at hour 300"
+    }
+  }
+}

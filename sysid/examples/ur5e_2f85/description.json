@@ -1,0 +1,305 @@
+{
+  "schema": "sysid.description/1",
+  "id": "ur5e_2f85",
+  "title": "6-DOF UR arm with gripper",
+  "subtitle": "UR5e + Robotiq 2F-85",
+  "summary": "Menagerie's UR5e with Menagerie's Robotiq 2F-85 on its flange, composed the way bam_arm.cell composes them (attach at attachment_site, prefix grip_). Beyond the arm's joint zeros and joint friction, calibration finds the tool the arm carries (the gripper's mass and centre of mass, the TCP at the pads) and the gripper's drive (the force per command count and the closing damping, which set its width map).",
+  "model": {
+    "format": "mjcf",
+    "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",
+    "source": "MuJoCo Menagerie universal_robots_ur5e + robotiq_2f85 @ 71f066a",
+    "attach": [
+      {
+        "site": "attachment_site",
+        "path": "/home/bam/.cache/like_keras/mujoco_menagerie/robotiq_2f85/2f85.xml",
+        "body": "base_mount",
+        "prefix": "grip_",
+        "source": "bam_ws src/core/mdp/env/sim/bam_arm/bam_arm/cell.py ArmCell._compose (the same attach call)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "cell",
+      "type": "deployment",
+      "title": "bench cell",
+      "parent": null
+    },
+    {
+      "id": "ur5e_2f85",
+      "type": "arm + gripper",
+      "title": "UR5e + 2F-85",
+      "parent": "cell",
+      "binds": {
+        "tcp_site": "grip_pinch"
+      }
+    },
+    {
+      "id": "ur5e",
+      "type": "ur5e",
+      "title": "UR5e arm",
+      "parent": "ur5e_2f85",
+      "binds": {
+        "base_body": "base",
+        "flange_site": "attachment_site"
+      }
+    },
+    {
+      "id": "shoulder_pan",
+      "type": "integrated servo",
+      "title": "shoulder pan joint (harmonic drive servo)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "shoulder_pan_joint",
+        "actuator": "shoulder_pan"
+      }
+    },
+    {
+      "id": "shoulder_lift",
+      "type": "integrated servo",
+      "title": "shoulder lift joint (harmonic drive servo)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "shoulder_lift_joint",
+        "actuator": "shoulder_lift"
+      }
+    },
+    {
+      "id": "elbow",
+      "type": "integrated servo",
+      "title": "elbow joint (harmonic drive servo)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "elbow_joint",
+        "actuator": "elbow"
+      }
+    },
+    {
+      "id": "wrist_1",
+      "type": "integrated servo",
+      "title": "wrist 1 joint (harmonic drive servo)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "wrist_1_joint",
+        "actuator": "wrist_1"
+      }
+    },
+    {
+      "id": "wrist_2",
+      "type": "integrated servo",
+      "title": "wrist 2 joint (harmonic drive servo)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "wrist_2_joint",
+        "actuator": "wrist_2"
+      }
+    },
+    {
+      "id": "wrist_3",
+      "type": "integrated servo",
+      "title": "wrist 3 joint (harmonic drive servo)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "wrist_3_joint",
+        "actuator": "wrist_3"
+      }
+    },
+    {
+      "id": "gripper",
+      "type": "gripper",
+      "title": "Robotiq 2F-85",
+      "parent": "ur5e_2f85",
+      "binds": {
+        "actuator": "grip_fingers_actuator",
+        "joint": "grip_right_driver_joint",
+        "body": "grip_base"
+      }
+    },
+    {
+      "id": "tool",
+      "type": "tool",
+      "title": "the tool the arm carries (gripper + coupling) and its TCP",
+      "parent": "ur5e_2f85",
+      "binds": {
+        "body": "grip_base",
+        "site": "grip_pinch"
+      }
+    }
+  ],
+  "parameters": {
+    "shoulder_pan.zero_offset_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's joint zeros: no per-robot UR calibration file is given"
+    },
+    "shoulder_pan.armature_kg_m2": {
+      "unit": "kg·m²",
+      "from": "mjcf:joint:shoulder_pan_joint:armature"
+    },
+    "shoulder_pan.damping_nm_s_rad": {
+      "unit": "N·m·s/rad",
+      "from": "mjcf:joint:shoulder_pan_joint:damping"
+    },
+    "shoulder_pan.frictionloss_nm": {
+      "unit": "N·m",
+      "from": "mjcf:joint:shoulder_pan_joint:frictionloss"
+    },
+    "shoulder_lift.zero_offset_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's joint zeros: no per-robot UR calibration file is given"
+    },
+    "shoulder_lift.armature_kg_m2": {
+      "unit": "kg·m²",
+      "from": "mjcf:joint:shoulder_lift_joint:armature"
+    },
+    "shoulder_lift.damping_nm_s_rad": {
+      "unit": "N·m·s/rad",
+      "from": "mjcf:joint:shoulder_lift_joint:damping"
+    },
+    "shoulder_lift.frictionloss_nm": {
+      "unit": "N·m",
+      "from": "mjcf:joint:shoulder_lift_joint:frictionloss"
+    },
+    "elbow.zero_offset_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's joint zeros: no per-robot UR calibration file is given"
+    },
+    "elbow.armature_kg_m2": {
+      "unit": "kg·m²",
+      "from": "mjcf:joint:elbow_joint:armature"
+    },
+    "elbow.damping_nm_s_rad": {
+      "unit": "N·m·s/rad",
+      "from": "mjcf:joint:elbow_joint:damping"
+    },
+    "elbow.frictionloss_nm": {
+      "unit": "N·m",
+      "from": "mjcf:joint:elbow_joint:frictionloss"
+    },
+    "wrist_1.zero_offset_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's joint zeros: no per-robot UR calibration file is given"
+    },
+    "wrist_1.armature_kg_m2": {
+      "unit": "kg·m²",
+      "from": "mjcf:joint:wrist_1_joint:armature"
+    },
+    "wrist_1.damping_nm_s_rad": {
+      "unit": "N·m·s/rad",
+      "from": "mjcf:joint:wrist_1_joint:damping"
+    },
+    "wrist_1.frictionloss_nm": {
+      "unit": "N·m",
+      "from": "mjcf:joint:wrist_1_joint:frictionloss"
+    },
+    "wrist_2.zero_offset_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's joint zeros: no per-robot UR calibration file is given"
+    },
+    "wrist_2.armature_kg_m2": {
+      "unit": "kg·m²",
+      "from": "mjcf:joint:wrist_2_joint:armature"
+    },
+    "wrist_2.damping_nm_s_rad": {
+      "unit": "N·m·s/rad",
+      "from": "mjcf:joint:wrist_2_joint:damping"
+    },
+    "wrist_2.frictionloss_nm": {
+      "unit": "N·m",
+      "from": "mjcf:joint:wrist_2_joint:frictionloss"
+    },
+    "wrist_3.zero_offset_rad": {
+      "unit": "rad",
+      "value": 0.0,
+      "source": "the description's joint zeros: no per-robot UR calibration file is given"
+    },
+    "wrist_3.armature_kg_m2": {
+      "unit": "kg·m²",
+      "from": "mjcf:joint:wrist_3_joint:armature"
+    },
+    "wrist_3.damping_nm_s_rad": {
+      "unit": "N·m·s/rad",
+      "from": "mjcf:joint:wrist_3_joint:damping"
+    },
+    "wrist_3.frictionloss_nm": {
+      "unit": "N·m",
+      "from": "mjcf:joint:wrist_3_joint:frictionloss"
+    },
+    "tool.mass_kg": {
+      "unit": "kg",
+      "from": "mjcf:body:grip_base:mass"
+    },
+    "tool.com_z_m": {
+      "unit": "m",
+      "from": "mjcf:body:grip_base:ipos:2"
+    },
+    "tool.tcp_x_m": {
+      "unit": "m",
+      "from": "mjcf:site:grip_pinch:pos:0"
+    },
+    "tool.tcp_z_m": {
+      "unit": "m",
+      "from": "mjcf:site:grip_pinch:pos:2"
+    },
+    "gripper.actuator_gain": {
+      "unit": "N per count",
+      "from": "mjcf:actuator:grip_fingers_actuator:gainprm:0"
+    },
+    "gripper.damping": {
+      "unit": "N·s/m",
+      "from": "mjcf:actuator:grip_fingers_actuator:biasprm:2",
+      "scale": -1.0
+    }
+  },
+  "known": {
+    "note": "the arm's position servos as in the UR5e example; the gripper's position spring (biasprm[1] = -100) and its force limit (5 N) as Menagerie states them"
+  },
+  "sensors": [
+    {
+      "id": "joint_encoders",
+      "kind": "joint_state",
+      "on": "the six arm joints",
+      "measures": "joint angle (the encoder, offset from the link by the joint zero) and speed"
+    },
+    {
+      "id": "joint_torque",
+      "kind": "joint_effort",
+      "on": "the six arm joints",
+      "measures": "motor torque from current (what the UR controller reports)"
+    },
+    {
+      "id": "tool_tracker",
+      "kind": "pose_tracker",
+      "on": "attachment_site",
+      "measures": "the flange pose from a tag on the flange, seen by a calibrated external camera"
+    },
+    {
+      "id": "gripper_position",
+      "kind": "joint_state",
+      "on": "grip_right_driver_joint",
+      "measures": "the finger drive's angle (the 2F-85 reports its position)"
+    },
+    {
+      "id": "tcp_tracker",
+      "kind": "point_tracker",
+      "on": "grip_pinch",
+      "measures": "a marker held between the pads, seen by the same external camera"
+    }
+  ],
+  "schedule": {
+    "poses_train": 40,
+    "poses_held_out": 20,
+    "settle_s": 1.5,
+    "excitations_train": 4,
+    "excitations_held_out": 2,
+    "excitation": "Fourier series per joint (Swevers 1997): 5 harmonics of 0.1 Hz, 10 s, inside the joint and speed limits",
+    "rate_hz": 500,
+    "gripper_train": "8 s of command steps (0, 64, 128, 192, 255 counts and back), twice",
+    "gripper_held_out": "8 s of other levels (40, 100, 170, 230)",
+    "seed": 52
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "schema": "sysid.description/1",
+  "id": "conveyor",
+  "title": "Conveyor belt",
+  "subtitle": "1.6 m belt, VFD drive",
+  "summary": "A 1.6 x 0.55 m belt (bam_robot_descriptions' conveyor layout object) on a VFD-driven drive roller with an encoder. The description says the roller is 50 mm in radius and the belt carries 12 kg with light drag. Calibration finds the roller's effective radius (what turns encoder counts into belt millimetres, the number a pick on a moving belt depends on), the moving mass and the belt's viscous and Coulomb drag.",
+  "model": {
+    "format": "mjcf",
+    "path": "sysid/examples/conveyor/conveyor.xml",
+    "source": "sysid/examples/conveyor/conveyor.xml (new: no dynamic conveyor exists in bam_ws; dimensions from bam_robot_descriptions scene_authoring's conveyor)"
+  },
+  "components": [
+    {
+      "id": "line",
+      "type": "deployment",
+      "title": "sorting line",
+      "parent": null
+    },
+    {
+      "id": "conveyor",
+      "type": "conveyor belt",
+      "title": "belt conveyor",
+      "parent": "line",
+      "binds": {
+        "joint": "belt",
+        "equality": "belt_drive"
+      }
+    },
+    {
+      "id": "vfd",
+      "type": "driver",
+      "title": "VFD + gearmotor (velocity servo on the drive roller)",
+      "parent": "conveyor",
+      "binds": {
+        "actuator": "vfd"
+      }
+    },
+    {
+      "id": "roller_encoder",
+      "type": "encoder",
+      "title": "drive-roller encoder",
+      "parent": "conveyor",
+      "binds": {
+        "joint": "drive_roller"
+      }
+    }
+  ],
+  "parameters": {
+    "belt.roller_radius_m": {
+      "unit": "m",
+      "from": "mjcf:equality:belt_drive:data:1"
+    },
+    "belt.moving_mass_kg": {
+      "unit": "kg",
+      "from": "mjcf:body:belt:mass"
+    },
+    "belt.viscous_drag_n_s_m": {
+      "unit": "N·s/m",
+      "from": "mjcf:joint:belt:damping"
+    },
+    "belt.coulomb_drag_n": {
+      "unit": "N",
+      "from": "mjcf:joint:belt:frictionloss"
+    }
+  },
+  "known": {
+    "note": "the VFD's speed loop (kv 40 N.m.s/rad on the roller, 25 N.m limit) and the roller's own inertia, as the description states; the VFD is set in belt speed through the NOMINAL radius"
+  },
+  "sensors": [
+    {
+      "id": "roller_encoder",
+      "kind": "joint_state",
+      "on": "drive_roller",
+      "measures": "roller angle"
+    },
+    {
+      "id": "belt_tracker",
+      "kind": "surface_tracker",
+      "on": "belt_marker",
+      "measures": "belt surface travel (a camera following a mark on the belt)"
+    }
+  ],
+  "schedule": {
+    "profiles_train": 6,
+    "profiles_held_out": 3,
+    "profile_s": 12.0,
+    "levels_m_s": [
+      0.1,
+      0.2,
+      0.3,
+      0.45,
+      0.6
+    ],
+    "rate_hz": 500,
+    "tracker_hz": 100,
+    "seed": 41
+  }
+}
