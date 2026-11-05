@@ -536,11 +536,20 @@ def run_set_checks(data: Path, out: Path) -> None:
     for r in stamped:
         sets.setdefault(r["run_set"], []).append(r)
     check(bool(sets) and all("· schedule " in name for name in sets), f"every schedule-stamped run sits in a named run set ({sorted(sets)})")
-    for name, members in sets.items():
-        session = Path(members[0]["npz"]).parent.parent
+    # WHY per session, not per set (2026-11-05, CAN 11's integral study): one session can hold several sets, one per (schedule digest, mode)
+    # its runs carry (the study ran ff_fb and ff_weakfb steps of 2f32ddbc and sweeps stamped with its own 818bd730), so the sets of a session
+    # together hold exactly its completed runs, and each run sits in the set its own stamp names
+    by_session: dict[Path, list[dict]] = {}
+    for r in stamped:
+        by_session.setdefault(Path(r["npz"]).parent.parent, []).append(r)
+    for session, members in by_session.items():
         steps = [st for st in json.loads((session / "session.json").read_text())["steps"] if st["kind"] != "pause" and st["status"] == "complete"]
         check(len(members) == len(steps) and {r["npz"] for r in members} == {str(session / f) for st in steps for f in st["files"] if f.endswith(".npz")},
-              f"run set {name!r} holds exactly its session's {len(steps)} completed runs ({len(members)})")
+              f"session {session.name}'s run sets hold exactly its {len(steps)} completed runs ({len(members)} in {len({r['run_set'] for r in members})} sets)")
+        stamps = {r["npz"]: json.loads(Path(r["npz"]).with_suffix(".json").read_text())["schedule"] for r in members}
+        check(all(r["run_set"].split(" · ")[1] == f"schedule {stamps[r['npz']]['digest'][:8]}" and r["run_set"].split(" · ")[2] == stamps[r["npz"]]["mode"]
+                  for r in members), f"session {session.name}: every run sits in the set its own stamp names (digest and mode)")
+    for name, members in sets.items():
         played = [r for r in members if r["models"]]
         check(len(played) == len(members) and all("twin of record" in r["situations"] for r in played),
               f"run set {name!r}: every run plays the twin of record beside real ({len(played)} of {len(members)})")
