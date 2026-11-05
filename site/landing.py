@@ -133,7 +133,7 @@ def coverage_line(doc: dict) -> str:
     verdict = (f'<span class="s2r-ex-{"ok" if pct >= gate else "no"}">({"≥" if pct >= gate else "<"} the card\'s {gate:g} % gate)</span>' if own
                else '<span class="s2r-ex-rule" title="sysid\'s own coverage rule; the card\'s gate is on its own axes">(sysid\'s rule)</span>')
     return (f'<div class="s2r-ex-cov" data-coverage="{pct}"><div class="s2r-ex-bar"><span style="width:{min(100.0, pct):.1f}%"></span>{bar}</div>'
-            f'<span>train <b>{num(pct, 3)} %</b> of {train["reachable"]:,} cells {verdict}'
+            f'<span>train <b>{num(pct, 3)} %</b> of {train["reachable"]:,} {"reachable " if cov.get("reachable_mask") else ""}cells {verdict}'
             f' · held out {num(cov["held_out"]["pct"], 3)} %</span></div>')
 
 

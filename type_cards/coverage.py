@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import bisect
 import itertools
+import json
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 
@@ -201,11 +203,32 @@ TOOL_BOX_M = ((-0.85, 0.85), (-0.85, 0.85), (-0.2, 1.0))  # UR5e's reach (850 mm
 TOOL_VOXEL_M = 0.1
 
 
-def arm_coverage(points: Sequence[Mapping[str, Any]], limits: Sequence[tuple[float, float]] = UR5E_LIMITS) -> CoverageResult:
+ARM_MOUNTS = ("ur5e_floor", "ur5e_2f85_floor")  # type_cards/arm_reachable/<mount>.json, written by tools/arm_reachable.py
+DEFAULT_ARM_MOUNT = "ur5e_floor"
+ARM_REACHABLE_DIR = Path(__file__).resolve().parent / "arm_reachable"
+_ARM_MASKS: dict[str, frozenset] = {}
+
+
+def arm_reachable_cells(mount: str) -> frozenset:
+    """The joint-cube cells (index tuples) a mounted arm can be in: a collision-free configuration of the arm lies inside the cell,
+    its shoulder lift inside the span connected to home. A committed mask (4,096 bits in itertools.product order) because the rule
+    needs MuJoCo's collision check and this module is stdlib only; tools/arm_reachable.py writes it and
+    sysid/tests/test_arm_reachable_mask.py holds the file to a fresh run."""
+    if mount not in _ARM_MASKS:
+        if mount not in ARM_MOUNTS:
+            raise KeyError(f"no reachable mask for mount {mount!r}; mounts: {ARM_MOUNTS}")
+        doc = json.loads((ARM_REACHABLE_DIR / f"{mount}.json").read_text())
+        order = itertools.product(range(doc["joint_bins"]), repeat=len(doc["limits"]))
+        _ARM_MASKS[mount] = frozenset(cell for cell, bit in zip(order, doc["mask"]) if bit == "1")
+    return _ARM_MASKS[mount]
+
+
+def arm_coverage(points: Sequence[Mapping[str, Any]], limits: Sequence[tuple[float, float]] = UR5E_LIMITS, mount: str | None = None) -> CoverageResult:
     """Points {joint space: (q1..qn) rad, tool pose: (x, y, z) m or absent}: the joint cube (JOINT_BINS per joint inside the
-    limits; every cell counted reachable: the limits are a box) as the headline, the tool position's voxels (TOOL_VOXEL_M over
-    TOOL_BOX_M) as a marginal. WHY no reachable-voxel mask yet: it needs the arm's FK (pin_utils), so the voxel share is over
-    the box and says so."""
+    limits) as the headline, the tool position's voxels (TOOL_VOXEL_M over TOOL_BOX_M) as a marginal. With a `mount`
+    (ARM_MOUNTS) the cube counts over that mount's reachable cells (arm_reachable_cells), as the servo counts over its
+    joint_reachable cells; without one every cell of the box counts (the sub-assembly's, and this function before 2026-11-05).
+    WHY no reachable-voxel mask yet: it needs the arm's FK (pin_utils), so the voxel share is over the box and says so."""
     edges = [[lo + (hi - lo) * i / JOINT_BINS for i in range(JOINT_BINS + 1)] for lo, hi in limits]
     joints = [tuple(p["joint space"]) for p in points]
     tools = [tuple(p["tool pose"])[:3] for p in points if p.get("tool pose") is not None]
@@ -213,8 +236,28 @@ def arm_coverage(points: Sequence[Mapping[str, Any]], limits: Sequence[tuple[flo
     if tools:
         vox = [[lo + TOOL_VOXEL_M * i for i in range(int(round((hi - lo) / TOOL_VOXEL_M)) + 1)] for lo, hi in TOOL_BOX_M]
         tool_pct = binned(tools, vox).pct
-    return binned(joints, edges, axes={"tool pose": tool_pct, "payload": None}, unplanned=("payload",),
-                  note="tool voxels are over the reach box, not the FK-reachable set")
+    reachable = None
+    if mount is not None:
+        if tuple(tuple(x) for x in limits) != UR5E_LIMITS:
+            raise ValueError(f"mount {mount!r}'s mask is over UR5E_LIMITS, not {limits}")
+        reach = arm_reachable_cells(mount)
+
+        def reachable(centre: tuple) -> bool:
+            return tuple(bin_index(c, e) for c, e in zip(centre, edges)) in reach
+
+    note = "tool voxels are over the reach box, not the FK-reachable set"
+    return binned(joints, edges, reachable, axes={"tool pose": tool_pct, "payload": None}, unplanned=("payload",),
+                  note=note if mount is None else f"joint cells over {mount}'s reachable mask; {note}")
+
+
+def arm_6dof_coverage(points: Sequence[Mapping[str, Any]], mount: str = DEFAULT_ARM_MOUNT) -> CoverageResult:
+    """The arm_6dof card's measure: arm_coverage over a mount's reachable cells (the bare UR5e on a floor unless told)."""
+    return arm_coverage(points, UR5E_LIMITS, mount=mount)
+
+
+def arm_gripper_coverage(points: Sequence[Mapping[str, Any]], mount: str = "ur5e_2f85_floor") -> CoverageResult:
+    """The arm_6dof_gripper card's measure: the arm's, over the arm-with-gripper's reachable cells (the 2F-85 on a UR5e)."""
+    return arm_coverage(points, UR5E_LIMITS, mount=mount)
 
 
 # --- cameras: scene conditions ----------------------------------------------------------------------------------------------

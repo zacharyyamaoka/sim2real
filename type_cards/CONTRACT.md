@@ -41,6 +41,7 @@ CalibrationPackage         id group title serves code status(exists|partial|prop
 CodeHome                   repo path ref note
 Axis (coverage)            v1: name unit binning   v2: bin_size (constant cell width, else None)  marginal
 Coverage                   v1: axes rule measure robotdx plan_source   v2: gate_pct (the coverage gate, % of reachable cells)
+                           v3: reachable_mask (the committed mask the measure counts over by default, or None)
 ```
 
 Constants: `SCHEMA`, `KINDS`, `SETTINGS` (`bench`, `deployed`), `ROLES`, `WEAR_LAWS`, `DRIFT_MESSAGE` ("model drift detected —
@@ -131,6 +132,18 @@ Each axis has a bin size (`Axis.bin_size`, or `binning` saying why the cells are
 gate is `Coverage.gate_pct`: a plan passes when it visits ≥ that % of the reachable headline cells (`reg.coverage_gate(card, result)`
 → `pass` | `fail` | `observed`). It is a histogram over the binned space; `cov.random_plan(axes, n, seed)` samples the full continuous
 space. `cov.servo_coverage` stays byte for byte what main 61a9de7 computes (CAN 11 train 66.15 %, digest pinned in the tests).
+
+**Reachable cells** (the denominator) are per type: the servo's are computed (`cov.joint_reachable`: the joint can hold the cell's
+centre and brake before its range ends); the cameras', driver's and conveyor's are every cell; the arm's are a committed mask per
+mount, `type_cards/arm_reachable/<mount>.json` (`cov.ARM_MOUNTS`: `ur5e_floor`, `ur5e_2f85_floor`; `cov.arm_reachable_cells(mount)`
+→ a frozenset of cell index tuples). A joint-cube cell is reachable when a collision-free configuration of the mounted arm lies
+in it (MuJoCo's collision check on the description's collision geoms, 5 cm over a floor at the base, 1 cm clear of itself) with
+the shoulder lift in the span connected to home; `tools/arm_reachable.py` writes it from a fixed per-cell Sobol probe and
+`sysid/tests/test_arm_reachable_mask.py` holds the file to a fresh run. Both UR5e mounts hold **2,560 of 4,096** cells. The
+arm_6dof card's measure is `cov.arm_6dof_coverage(points, mount="ur5e_floor")`, the gripper card's `cov.arm_gripper_coverage`
+(`ur5e_2f85_floor`); `cov.arm_coverage(points, limits, mount=None)` without a mount still counts every cell of the box (the
+sub-assembly's). The gate stays 40 % on every card: on the arm that is 1,024 reachable cells (it was 1,639 of the box, 64 % of
+what a floor-mounted arm can reach). Decision record: `docs/decision-arm-reachable-coverage-2026-11-05.md`.
 
 ## Calibration packages
 

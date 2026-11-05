@@ -129,6 +129,7 @@ class Coverage:
     robotdx: str | None = None   # the RobotDx coverage entry, where one exists
     plan_source: str = ""        # where a planned set comes from today
     gate_pct: float | None = None  # v2: the coverage gate, a plan passes when it visits >= this % of the reachable headline cells
+    reachable_mask: str | None = None  # v3: the committed reachable-cell mask (cov.ARM_MOUNTS) the measure counts over by default; None: a computed rule or every cell
 
 
 @dataclass(frozen=True)
@@ -495,10 +496,15 @@ ARM = Card(
                     P("tool_frame", "m, rad", None, "the gripper's CAD", "tool-flange tag", "yes", role="assembly"),
                     P("link_inertials", "kg, kg·m²", None, "URDF", "excitation trajectories", "partial"),
                 )),
-    coverage=Coverage((Axis("joint space", "rad", "4 cells per joint inside its limits (4096 cells; the bin size is each joint's range / 4)"),
+    # WHY a reachable mask (2026-11-05, docs/decision-arm-reachable-coverage-2026-11-05.md): over the whole box the 40 % gate asked a
+    # floor-mounted UR5e for 64 % of the cells it can be in; the shoulder lift's bin 3 is bin 1 shifted 2 pi and never reachable from home
+    coverage=Coverage((Axis("joint space", "rad", "4 cells per joint inside its limits (4096 cells; the bin size is each joint's range / 4), counted over the "
+                            "cells the mounted arm can reach (2,560 on a floor: collision-free and in the shoulder lift's span from home)"),
                        Axis("tool pose", "m", "0.1 m voxels over the 850 mm reach box", bin_size=0.1, marginal=True),
                        Axis("payload", "kg", "0 / 1 / 3 / 5 kg (unplanned yet)", marginal=True)),
-                      "share of the joint cube's cells visited; tool voxels and payload as marginals", cov.arm_coverage, robotdx="arm.workspace_coverage"),
+                      "share of the joint cube's reachable cells visited (a cell is reachable when a collision-free configuration of the mounted arm, "
+                      "its shoulder lift in the span connected to home, lies in it: type_cards/arm_reachable/<mount>.json); tool voxels and payload as marginals",
+                      cov.arm_6dof_coverage, robotdx="arm.workspace_coverage", reachable_mask=cov.DEFAULT_ARM_MOUNT),
     view=View("robotics-arm-gates", ("Path 3D", "Path top", "EEF error", "Joint error", "Coverage", "Reach", "Joint range")),
     observability=Observability("no", ("none on the rack: the UR5e is sim only",), ("a real 6-DOF arm", "tool-flange tag + calibrated cameras")),
     procedure=proc(identify="proposed: kinematic calibration (study on claude/kinematic-calibration-multi-arm-4645cc)"),
@@ -528,9 +534,10 @@ ARM_GRIPPER = Card(
                     P("grip_force_map", "N", None, "unknown", "force gauge in the jaws", "no"),
                     P("contact_friction", "1", None, "unknown", "pull-out tests per material", "partial"),
                 )),
-    coverage=Coverage((Axis("joint space", "rad", "as the arm: 4 cells per joint inside its limits"), Axis("tool pose", "m", "as the arm: 0.1 m voxels", bin_size=0.1, marginal=True),
+    coverage=Coverage((Axis("joint space", "rad", "as the arm: 4 cells per joint inside its limits, over the arm-with-gripper's reachable cells"), Axis("tool pose", "m", "as the arm: 0.1 m voxels", bin_size=0.1, marginal=True),
                        Axis("payload", "kg", "object mass classes", marginal=True)),
-                      "the arm's coverage at the grasp poses; object classes as a marginal (proposed)", cov.arm_coverage),
+                      "the arm's coverage at the grasp poses, over the arm-with-gripper's reachable cells; object classes as a marginal (proposed)",
+                      cov.arm_gripper_coverage, reachable_mask="ur5e_2f85_floor"),
     view=View("robotics-arm-gripper-gates", ("EEF z", "Gripper width", "Grip width at grasp", "Grip force", "Tool path 3D")),
     observability=Observability("no", ("none: sim only",), ("a real arm + gripper", "scene set with known objects")),
     procedure=proc(),

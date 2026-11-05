@@ -128,6 +128,7 @@ class ArmPlan:
     sweep_train: list[np.ndarray] = field(default_factory=list)  # the coverage sweep: (samples, 6) commanded encoder angles at DT
     sweep_held_out: list[np.ndarray] = field(default_factory=list)
     sweep: dict = field(default_factory=dict)  # how the sweep was built (waypoints, limits, seconds)
+    mount: str = "ur5e_floor"  # the arm card's reachable mask the coverage counts over (type_cards.coverage.ARM_MOUNTS)
 
     def trajectories(self, split: str) -> list[np.ndarray]:
         """Every commanded trajectory of a split the dynamics fit and the coverage read: the excitations, then the sweep."""
@@ -182,10 +183,11 @@ def plan(description, *, gripper: bool = False) -> ArmPlan:
     if gripper:
         p.gripper_train = np.concatenate([gripper_steps((0, 64, 128, 192, 255, 192, 128, 64, 0, 255)), gripper_steps((0, 255, 0, 128, 0))])
         p.gripper_held_out = gripper_steps((0, 40, 100, 170, 230, 100, 0))
+        p.mount = "ur5e_2f85_floor"  # the arm carries the 2F-85: its reachable cells are the arm-with-gripper's
     sweep = s.get("sweep")
     if sweep:
         start = [{"joint space": tuple(q)} for q in coverage_points(p.poses_train, p.excitations_train)]
-        p.sweep_train, p.sweep = coverage_sweep(clear, sweep, p.hold, start)
+        p.sweep_train, p.sweep = coverage_sweep(clear, sweep, p.hold, start, mount=p.mount)
     p.coverage = arm_coverage(p)
     return p
 
@@ -216,17 +218,19 @@ def arm_coverage(p: ArmPlan) -> dict:
     for split in ("train", "held_out"):
         trajectories = p.trajectories(split)
         poses = getattr(p, f"poses_{split}")
-        c = cov.arm_coverage([{"joint space": q} for q in coverage_points(poses, trajectories)])
+        c = cov.arm_coverage([{"joint space": q} for q in coverage_points(poses, trajectories)], mount=p.mount)
         sweep_s = sum(e.shape[0] for e in getattr(p, f"sweep_{split}")) * DT
         motion_s = sum(e.shape[0] for e in trajectories) * DT
-        base = cov.arm_coverage([{"joint space": q} for q in coverage_points(poses, getattr(p, f"excitations_{split}"))])
+        base = cov.arm_coverage([{"joint space": q} for q in coverage_points(poses, getattr(p, f"excitations_{split}"))], mount=p.mount)
         # visited cells per joint and bin: where the cube is filled, and the shoulder lift's cell 3 (unreachable from home) shown empty
         per_bin = [[sum(1 for cell in c.cells if cell[j] == b) for b in range(cov.JOINT_BINS)] for j in range(len(JOINTS))]
         out[split] = {"pct": c.pct, "visited": c.visited, "reachable": c.reachable, "samples": c.samples, "axes": c.axes, "unplanned": list(c.unplanned),
                       "motion_s": round(motion_s, 1), "sweep_s": round(sweep_s, 1), "settle_s": round(len(poses) * SETTLE_S, 1),
                       "without_sweep_pct": base.pct, "visited_by_joint_bin": per_bin}
-    out["function"] = "type_cards.coverage.arm_coverage (4 cells per joint inside the limits: the 4096-cell joint cube)"
-    out["rule"] = ("share of the joint cube's cells the static poses, the excitations and the coverage sweep (every 50 ms) visit; "
+    out["function"] = (f"type_cards.coverage.arm_coverage over {p.mount}'s reachable cells (4 cells per joint inside the limits: the 4096-cell joint cube, "
+                       f"{len(cov.arm_reachable_cells(p.mount)):,} of them reachable)")
+    out["reachable_mask"] = p.mount
+    out["rule"] = ("share of the joint cube's reachable cells the static poses, the excitations and the coverage sweep (every 50 ms) visit; "
                    "tool voxels need FK (a marginal, not planned here)")
     if p.sweep:
         out["sweep"] = p.sweep
@@ -296,7 +300,7 @@ def cell_of(q: np.ndarray, edges: np.ndarray) -> int:
     return (np.moveaxis(i, 0, -1) * bins ** np.arange(q.shape[-1])).sum(-1)
 
 
-def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: list) -> tuple[list, dict]:
+def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: list, mount: str = "ur5e_floor") -> tuple[list, dict]:
     """A collision-free tour that takes the joint cube's coverage (with what the poses and excitations already visit) to
     cfg["target_pct"] of its cells.
 
@@ -329,11 +333,15 @@ def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: li
             waypoints[int(c)] = q
     visited = {int(c) for c in cell_of(np.array([p["joint space"] for p in already]), edges)} if already else set()
     target = math.ceil(cfg["target_pct"] / 100.0 * bins ** len(JOINTS))
+    # WHY the curve over the mount's reachable cells but the target over the box (2026-11-05, docs/decision-arm-reachable-coverage-2026-11-05.md):
+    # the curve is read against the card's gate, which is now a share of the reachable cells; the target stays the schedule this sweep
+    # was proved with (1,721 cells), so the commanded trajectories are unchanged
+    reachable = len(cov.arm_reachable_cells(mount))
     speed, accel, check = cfg["speed_rad_s"], cfg["accel_rad_s2"], 5
     open_cells = [c for c in waypoints if c not in visited]
     q = np.asarray(start_q, float)
     segments, rejected = [], 0
-    elapsed, curve = 0.0, [(0.0, round(100.0 * len(visited) / bins ** len(JOINTS), 2))]
+    elapsed, curve = 0.0, [(0.0, round(100.0 * len(visited) / reachable, 2))]
     while len(visited) < target and open_cells:
         targets = np.array([waypoints[c] for c in open_cells])
         span = np.abs(targets - q).max(axis=1)
@@ -355,7 +363,7 @@ def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: li
         visited |= new
         elapsed += move.shape[0] * DT
         if elapsed - curve[-1][0] >= 15.0:
-            curve.append((round(elapsed, 1), round(100.0 * len(visited) / bins ** len(JOINTS), 2)))
+            curve.append((round(elapsed, 1), round(100.0 * len(visited) / reachable, 2)))
         q = move[-1]
         open_cells = [c for c in open_cells if c not in visited]
     if len(visited) < target:
@@ -382,7 +390,8 @@ def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: li
     info = {"waypoints": len(segments), "candidate_cells": len(waypoints), "sobol_points": int(pool.shape[0]), "rejected_moves": rejected,
             "seconds": round(seconds, 1), "trajectories": len(out), "speed_rad_s": speed, "accel_rad_s2": accel,
             "lift_span_rad": list(cfg["lift_span_rad"]), "floor_clearance_m": clear.floor_m, "self_clearance_m": clear.self_m,
-            "target_pct": cfg["target_pct"], "seed": cfg["seed"], "curve": curve + [(round(elapsed, 1), round(100.0 * len(visited) / bins ** len(JOINTS), 2))],
+            "target_pct": cfg["target_pct"], "target_cells": target, "reachable_mask": mount, "reachable_cells": reachable, "curve_of": "reachable cells",
+            "seed": cfg["seed"], "curve": curve + [(round(elapsed, 1), round(100.0 * len(visited) / reachable, 2))],
             "rule": "scrambled Sobol waypoints (one per joint-cube cell, collision-free), toured greedily by new cells per second, "
                     "straight joint-space minimum-jerk moves, every 10 ms sample clear of the floor and the arm"}
     return out, info
