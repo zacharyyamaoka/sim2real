@@ -222,6 +222,18 @@
     "excitations_held_out": 2,
     "excitation": "Fourier series per joint (Swevers 1997): 5 harmonics of 0.2 Hz, 10 s, inside the joint and speed limits",
     "rate_hz": 500,
-    "seed": 51
+    "seed": 51,
+    "sweep": {
+      "target_pct": 42.0,
+      "speed_rad_s": 2.8,
+      "accel_rad_s2": 6.0,
+      "lift_span_rad": [-3.6, 0.5],
+      "limit_margin_rad": 0.05,
+      "sobol_log2": 17,
+      "candidates": 24,
+      "chunk_s": 60.0,
+      "seed": 51,
+      "note": "the coverage sweep (sysid.arm.coverage_sweep): scrambled Sobol waypoints over the arm_6dof card's joint cube, one per cell where the arm clears a floor at its base plane (5 cm) and itself (1 cm); toured by new cells per second in straight minimum-jerk moves under 2.8 rad/s (UR's limit is 3.14) and 6 rad/s2 (UR states none) until 42 % of the 4096 cells (the card's gate is 40 %). The shoulder lift stays in the span a floor-mounted arm reaches from home: its cube cells 1 and 3 are one posture 2 pi apart."
+    }
   }
 }

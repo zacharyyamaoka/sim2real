@@ -125,6 +125,13 @@ class ArmPlan:
     gripper_held_out: np.ndarray | None = None
     hold: np.ndarray = field(default_factory=lambda: np.array([0.0, -1.2, 1.4, -1.77, -1.5708, 0.0]))
     coverage: dict = field(default_factory=dict)
+    sweep_train: list[np.ndarray] = field(default_factory=list)  # the coverage sweep: (samples, 6) commanded encoder angles at DT
+    sweep_held_out: list[np.ndarray] = field(default_factory=list)
+    sweep: dict = field(default_factory=dict)  # how the sweep was built (waypoints, limits, seconds)
+
+    def trajectories(self, split: str) -> list[np.ndarray]:
+        """Every commanded trajectory of a split the dynamics fit and the coverage read: the excitations, then the sweep."""
+        return list(getattr(self, f"excitations_{split}")) + list(getattr(self, f"sweep_{split}"))
 
 
 def fourier_excitation(rng, duration_s: float = 10.0, base_hz: float = 0.2, harmonics: int = 5) -> np.ndarray:
@@ -156,35 +163,229 @@ def gripper_steps(levels, dwell_s: float = 0.8) -> np.ndarray:
 
 
 def plan(description, *, gripper: bool = False) -> ArmPlan:
+    """The schedule: static poses and Fourier excitations (both re-drawn until the arm clears the floor and itself), then the
+    coverage sweep that takes the train split to the arm card's coverage gate."""
     s = description.schedule
+    clear = Clearance(description)
     rng = rng_for(s["seed"], "plan")
     lo, hi = np.array(POSE_RANGES).T
-    poses = rng.uniform(lo, hi, size=(s["poses_train"] + s["poses_held_out"], len(JOINTS)))
-    excitations = [fourier_excitation(rng_for(s["seed"], "excitation", k)) for k in range(s["excitations_train"] + s["excitations_held_out"])]
+    # WHY drawn until clear (2026-11-05, arm-coverage lane): uniform draws over POSE_RANGES put 8 of the bare arm's 40 train poses
+    # in the floor or in the arm itself; MuJoCo's contacts are off, so the "real" arm went there, a real one cannot
+    poses = []
+    while len(poses) < s["poses_train"] + s["poses_held_out"]:
+        q = rng.uniform(lo, hi)
+        if clear(q):
+            poses.append(q)
+    poses = np.array(poses)
+    excitations = [clear_excitation(clear, s["seed"], k) for k in range(s["excitations_train"] + s["excitations_held_out"])]
     p = ArmPlan(poses[: s["poses_train"]], poses[s["poses_train"]:], excitations[: s["excitations_train"]], excitations[s["excitations_train"]:])
     if gripper:
         p.gripper_train = np.concatenate([gripper_steps((0, 64, 128, 192, 255, 192, 128, 64, 0, 255)), gripper_steps((0, 255, 0, 128, 0))])
         p.gripper_held_out = gripper_steps((0, 40, 100, 170, 230, 100, 0))
+    sweep = s.get("sweep")
+    if sweep:
+        start = [{"joint space": tuple(q)} for q in coverage_points(p.poses_train, p.excitations_train)]
+        p.sweep_train, p.sweep = coverage_sweep(clear, sweep, p.hold, start)
     p.coverage = arm_coverage(p)
     return p
+
+
+def clear_excitation(clear, seed: int, k: int) -> np.ndarray:
+    """Excitation k: the first of its draws whose every 10 ms sample clears the floor and the arm (draw 0 is the original one)."""
+    for attempt in range(50):
+        names = ("excitation", k) if attempt == 0 else ("excitation", k, attempt)
+        e = fourier_excitation(rng_for(seed, *names))
+        if all(clear(q) for q in e[::5]):
+            return e
+    raise RuntimeError(f"no collision-free excitation {k} in 50 draws")
+
+
+# --- coverage: the arm card's joint cube, and the sweep that fills it -----------------------------------------------------------
+
+COVERAGE_EVERY = 25  # the coverage rule reads every 25th commanded sample (50 ms)
+
+
+def coverage_points(poses, trajectories) -> list:
+    return [*(tuple(q) for q in poses), *(tuple(q) for e in trajectories for q in e[::COVERAGE_EVERY])]
 
 
 def arm_coverage(p: ArmPlan) -> dict:
     from type_cards import coverage as cov  # noqa: PLC0415
 
-    def points(poses, excitations):
-        pts = [{"joint space": tuple(q)} for q in poses]
-        for e in excitations:
-            pts.extend({"joint space": tuple(q)} for q in e[::25])
-        return pts
-
     out = {}
-    for split, (poses, exc) in {"train": (p.poses_train, p.excitations_train), "held_out": (p.poses_held_out, p.excitations_held_out)}.items():
-        c = cov.arm_coverage(points(poses, exc))
-        out[split] = {"pct": c.pct, "visited": c.visited, "reachable": c.reachable, "samples": c.samples, "axes": c.axes, "unplanned": list(c.unplanned)}
+    for split in ("train", "held_out"):
+        trajectories = p.trajectories(split)
+        poses = getattr(p, f"poses_{split}")
+        c = cov.arm_coverage([{"joint space": q} for q in coverage_points(poses, trajectories)])
+        sweep_s = sum(e.shape[0] for e in getattr(p, f"sweep_{split}")) * DT
+        motion_s = sum(e.shape[0] for e in trajectories) * DT
+        base = cov.arm_coverage([{"joint space": q} for q in coverage_points(poses, getattr(p, f"excitations_{split}"))])
+        # visited cells per joint and bin: where the cube is filled, and the shoulder lift's cell 3 (unreachable from home) shown empty
+        per_bin = [[sum(1 for cell in c.cells if cell[j] == b) for b in range(cov.JOINT_BINS)] for j in range(len(JOINTS))]
+        out[split] = {"pct": c.pct, "visited": c.visited, "reachable": c.reachable, "samples": c.samples, "axes": c.axes, "unplanned": list(c.unplanned),
+                      "motion_s": round(motion_s, 1), "sweep_s": round(sweep_s, 1), "settle_s": round(len(poses) * SETTLE_S, 1),
+                      "without_sweep_pct": base.pct, "visited_by_joint_bin": per_bin}
     out["function"] = "type_cards.coverage.arm_coverage (4 cells per joint inside the limits: the 4096-cell joint cube)"
-    out["rule"] = "share of the joint cube's cells the static poses and the excitations (every 50 ms) visit; tool voxels need FK (a marginal, not planned here)"
+    out["rule"] = ("share of the joint cube's cells the static poses, the excitations and the coverage sweep (every 50 ms) visit; "
+                   "tool voxels need FK (a marginal, not planned here)")
+    if p.sweep:
+        out["sweep"] = p.sweep
     return out
+
+
+class Clearance:
+    """q -> True when the arm (and its gripper) clears the floor by `floor_m` and itself by `self_m`: MuJoCo's own collision
+    detection on the description's collision geoms (Menagerie's capsules, the 2F-85's meshes) plus a floor plane at the base's
+    mounting plane. The simulator that plays the real arm runs with contacts off, so this is the only thing keeping a schedule
+    one a real arm on a floor could run. The 2F-85's linkage touching itself is by design and ignored."""
+
+    def __init__(self, description, floor_m: float = 0.05, self_m: float = 0.01):
+        import mujoco  # noqa: PLC0415
+
+        spec = description.spec()
+        floor = spec.worldbody.add_geom()
+        floor.name, floor.type, floor.size = "clearance_floor", mujoco.mjtGeom.mjGEOM_PLANE, [5.0, 5.0, 0.1]
+        m = spec.compile()
+        self.model, self.data = m, mujoco.MjData(m)
+        self.floor = m.geom("clearance_floor").id
+        m.geom_margin[:] = self_m
+        m.geom_margin[self.floor] = floor_m
+        self.floor_m, self.self_m = floor_m, self_m
+        self.qadr = m.jnt_qposadr[[m.joint(f"{j}_joint").id for j in JOINTS]]
+        self.gripper = {b for b in range(m.nbody) if m.body(b).name.startswith("grip_")}
+        # the shoulder link only turns about the base's vertical axis: its capsule sits 3 mm over the mounting plane at any pan
+        self.fixed_height = {m.body("shoulder_link").id}
+        self.rest = self.data.qpos.copy()
+        self.calls = 0
+
+    def __call__(self, q) -> bool:
+        import mujoco  # noqa: PLC0415
+
+        m, d = self.model, self.data
+        self.calls += 1
+        d.qpos[:] = self.rest
+        d.qpos[self.qadr] = q
+        mujoco.mj_kinematics(m, d)
+        mujoco.mj_collision(m, d)
+        for c in d.contact[: d.ncon]:
+            b1, b2 = m.geom_bodyid[c.geom1], m.geom_bodyid[c.geom2]
+            if self.floor in (c.geom1, c.geom2):
+                if c.dist < self.floor_m and not ({b1, b2} & self.fixed_height):
+                    return False
+            elif not (b1 in self.gripper and b2 in self.gripper) and c.dist < self.self_m:
+                return False
+        return True
+
+
+def min_jerk(q0: np.ndarray, q1: np.ndarray, speed: float, accel: float, quantum: int = COVERAGE_EVERY) -> np.ndarray:
+    """Rest-to-rest minimum-jerk move (s = 10t^3 - 15t^4 + 6t^5), every joint arriving together, its time the shortest that keeps
+    the moving-most joint under `speed` (peak 15/8 D/T) and `accel` (peak 10/sqrt(3) D/T^2), rounded up to whole `quantum`s of
+    samples (so every segment starts on the coverage rule's 50 ms stride). Samples at DT, q0 excluded, q1 included."""
+    span = float(np.abs(q1 - q0).max())
+    seconds = max(15.0 / 8.0 * span / speed, math.sqrt(10.0 / math.sqrt(3.0) * span / accel), DT * quantum)
+    n = int(math.ceil(seconds / DT / quantum)) * quantum
+    t = np.arange(1, n + 1) / n
+    s = 10 * t ** 3 - 15 * t ** 4 + 6 * t ** 5
+    return q0 + s[:, None] * (q1 - q0)
+
+
+def cell_of(q: np.ndarray, edges: np.ndarray) -> int:
+    """The card's joint cube cell (numpy.histogramdd's [lo, hi) bins, the last closed) as one integer, base JOINT_BINS."""
+    bins = edges.shape[1] - 1
+    i = np.clip(np.array([np.searchsorted(edges[j], q[..., j], side="right") - 1 for j in range(q.shape[-1])]), 0, bins - 1)
+    return (np.moveaxis(i, 0, -1) * bins ** np.arange(q.shape[-1])).sum(-1)
+
+
+def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: list) -> tuple[list, dict]:
+    """A collision-free tour that takes the joint cube's coverage (with what the poses and excitations already visit) to
+    cfg["target_pct"] of its cells.
+
+    1. Waypoints: a scrambled Sobol sequence (scipy.stats.qmc) of 2^m points over the card's joint box, the shoulder lift held to
+       the span a floor-mounted arm reaches from its home posture (lift_span_rad), each kept only where the arm clears the floor
+       and itself; each cell's waypoint is its first clear point in the sequence.
+    2. Order: from the hold posture, the next waypoint is the one whose straight joint-space minimum-jerk move visits the most
+       new cells per second, among the `candidates` unvisited waypoints nearest in move time, and whose every 10 ms sample is clear.
+    3. Cut into trajectories of at most chunk_s seconds at rest points (each one starts where the last stopped).
+
+    WHY a sweep and not wider Fourier excitations (2026-11-05): the card's cube has 4 cells per joint over +-2 pi (the elbow +-pi),
+    so a cell is pi rad wide on five joints; an excitation around one centre visits tens of cells (32 of 4096 here), and 40 %
+    needs 1,639 distinct joint combinations. WHY the shoulder lift's span: its cells 1 and 3 are the same physical posture 2 pi
+    apart, and the move from one to the other swings the upper arm through the floor, so a schedule on a real arm covers one."""
+    from scipy.stats import qmc  # noqa: PLC0415
+    from type_cards import coverage as cov  # noqa: PLC0415
+
+    limits = np.array(cov.UR5E_LIMITS)
+    bins = cov.JOINT_BINS
+    edges = np.array([np.linspace(lo, hi, bins + 1) for lo, hi in limits])
+    margin = cfg["limit_margin_rad"]
+    box_lo, box_hi = limits[:, 0] + margin, limits[:, 1] - margin
+    box_lo[1], box_hi[1] = cfg["lift_span_rad"]
+    sobol = qmc.Sobol(d=len(JOINTS), scramble=True, seed=cfg["seed"])
+    pool = qmc.scale(sobol.random_base2(cfg["sobol_log2"]), box_lo, box_hi)
+    cells = cell_of(pool, edges)
+    waypoints: dict[int, np.ndarray] = {}
+    for q, c in zip(pool, cells):
+        if int(c) not in waypoints and clear(q):
+            waypoints[int(c)] = q
+    visited = {int(c) for c in cell_of(np.array([p["joint space"] for p in already]), edges)} if already else set()
+    target = math.ceil(cfg["target_pct"] / 100.0 * bins ** len(JOINTS))
+    speed, accel, check = cfg["speed_rad_s"], cfg["accel_rad_s2"], 5
+    open_cells = [c for c in waypoints if c not in visited]
+    q = np.asarray(start_q, float)
+    segments, rejected = [], 0
+    elapsed, curve = 0.0, [(0.0, round(100.0 * len(visited) / bins ** len(JOINTS), 2))]
+    while len(visited) < target and open_cells:
+        targets = np.array([waypoints[c] for c in open_cells])
+        span = np.abs(targets - q).max(axis=1)
+        nearest = np.argsort(span)[: cfg["candidates"]]
+        scored = []
+        for i in nearest:
+            move = min_jerk(q, targets[i], speed, accel)
+            new = {int(c) for c in cell_of(move[::COVERAGE_EVERY], edges)} - visited  # the samples the coverage rule reads
+            scored.append((len(new) / (move.shape[0] * DT), i, move, new))
+        scored.sort(key=lambda row: -row[0])
+        for _, i, move, new in scored:
+            if all(clear(x) for x in move[check - 1::check]):
+                break
+            rejected += 1
+        else:  # no near waypoint is reachable in a straight move from here: drop the nearest, try again
+            open_cells.pop(int(nearest[0]))
+            continue
+        segments.append(move)
+        visited |= new
+        elapsed += move.shape[0] * DT
+        if elapsed - curve[-1][0] >= 15.0:
+            curve.append((round(elapsed, 1), round(100.0 * len(visited) / bins ** len(JOINTS), 2)))
+        q = move[-1]
+        open_cells = [c for c in open_cells if c not in visited]
+    if len(visited) < target:
+        raise RuntimeError(f"the sweep reached {len(visited)} of {target} cells: no reachable waypoint left")
+    home = min_jerk(q, np.asarray(start_q, float), speed, accel)
+    if all(clear(x) for x in home[check - 1::check]):
+        segments.append(home)
+    chunks, current, length = [], [], 0
+    limit = int(round(cfg["chunk_s"] / DT))
+    for seg in segments:
+        if current and length + seg.shape[0] > limit:
+            chunks.append(current)
+            current, length = [], 0
+        current.append(seg)
+        length += seg.shape[0]
+    chunks.append(current)
+    # each chunk opens with 50 ms at rest where its first move starts (the hold posture, then the last chunk's end): the arm
+    # settles there, and every move still starts on the coverage rule's stride
+    out, q0 = [], np.asarray(start_q, float)
+    for chunk in chunks:
+        out.append(np.vstack([np.repeat(q0[None, :], COVERAGE_EVERY, 0)] + chunk))
+        q0 = chunk[-1][-1]
+    seconds = sum(t.shape[0] for t in out) * DT
+    info = {"waypoints": len(segments), "candidate_cells": len(waypoints), "sobol_points": int(pool.shape[0]), "rejected_moves": rejected,
+            "seconds": round(seconds, 1), "trajectories": len(out), "speed_rad_s": speed, "accel_rad_s2": accel,
+            "lift_span_rad": list(cfg["lift_span_rad"]), "floor_clearance_m": clear.floor_m, "self_clearance_m": clear.self_m,
+            "target_pct": cfg["target_pct"], "seed": cfg["seed"], "curve": curve + [(round(elapsed, 1), round(100.0 * len(visited) / bins ** len(JOINTS), 2))],
+            "rule": "scrambled Sobol waypoints (one per joint-cube cell, collision-free), toured greedily by new cells per second, "
+                    "straight joint-space minimum-jerk moves, every 10 ms sample clear of the floor and the arm"}
+    return out, info
 
 
 # --- the real arm ----------------------------------------------------------------------------------------------------------------
@@ -525,9 +726,9 @@ class Measured:
 
 def measure_example(description, plan_: ArmPlan, truth: dict, noise: dict, seed: int, *, gripper: bool) -> Measured:
     model = ArmModel.build(description)
-    train = measure(model, truth, noise, seed, plan_.poses_train, plan_.excitations_train,
+    train = measure(model, truth, noise, seed, plan_.poses_train, plan_.trajectories("train"),
                     plan_.gripper_train if gripper else None, plan_.hold, label="train")
-    held = measure(model, truth, noise, seed, plan_.poses_held_out, plan_.excitations_held_out,
+    held = measure(model, truth, noise, seed, plan_.poses_held_out, plan_.trajectories("held_out"),
                    plan_.gripper_held_out if gripper else None, plan_.hold, label="held_out")
     return Measured(train, held)
 
@@ -553,7 +754,7 @@ def identify_example(description, train: ArmMeasured, *, gripper: bool) -> ArmFi
     methods = {"kinematics": f"least squares of FK(q_encoder + offset) on the tracker's flange pose{' and the TCP marker' if gripper else ''} at "
                              f"{len(train.poses)} static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
                "dynamics": f"weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint{' + the tool mass and centre of mass' if gripper else ''}, "
-                           f"{dyn['_rows']:,} moving rows of {len(train.excitations)} excitations (95 % from the covariance)"}
+                           f"{dyn['_rows']:,} moving rows of {len(train.excitations)} trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)"}
     stats = {"kinematic_rms_mm": kin["_rms_position_mm"], "dynamic_rows": dyn["_rows"], "torque_residual_nm": dyn["_residual_nm"]}
     if gripper:
         model.set_values({k: v[0] for k, v in found.items()})
@@ -617,10 +818,13 @@ def assemble_example(example: str, description, plan_: ArmPlan, fit: ArmFit, sco
                         "attach": m_desc.get("attach", []), "sensors": description.manifest.get("sensors", []), "known": description.known,
                         "components": len(description.components)},
         "tree": description.tree(),
-        "schedule": {"train": {"poses": len(plan_.poses_train), "excitations": len(plan_.excitations_train), "seconds": round(sum(e.shape[0] for e in plan_.excitations_train) * DT, 1)},
-                     "held_out": {"poses": len(plan_.poses_held_out), "excitations": len(plan_.excitations_held_out), "seconds": round(sum(e.shape[0] for e in plan_.excitations_held_out) * DT, 1)},
+        "schedule": {split: {"poses": len(getattr(plan_, f"poses_{split}")), "excitations": len(getattr(plan_, f"excitations_{split}")),
+                             "excitation_s": round(sum(e.shape[0] for e in getattr(plan_, f"excitations_{split}")) * DT, 1),
+                             "sweep_trajectories": len(getattr(plan_, f"sweep_{split}")), "sweep_s": plan_.coverage[split]["sweep_s"],
+                             "seconds": plan_.coverage[split]["motion_s"], "settle_s": plan_.coverage[split]["settle_s"]} for split in ("train", "held_out")}
+                    | {
                      "gripper": {"train_s": round(plan_.gripper_train.size * DT, 1), "held_out_s": round(plan_.gripper_held_out.size * DT, 1)} if gripper else None,
-                     "excitation": description.schedule.get("excitation"), "coverage": plan_.coverage},
+                     "excitation": description.schedule.get("excitation"), "sweep": plan_.sweep or None, "coverage": plan_.coverage},
         "parameters": parameters, "metrics": metrics, "models": models, "card_ladders": cards.card_ladders(example, fit.values),
         "selected_rung": None, "fit": fit.stats,
         "notes": ["The tracker sees the flange through a calibrated external camera: its frame is the arm's base frame (hand-eye is the dual-arm cell's job).",
