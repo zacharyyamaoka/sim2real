@@ -296,7 +296,7 @@
     "settle_s": 1.5,
     "excitations_train": 4,
     "excitations_held_out": 2,
-    "excitation": "Fourier series per joint (Swevers 1997): 5 harmonics of 0.1 Hz, 10 s, inside the joint and speed limits",
+    "excitation": "Fourier series per joint (Swevers 1997): 5 harmonics of 0.2 Hz, 10 s, inside the joint and speed limits",
     "rate_hz": 500,
     "gripper_train": "8 s of command steps (0, 64, 128, 192, 255 counts and back), twice",
     "gripper_held_out": "8 s of other levels (40, 100, 170, 230)",

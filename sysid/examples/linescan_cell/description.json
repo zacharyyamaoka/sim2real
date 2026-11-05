@@ -477,7 +477,12 @@
         "grey": 0.5,
         "black": 0.05,
         "dark": 0.0
-      }
+      },
+      "risers_m": [
+        0.0,
+        0.15
+      ],
+      "risers_note": "the D435 frames alternate the card flat on the belt and on a certified 150 mm riser: depth relief for its focal length, standoff and depth scale"
     }
   },
   "sensors": [
