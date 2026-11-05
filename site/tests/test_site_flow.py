@@ -486,7 +486,8 @@ def types_checks(page, base: str, still) -> None:
           f"the drift diagnostic warns '{registry.DRIFT_MESSAGE}' past 1.25× its calibrated value, and T2 gates fidelity at 1.5× the floor")
 
     open_tab(page, "model")
-    ladder = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-rung]')].map(r => [r.dataset.rung, r.dataset.kind, +r.dataset.nParams, r.dataset.current === 'true', r.textContent])")
+    # a rung's row is tr[data-rung][data-kind]: a parameter's row names the rung it enters (data-rung) and has no kind
+    ladder = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-rung][data-kind]')].map(r => [r.dataset.rung, r.dataset.kind, +r.dataset.nParams, r.dataset.current === 'true', r.textContent])")
     names_shown = all(all(n in text for n in r.parameter_names) for r, (*_x, text) in zip(card.rungs, ladder))
     check([row[:4] for row in ladder] == [[r.key, r.kind, r.n_parameters, r.current] for r in card.rungs] and names_shown,
           f"the Models tab shows the servo's ladder: each rung's key, kind, parameter count and names, today's (M4) marked ({[r[0] for r in ladder]})")
@@ -557,7 +558,7 @@ def types_checks(page, base: str, still) -> None:
           "the Motor card says what it needs before it can be measured (a dyno)")
     page.goto(f"{base}/types/conveyor/#model")
     page.wait_for_load_state("load")
-    conveyor = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-rung]')].map(r => r.dataset.rung)")
+    conveyor = page.evaluate("[...document.querySelectorAll('[data-tab=model] tr[data-rung][data-kind]')].map(r => r.dataset.rung)")
     check(conveyor == [r.key for r in registry.CARDS["conveyor"].rungs], f"the Conveyor card (new, for the landing-page examples) shows its ladder ({conveyor})")
 
 
