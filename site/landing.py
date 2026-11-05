@@ -66,6 +66,7 @@ def num(value, digits: int = 4) -> str:
 
 def quantity(value, unit: str, digits: int = 4) -> str:
     v, u = display(value, unit)
+    u = "" if u == "1" else u  # a dimensionless number prints bare (a depth scale of "1.008", not "1.008 1")
     return f"{num(v, digits)} {e(u)}".strip() if v is not None else "—"
 
 
