@@ -228,7 +228,7 @@ def proc(**tools) -> dict:
     return out
 
 
-AX_Q = Axis("q", "rad", "12 cells over the joint's range from its origin (the bin size is range / 12, per unit: CAN 11's is 0.2565 rad)")
+AX_Q = Axis("q", "rad", "12 cells over the joint's range from its origin (the bin size is range / 12, per unit: each station's is on its coverage row)")
 AX_QD = Axis("qd", "rad/s", "signed, log-spaced to the speed budget (±1 %, 2.5 %, 5 %, 10 %, 25 %, 50 %, 100 %), a dead cell around 0")
 AX_QDD = Axis("qdd", "rad/s²", "signed, log-spaced to the accel envelope (±0.6 %, 2.5 %, 6 %, 19 %, 50 %, 100 %)")
 AX_TAU = Axis("load torque", "N·m", "0.25 N·m cells to the torque limit (the planned demand tau_pred); its own marginal", bin_size=0.25, marginal=True)

@@ -141,14 +141,17 @@ TYPE = Kind(
     # to view the results": a type is what a station is; its card is a record with the same tabs every card has
     key="type", label="Type", plural="Types",
     records=types_pages.records, url=lambda t: types_pages.type_url(t.id), title=lambda t: t.card.title,
+    # WHY Models and Tests (Zach, PROJECT - Sim2Real, Nov 5 2026: "2. Models ... Multiple rungs of models", "3. Test Type"): the tab keeps its
+    # #model anchor, so old links still open it
     tabs=(Tab("metrics", "Metrics", body=types_pages.metrics_tab),
-          Tab("model", "Model", body=types_pages.model_tab),
+          Tab("model", "Models", body=types_pages.model_tab),
+          Tab("tests", "Tests", body=types_pages.tests_tab),
           Tab("coverage", "Coverage", body=types_pages.coverage_tab),
           Tab("view", "View", body=types_pages.view_tab),
           Tab("procedure", "Procedure", body=types_pages.procedure_tab)),
     header=types_pages.header, crumbs=lambda site, t: [ROOT_CRUMB, ("Types", "/types/"), (t.card.title, types_pages.type_url(t.id))],
     back=lambda site, t: ["/", "/types/"],
-    description=lambda site, t: f"{t.card.title}: its black-box metrics, model and parameters, coverage, view and the shared procedure.",
+    description=lambda site, t: f"{t.card.title}: its black-box metrics, diagnostics and gates, model rungs, test types, coverage, view and the shared procedure.",
     scripts=("site", "sim2real"),
 )
 

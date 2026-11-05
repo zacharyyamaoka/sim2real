@@ -26,6 +26,14 @@ from type_cards import registry as reg  # noqa: E402
 
 GROUPS = (("actuator", "Actuators"), ("sensor", "Sensors"))
 OBS = {"yes": ("pass", "yes"), "partial": ("partial", "partly"), "no": ("not_run", "no")}
+KIND = {"physics": ("none", "physics"), "residual": ("partial", "grey-box residual"), "learned": ("warn", "black-box net")}
+FAMILIES = (("performance", "Performance: the real device against its target"), ("fidelity", "Fidelity: the twin against the real device, same input"))
+STATUS = {"exists": "pass", "partial": "partial", "proposed": "not_run", "unknown": "not_run"}
+REPO_SHORT = {"/home/bam/bam_ws": "bam_ws", "/home/bam/io-diagnostics": "io-diagnostics", "/home/bam/robotparts": "robotparts", "/home/bam/pidtuna": "pidtuna"}
+KEYS_NOTE = ("M0–M5 are physics: on the actuators robotparts publishes (servo, motor, gearbox, conveyor) they follow robotparts' ladder "
+             "(M0 ideal, M2 Coulomb + viscous, M3 Stribeck / load, M4 ripple + backlash, M5 motor electrics; its M1 is the datasheet, here "
+             "every parameter's Nominal), and every other card defines its own. A .wear rung takes usage as an input. M6 is always the "
+             "grey-box residual and M7 always the black-box net.")
 
 
 @dataclass
@@ -86,10 +94,34 @@ def tr(cells, **data) -> str:
 
 # --- the list and the header ---------------------------------------------------------------------------------------------
 
+def ladder_text(c) -> str:
+    """Each rung's key and its parameter count, lowest first: what /types/ shows of a card's ladder."""
+    return " · ".join(f'<span class="s2r-rungkey" title="{e(r.name)}" style="white-space:nowrap">{e(r.key)} {r.n_parameters:,}</span>' for r in c.rungs)
+
+
+def code_home(h) -> str:
+    where = f"{REPO_SHORT.get(h.repo, h.repo)}:{h.path}" + (f" @ {h.ref}" if h.ref else "")
+    return f"<li>{code(where)}" + (f" — {e(h.note)}" if h.note else "") + "</li>"
+
+
+def packages_table(packages, caption="") -> str:
+    rows = []
+    for pkg in packages:
+        serves = ", ".join(f'<a href="{type_url(cid)}">{e(reg.CARDS[cid].title)}</a>' for cid in pkg.serves)
+        homes = f'<ul class="s2r-homes">{"".join(code_home(h) for h in pkg.code)}</ul>' if pkg.code else "unknown: no code found"
+        refs = "; ".join(ref_link(r) for r in pkg.references)
+        rows.append(tr([f"<b>{e(pkg.group)}</b><br>{e(pkg.title)}" + (f" ({e(pkg.level)} level)" if pkg.level else ""), serves, homes,
+                        chip(STATUS[pkg.status], pkg.status), e(pkg.note) + (f"<br><small>{refs}</small>" if refs else "")],
+                       package=pkg.id, status=pkg.status))
+    return table(["Package", "Serves", "Code today", "Status", "Note"], rows, caption=caption, cls="s2r-table s2r-packages")
+
+
 def list_body(site) -> str:
-    out = ['<h1>Types</h1>', '<p class="lede">One card per part type: the black-box metrics, the model and its parameters, what the inputs must cover, '
-           'the standard view and the shared procedure. The cards are code (<code>type_cards/registry.py</code>); '
-           'the vault note is rendered from the same registry.</p>']
+    out = ['<h1>Types</h1>', '<p class="lede">One card per part type: the black-box metrics and the diagnostics and gates built on them, a ladder of '
+           'models from the ideal one to learned nets (each counted, each with where to learn it), the tests that identify them on the bench '
+           'and in a deployment, what the inputs must cover, the standard view and the shared procedure. The cards are code '
+           '(<code>type_cards/registry.py</code>, its API <code>type_cards/CONTRACT.md</code>); the vault note is rendered from the same registry.</p>',
+           f'<p class="lede">{e(KEYS_NOTE)} The rule that picks one: {e(reg.SELECTION_RULE)}.</p>']
     for group, label in GROUPS:
         rows = []
         for t in records(site):
@@ -98,11 +130,16 @@ def list_body(site) -> str:
                 continue
             proposed = sum(1 for m in c.metrics if not m.robotdx)
             verdict, word = OBS[c.observability.today]
-            rows.append(f'<tr data-type="{e(c.id)}"><th scope="row"><a href="{type_url(c.id)}">{e(c.title)}</a></th>'
+            rows.append(f'<tr data-type="{e(c.id)}" data-rungs="{len(c.rungs)}"><th scope="row"><a href="{type_url(c.id)}">{e(c.title)}</a></th>'
+                        f'<td data-col="rungs">{ladder_text(c)}</td>'
                         f'<td>{len(c.metrics)} ({proposed} proposed)</td><td>{len(c.model.parameters)}</td>'
                         f'<td>{e(", ".join(a.name for a in c.coverage.axes))}</td><td>{code(c.view.template) if c.view.template else "proposed"}</td>'
                         f'<td>{chip(verdict, word)}</td><td>{len(t.stations) or "—"}</td></tr>')
-        out.append(f"<h2>{label}</h2>" + table(["Type", "Metrics", "Model params", "Coverage axes", "View (data-ui)", "Measurable today", "Stations"], rows, cls="s2r-table s2r-types"))
+        out.append(f"<h2>{label}</h2>" + table(["Type", "Model rungs (parameters)", "Metrics", "Today's model params", "Coverage axes", "View (data-ui)",
+                                               "Measurable today", "Stations"], rows, cls="s2r-table s2r-types"))
+    out.append("<h2>Calibration packages</h2><p>Zach's packages: each calibrates a slice of the types and has its own algorithms. Where the code "
+               "lives today (found by reading bam_ws, io-diagnostics, robotparts and pidtuna; every path checked to exist at its ref):</p>"
+               + packages_table(reg.CALIBRATION_PACKAGES))
     return "".join(out)
 
 
@@ -124,8 +161,9 @@ def header(site, t: TypeRecord) -> str:
                  + (f" <b>It needs</b> {e('; '.join(c.observability.needs))}." if c.observability.needs else "") + "</p>")
     rdx = f"RobotDx part type {code(c.robotdx_part)}" if c.robotdx_part else f"no RobotDx part type ({e(c.robotdx_gap)})"
     kpis = "".join(f"<div><dt>{e(k)}</dt><dd>{v}</dd></div>" for k, v in (
-        ("Metrics", f"{len(c.metrics)} ({sum(1 for m in c.metrics if not m.robotdx)} proposed)"), ("Model parameters", str(len(c.model.parameters))),
-        ("Coverage axes", str(len(c.coverage.axes))), ("Measurable today", word)))
+        ("Metrics", f"{len(c.metrics)} ({sum(1 for m in c.metrics if not m.robotdx)} proposed)"), ("Model rungs", str(len(c.rungs))),
+        ("Today's model", f"{reg.current_rung(c).key if c.rungs else '—'} · {len(c.model.parameters)} params"), ("Gates", str(len(c.gates))),
+        ("Test types", str(len(c.tests))), ("Measurable today", word)))
     return (f'<h1>{e(c.title)}</h1>\n<p class="sub">{e(c.group.title())} · Zach\'s word: {e(c.zach)} · {rdx}</p>\n'
             f'<dl class="s2r-kpis">{kpis}</dl>\n' + "\n".join(lines))
 
@@ -134,25 +172,126 @@ def header(site, t: TypeRecord) -> str:
 
 def metrics_tab(site, t: TypeRecord) -> str:
     c = t.card
-    rows = [tr([e(m.title), chip("pass" if m.family == "performance" else "partial", m.family), e(m.defined_on), e(m.unit),
-                code(m.robotdx) if m.robotdx else f"<b>proposed:</b> {e(m.proposed)}", e(m.normalised), e(m.gate or "—"), "yes" if m.today else "no"],
-               metric=m.id, family=m.family, robotdx=m.robotdx or "") for m in c.metrics]
-    floor = f'<p><b>Floor:</b> {code(c.floor.robotdx) + ": " if c.floor.robotdx else ""}{e(c.floor.rule)}.</p>'
-    return ('<p class="lede">Black box and output-only: <b>performance</b> is the device against its commanded target; <b>fidelity</b> is the twin '
-            'against the real device on the same input. Each is divided by the device\'s own repeatability floor where one is measurable. '
-            f'Ids are RobotDx stock-catalog entries (io-diagnostics {code(reg.ROBOTDX_COMMIT)}).</p>'
-            + table(["Metric", "Family", "Defined on", "Unit", "RobotDx id", "÷ floor", "Gate", "Today"], rows) + floor)
+    out = ['<p class="lede">Black box and output-only: they read inputs and outputs, never a model parameter. <b>Performance</b> is the real device '
+           'against its commanded target; <b>fidelity</b> is the twin against the real device on the same input. Each is divided by the device\'s own '
+           f'repeatability floor where one is measurable. Ids are RobotDx stock-catalog entries (io-diagnostics {code(reg.ROBOTDX_COMMIT)}). '
+           'A metric no gate reads is <b>observed</b>, not gated.</p>']
+    for family, caption in FAMILIES:
+        rows = [tr([e(m.title), e(m.defined_on), e(m.unit), code(m.robotdx) if m.robotdx else f"<b>proposed:</b> {e(m.proposed)}", e(m.normalised),
+                    chip("pass" if reg.metric_status(c, m.id) == "gated" else "none", reg.metric_status(c, m.id)), e(m.gate or "—"), "yes" if m.today else "no"],
+                   metric=m.id, family=m.family, robotdx=m.robotdx or "", status=reg.metric_status(c, m.id)) for m in c.metrics if m.family == family]
+        out.append(table(["Metric", "Defined on", "Unit", "RobotDx id", "÷ floor", "Status", "Acceptance", "Today"], rows, caption=e(caption))
+                   .replace('<table class="s2r-table">', f'<table class="s2r-table" data-family="{family}">', 1))
+    out.append(f'<p><b>Floor:</b> {code(c.floor.robotdx) + ": " if c.floor.robotdx else ""}{e(c.floor.rule)}.</p>')
+    gate_of = {g.diagnostic: g for g in c.gates}
+    titles = {m.id: m.title for m in c.metrics}
+    rows = []
+    for d in c.diagnostics:
+        g = gate_of.get(d.id)
+        warn = f"{e(d.message)}" if d.kind == "drift" else ""
+        fine = f"{e(d.threshold.text())}" + (" (settable)" if d.settable else "")
+        target = (f"{e(g.target.text())}" + (f" · {e(g.acceptance)}" if g.acceptance else "")) if g else "— (observed)"
+        forecast = (f"<br><small>Forecast: {e(d.forecast.usage)} left until the threshold, from the {e(d.forecast.law)} law of "
+                    f"{e(', '.join(d.forecast.parameters))}.</small>" if d.forecast else "")
+        rows.append(tr([f"{chip('warn' if d.kind == 'drift' else 'none', d.kind)} {e(titles.get(d.metric, d.metric))}",
+                        fine + (f"<br><b>{warn}</b>" if warn else "") + forecast + (f"<br><small>{e(d.note)}</small>" if d.note else ""),
+                        target, code(d.robotdx) if d.robotdx else "—"], diagnostic=d.id, kind=d.kind, gate=g.id if g else ""))
+    out.append("<h2>Diagnostics and gates</h2><p>A <b>diagnostic</b> is a metric plus a threshold: past it, a warning. A <b>gate</b> is a diagnostic "
+               "with a target: pass or fail. The drift diagnostic divides fidelity on live data by its calibrated value.</p>"
+               + table(["Diagnostic (reads)", "Fine while (threshold)", "Gate target", "RobotDx"], rows))
+    return "".join(out)
+
+
+def ref_short(ref) -> str:
+    """'Hwangbo et al. 2019' from 'Hwangbo, Lee, ... (2019). Title. Venue.'; a doc keeps its title: 'MuJoCo 2026: XML reference: ...'."""
+    head, _, rest = ref.title.partition(" (")
+    year, _, after = rest.partition(").")
+    authors = [a for a in head.split(", ") if a]
+    who = authors[0] + (" et al." if len(authors) > 2 else f" & {authors[1]}" if len(authors) == 2 else "")
+    label = f"{who} {year}".strip()
+    if ref.kind in ("doc", "standard", "code"):
+        label += ": " + after.strip().rstrip(".")
+    return label
+
+
+def ref_link(ref) -> str:
+    """A reference as a short link, the full citation (and what the rung uses it for) in its tooltip."""
+    tip = e(ref.title + (f" — {ref.note}" if ref.note else ""))
+    label = e(ref_short(ref))
+    return f'<a href="{e(ref.url)}" title="{tip}">{label}</a>' if ref.url else f'<span title="{tip}">{label}</span>'
 
 
 def model_tab(site, t: TypeRecord) -> str:
-    m = t.card.model
+    c = t.card
+    m = c.model
     word = {"yes": "yes", "partial": "partly", "no": "no"}
-    rows = [tr([code(p.name), e(p.unit), e("—" if p.nominal is None else str(p.nominal)), e(p.source), e(p.identified_by),
-                chip(OBS[p.observable][0], word[p.observable]), e(p.note)], param=p.name, observable=p.observable) for p in m.parameters]
-    return (f'<p class="lede"><b>{e(m.name)}</b> · robotparts {code(m.robotparts) if m.robotparts else "none"}{(" · " + e(m.proposed)) if m.proposed else ""}.</p>'
-            f"<p>{code(m.equation)}</p>"
-            + table(["Parameter", "Unit", "Nominal", "Source", "Identified by", "Outputs see it?", "Note"], rows)
-            + "<p>Parameters are levers: improving the model and its calibration should move the metrics, never be one.</p>")
+    out = [f'<p class="lede">{e(KEYS_NOTE)}</p>', f"<p><b>Selection rule:</b> {e(reg.SELECTION_RULE)}.</p>"]
+    rows = []
+    below: set[str] = set()
+    for r in c.rungs:
+        kind_v, kind_w = KIND[r.kind]
+        names = ", ".join(f"<b>{e(n)}</b>" if n not in below else e(n) for n in r.parameter_names) or "—"
+        size = f"{r.n_parameters:,}" + (f" <small>({r.n_named} named + {r.architecture.weights:,} weights)</small>" if r.architecture and r.n_named else
+                                       " <small>weights</small>" if r.architecture else "")
+        need = r.needs
+        needs = (f"{need.min_pct:g} % of cells × ≥ {need.min_samples} samples" + ("" if need.extrapolates else "; no extrapolation")
+                 + (f"; {need.deployment_weighted_pct:g} % deployment-weighted" if need.deployment_weighted_pct else "")) if need else "—"
+        refs = "<br>".join(ref_link(x) for x in r.references)
+        current = ' <span class="s2r-v s2r-pass">today\'s model</span>' if r.current else ""
+        rows.append(f'<tr data-rung="{e(r.key)}" data-kind="{e(r.kind)}" data-n-params="{r.n_parameters}" data-current="{str(r.current).lower()}">'
+                    f'<th scope="row">{e(r.key)}{current}</th><td>{e(r.name)}<br><small>{e(r.equation)}</small></td><td>{chip(kind_v, kind_w)}</td>'
+                    f'<td>{size}</td><td>{names}</td><td>{e(needs)}</td><td>{code(r.robotparts) if r.robotparts else "—"}<br><small>{e(r.implemented)}</small></td>'
+                    f'<td class="s2r-refs">{refs}</td></tr>')
+        below = set(r.parameter_names)
+    out.append("<h2>The ladder</h2>" + table(["Rung", "Model", "Kind", "Parameters", "Names (new in bold)", "Coverage it needs", "robotparts / runs in", "Learn it"],
+                                              rows, caption="Lowest first. A physics rung holds every parameter of the rung below it."))
+    learned = [r for r in c.rungs if r.architecture]
+    if learned:
+        arows = []
+        for r in learned:
+            a = r.architecture
+            hidden = " × ".join(str(h) for h in a.hidden) or "—"
+            history = f"{a.history} sample{'s' if a.history != 1 else ''}" + (f", {a.history_dt_s * 1000:g} ms apart" if a.history_dt_s else "")
+            arows.append(f'<tr data-arch="{e(r.key)}"><th scope="row">{e(r.key)}</th><td>{e(a.family)}</td><td>{e(", ".join(a.inputs))} × {history} = {a.n_inputs} inputs</td>'
+                         f'<td>{e(hidden)}{(" " + e(a.activation)) if a.activation else ""}</td><td>{e(a.output)}</td><td>{a.weights:,}</td>'
+                         f'<td>{e(r.base) if r.base else "—"}</td></tr>')
+        out.append("<h2>Learned rungs</h2><p>Their size is a weight count, not named parameters. They are judged only on held-out data inside the "
+                   f"cells they were trained on; outside, a sample is flagged <b>{e(reg.OUT_OF_COVERAGE)}</b>.</p>"
+                   + table(["Rung", "Family", "Inputs × history", "Hidden layers", "Predicts", "Weights", "On rung"], arows))
+    worn = [(r, p) for r in c.rungs for p in r.wear_parameters]
+    if worn:
+        wrows = [tr([e(r.key), code(p.name), e(p.wear.usage) + f" ({e(p.wear.unit)})", e(p.wear.law) + f": {e(reg.WEAR_LAWS[p.wear.law])}", code(p.wear.rate),
+                     "; ".join(ref_link(x) for x in reg.WEAR_LAW_REFERENCES[p.wear.law])], wear=p.name) for r, p in worn]
+        out.append("<h2>Wear</h2><p>Known wear parameters grow with use; the drift diagnostic's forecast extrapolates the same law to its threshold.</p>"
+                   + table(["Rung", "Parameter", "Usage", "Law", "Rate parameter", "Learn it"], wrows))
+    first: dict[str, str] = {}
+    union = []
+    for r in c.rungs:
+        for p in r.parameters:
+            if p.name not in first:
+                first[p.name] = r.key
+                union.append(p)
+    prow = [tr([code(p.name), e(first[p.name]), e(p.unit), e("—" if p.nominal is None else str(p.nominal)), e(p.source), e(p.identified_by),
+                chip(OBS[p.observable][0], word[p.observable]), e(p.role), e(p.note)], param=p.name, observable=p.observable, rung=first[p.name], role=p.role)
+            for p in union]
+    out.append(f'<h2>Parameters</h2><p>Every named parameter once, with the rung it enters. Today\'s model is <b>{e(m.name)}</b> · robotparts '
+               f'{code(m.robotparts) if m.robotparts else "none"}{(" · " + e(m.proposed)) if m.proposed else ""}: {code(m.equation)}.</p>'
+               + table(["Parameter", "From", "Unit", "Nominal", "Source", "Identified by", "Outputs see it?", "Role", "Note"], prow)
+               + "<p>Parameters are levers: improving the model and its calibration should move the metrics, never be one.</p>")
+    return "".join(out)
+
+
+def tests_tab(site, t: TypeRecord) -> str:
+    c = t.card
+    rows = []
+    for x in c.tests:
+        rows.append(tr([e(x.title), chip("pass" if x.setting == "bench" else "partial", x.setting), ", ".join(code(n) for n in x.identifies), e(x.how),
+                        e("; ".join(x.needs) or "—"), "recalibrates" if x.recalibration else "—", e(x.exists or "—") + (f" <small>({e(x.duration)})</small>" if x.duration else "")],
+                       test=x.id, setting=x.setting, recalibration=str(x.recalibration).lower()))
+    settings = " ".join(f"<b>{e(k)}</b>: {e(v)}." for k, v in reg.SETTINGS.items())
+    return (f'<p class="lede">The tests that identify this type\'s parameters. {settings} A run is tagged with its setting and its test type.</p>'
+            + table(["Test", "Setting", "Identifies", "How", "Needs", "Recalibration", "Today"], rows)
+            + "<h2>Calibration packages that serve it</h2>" + packages_table(reg.packages_for(c)))
 
 
 def coverage_map(sched, st) -> str:
@@ -189,20 +328,34 @@ def coverage_map(sched, st) -> str:
 
 def coverage_tab(site, t: TypeRecord) -> str:
     c = t.card
-    axes = table(["Axis", "Unit", "Binning"], [tr([e(a.name), e(a.unit), e(a.binning)], axis=a.name) for a in c.coverage.axes])
+    axes = table(["Axis", "Unit", "Bin size", "Binning", "Marginal"],
+                 [f'<tr data-axis="{e(a.name)}" data-bin-size="{"" if a.bin_size is None else f"{a.bin_size:g}"}" data-marginal="{str(a.marginal).lower()}">'
+                  f'<td>{e(a.name)}</td><td>{e(a.unit)}</td><td>{"—" if a.bin_size is None else f"{a.bin_size:g} {e(a.unit)}"}</td><td>{e(a.binning)}</td>'
+                  f'<td>{"yes" if a.marginal else "headline"}</td></tr>' for a in c.coverage.axes])
+    gate = c.coverage.gate_pct
+    needs = "; ".join(f"{r.key} {r.needs.min_pct:g} % × ≥ {r.needs.min_samples}" for r in c.rungs if r.needs and r.kind != "physics")
     out = [f'<p class="lede">{e(c.coverage.rule)}.' + (f" RobotDx: {code(c.coverage.robotdx)}." if c.coverage.robotdx else "")
-           + (f" A plan comes from: {e(c.coverage.plan_source)}." if c.coverage.plan_source else "") + "</p>", axes]
+           + (f" A plan comes from: {e(c.coverage.plan_source)}." if c.coverage.plan_source else "") + "</p>",
+           f'<p data-coverage-gate="{gate:g}"><b>Coverage gate:</b> a plan passes when it visits at least {gate:g} % of the reachable headline cells (a '
+           f'histogram over the binned space; the plan may sample anywhere in the full space). The learned rungs bind harder: {e(needs or "none on this card")}.</p>'
+           if gate is not None else "", axes]
     planned = [(st, s) for st, s in t.stations if s]
     if planned:
         rows = []
         for st, s in planned:
             train, held = cov.servo_coverage(s), cov.servo_coverage(s, split="held_out")
             same = train.pct == s["coverage"]["train"]["pct_reachable"]
+            verdict = reg.coverage_gate(c, train)
+            q_edges = cov.joint_edges(s["description"])[0]
+            q_bin = f"{q_edges[1] - q_edges[0]:.4g}"
             rows.append(tr([f'<a href="{st.url}#schedule">{e(st.device)}</a>', code(s["digest"]), f"<b>{train.pct} %</b>", f"{held.pct} %", f"{train.visited} of {train.reachable}",
-                            f"{train.axes['load torque']} %", "not planned", chip("pass" if same else "fail", f"schedule.py: {s['coverage']['train']['pct_reachable']} %")],
-                           station=st.key, train_pct=train.pct, held_out_pct=held.pct))
+                            f"{q_bin} rad",
+                            f"{train.axes['load torque']} %", "not planned", chip("pass" if same else "fail", f"schedule.py: {s['coverage']['train']['pct_reachable']} %"),
+                            chip(verdict if verdict != "observed" else "none", verdict)],
+                           station=st.key, train_pct=train.pct, held_out_pct=held.pct, gate=verdict, q_bin=q_bin))
         out.append("<h2>Planned coverage, before anything runs</h2>"
-                   + table(["Station", "Schedule", "Train (q, qd, qdd)", "Held out", "Cells", "Load torque", "Temperature", "Producer's number"], rows,
+                   + table(["Station", "Schedule", "Train (q, qd, qdd)", "Held out", "Cells", "q cell", "Load torque", "Temperature", "Producer's number",
+                            f"Gate (≥ {c.coverage.gate_pct:g} %)" if c.coverage.gate_pct is not None else "Gate"], rows,
                            caption="Every station of this type with a schedule (bam_rack_twin.schedule), scored by this card's coverage function"))
         # WHY one map per station (2026-11-04): with every servo scheduled, a single map under one station's name was another's plan
         out.extend(coverage_map(sched, st) for st, sched in planned)
