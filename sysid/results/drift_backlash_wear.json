@@ -566,8 +566,37 @@
   "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"
  },
  "provenance": {
-  "code": "782bd5e+dirty",
-  "seconds": 175.7,
+  "code": "afafdcf",
+  "imports": [
+   {
+    "repo": "/home/bam/bam_ws",
+    "name": "bam_ws",
+    "branch": "main",
+    "commit": "e46c5335",
+    "date": "2026-11-05T11:19:53-07:00",
+    "dirty": false,
+    "paths": 13
+   },
+   {
+    "repo": "/home/bam/io-diagnostics",
+    "name": "io-diagnostics",
+    "branch": "main",
+    "commit": "1bb3f13",
+    "date": "2026-11-04T23:16:40-07:00",
+    "dirty": false,
+    "paths": 4
+   },
+   {
+    "repo": "/home/bam/robot_msgs",
+    "name": "robot_msgs",
+    "branch": "main",
+    "commit": "e9adfce",
+    "date": "2026-11-04T23:04:42-07:00",
+    "dirty": false,
+    "paths": 6
+   }
+  ],
+  "seconds": 267.9,
   "commissioned_twin": "19d8c27f",
   "identify_sealed": true
  }

@@ -1776,12 +1776,40 @@
   "runs": 42
  },
  "provenance": {
-  "bam_rack_twin": "bam_ws main, src/dev/bam_rack_twin (imported in place) @ e46c5335 2026-11-05T11:19:53-07:00",
   "twin_of_record": "twin of record (followup A)",
   "twin_of_record_digest": "89b6fde5",
   "identify_sealed": true,
-  "code": "782bd5e+dirty",
-  "seconds": 491.7
+  "code": "afafdcf",
+  "imports": [
+   {
+    "repo": "/home/bam/bam_ws",
+    "name": "bam_ws",
+    "branch": "main",
+    "commit": "e46c5335",
+    "date": "2026-11-05T11:19:53-07:00",
+    "dirty": false,
+    "paths": 11
+   },
+   {
+    "repo": "/home/bam/io-diagnostics",
+    "name": "io-diagnostics",
+    "branch": "main",
+    "commit": "1bb3f13",
+    "date": "2026-11-04T23:16:40-07:00",
+    "dirty": false,
+    "paths": 4
+   },
+   {
+    "repo": "/home/bam/robot_msgs",
+    "name": "robot_msgs",
+    "branch": "main",
+    "commit": "e9adfce",
+    "date": "2026-11-04T23:04:42-07:00",
+    "dirty": false,
+    "paths": 6
+   }
+  ],
+  "seconds": 620.6
  },
  "notes": [
   "The real CAN 11 is bam_rack_twin's own twin at world.json's truth; the floor is the oracle's measurement noise alone (two camera draws of one deterministic run), so real floors are larger.",

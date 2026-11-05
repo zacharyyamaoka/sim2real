@@ -2071,7 +2071,45 @@
  },
  "provenance": {
   "identify_sealed": true,
-  "code": "782bd5e+dirty",
-  "seconds": 7.9
+  "code": "afafdcf",
+  "imports": [
+   {
+    "repo": "/home/bam/.cache/like_keras/mujoco_menagerie",
+    "name": "mujoco_menagerie",
+    "branch": "main",
+    "commit": "71f066a",
+    "date": "2026-07-04T13:08:40-07:00",
+    "dirty": false,
+    "paths": 2
+   },
+   {
+    "repo": "/home/bam/bam_ws",
+    "name": "bam_ws",
+    "branch": "main",
+    "commit": "e46c5335",
+    "date": "2026-11-05T11:19:53-07:00",
+    "dirty": false,
+    "paths": 10
+   },
+   {
+    "repo": "/home/bam/io-diagnostics",
+    "name": "io-diagnostics",
+    "branch": "main",
+    "commit": "1bb3f13",
+    "date": "2026-11-04T23:16:40-07:00",
+    "dirty": false,
+    "paths": 4
+   },
+   {
+    "repo": "/home/bam/robot_msgs",
+    "name": "robot_msgs",
+    "branch": "main",
+    "commit": "e9adfce",
+    "date": "2026-11-04T23:04:42-07:00",
+    "dirty": false,
+    "paths": 6
+   }
+  ],
+  "seconds": 11.0
  }
 }
