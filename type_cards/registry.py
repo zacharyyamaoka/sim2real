@@ -37,6 +37,10 @@ from pathlib import Path
 from typing import Callable
 
 from . import coverage as cov
+from . import schema
+from .schema import (DRIFT_MESSAGE, DRIFT_THRESHOLD, KINDS, OUT_OF_COVERAGE, ROLES, SCHEMA, SETTINGS, TWINNED_LIMIT, WEAR_LAWS,  # noqa: F401
+                     Architecture, CalibrationPackage, CodeHome, CoverageNeed, Diagnostic, DriftResult, Forecast, Gate, Limit, Reference,
+                     Rung, RungScore, TestType, Wear, coverage_flag, drift_check, mlp_weights, usage_remaining, wear_usage_at, wear_value)
 
 REPO = Path(__file__).resolve().parents[1]
 ROBOTDX_REPO = Path("/home/bam/io-diagnostics")
@@ -91,6 +95,8 @@ class Parameter:
     identified_by: str   # the experiment that identifies it
     observable: str      # yes | partial | no: can the type's own outputs see it
     note: str = ""
+    wear: Wear | None = None  # v2: grows with use (usage, law, rate parameter); None: constant
+    role: str = "model"       # v2: model | driver | assembly | config (schema.ROLES)
 
 
 @dataclass(frozen=True)
@@ -107,6 +113,8 @@ class Axis:
     name: str
     unit: str
     binning: str
+    bin_size: float | None = None  # v2: the constant cell width in `unit`; None when log-spaced, set per unit or categorical (see binning)
+    marginal: bool = False         # v2: reported beside the headline cells, never folded into them
 
 
 @dataclass(frozen=True)
@@ -116,6 +124,7 @@ class Coverage:
     measure: Callable
     robotdx: str | None = None   # the RobotDx coverage entry, where one exists
     plan_source: str = ""        # where a planned set comes from today
+    gate_pct: float | None = None  # v2: the coverage gate, a plan passes when it visits >= this % of the reachable headline cells
 
 
 @dataclass(frozen=True)
@@ -180,6 +189,11 @@ class Card:
     procedure: dict
     members: tuple[Member, ...] = ()
     error_budget: str = ""
+    # v2 (Zach, Nov 5 2026): the ladder of models, the diagnostics and gates over the metrics, and the test types
+    rungs: tuple[Rung, ...] = ()
+    diagnostics: tuple[Diagnostic, ...] = ()
+    gates: tuple[Gate, ...] = ()
+    tests: tuple[TestType, ...] = ()
 
 
 # --- the shared procedure ----------------------------------------------------------------------------------------------------
@@ -197,8 +211,8 @@ STEPS = (
 # the previous step's file; the same schedule with a new model is a fair comparison.
 
 
-def P(name, unit, nominal, source, identified_by, observable, note=""):
-    return Parameter(name, unit, nominal, source, identified_by, observable, note)
+def P(name, unit, nominal, source, identified_by, observable, note="", wear=None, role="model"):
+    return Parameter(name, unit, nominal, source, identified_by, observable, note, wear, role)
 
 
 def proc(**tools) -> dict:
@@ -613,3 +627,145 @@ def gaps() -> list[tuple[str, str, str]]:
         if not card.view.template:
             out.append(("data-ui", card.id, card.view.proposed))
     return out
+
+
+# --- v2: the API lanes code against (type_cards/CONTRACT.md) -------------------------------------------------------------------
+
+# Zach's calibration packages (PROJECT - Sim2Real, Nov 5 2026), filled in by type_cards/calibration.py
+CALIBRATION_PACKAGES: tuple[CalibrationPackage, ...] = ()
+# each wear law's references (real, citable), filled in by type_cards/references.py
+WEAR_LAW_REFERENCES: dict[str, tuple[Reference, ...]] = {}
+
+SELECTION_RULE = ("pick the lowest rung, in ladder order, whose held-out fidelity reaches the floor (held-out error ÷ the floor <= "
+                  f"{TWINNED_LIMIT:g}×); a residual or learned rung is judged only on held-out data inside its covered cells, and "
+                  f"held-out samples outside them are flagged '{OUT_OF_COVERAGE}', never scored")
+
+
+def _card(card: Card | str) -> Card:
+    return CARDS[card] if isinstance(card, str) else card
+
+
+def rungs(card: Card | str) -> tuple[Rung, ...]:
+    """A card's ladder, lowest first (physics, then the wear variant, then residual and learned)."""
+    return _card(card).rungs
+
+
+def rung(card: Card | str, key: str) -> Rung:
+    for r in _card(card).rungs:
+        if r.key == key:
+            return r
+    raise KeyError(f"{_card(card).id} has no rung {key!r} (it has {[r.key for r in _card(card).rungs]})")
+
+
+def current_rung(card: Card | str) -> Rung | None:
+    """The rung that equals the card's `model` (today's single model); None while a card has no ladder."""
+    return next((r for r in _card(card).rungs if r.current), None)
+
+
+def added(card: Card | str, key: str) -> tuple[Parameter, ...]:
+    """The named parameters `key` adds over the rung below it (a learned rung adds none: its size is its weights)."""
+    ladder = _card(card).rungs
+    i = [r.key for r in ladder].index(key)
+    below = set(ladder[i - 1].parameter_names) if i else set()
+    return tuple(p for p in ladder[i].parameters if p.name not in below)
+
+
+def select_rung(card_or_ladder, held_out, limit: float = TWINNED_LIMIT) -> Rung | None:
+    """SELECTION_RULE over a card (or a card id, or a ladder of rungs): see schema.select."""
+    ladder = card_or_ladder if isinstance(card_or_ladder, (tuple, list)) else _card(card_or_ladder).rungs
+    return schema.select(ladder, held_out, limit)
+
+
+def drift_diagnostic(card: Card | str) -> Diagnostic | None:
+    return next((d for d in _card(card).diagnostics if d.kind == "drift"), None)
+
+
+def check_drift(card: Card | str, live: float, calibrated: float, threshold: float | None = None, history=None) -> DriftResult:
+    """The card's drift diagnostic on live data (DRIFT_MESSAGE past the threshold; `threshold` overrides the card's)."""
+    dx = drift_diagnostic(card)
+    if dx is None:
+        raise KeyError(f"{_card(card).id} has no drift diagnostic")
+    return drift_check(dx, live, calibrated, threshold, history)
+
+
+def metric_status(card: Card | str, metric_id: str) -> str:
+    """'gated' when a gate's diagnostic reads the metric, else 'observed' (Zach: "if not gated then we just observe it")."""
+    c = _card(card)
+    reads = {d.id: d.metric for d in c.diagnostics}
+    return "gated" if any(reads.get(g.diagnostic) == metric_id for g in c.gates) else "observed"
+
+
+def gate_status(gate: Gate, value: float | None, limit: float | None = None) -> str:
+    """pass | fail against the gate's target, not_run without a value; `limit` supplies a per-unit target (Limit.value None)."""
+    return "not_run" if value is None else ("pass" if gate.target.ok(value, limit) else "fail")
+
+
+def coverage_gate(card: Card | str, result) -> str:
+    """pass | fail against the card's coverage gate (>= gate_pct % of the reachable headline cells), observed when it has none."""
+    gate = _card(card).coverage.gate_pct
+    return "observed" if gate is None else ("pass" if result.pct >= gate else "fail")
+
+
+def tests_for(card: Card | str, setting: str | None = None) -> tuple[TestType, ...]:
+    if setting is not None and setting not in SETTINGS:
+        raise ValueError(f"setting {setting!r} is not one of {sorted(SETTINGS)}")
+    return tuple(t for t in _card(card).tests if setting is None or t.setting == setting)
+
+
+def packages_for(card: Card | str) -> tuple[CalibrationPackage, ...]:
+    cid = _card(card).id
+    return tuple(p for p in CALIBRATION_PACKAGES if cid in p.serves)
+
+
+ALIASES = {
+    "integrated servo": "servo", "integrated_servo": "servo", "joint": "servo", "bldc_driver": "driver", "driver board": "driver",
+    "bldc driver": "driver", "moteus": "driver", "rgb": "camera_rgb", "rgb camera": "camera_rgb", "rgbd": "camera_rgbd",
+    "rgbd camera": "camera_rgbd", "depth camera": "camera_rgbd", "d405": "camera_rgbd", "d435": "camera_rgbd", "hsi": "camera_hsi",
+    "hyperspectral": "camera_hsi", "hyperspectral camera": "camera_hsi", "arm": "arm_6dof", "6 dof robot arm": "arm_6dof", "ur5e": "arm_6dof",
+    "arm_gripper": "arm_6dof_gripper", "arm + gripper": "arm_6dof_gripper", "wrist": "arm_subassembly", "sub-assembly": "arm_subassembly",
+    "conveyor belt": "conveyor", "belt": "conveyor",
+}
+
+
+def _word(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower().replace("_", " ").replace("-", " "))
+
+
+def card_for(word: str) -> Card | None:
+    """The card a description's word names (a card id, its title, Zach's word, its RobotDx part type or an alias), or None."""
+    w = _word(word)
+    for c in CARDS.values():
+        if w in {_word(c.id), _word(c.title), _word(c.zach), _word(c.robotdx_part or "")} - {""}:
+            return c
+    hit = {_word(k): v for k, v in ALIASES.items()}.get(w)
+    return CARDS.get(hit) if hit else None
+
+
+def _plain(obj):
+    """JSON-able: dataclasses as dicts (a Rung and an Architecture with their computed sizes), tuples as lists, callables dropped."""
+    from dataclasses import fields, is_dataclass  # noqa: PLC0415
+    if is_dataclass(obj):
+        out = {f.name: _plain(getattr(obj, f.name)) for f in fields(obj) if not callable(getattr(obj, f.name))}
+        if isinstance(obj, Rung):
+            out.update(n_parameters=obj.n_parameters, n_named=obj.n_named, parameter_names=list(obj.parameter_names))
+        if isinstance(obj, Architecture):
+            out.update(n_inputs=obj.n_inputs, weights=obj.weights)
+        return out
+    if isinstance(obj, dict):
+        return {str(k): _plain(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_plain(v) for v in obj]
+    return obj
+
+
+def export() -> dict:
+    """The whole registry as JSON-able data (schema SCHEMA), for pages and lanes that do not import Python."""
+    cards = []
+    for c in CARDS.values():
+        d = _plain(c)
+        d["metric_status"] = {m.id: metric_status(c, m.id) for m in c.metrics}
+        cards.append(d)
+    return {"schema": SCHEMA, "settings": dict(SETTINGS), "kinds": list(KINDS), "roles": list(ROLES), "wear_laws": dict(WEAR_LAWS),
+            "drift_message": DRIFT_MESSAGE, "drift_threshold": DRIFT_THRESHOLD, "out_of_coverage": OUT_OF_COVERAGE,
+            "twinned_limit": TWINNED_LIMIT, "selection_rule": SELECTION_RULE, "steps": _plain(STEPS), "cards": cards,
+            "calibration_packages": _plain(CALIBRATION_PACKAGES)}

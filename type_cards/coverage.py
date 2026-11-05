@@ -242,3 +242,16 @@ def condition_coverage(axes: Mapping[str, Sequence[Any]]) -> Callable[[Sequence[
         return CoverageResult(**{**result.__dict__, "unplanned": tuple(n for n in names if n not in given)})
 
     return measure
+
+
+# --- v2: random plans over the full space ------------------------------------------------------------------------------------
+
+def random_plan(axes: Sequence[Sequence[Any]], n: int, seed: int = 0) -> list[tuple]:
+    """n points drawn uniformly over the FULL space the axes span (a continuous axis from its first edge to its last, a categorical
+    one over its levels), reproducible from `seed`. WHY (Zach, Nov 5: "you can randomly sample within the full space, but its a easy
+    way to quickly check if your covering it ... its like a histogram"): the cells are only the ruler; a plan need not sit on them."""
+    import random  # noqa: PLC0415
+
+    rng = random.Random(seed)
+    return [tuple(rng.choice(axis[1:]) if axis and axis[0] == "levels" else rng.uniform(float(axis[0]), float(axis[-1])) for axis in axes)
+            for _ in range(n)]
