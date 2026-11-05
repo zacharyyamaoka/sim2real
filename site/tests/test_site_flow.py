@@ -161,6 +161,10 @@ TREE_JS = """(name) => { const s = (%s)(name); if (!s) return null; return [...s
   const b = tr.querySelector('td[data-col="worst"] .dv-state'); const label = tr.querySelector('td[data-col="label"]');
   return { label: label ? label.textContent.trim() : '', state: b ? b.dataset.state : null, word: b ? (b.querySelector('.dv-state-word') || {}).textContent : null,
            glyph: b ? (b.querySelector('.dv-state-glyph') || {}).textContent : null, shown: b ? b.getBoundingClientRect().width > 0 : false }; }); }""" % VIEW_JS
+# a tree table's roll-up number columns: every row's label and its passing and cells cells as drawn
+ROLLUP_COLS_JS = """(name) => { const s = (%s)(name); if (!s) return null; return [...s.querySelectorAll('tbody tr[data-id]')].map((tr) => {
+  const t = (c) => ((tr.querySelector('td[data-col="' + c + '"]') || {}).textContent || '').replace(/[^\\d.]/g, '');
+  return { label: ((tr.querySelector('td[data-col="label"]') || {}).textContent || '').trim(), passing: t('passing'), cells: t('cells') }; }); }""" % VIEW_JS
 PEEK_JS = """() => { const p = [...document.querySelectorAll('.dv-peek')].find((x) => !x.hidden && x.getClientRects().length > 0); if (!p) return null;
   const a = p.querySelector('a.dv-peek-link'); const r = p.getBoundingClientRect();
   return { text: p.textContent, link: a ? a.href : null, linkText: a ? a.textContent : null, box: [r.left, r.right, r.top, r.bottom],
@@ -590,6 +594,260 @@ def schedule_freshness_checks(out: Path, schedules_root: Path) -> None:
     check(n_commands > 0 and not missing, f"every schedule command's --plan file exists ({n_commands} commands; missing: {missing[:3]})")
 
 
+# ---- the deployment tree, the run tags and the configuration snapshot (Zach, PROJECT - Sim2Real, Nov 5 2026), written before them --
+# "each deployment, should have a tree, I guess simlar to the RobotDx Entity tree ... we can see like how the matching is at that
+# level"; "tag a run as bench vs real"; "record the current configuration values ... so ideally we can reproduce". Every expectation
+# below is read here from the primary files (the registry, the bam_rack_twin record, the newest acceptance in the archive, each run's
+# own session.json), never from the site's tree.json.
+ENVIRONMENTS = ("sim", "bench", "real")
+SETTINGS = ("bench", "deployed")  # type_cards SETTINGS (sim2real.type_cards/2 CONTRACT: a run is tagged with its setting)
+# a tree facet's buttons as data-ui draws them in a visible rail: level, value, label, count, pressed (data-ui CONTRACT §7 `tree`)
+TREE_NODES_JS = """(scope) => { const root = document.querySelector(scope) || document; const rail = [...root.querySelectorAll('.dd-rail, data-facets')]
+  .find((r) => r.getClientRects().length > 0 && r.querySelector('.df-tree')); if (!rail) return null; const tree = rail.querySelector('.df-tree');
+  const group = tree.closest('[role=group], section, fieldset, details, .df-facet') || tree.parentElement;
+  const r = rail.getBoundingClientRect(), t = tree.getBoundingClientRect();
+  return { first: [...rail.querySelectorAll('.df-tree, .df-values, .df-list, input, select, .df-range, .df-chips')].indexOf(tree) === 0 || rail.querySelector('.df-tree') === rail.querySelector('ul, .df-values, input'),
+           heading: group ? (group.querySelector('h3, h4, legend, summary, .df-h, .df-title') || {}).textContent || '' : '',
+           rail: [r.left, r.right], box: [t.left, t.right, t.top, t.bottom],
+           nodes: [...tree.querySelectorAll('button.df-node')].map((b) => ({ level: Number(b.dataset.level), value: b.dataset.value,
+             label: (b.querySelector('.df-label') || {}).textContent || '', count: Number(((b.querySelector('.df-count') || {}).textContent || '').replace(/[^\\d]/g, '')),
+             pressed: b.getAttribute('aria-pressed') === 'true', shown: b.getBoundingClientRect().width > 0 })) }; }"""
+# the rows a dashboard panel's view holds after every filter (its data-views model), and the first rows' cells as drawn
+PANEL_ROWS_JS = """([name, column]) => { const s = (%s)(name); const e = s && s.querySelector(':scope > data-views'); const m = e && e.model; if (!m) return null;
+  const heads = [...s.querySelectorAll('thead th')].map((h) => h.textContent.trim()); const i = heads.findIndex((h) => h.startsWith(column));
+  return { n: m.matched ?? (m.rows ? m.rows.length : null), cells: i < 0 ? [] : [...s.querySelectorAll('tbody tr')].slice(0, 40).map((tr) => (tr.querySelectorAll('td')[i] || {}).textContent || '').map((x) => x.trim()).filter(Boolean) }; }""" % VIEW_JS
+
+
+def rack_layout(registry_path: Path) -> tuple[dict, dict[str, str]]:
+    """(the rack's registry entry, {device: adapter serial}) from app/registry.json and the bam_rack_twin record it names."""
+    entry = next(d for d in json.loads(registry_path.read_text())["deployments"] if d["id"] == DEP)
+    record = json.loads(Path(entry["record"]).read_text())
+    return entry, {f"CAN {c['can_id']}": c["adapter_serial"] for c in record["components"] if c.get("can_id") is not None}
+
+
+def session_of(npz: Path) -> Path | None:
+    """A run's bam_rack_twin.hardware session.json: <session>/runs/<run>.npz beside <session>/session.json (the test's own copy)."""
+    folder = npz.parent.parent if npz.parent.name == "runs" else npz.parent
+    return folder / "session.json" if (folder / "session.json").is_file() else None
+
+
+def snapshot_of(npz: Path, can_id: int, cache: dict) -> bool:
+    """Whether the run's session recorded its board's whole config: board_configs[can_id] names a file whose key lines hash to it."""
+    session = session_of(npz)
+    if session is None:
+        return False
+    if session not in cache:
+        cache[session] = json.loads(session.read_text())
+    entry = (cache[session].get("board_configs") or {}).get(str(can_id)) or {}
+    path = session.parent / entry["file"] if entry.get("file") and not entry.get("error") else None
+    if path is None or not path.is_file():
+        return False
+    keys = "".join(line + "\n" for line in path.read_text(encoding="latin1").splitlines() if line and not line.startswith("#"))
+    return hashlib.sha256(keys.encode("latin1")).hexdigest() == entry.get("sha256")
+
+
+def deploy_tree_checks(data: Path, out: Path, doc: dict) -> dict:
+    """The rack's tree, every node's match and every run's tags and config, against the primary files. Returns what the browser
+    checks click: {adapter: (node id, stations, runs)}, the station node ids and the runs per station."""
+    entry, adapter_of = rack_layout(REPO / "app" / "registry.json")
+    rows = json.loads((data / "runs.json").read_text())["rows"]
+    want = {(f"CAN {can}", g["id"]): g["status"] for can, st in doc["stations"].items() for g in st["gates"]}
+    runs_of = {}
+    for r in rows:
+        runs_of[r["device"]] = runs_of.get(r["device"], 0) + 1
+    tree_path = data / "tree.json"
+    check(tree_path.is_file(), f"the rack's tree is served ({tree_path.relative_to(out)})")
+    if not tree_path.is_file():
+        return {}
+    nodes = json.loads(tree_path.read_text())["rows"]
+    by_id = {n["id"]: n for n in nodes}
+    roots = [n for n in nodes if not n.get("parent")]
+    adapters = sorted(set(adapter_of.values()))
+    shape = {}
+    for n in nodes:
+        if n.get("parent") in by_id and by_id[n["parent"]] in roots:
+            shape[n["label"]] = sorted(c["device"] for c in nodes if c.get("parent") == n["id"])
+    want_shape = {f"fdcanusb {serial}": sorted(d for d, s in adapter_of.items() if s == serial) for serial in adapters}
+    check(len(roots) == 1 and roots[0]["label"] == entry["title"] and shape == want_shape and len(nodes) == 1 + len(adapters) + len(adapter_of),
+          f"the rack's tree is its record's wiring, as RobotDx draws it: {entry['title']} → {len(adapters)} fdcanusb adapters → {len(adapter_of)} stations "
+          f"({shape})")
+    # every node's match: the gate cells of the stations under it, read from the newest acceptance
+    wrong = []
+    for n in nodes:
+        under = [d for d in adapter_of if n.get("device") == d or (n in roots) or n.get("label") == f"fdcanusb {adapter_of[d]}"]
+        cells = [v for (d, _g), v in want.items() if d in under]
+        if (n.get("cells"), n.get("passing"), n.get("worst")) != (len(cells), sum(v == "pass" for v in cells), RANK_WORD[max(RANK[v] for v in cells)]):
+            wrong.append((n["label"], n.get("passing"), n.get("cells"), n.get("worst"), sum(v == "pass" for v in cells), len(cells)))
+        if n.get("runs") != sum(runs_of.get(d, 0) for d in under):
+            wrong.append((n["label"], "runs", n.get("runs")))
+    check(not wrong, f"every tree node carries the gate cells under it from the newest acceptance (passing, cells, worst) and its runs ({len(nodes)} nodes; wrong {wrong[:3]})")
+    import type_cards.registry as reg  # noqa: PLC0415
+    servo = reg.card_for("servo")
+    cards = {n["label"]: n.get("card") for n in nodes}
+    check(servo is not None and all(cards[d] == servo.id for d in adapter_of) and not any(cards[f"fdcanusb {s}"] for s in adapters),
+          f"each station node carries its type card (type_cards card_for(devices.json type) = {servo.id if servo else None}); an adapter has none")
+
+    # every run sits under its station, its adapter and the rack (node_0 … node_2), each level labelled with its node's match
+    fields = {f["name"]: f for f in json.loads((data / "runs.json").read_text())["schema"]["fields"]}
+    station_node = {n["device"]: n for n in nodes if n.get("device")}
+    misplaced = [r["run"] for r in rows if (r.get("node_0"), r.get("node_1"), r.get("node_2")) != (
+        roots[0]["id"], station_node[r["device"]]["parent"], station_node[r["device"]]["id"])]
+    labels_ok = all(f"{n['passing']}/{n['cells']}" in str((fields.get(f"node_{n['depth']}", {}).get("labels") or {}).get(n["id"], "")) for n in nodes)
+    check(not misplaced and labels_ok and all(f"node_{k}" in fields for k in range(3)),
+          f"every run sits under its station, its adapter and the rack (node_0..node_2), each level's label naming its node's passing/cells "
+          f"({len(rows)} runs, {len(misplaced)} misplaced; labels {labels_ok})")
+
+    # tags: a run is bench (and set at the bench) when it is a real recording in the rack's archive; anything else stays unknown
+    roots_ = [Path(a) for a in entry["archive"]]
+    real = [r for r in rows if r.get("basis") == "real" and r.get("npz") and any(Path(r["npz"]).is_relative_to(a) for a in roots_)]
+    want_env = {r["run"]: (entry.get("environment") if r in real else "unknown") for r in rows}
+    want_set = {r["run"]: (entry.get("setting") if r in real else "unknown") for r in rows}
+    env = {r["run"]: r.get("environment") for r in rows}
+    setting = {r["run"]: r.get("setting") for r in rows}
+    counts = {v: sum(1 for x in env.values() if x == v) for v in (*ENVIRONMENTS, "unknown")}
+    check(entry.get("environment") == "bench" and entry.get("setting") == "bench" and env == want_env and setting == want_set
+          and set(env.values()) <= {*ENVIRONMENTS, "unknown"} and set(setting.values()) <= {*SETTINGS, "unknown"},
+          f"every run is tagged truthfully: the rack's own recordings bench (environment) and bench (setting, type_cards SETTINGS), the rest "
+          f"unknown ({counts})")
+    check(all(r.get("test_type") in (None, "") or r["test_type"] in {t.id for c in reg.CARDS.values() for t in c.tests} for r in rows),
+          "a run's test type is a type_cards TestType id it recorded, or none (nothing is inferred)")
+
+    # the configuration snapshot: full only where the run's own session recorded its board's whole config, hashed
+    cache = {}
+    want_full = {r["run"]: snapshot_of(Path(r["npz"]), int(r["device"].split()[1]), cache) for r in rows}
+    got = {r["run"]: r.get("config") for r in rows}
+    full = sum(want_full.values())
+    check(got == {k: ("full" if v else "not recorded") for k, v in want_full.items()} and all(r.get("config_detail") for r in rows)
+          and all(r.get("full_config_pct") == (100 if want_full[r["run"]] else 0) for r in rows),
+          f"every run's configuration snapshot is read from its own session: full where board_configs names a file whose key lines hash to it, "
+          f"else 'not recorded' with what is recorded ({full} of {len(rows)} full)")
+    page = (out / DEP / "index.html").read_text()
+    pct = f"{100 * full / len(rows):.0f} %"
+    check(f"{full:,} of {len(rows):,} runs" in page and pct in page and "Config snapshots" in page,
+          f"the deployment's header states its config-snapshot coverage ({full:,} of {len(rows):,} runs, {pct})")
+    return {"adapters": {f"fdcanusb {s}": (next(n["id"] for n in nodes if n.get("label") == f"fdcanusb {s}"), want_shape[f"fdcanusb {s}"],
+                                           sum(runs_of.get(d, 0) for d in want_shape[f"fdcanusb {s}"])) for s in adapters},
+            "stations": {d: n["id"] for d, n in station_node.items()}, "runs_of": runs_of, "env": counts, "full": full, "total": len(rows)}
+
+
+def config_snapshot_unit_checks(tmp: Path) -> None:
+    """site/deploy_tree.config_of on a session written the way bam_rack_twin.hardware.session writes one: full, a tampered file,
+    a board the session failed to read, and a run with no session at all."""
+    import deploy_tree  # noqa: PLC0415
+    keys = "servo.pid_position.kp 200\nservo.default_accel_limit 100\n"
+    sha_ = hashlib.sha256(keys.encode("latin1")).hexdigest()
+    session = tmp / "s1"
+    (session / "runs").mkdir(parents=True, exist_ok=True)
+    (session / "board_configs").mkdir(exist_ok=True)
+    (session / "board_configs" / "can11.cfg").write_text("# CAN 11 whole config\n" + keys, encoding="latin1")
+    (session / "session.json").write_text(json.dumps({"package_version": "0.1.0", "git_head": "f" * 40, "plan_sha256": "a" * 64, "board_configs": {
+        "11": {"file": "board_configs/can11.cfg", "sha256": sha_, "keys": 2, "firmware": "657b5c5" + "0" * 33},
+        "12": {"error": "conf enumerate: TimeoutError"}}}))
+    full = deploy_tree.config_of(session / "runs" / "s01.npz", 11, {})
+    failed = deploy_tree.config_of(session / "runs" / "s02.npz", 12, {})
+    (session / "board_configs" / "can11.cfg").write_text("# CAN 11 whole config\n" + keys.replace("200", "150"), encoding="latin1")
+    tampered = deploy_tree.config_of(session / "runs" / "s01.npz", 11, {})
+    alone = deploy_tree.config_of(tmp / "loose" / "x.npz", 11, {})
+    check(full["config"] == "full" and full["config_sha256"] == sha_ and full["full_config_pct"] == 100
+          and all(x["config"] == "not recorded" and x["full_config_pct"] == 0 for x in (failed, tampered, alone))
+          and "TimeoutError" in failed["config_detail"] and "sha256" in tampered["config_detail"] and "no session" in alone["config_detail"],
+          "config_of: full only for a snapshot whose key lines hash to session.json's sha256; a failed read, a tampered file and a run "
+          "with no session read 'not recorded' and say why")
+
+
+def tree_rail_checks(page, base: str, data: Path, layout: dict, still) -> None:
+    """The deployment's Runs tab: the tree is the rail's first facet, on the left; a node filters the runs to its level, and its
+    children open under it (data-ui's `tree` facet, CONTRACT §7), each node labelled with its match."""
+    page.goto(f"{base}/{DEP}/")
+    page.wait_for_load_state("load")
+    panel(page, "Runs · newest first").locator("tbody tr").first.wait_for(timeout=30000)
+    page.wait_for_timeout(1500)
+    scope = "[role=tabpanel][data-tab=runs]"
+    t0 = page.evaluate(TREE_NODES_JS, scope) or {}
+    level0 = [n for n in t0.get("nodes", []) if n["level"] == 0 and n["shown"]]
+    want0 = {node_id: (name, runs) for name, (node_id, _st, runs) in layout["adapters"].items()}
+    check(bool(t0) and {n["value"] for n in level0} == set(want0) and all(n["count"] == want0[n["value"]][1] and n["label"].startswith(want0[n["value"]][0])
+                                                                          and re.search(r"\d+/\d+ pass", n["label"]) for n in level0),
+          f"the Runs tab's rail opens on the rack's tree: its adapters, each labelled with its match and counting its runs "
+          f"({[(n['label'], n['count']) for n in level0]})")
+    panels_left = page.evaluate(f"""() => {{ const d = [...document.querySelectorAll('{scope} data-dashboard .dd-body.dd-has-rail')].find(b => b.offsetParent);
+        return d ? d.querySelector(':scope > .dd-main').getBoundingClientRect().left : null; }}""")
+    check(t0.get("rail") and panels_left is not None and t0["rail"][1] <= panels_left + 1 and t0.get("first"),
+          f"the tree is the first facet of the filter rail, left of the runs (rail ends {t0.get('rail', [0, 0])[1]:.0f} px, panels start {panels_left} px)")
+    still("13-tree-rail")
+    name, (adapter_id, stations, runs) = next((k, v) for k, v in layout["adapters"].items() if "0607623A" in k)
+    page.locator(f"{scope} .dd-rail button.df-node[data-level='0'][data-value='{adapter_id}']").first.click()
+    soft_wait(page, f"([name, n]) => {{ const s = ({VIEW_JS})(name); const e = s && s.querySelector(':scope > data-views'); return !!e && !!e.model && (e.model.matched ?? e.model.rows.length) === n; }}",
+              ["Runs", runs], timeout=20000)
+    page.wait_for_timeout(1200)
+    got = page.evaluate(PANEL_ROWS_JS, ["Runs", "Station"]) or {}
+    t1 = page.evaluate(TREE_NODES_JS, scope) or {}
+    kids = [n for n in t1.get("nodes", []) if n["level"] == 1 and n["shown"]]
+    want_kids = {layout["stations"][d]: layout["runs_of"].get(d, 0) for d in stations}
+    check(got.get("n") == runs and got.get("cells") and set(got["cells"]) <= set(stations),
+          f"a click on {name} filters the runs to its stations ({got.get('n')} of {runs} runs; stations drawn {sorted(set(got.get('cells') or []))})")
+    check({n["value"]: n["count"] for n in kids} == want_kids and all(re.search(r"\d+/\d+ pass", n["label"]) for n in kids)
+          and any(n["pressed"] and n["value"] == adapter_id for n in t1.get("nodes", [])),
+          f"{name} opens under it: its {len(want_kids)} stations, each with its match and its runs ({[(n['label'], n['count']) for n in kids]})")
+    still("13b-tree-adapter")
+    can11 = layout["stations"]["CAN 11"]
+    page.locator(f"{scope} .dd-rail button.df-node[data-level='1'][data-value='{can11}']").first.click()
+    n11 = layout["runs_of"]["CAN 11"]
+    soft_wait(page, f"([name, n]) => {{ const s = ({VIEW_JS})(name); const e = s && s.querySelector(':scope > data-views'); return !!e && !!e.model && (e.model.matched ?? e.model.rows.length) === n; }}",
+              ["Runs", n11], timeout=20000)
+    page.wait_for_timeout(1200)
+    got = page.evaluate(PANEL_ROWS_JS, ["Runs", "Station"]) or {}
+    check(got.get("n") == n11 and set(got.get("cells") or []) == {"CAN 11"} and "node_2" in unquote(page.url),
+          f"a click on CAN 11 filters the runs to it ({got.get('n')} of {n11}), and the URL names the pick ({unquote(page.url).split('?', 1)[-1][:120]})")
+    still("13c-tree-station")
+    page.locator(f"{scope} .dd-rail button.df-node[data-level='0'][data-value='{adapter_id}']").first.click()
+    soft_wait(page, f"([name, n]) => {{ const s = ({VIEW_JS})(name); const e = s && s.querySelector(':scope > data-views'); return !!e && !!e.model && (e.model.matched ?? e.model.rows.length) === n; }}",
+              ["Runs", sum(layout["runs_of"].values())], timeout=20000)
+    got = page.evaluate(PANEL_ROWS_JS, ["Runs", "Station"]) or {}
+    check(got.get("n") == sum(layout["runs_of"].values()), f"a second click on {name} gives every run back ({got.get('n')})")
+    kpi = page.evaluate(KPI_JS, "Config recorded") or [{}]
+    want_pct = f"{100 * layout['full'] / layout['total']:.0f}"
+    check(want_pct in (kpi[0].get("value") or "") and "config" in (kpi[0].get("label") or "").lower(),
+          f"the Runs tab's KPI says how many runs carry a full config snapshot ({kpi[0].get('label')!r}: {kpi[0].get('value')!r} vs {want_pct} %)")
+
+
+def flat_runs_checks(page, base: str, layout: dict, still) -> None:
+    """/runs/: every run flat, faceted by type, deployment kind, the tree (deployment at its root), environment, setting, test type
+    and config snapshot; a tag narrows the list."""
+    page.goto(f"{base}/runs/")
+    page.wait_for_load_state("load")
+    page.locator("data-views tbody tr").first.wait_for(timeout=30000)
+    page.wait_for_timeout(1500)
+    headings = page.evaluate("[...document.querySelectorAll('aside data-facets h3, aside data-facets h4, aside data-facets legend, aside data-facets summary, aside data-facets .df-h')].map(h => h.textContent.trim())")
+    want = ("Deployment tree", "Environment", "Setting", "Test type", "Type", "Deployment kind", "Config snapshot")
+    check(all(any(h.startswith(w) for h in headings) for w in want), f"/runs/ facets every run flat by {', '.join(want)} ({headings})")
+    t0 = page.evaluate(TREE_NODES_JS, "aside") or {}
+    roots = [n for n in t0.get("nodes", []) if n["level"] == 0]
+    check(len(roots) >= 1 and any(n["value"] == DEP and n["count"] == layout["total"] and re.search(r"\d+/\d+ pass", n["label"]) for n in roots),
+          f"/runs/'s tree starts at the deployments, each with its match and runs ({[(n['label'], n['count']) for n in roots]})")
+    page.locator("aside data-facets label", has_text=re.compile(r"^\s*bench")).first.click()
+    page.wait_for_timeout(1500)
+    shown = page.evaluate("(() => { const v = document.getElementById('parts-views'); return v && v.model ? v.model.matched : null; })()")
+    check(shown == layout["env"]["bench"], f"Environment · bench narrows /runs/ to the bench runs ({shown} of {layout['env']['bench']})")
+    still("14-runs-flat")
+
+
+def run_config_checks(page, base: str, data: Path) -> None:
+    """A run says whether its configuration was recorded: 'config not recorded' where its session kept no board config."""
+    rows = json.loads((data / "runs.json").read_text())["rows"]
+    bare = next((r for r in rows if r.get("config") == "not recorded"), None)
+    if bare is None:
+        check(True, "every run has a full config snapshot (no 'config not recorded' to show)")
+        return
+    page.goto(f"{base}/{DEP}/runs/{bare['run']}/")
+    page.wait_for_load_state("load")
+    head = page.locator(".phead, header, h1").first.evaluate("el => (el.closest('.phead') || el.parentElement).textContent")
+    open_tab(page, "evidence")
+    ev = page.locator("[role=tabpanel][data-tab=evidence]").inner_text()
+    check("config not recorded" in head and "Configuration" in ev and bare["config_detail"].split(".")[0] in ev,
+          f"a run whose session kept no board config says 'config not recorded' in its header and what is recorded on Evidence ({bare['run'][:60]})")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -615,6 +873,11 @@ def main() -> int:
     whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
     run_set_checks(data, out)
+    # the deployment tree, the run tags and the configuration snapshot (Zach, PROJECT - Sim2Real, Nov 5 2026)
+    layout = deploy_tree_checks(data, out, doc)
+    import tempfile  # noqa: PLC0415
+    with tempfile.TemporaryDirectory() as scratch:
+        config_snapshot_unit_checks(Path(scratch))
 
     vendored = SITE / "vendor" / "catalog_workbench"
     manifest = json.loads((vendored / "MANIFEST.json").read_text())["files"]
@@ -772,11 +1035,14 @@ def main() -> int:
                 tree = page.evaluate(TREE_JS, "The rack") or []
                 gate_rows = json.loads((data / "gates.json").read_text())["rows"]
                 dev_rows = json.loads((data / "devices.json").read_text())["rows"]
-                plate = lambda text: "GIM43 plate" if text.split(",", 1)[0].strip().endswith("GIM43 plate") else text.split(",", 1)[0].strip()  # noqa: E731
+                # WHY adapters, not plates (ruler change, named; Zach, PROJECT - Sim2Real, Nov 5 2026: each deployment's tree is like
+                # RobotDx's entity tree, host -> adapter -> board): the rack's middle level is each fdcanusb the record wires its boards to
+                _entry, adapter_of = rack_layout(REPO / "app" / "registry.json")
+                plate = lambda device: f"fdcanusb {adapter_of[device]}"  # noqa: E731
                 worst_dev = {d["device"]: max(RANK[g["verdict"]] for g in gate_rows if g["device"] == d["device"]) for d in dev_rows}
                 want_tree = {"One Dof Test Rack": max(worst_dev.values())}
                 for d in dev_rows:
-                    want_tree[plate(d["station"])] = max(want_tree.get(plate(d["station"]), 0), worst_dev[d["device"]])
+                    want_tree[plate(d["device"])] = max(want_tree.get(plate(d["device"]), 0), worst_dev[d["device"]])
                 got_tree = {}
                 for r in tree:
                     label = re.sub(r"^[▾▸]\s*", "", r["label"])
@@ -784,8 +1050,21 @@ def main() -> int:
                     got_tree[key] = r["word"]
                 want_words = {**{k: RANK_WORD[v] for k, v in want_tree.items()}, **{k: RANK_WORD[v] for k, v in worst_dev.items()}}
                 check(got_tree == want_words and all(r["glyph"] and r["shown"] for r in tree),
-                      f"rollup_tree: the rack, its plates and stations each show the worst gate under them, word and glyph ({len(tree)} rows; "
+                      f"rollup_tree: the rack, its adapters and stations each show the worst gate under them, word and glyph ({len(tree)} rows; "
                       f"differ {sorted(k for k in want_words if got_tree.get(k) != want_words[k])[:4]})")
+                # each node's match in numbers too: the cells passing of every cell under it (data-ui's roll-up: Sum and Count of passes)
+                cols = page.evaluate(ROLLUP_COLS_JS, "The rack") or []
+                acc = {(f"CAN {can}", g["id"]): g["status"] for can, st in doc["stations"].items() for g in st["gates"]}
+                under = lambda key: [d for d in adapter_of if key in (d, plate(d), "One Dof Test Rack")]  # noqa: E731
+                want_cols = {key: (sum(1 for (d, _g), v in acc.items() if d in under(key) and v == "pass"), sum(1 for (d, _g) in acc if d in under(key)))
+                             for key in want_tree.keys() | set(adapter_of)}
+                got_cols = {}
+                for r in cols:
+                    label = re.sub(r"^[▾▸]\s*", "", r["label"])
+                    key = label.split(" · ")[0] if label.startswith("CAN ") else re.sub(r"\d+$", "", label)
+                    got_cols[key] = (int(float(r["passing"] or -1)), int(float(r["cells"] or -1)))
+                check(got_cols == want_cols, f"rollup_tree: every node counts the gate cells passing under it, of all of them, from the newest acceptance "
+                                             f"(differ {sorted((k, got_cols.get(k), v) for k, v in want_cols.items() if got_cols.get(k) != v)[:3]})")
                 still("4c-gates-trend-rollup")
             open_tab(page, "runs")
             page.wait_for_timeout(800)
@@ -1219,10 +1498,18 @@ def main() -> int:
             with guard("the Types area"):
                 types_checks(page, base, still)
 
+            # 13. the deployment tree in the rail, every run flat, a run's configuration (Zach, PROJECT - Sim2Real, Nov 5 2026)
+            with guard("the deployment tree in the rail"):
+                tree_rail_checks(page, base, data, layout, still)
+            with guard("every run flat on /runs/"):
+                flat_runs_checks(page, base, layout, still)
+            with guard("a run's configuration snapshot"):
+                run_config_checks(page, base, data)
+
             # 10. a phone: no sideways scroll anywhere on the click path, the search still in the bar
             page.set_viewport_size({"width": 390, "height": 844})
             for url in ("/", f"/{DEP}/", f"/{DEP}/runs/{run_slug}/", f"/{DEP}/can12/", f"/{DEP}/can11/#schedule", "/analysis/why-it-fails/",
-                        f"/{DEP}/#gates", f"/{DEP}/can12/#gates", "/types/", "/types/servo/#coverage", "/types/servo/#model"):
+                        f"/{DEP}/#gates", f"/{DEP}/can12/#gates", "/types/", "/types/servo/#coverage", "/types/servo/#model", "/runs/"):
                 page.goto(base + url)
                 page.wait_for_load_state("load")
                 page.wait_for_timeout(1500)
