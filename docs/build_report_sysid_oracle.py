@@ -105,7 +105,8 @@ def capture(site: Path, media: Path) -> dict:
                 table = page.locator("table.s2r-ex-full")
                 table.scroll_into_view_if_needed()
                 shots[f"params-{example}"] = media / f"params-{example}.jpg"
-                table.screenshot(path=str(shots[f"params-{example}"]), type="jpeg", quality=55)
+                # WHY quality 45 and a 320 px, 16-colour GIF: the page stays under the desktop preview's ~1.9 MB media-page limit (1.89 MB at 55 / 360 px / 24)
+                table.screenshot(path=str(shots[f"params-{example}"]), type="jpeg", quality=45)
                 if example in landing.DRIFT_OF:
                     fig = page.locator("#drift ~ figure").first
                     fig.scroll_into_view_if_needed()
@@ -140,7 +141,7 @@ def capture(site: Path, media: Path) -> dict:
     shots["hero"] = mp4
     gif = media / "hero.gif"
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-vf",
-                    "fps=1,scale=360:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=24[p];[b][p]paletteuse=dither=none", str(gif)], check=False)
+                    "fps=1,scale=320:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=16[p];[b][p]paletteuse=dither=none", str(gif)], check=False)
     if gif.is_file():
         shots["gif"] = gif
     return shots
