@@ -35,6 +35,7 @@ the truth, a tolerance the description's own nominal already meets, and a landin
 - A change to bam_rack_twin's twin of record (or to Menagerie at the cached checkout) makes `test_the_committed_result_is_this_code`
   red until `python -m sysid all --write` is re-run and the new numbers are reviewed: intended.
 - The CAN 11 example and its drift demo take minutes (30 kHz replays); the acceptance test takes about 12 minutes in all.
+- 2026-11-05 (later): the wear forecast's gap -> drift-ratio curve is fitted to the early-life checks (hours <= 168 only) as ratio² = 1 + d² + 2ρd (ρ 0.075) instead of quadrature (ρ = 0, which assumed the twin's base error and the gap's error independent): the forecast moved from hour 262.2 (+11.9 %, late) to 233.1 (−0.5 %) against the sim's 234.3, and a plan-by hour (the wear line's upper 95 % band, 220.6) is now reported and tested never late; the test also demands |error| <= 5 % and that corrupting post-forecast checks leaves the forecast unchanged.
 - Card placement, adapter types and the drift threshold choice live in `sysid/cards.py`, never in `type_cards/` (lane A's).
 
 ## Alternatives not taken

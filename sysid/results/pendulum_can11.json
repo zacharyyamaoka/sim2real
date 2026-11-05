@@ -1779,7 +1779,7 @@
   "twin_of_record": "twin of record (followup A)",
   "twin_of_record_digest": "89b6fde5",
   "identify_sealed": true,
-  "code": "afafdcf",
+  "code": "d2f2919",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
@@ -1809,7 +1809,7 @@
     "paths": 6
    }
   ],
-  "seconds": 620.6
+  "seconds": 1184.8
  },
  "notes": [
   "The real CAN 11 is bam_rack_twin's own twin at world.json's truth; the floor is the oracle's measurement noise alone (two camera draws of one deterministic run), so real floors are larger.",
