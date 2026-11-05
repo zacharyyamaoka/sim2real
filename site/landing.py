@@ -120,19 +120,33 @@ def tree_list(doc: dict, limit: int | None = None) -> str:
 
 
 def coverage_line(doc: dict) -> str:
-    """Train coverage; the type card's 40 % gate is compared only where the number IS the card's own coverage function (the servo's,
+    """Train coverage; the card's coverage gate (its gate_pct) is compared only where the number IS that card's own coverage function (the servo's,
     the arm's): sysid's adapter rules (image cells, line bins, belt speed x acceleration) are labelled as such, never held to it."""
     cov = doc["schedule"]["coverage"]
     train = cov["train"]
     pct = train["pct"]
-    gate = 40.0
     own = str(cov.get("function", "")).startswith("type_cards")
-    bar = f'<i style="left:{gate:.0f}%" title="the type card coverage gate, {gate:g} %"></i>' if own else ""
+    gate = coverage_gate_pct(doc["example"]) if own else None
+    own = own and gate is not None
+    bar = f'<i style="left:{gate:.0f}%" title="the {COVERAGE_CARD[doc["example"]]} card\'s coverage gate, {gate:g} %"></i>' if own else ""
     verdict = (f'<span class="s2r-ex-{"ok" if pct >= gate else "no"}">({"≥" if pct >= gate else "<"} the card\'s {gate:g} % gate)</span>' if own
                else '<span class="s2r-ex-rule" title="sysid\'s own coverage rule; the card\'s gate is on its own axes">(sysid\'s rule)</span>')
     return (f'<div class="s2r-ex-cov" data-coverage="{pct}"><div class="s2r-ex-bar"><span style="width:{min(100.0, pct):.1f}%"></span>{bar}</div>'
             f'<span>train <b>{num(pct, 3)} %</b> of {train["reachable"]:,} cells {verdict}'
             f' · held out {num(cov["held_out"]["pct"], 3)} %</span></div>')
+
+
+# the card whose own coverage function an example's schedule is scored with (its gate_pct is the gate the card shows)
+COVERAGE_CARD = {"pendulum_can11": "servo", "ur5e": "arm_6dof", "ur5e_2f85": "arm_6dof"}
+
+
+def coverage_gate_pct(example: str) -> float | None:
+    card = COVERAGE_CARD.get(example)
+    if card is None:
+        return None
+    from type_cards import registry as reg  # noqa: PLC0415
+
+    return reg.CARDS[card].coverage.gate_pct
 
 
 def schedule_line(doc: dict) -> str:
