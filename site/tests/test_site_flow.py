@@ -527,6 +527,11 @@ def types_checks(page, base: str, still) -> None:
     want = sched["coverage"]["train"]["pct_reachable"]
     check(pct is not None and float(pct) == want and f"{want} %" in row.inner_text() and row.locator(f"a[href='/{DEP}/can11/#schedule']").count() == 1,
           f"the Servo card's Coverage tab shows CAN 11's planned train coverage, schedule.py's own {want} % ({pct}), linked to its Schedule tab")
+    from type_cards import coverage as tcov  # noqa: PLC0415
+    q_edges = tcov.joint_edges(sched["description"])[0]
+    q_bin = f"{q_edges[1] - q_edges[0]:.4g} rad"
+    check(row.get_attribute("data-q-bin") == f"{q_edges[1] - q_edges[0]:.4g}" and q_bin in row.inner_text(),
+          f"CAN 11's row states its own q cell, computed from its schedule's range ({q_bin}; shown {row.get_attribute('data-q-bin')})")
     axes = page.evaluate("[...document.querySelectorAll('[data-tab=coverage] tr[data-axis]')].map(r => [r.dataset.axis, r.dataset.binSize || '', r.dataset.marginal === 'true'])")
     check(axes == [[a.name, "" if a.bin_size is None else f"{a.bin_size:g}", a.marginal] for a in card.coverage.axes],
           f"each coverage axis shows its bin size and whether it is a marginal ({axes})")
