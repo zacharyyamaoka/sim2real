@@ -462,7 +462,16 @@ def slug_of(path: str) -> str:
     return str(rel).removeprefix("rack_").replace("/", "~")
 
 
-def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[dict]]:
+def rules_in_force(acceptance_path: Path | None) -> tuple[str, str]:
+    """(floor rule, pick rule) the acceptance file was judged under. WHY (bam_rack_twin, 2026-11-04): the gates default to the pooled
+    floor and the held-out-safer pick (Zach: go with the default on easy-to-reverse calls); a file written before then names neither
+    and was judged on the session floor with the declared pick."""
+
+    doc = json.loads(Path(acceptance_path).read_text()) if acceptance_path else {}
+    return doc.get("floor_rule", "session"), doc.get("pick_rule", "declared")
+
+
+def why(entry: dict, dep_id: str, runs: list[dict], pick_rule: str = "declared") -> tuple[list[dict], list[dict]]:
     """One row per station: T2 moves/hold against the 1.5 gate (before -> after), the limiting term in the study's words, the share of
     the held-out torque gap its term family explains on its own, and a link to the worst held-out window in playback. Plus the two
     caveats, derived (the why file does not state them): the floors grew on the new day, and three picks were overfit."""
@@ -483,10 +492,11 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
         family = lt.get("remaining_largest_family")
         name = lt.get("name") or ""
         summary = station.get("summary") or ""
-        if "variants" in t2:  # v2 (follow-up) rows: the declared pick against the twin today (C), the decomposition keyed by variant
-            after, before = t2["variants"][t2["declared_pick"]], t2["variants"].get("C", {})
+        chosen = (t2.get("safer_pick") if pick_rule == "safer" else None) or t2.get("declared_pick")
+        if "variants" in t2:  # v2 (follow-up) rows: the pick under the rule in force against the twin today (C), the decomposition keyed by variant
+            after, before = t2["variants"][chosen], t2["variants"].get("C", {})
             per_variant = ev.get("residual_decomposition") or {}
-            dec = per_variant.get(t2["declared_pick"]) or {}
+            dec = per_variant.get(chosen) or {}
             m = re.search(r"follows (.+?) most \((\d+)% on its own", summary)
             family = m.group(1) if m else family
             if not name:
@@ -498,10 +508,10 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
         share = shares.get(shown) if shown else None
         # the floor on the new day against the 10-24 floor (the same T1 ruler), and the pick against the deployed twin
         new_floor = (t2.get("floor") or {}).get("floor_mrad") or (scored.get(sid, {}).get("floor") or {}).get("floor_mrad")
-        pick_rule = None
+        pick_rule_row = None
         if "declared_pick" in t2 and t2["declared_pick"] != t2.get("safer_pick"):
             declared, safer = t2["variants"][t2["declared_pick"]], t2["variants"][t2["safer_pick"]]
-            pick_rule = (can, t2["declared_pick"], declared["moves_over_floor"], t2["safer_pick"], safer["moves_over_floor"])
+            pick_rule_row = (can, t2["declared_pick"], declared["moves_over_floor"], t2["safer_pick"], safer["moves_over_floor"])
         old_floor = (earlier.get(str(can)) or {}).get("floor_mrad")
         floor_growth = new_floor / old_floor if new_floor and old_floor and sid in scored else None  # CAN 11: its final-controller floor
         if floor_growth and floor_growth > 1:
@@ -543,13 +553,14 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
             "floor_growth_x": num(floor_growth, 3), "overfit_pick": is_overfit,
             "worst_run": slug, "worst_window": f"{window['t0_s']:.2f}-{window['t1_s']:.2f} s (tape clock), {window['rms_mrad']:.2f} mrad RMS" if window else None,
             "page": link, "order": can,
-            "pick": t2.get("declared_pick") or t2.get("pick"), "safer_pick": t2.get("safer_pick"),
+            "pick": chosen or t2.get("pick"), "safer_pick": t2.get("safer_pick"),
             "cis": "; ".join(f"{p['name']} {p['value']:.3g} [{p['ci95'][0]:.3g}, {p['ci95'][1]:.3g}]" for p in
                              (((station.get("identified") or {}).get("parameters") if isinstance(station.get("identified"), dict) else station.get("identified")) or [])
                              if isinstance(p, dict) and p.get("ci95") and isinstance(p.get("value"), (int, float)))[:400] or None,
-            "pick_rule": (f"declared {pick_rule[1]} {pick_rule[2]:.2f}× vs held-out-safer {pick_rule[3]} {pick_rule[4]:.2f}×" if pick_rule else None)})
-        if pick_rule:
-            rules.append(pick_rule)
+            "pick_rule": (f"declared {pick_rule_row[1]} {pick_rule_row[2]:.2f}× vs held-out-safer {pick_rule_row[3]} {pick_rule_row[4]:.2f}× "
+                          f"(the gates use the {pick_rule} pick)" if pick_rule_row else None)})
+        if pick_rule_row:
+            rules.append(pick_rule_row)
     rows.sort(key=lambda r: (r["status"] == "pass", -(r["moves_x"] or 0)))
     caveats = [
         {"caveat": "Floors grew on the new day", "detail": f"{len(grew)} of {len(scored)} refit stations have a larger T1 floor than on 10-24 ("
@@ -559,10 +570,14 @@ def why(entry: dict, dep_id: str, runs: list[dict]) -> tuple[list[dict], list[di
                    "the held-out data did not prefer.", "stations": len(overfit)},
     ]
     for can, declared, d_moves, safer, s_moves in rules:
-        caveats.append({"caveat": f"The declared pick rule picked the worse twin on CAN {can}",
-                        "detail": f"The held-out-safer twin ({safer}) scores {s_moves:.2f}× moves; the declared pick ({declared}) scores {d_moves:.2f}×, and that is "
-                                  f"the number this panel shows. Which pick rule counts (declared: the lower identification mean; safer: no identification "
-                                  f"family worse by > 5 %) is Zach's decision, pending.", "stations": 1})
+        shown, shown_moves = (safer, s_moves) if pick_rule == "safer" else (declared, d_moves)
+        caveats.append({"caveat": f"The two pick rules disagree on CAN {can}",
+                        "detail": f"The held-out-safer twin ({safer}) scores {s_moves:.2f}× moves; the declared pick ({declared}) scores {d_moves:.2f}×. "
+                                  f"The gates use the {pick_rule} pick (declared: the lower identification mean; safer: the same among the candidates "
+                                  f"with no identification family worse by > 5 %), so this panel shows {shown}'s {shown_moves:.2f}×. "
+                                  + ("The safer rule is the default since 2026-11-04 (Zach: go with the default on easy-to-reverse calls); "
+                                     "--pick-rule declared in bam_rack_twin.acceptance switches back." if pick_rule == "safer" else
+                                     "The safer rule would show the other number."), "stations": 1})
     return rows, caveats
 
 
@@ -718,11 +733,13 @@ def headline(gid: str, gate: dict) -> str:
 def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_rows: list[dict]) -> list[dict]:
     """One row per (station, gate) the newest acceptance does not pass, plus each pass that flips under the pooled floor: the judged
     statistics against their limits (headline), why (from the result file the acceptance cites, else the acceptance's own words),
-    the evidence, both floor rules where they differ (Zach's decision, pending), the next step, and any earlier result from an older
+    the evidence, both floor rules where they differ (the acceptance file names the one in force), the next step, and any earlier result from an older
     file, labelled with its file, date and model. Each field says something the others do not."""
 
     acc_path, acc_stamp = sources["acceptance"]
     acceptance = json.loads(acc_path.read_text())["stations"]
+    floor_rule, _ = rules_in_force(acc_path)
+    other_rule = "session" if floor_rule == "pooled" else "pooled"
     triage_path, triage_stamp = sources["triage"]
     triage_doc = json.loads(triage_path.read_text()) if triage_path else {}
     triage = {(c["station"], c["gate"]): c for c in triage_doc.get("cells", [])}
@@ -778,7 +795,8 @@ def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_r
                     p2 = (pooled.get(sid) or {}).get("t2") or {}
                     if p2.get("session") and p2.get("pooled"):
                         a, b = p2["session"], p2["pooled"]
-                        same = _same(a["moves_over_floor"], judged.get("moves")) and _same(a["hold_offset_over_floor"], judged.get("hold offset"))
+                        used = b if floor_rule == "pooled" else a  # the side the gate was judged on
+                        same = _same(used["moves_over_floor"], judged.get("moves")) and _same(used["hold_offset_over_floor"], judged.get("hold offset"))
                         text = (f"session floor: moves {a['moves_over_floor']:.2f}×, hold {a['hold_offset_over_floor']:.2f}× ({'pass' if a['passes'] else 'fail'}) · "
                                 f"pooled floor: moves {b['moves_over_floor']:.2f}×, hold {b['hold_offset_over_floor']:.2f}× ({'pass' if b['passes'] else 'fail'})")
                         if same:
@@ -856,12 +874,15 @@ def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_r
                 if gid == "T9" and floors is None:
                     p9 = (pooled.get(sid) or {}).get("t9") or {}
                     sess = p9.get("sessions") or []
-                    if sess and sess[-1].get("session_floor_mrad") and sess[-1].get("pooled_floor_mrad"):
-                        w = sess[-1]
+                    sess = [w for w in sess if w.get("session_floor_mrad") and w.get("pooled_floor_mrad")]
+                    if sess:
+                        # the worst session under the rule in force is the one the gate counted
+                        floor_key = "pooled_floor_mrad" if floor_rule == "pooled" else "session_floor_mrad"
+                        w = max(sess, key=lambda row: row["twin_mrad"] / row[floor_key])
                         a, b = w["twin_mrad"] / w["session_floor_mrad"], w["twin_mrad"] / w["pooled_floor_mrad"]
-                        text = (f"session floor {w['session_floor_mrad']:.2f} mrad: {a:.2f}× ({'pass' if a <= 1.5 else 'fail'}) · "
-                                f"pooled floor {w['pooled_floor_mrad']:.2f} mrad: {b:.2f}× ({'pass' if b <= 1.5 else 'fail'})")
-                        if _same(a, value):
+                        text = (f"worst warm session {Path(w.get('session', '')).name}: session floor {w['session_floor_mrad']:.2f} mrad: {a:.2f}× "
+                                f"({'pass' if a <= 1.5 else 'fail'}) · pooled floor {w['pooled_floor_mrad']:.2f} mrad: {b:.2f}× ({'pass' if b <= 1.5 else 'fail'})")
+                        if _same(b if floor_rule == "pooled" else a, value):
                             floors, session_pass, pooled_pass = labelled(pooled_path, pooled_stamp, None, text, "the same result"), a <= 1.5, b <= 1.5
                         else:
                             earlier.append(labelled(pooled_path, pooled_stamp, None, text, "an earlier result"))
@@ -893,12 +914,15 @@ def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_r
                 nxt = "not triaged yet"
             flips = floors is not None and session_pass is not None and session_pass != pooled_pass
             if flips:
-                floors += " — the verdict depends on the floor rule, which is Zach's decision, pending"
+                # WHY name the rule in force (2026-11-04): the gates use bam_rack_twin's FLOOR_RULE, pooled by default since Zach's go-with-
+                # the-default call; the other rule's verdict stays visible beside it
+                floors += (f" — the verdict depends on the floor rule; the gates use the {floor_rule} floor"
+                           + (" (the default since 2026-11-04; --floor-rule session switches back)" if floor_rule == "pooled" else ""))
             if status == "pass":
                 if not flips:
                     continue  # a pass under both floor rules is not a failure to explain
-                nxt = "blocked on Zach: decide the floor rule (the session floor the gates use today, or the pooled same-tape floor)"
-                why_parts.insert(0, "passes on the session floor the gates use today; fails on the pooled floor")
+                nxt = f"none needed under the {floor_rule} floor the gates use; it would fail under the {other_rule} floor"
+                why_parts.insert(0, f"passes on the {floor_rule} floor the gates use; fails on the {other_rule} floor")
             measured = headline(gid, gate)
             # WHY the triage's words land in Why only when Next does not already carry them: each field says something different
             if not why_parts and closes and closes not in nxt:
@@ -1071,7 +1095,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
     sources = evidence_sources(entry)
     entry = {**entry, "why": str(sources["why"][0] or entry.get("why"))}
     cells = acceptance_cells(sources["acceptance"][0])
-    t2_rows, caveats = why(entry, dep_id, runs)
+    t2_rows, caveats = why(entry, dep_id, runs, rules_in_force(sources["acceptance"][0])[1])
     why_rows = failed_cells(entry, dep_id, runs, sources, t2_rows)
     write(dep_dir / "why.json", f"Why it fails · {entry['title']}", f"one row per failed, partial or unrun gate cell of {sources['acceptance'][0]}; "
           f"reasons from {sources['why'][0]}, {sources['triage'][0]}, warm*_scored.json, {sources['floors_pooled'][0]}", WHY_PROPS, why_rows)

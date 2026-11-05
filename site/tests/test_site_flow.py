@@ -721,7 +721,7 @@ def main() -> int:
                 page.wait_for_timeout(800)
                 rack_card = (page.evaluate(KPI_JS, "Gate cells passing") or [{}])[0]
                 want_rack = [sum(1 for v in cells_.values() if v == "pass") for _p, _d, cells_ in history]
-                check(rack_card.get("points") == want_rack and re.search(r"\b32\b", rack_card.get("value") or "") and "88" in (rack_card.get("text") or "")
+                check(rack_card.get("points") == want_rack and re.search(rf"\b{want_rack[-1]}\b", rack_card.get("value") or "") and "88" in (rack_card.get("text") or "")
                       and rack_card.get("rules", 0) >= 1 and rack_card.get("width", 0) > 100,
                       f"kpi_trend: the rack's cells passing is the newest acceptance's, its trend every acceptance file's ({rack_card.get('points')} vs {want_rack}), "
                       f"88 cells its target ({rack_card.get('value')!r}, {rack_card.get('rules')} target rule, {rack_card.get('width', 0):.0f} px wide)")
