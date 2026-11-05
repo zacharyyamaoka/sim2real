@@ -56,10 +56,13 @@ def test_the_train_schedule_meets_the_arm_cards_coverage_gate(example):
     points = [{"joint space": tuple(q)} for q in p.poses_train]
     for e in trajectories(p, "train"):
         points.extend({"joint space": tuple(q)} for q in e[::COVERAGE_EVERY])
-    result = card.coverage.measure(points)
-    counted = sum(1 for c in result.cells.values() if c >= min_samples)
+    # WHY the mount's mask (2026-11-05, docs/decision-arm-reachable-coverage-2026-11-05.md; was "== 4096", the whole box): the card
+    # counts over the cells the mounted arm can reach, and the 2F-85 example's arm carries its gripper
+    result = card.coverage.measure(points, mount=p.mount)
+    reach = cov.arm_reachable_cells(p.mount)
+    counted = sum(1 for cell, c in result.cells.items() if c >= min_samples and cell in reach)
     pct = 100.0 * counted / result.reachable
-    assert result.reachable == 4096, f"{example}: the card's joint cube is {result.reachable} cells, not 4^6"
+    assert result.reachable == len(reach) < 4096, f"{example}: the card counts {result.reachable} cells, {p.mount}'s mask holds {len(reach)}"
     assert pct >= min_pct, (f"{example}: train visits {counted} of {result.reachable} cells with >= {min_samples} samples "
                             f"({pct:.2f} %), the arm card's gate is {min_pct:g} %")
     assert reg.coverage_gate(card, result) == "pass"
