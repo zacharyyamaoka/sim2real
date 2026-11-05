@@ -19,6 +19,7 @@ from catalog_workbench.contract import Account, AnalysisArea, Area, Brand, Catal
 from catalog_workbench.html import e
 
 import pages
+import types_pages
 from adapter import Station, deployment_url, run_url, station_url
 
 ROOT_CRUMB = pages.ROOT_CRUMB
@@ -33,6 +34,7 @@ AREAS = (
     Area("data", "Every run", "/runs/", "Every real run, newest first, with its station, kind and models"),
     Area("sources", "Stations", "/stations/", "Every station's gates T1-T11 in one matrix"),
     Area("guides", "Deployments", "/deployments/", "The machines we do sim to real on"),
+    Area("programs", "Types", "/types/", "One card per part type: metrics, model, coverage, view and procedure"),
 )
 REPORTS = (("why-it-fails", "Why it fails", "Every gate cell that does not pass, in words: the number against its limit, why, and the next step."),
            ("gate-standing", "Gate standing", "The stations × gates matrix, passing per gate, and the caveats on the numbers."))
@@ -134,6 +136,23 @@ RUN = Kind(
 )
 
 
+TYPE = Kind(
+    # WHY a kind and not a page per card (Zach, PROJECT - Sim2Real, Nov 4 2026): "for each 'type' ... the models, and then the dashboards
+    # to view the results": a type is what a station is; its card is a record with the same tabs every card has
+    key="type", label="Type", plural="Types",
+    records=types_pages.records, url=lambda t: types_pages.type_url(t.id), title=lambda t: t.card.title,
+    tabs=(Tab("metrics", "Metrics", body=types_pages.metrics_tab),
+          Tab("model", "Model", body=types_pages.model_tab),
+          Tab("coverage", "Coverage", body=types_pages.coverage_tab),
+          Tab("view", "View", body=types_pages.view_tab),
+          Tab("procedure", "Procedure", body=types_pages.procedure_tab)),
+    header=types_pages.header, crumbs=lambda site, t: [ROOT_CRUMB, ("Types", "/types/"), (t.card.title, types_pages.type_url(t.id))],
+    back=lambda site, t: ["/", "/types/"],
+    description=lambda site, t: f"{t.card.title}: its black-box metrics, model and parameters, coverage, view and the shared procedure.",
+    scripts=("site", "sim2real"),
+)
+
+
 def reports(site) -> list[Report]:
     out = []
     for slug, title, what in REPORTS:
@@ -159,7 +178,7 @@ CATALOG = Catalog(
                 styles=("/static/sim2real.css",)),
     words=Words(item="run", items="runs", an_item="a run", groups="Deployments", subgroups="Stations"),
     menu=menu,
-    kinds=(DEPLOYMENT, STATION, RUN),
+    kinds=(DEPLOYMENT, STATION, RUN, TYPE),
     areas=AREAS,
     quick=(("Why it fails", "/analysis/why-it-fails/"), ("Analysis", "/analysis/")),
     account=Account(lists=tuple((f"/analysis/{slug}/", title) for slug, title, _w in REPORTS), pill="standard",

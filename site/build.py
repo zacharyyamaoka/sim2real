@@ -93,6 +93,10 @@ def site_files(site):
         body = f"<h1>{title} ({n_runs:,})</h1>\n<p class=\"lede\">{intro} Open one to play it back against its models.</p>\n{results}"
         yield url.strip("/") + "/index.html", s2r.page(site, f"{title}: sim2real", url, body, kind, aside=aside, data_ui=True,
                                                        trail=results_line(plural(n_runs, "run"), breadcrumb([s2r.ROOT_CRUMB, (title, url)])))
+    import types_pages  # noqa: PLC0415
+    yield "types/index.html", s2r.page(site, "Types: sim2real", "/types/", types_pages.list_body(site), "types",
+                                       description="One card per part type: metrics, model, coverage, view and the shared procedure.",
+                                       trail=breadcrumb([s2r.ROOT_CRUMB, ("Types", "/types/")]))
     yield "search/suggest.json", s2r.suggest_index(site)
     yield from views.files()
     yield "views/runs.base", pages.runs_base(site)

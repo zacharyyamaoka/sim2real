@@ -19,6 +19,7 @@ from catalog_workbench.home import Group, tile, tile_home
 from catalog_workbench.html import breadcrumb, e, plural, results_line
 
 import adapter
+import types_pages
 from adapter import Deployment, Site, Station, deployment_url, rewrite_links, run_url, station_key, station_url
 
 ROOT_CRUMB = ("Home", "/")
@@ -266,7 +267,8 @@ def station_header(site: Site, st: Station) -> str:
 <p class="sub">{e(row.get("station") or "")} · {e(row.get("type") or "")} on {a(deployment_url(dep.id), dep.row["title"])}</p>
 {kpis([("Gate cells passing", f"{passing} of {len(cells)}"), ("Real runs", f'{row.get("runs", 0):,}'), ("Gains (record)", e(gains or "—")),
        ("Speed ceiling", f'{num(row.get("qd_max_deg_s"))} °/s' if row.get("qd_max_deg_s") else "—")])}
-{gate_chips(dep, st.device)}"""
+{gate_chips(dep, st.device)}
+{types_pages.station_link(st)}"""
 
 
 def station_runs(site, st: Station) -> str:
