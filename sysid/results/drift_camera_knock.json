@@ -367,7 +367,7 @@
   "rz_rad": 0.004
  },
  "provenance": {
-  "code": "d2f2919",
+  "code": "5a57664",
   "imports": [
    {
     "repo": "/home/bam/.cache/like_keras/mujoco_menagerie",
@@ -382,10 +382,10 @@
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "e46c5335",
-    "date": "2026-11-05T11:19:53-07:00",
+    "commit": "9f090ab3",
+    "date": "2026-11-05T14:35:14-07:00",
     "dirty": false,
-    "paths": 13
+    "paths": 12
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -406,7 +406,7 @@
     "paths": 6
    }
   ],
-  "seconds": 1.8,
+  "seconds": 1.6,
   "identify_sealed": true
  }
 }

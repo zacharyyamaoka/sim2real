@@ -593,14 +593,14 @@
  },
  "provenance": {
   "identify_sealed": true,
-  "code": "d2f2919",
+  "code": "5a57664",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "e46c5335",
-    "date": "2026-11-05T11:19:53-07:00",
+    "commit": "9f090ab3",
+    "date": "2026-11-05T14:35:14-07:00",
     "dirty": false,
     "paths": 10
    },
@@ -623,6 +623,6 @@
     "paths": 6
    }
   ],
-  "seconds": 14.9
+  "seconds": 6.9
  }
 }
