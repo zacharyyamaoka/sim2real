@@ -109,7 +109,18 @@ def test_actuator_keys_are_robotparts_rungs():
     for cid in ROBOTPARTS_NUMBERED:
         keys = {r.key.split(".")[0] for r in physics(reg.CARDS[cid])}
         assert keys <= {"M0", "M2", "M3", "M4", "M5"}, (cid, keys)  # robotparts' M1 is the datasheet: the Nominal column
-        assert [r.key for r in reg.CARDS[cid].rungs if r.kind != "physics"] == ["M6", "M7"], cid
+
+
+def test_m6_and_m7_mean_the_same_on_every_card():
+    """The coordinator, 2026-11-05: a reader who learns "M6 = residual" on the servo must not misread the arm. M0-M5 are each card's
+    physics layers (robotparts' on the actuators); M6 is always the grey-box residual and M7 always the black-box net, gaps allowed."""
+    for card in reg.CARDS.values():
+        for r in card.rungs:
+            number = int(r.key[1:].split(".")[0])
+            if r.kind == "physics":
+                assert 0 <= number <= 5, (card.id, r.key)
+            else:
+                assert r.key == {"residual": "M6", "learned": "M7"}[r.kind], (card.id, r.key, r.kind)
 
 
 def test_the_servo_ladder_is_the_one_zach_described():
