@@ -22,8 +22,13 @@ the truth, a tolerance the description's own nominal already meets, and a landin
   renders only those files (no MuJoCo, no scipy at site build time), and the test re-runs every example and requires the committed
   numbers to equal this code's to 1e-9.
 - **bam_ws is imported in place, at its main.** The CAN 11 example runs bam_rack_twin's own schedule, twin, replayer, smoother and
-  bootstrap from `/home/bam/bam_ws/src/dev/bam_rack_twin` (its venv runs the pipelines); nothing is vendored. The result records the
-  bam_rack_twin commit; the freshness test is the tripwire when a peer changes it.
+  bootstrap from `/home/bam/bam_ws/src/dev/bam_rack_twin` (its venv runs the pipelines), the camera examples bam_scan_tunnel's
+  projector and intel_rgbd's D435 law, the arm examples Menagerie's models from its cached checkout; nothing is vendored. Every
+  result's provenance carries `code` (this repo's commit, +dirty only when sysid/ or type_cards/ had uncommitted changes; the results
+  a run writes do not count) and `imports` (every checkout outside this repo that a module loaded in the run's process, or a file
+  the description names, came from: bam_ws, the io-diagnostics and robot_msgs checkouts bam_rack_twin imports, Menagerie; each with
+  its branch, the last commit that touched what was used, and +dirty; one process running several examples names the union, never
+  less). The freshness test is the tripwire when a peer changes one.
 
 ## Consequences
 

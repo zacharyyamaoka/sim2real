@@ -44,7 +44,7 @@ def run(example: str, *, workers: int = 6, write: bool = False) -> dict:
     doc["schema"] = result.SCHEMA
     doc["example"] = example
     doc["verdict"] = result.verdict(doc)
-    doc.setdefault("provenance", {}).update({"identify_sealed": True, "code": result.code_version(),
+    doc.setdefault("provenance", {}).update({"identify_sealed": True, **result.provenance(example),
                                              "seconds": round(time.monotonic() - started, 1)})
     if write:
         result.write(doc)

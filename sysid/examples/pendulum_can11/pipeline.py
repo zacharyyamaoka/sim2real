@@ -63,22 +63,6 @@ def _rack():
     return label, record, station
 
 
-BAM_WS = Path("/home/bam/bam_ws")
-
-
-def bam_ws_stamp() -> str:
-    """bam_ws as this run imported it: bam_rack_twin and every bam_ws source root on sys.path (its own imports included), on the
-    branch checked out. WHY: the code is imported in place, not vendored (docs/decision-sysid-oracle-2026-11-05.md), so the stamp
-    is the only record of which bam_ws code produced CAN 11's numbers; it said "main" and read bam_rack_twin's folder alone."""
-    import sys  # noqa: PLC0415
-
-    roots = sorted({Path(p).resolve() for p in sys.path if p and Path(p).is_dir() and Path(p).resolve().is_relative_to(BAM_WS)
-                    and ".venv" not in Path(p).parts})
-    v = result.checkout_version(BAM_WS, roots)
-    return (f"bam_ws {v['branch']}, src/dev/bam_rack_twin and the {len(roots)} bam_ws source roots it imports (in place) @ "
-            f"{v['commit']} {v['date']}{' +dirty' if v['dirty'] else ''}")
-
-
 # --- plan ---------------------------------------------------------------------------------------------------------------------
 
 @dataclass
@@ -547,7 +531,7 @@ def assemble(description, plan: Plan, fit: Fit, scores: dict, *, truth: dict) ->
         "selection_rule": reg.SELECTION_RULE,
         "stock_fit": stock,
         "fit": {"rows": fit.rows, "runs": fit.runs},
-        "provenance": {"bam_rack_twin": bam_ws_stamp(), "twin_of_record": _rack()[0],
+        "provenance": {"twin_of_record": _rack()[0],
                        "twin_of_record_digest": _rack()[1].digest()},
         "notes": [
             "The real CAN 11 is bam_rack_twin's own twin at world.json's truth; the floor is the oracle's measurement noise alone (two camera draws of one deterministic run), so real floors are larger.",

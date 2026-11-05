@@ -1,7 +1,7 @@
 """The system-ID oracle report (2026-11-05): six robot descriptions in, a better model out, each checked against a hidden truth.
 
     python3 /home/bam/sim2real/site/build.py
-    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_sysid_oracle.py --oracle-tests 46/46 --site-tests 200/200
+    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_sysid_oracle.py --oracle-tests N/N --site-tests N/N --type-cards-tests N/N
 
 Serves a built site (default ~/.cache/sim2real/site) with `python3 -m http.server` on a free port in 4711-4799 (never 4700, Zach's) and
 stops it by the PID it started; records the click-through home -> the oracle cards -> CAN 11's page (its ladder, its wear chart) ->
@@ -290,9 +290,12 @@ def main() -> None:
     parser.add_argument("--type-cards-tests", default="?")
     args = parser.parse_args()
     docs = landing.load()
-    shas = {"main": subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip(),
-            "bam_ws (bam_rack_twin)": (docs.get("pendulum_can11", {}).get("provenance", {}).get("bam_rack_twin") or "").rsplit("@ ", 1)[-1],
-            "menagerie": "71f066a"}
+    shas = {"main": subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()}
+    # every checkout the results were computed from in place, as their provenance stamped it (never typed here)
+    for doc in docs.values():
+        for s in (doc.get("provenance") or {}).get("imports") or []:
+            stamp = f"{s['branch']} @ {s['commit']} {s['date'][:10]}{' +dirty' if s['dirty'] else ''}"
+            shas[s["name"]] = " / ".join(sorted(set(filter(None, shas.get(s["name"], "").split(" / "))) | {stamp}))
     with tempfile.TemporaryDirectory() as tmp:
         shots = capture(args.site, Path(tmp))
         page = render(shots, {"oracle": args.oracle_tests, "site": args.site_tests, "type_cards": args.type_cards_tests}, shas, docs)

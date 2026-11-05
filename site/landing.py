@@ -323,7 +323,17 @@ def page_body(doc: dict, docs: dict) -> str:
 <h2 id="ladders">Where the values sit on the type cards</h2>
 {ladders}
 <h2 id="notes">Notes</h2><ul>{notes}</ul>
-<p><small>Code {e(str(prov.get('code', '')))} · {e(str(prov.get('seconds', '')))} s · identification ran with the world sealed: {e(str(prov.get('identify_sealed')))}{' · ' + e(prov['bam_rack_twin']) if prov.get('bam_rack_twin') else ''}</small></p>"""
+<p><small>Code {e(str(prov.get('code', '')))} · {e(str(prov.get('seconds', '')))} s · identification ran with the world sealed: {e(str(prov.get('identify_sealed')))}{imports_line(prov)}</small></p>"""
+
+
+def imports_line(prov: dict) -> str:
+    """The checkouts outside sim2real the run used in place (sysid.result.provenance): name, branch, the last commit that touched
+    what was used, +dirty when that had uncommitted changes."""
+    stamps = prov.get("imports") or []
+    if not stamps:
+        return ""
+    words = " · ".join(f"{s['name']} {s['branch']} @ {s['commit']}{' +dirty' if s['dirty'] else ''}" for s in stamps)
+    return f"<br>Checkouts used in place (by the modules loaded in the process that computed this, and the description's files): {e(words)}"
 
 
 SOURCE_WORD = {"type_cards": "type card", "sysid adapter (no card yet)": "sysid adapter", "structural": "structure"}

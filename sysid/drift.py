@@ -159,7 +159,7 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
         "wear": {"card": "servo", "rung": "M5.wear", "parameter": "backlash_rad", "usage": wear.usage, "unit": wear.unit, "law": wear.law, "rate": wear.rate,
                  "duty_nm_rev_per_h": duty, "rate_recovered_per_nm_rev": k_hat / duty if duty else None, "rate_true_per_nm_rev": hidden_wear["rate_rad_per_h"] / duty if duty else None,
                  "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"},
-        "provenance": {"code": result.code_version(), "seconds": round(time.monotonic() - started, 1), "commissioned_twin": commissioned.digest(),
+        "provenance": {**result.provenance(P.EXAMPLE), "seconds": round(time.monotonic() - started, 1), "commissioned_twin": commissioned.digest(),
                        "identify_sealed": True},
     }
     if write:
@@ -277,7 +277,7 @@ def run_camera(*, workers: int = 6, write: bool = False) -> dict:
         "threshold": float(cards.drift_diagnostic("camera_rgb").threshold.value), "diagnostic": {"id": cards.drift_diagnostic("camera_rgb").id},
         "calibrated_reprojection_px": calibrated, "checks": checks, "alarm_h": alarm, "knock_h": knock["hour"],
         "recalibrated": recal, "shift_recovered": shift_recovered, "shift_true": knock["shift"],
-        "provenance": {"code": result.code_version(), "seconds": round(time.monotonic() - started, 1), "identify_sealed": True},
+        "provenance": {**result.provenance(P.EXAMPLE), "seconds": round(time.monotonic() - started, 1), "identify_sealed": True},
     }
     if write:
         result.write(doc, "drift_camera_knock")
