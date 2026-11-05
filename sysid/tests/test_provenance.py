@@ -77,3 +77,41 @@ def test_an_imported_checkout_is_stamped_by_what_was_imported(tmp_path):
     git(repo, "commit", "-q", "-am", "servo")
     moved = result.checkout_version(repo, roots)
     assert moved["commit"] == head() != stamp["commit"] and not moved["dirty"], moved
+
+
+# Beyond bam_ws: CAN 11's bam_rack_twin also imports io-diagnostics and robot_msgs from their own checkouts, and the arm examples load
+# Menagerie's models from a cached checkout. Every result names every checkout outside this repo it imported code or loaded a model
+# from, each stamped by the rule above; paths in this repo, in a virtualenv, or in no checkout at all are not imports to stamp.
+
+def test_every_checkout_outside_this_repo_is_stamped(tmp_path):
+    here = committed_repo(tmp_path / "sim2real")
+    imports = {}
+    for name, rel in (("bam_ws", "src/dev/bam_rack_twin/twin.py"), ("menagerie", "universal_robots_ur5e/ur5e.xml"),
+                      ("io-diagnostics", "io_diagnostics/entity.py")):
+        repo = tmp_path / name
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("0\n")
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "add", "--", ".")
+        git(repo, "commit", "-q", "-m", "base")
+        imports[name] = repo / rel
+    loose = tmp_path / "not_a_checkout"
+    loose.mkdir()
+    venv = tmp_path / "bam_ws" / "src/dev/bam_rack_twin/.venv/lib/site-packages"
+    venv.mkdir(parents=True)
+    paths = [imports["bam_ws"].parent, imports["menagerie"], imports["io-diagnostics"].parent, here / "sysid", loose, venv,
+             tmp_path / "missing"]
+    stamps = result.external_checkouts(paths, exclude=here)
+    assert [Path(s["repo"]).name for s in stamps] == ["bam_ws", "io-diagnostics", "menagerie"], stamps
+    assert all(s["branch"] == "main" and s["commit"] and not s["dirty"] for s in stamps), stamps
+
+    (imports["menagerie"]).write_text("1\n")  # a model file loaded in place, changed and not committed
+    dirty = {Path(s["repo"]).name: s["dirty"] for s in result.external_checkouts(paths, exclude=here)}
+    assert dirty == {"bam_ws": False, "io-diagnostics": False, "menagerie": True}, dirty
+
+
+def test_a_description_names_the_model_files_it_loads():
+    for example, expected in (("ur5e", "universal_robots_ur5e/ur5e.xml"), ("dual_arm_cell", "robotiq_2f85/2f85.xml"),
+                              ("conveyor", "sysid/examples/conveyor/conveyor.xml")):
+        paths = [str(p) for p in result.description_paths(example)]
+        assert any(p.endswith(expected) for p in paths), (example, paths)
