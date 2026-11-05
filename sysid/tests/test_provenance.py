@@ -47,3 +47,33 @@ def test_a_change_to_what_computes_results_is_dirty(tmp_path):
         clean = result.code_version(repo)
         (repo / rel).write_text("1\n")
         assert result.code_version(repo) == clean + "+dirty", rel
+
+
+# bam_ws is imported in place (CAN 11 runs bam_rack_twin and the bam_ws packages it imports from their checkout), so its stamp is the
+# same rule on another repo: the branch actually checked out (not an assumed "main"), the last commit that touched an imported root,
+# and +dirty when one of those roots has uncommitted changes.
+
+def test_an_imported_checkout_is_stamped_by_what_was_imported(tmp_path):
+    repo = tmp_path / "bam_ws"
+    imported = ("src/dev/bam_rack_twin", "src/core/moteus_servo/src")
+    for rel in ("src/dev/bam_rack_twin/twin.py", "src/core/moteus_servo/src/servo.py", "src/core/like_keras/notes.md"):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("0\n")
+    git(repo, "init", "-q", "-b", "work")
+    git(repo, "add", "--", ".")
+    git(repo, "commit", "-q", "-m", "base")
+    roots = [repo / r for r in imported]
+    head = lambda: subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()  # noqa: E731
+    stamp = result.checkout_version(repo, roots)
+    assert (stamp["branch"], stamp["commit"], stamp["dirty"]) == ("work", head(), False) and stamp["date"], stamp
+
+    (repo / "src/core/like_keras/notes.md").write_text("1\n")
+    assert result.checkout_version(repo, roots) == stamp, "an uncommitted change outside the imported roots"
+    git(repo, "commit", "-q", "-am", "unrelated")
+    assert result.checkout_version(repo, roots) == stamp, "a commit outside the imported roots"
+
+    (repo / "src/core/moteus_servo/src/servo.py").write_text("1\n")
+    assert result.checkout_version(repo, roots) == {**stamp, "dirty": True}, "an uncommitted change to an imported dependency"
+    git(repo, "commit", "-q", "-am", "servo")
+    moved = result.checkout_version(repo, roots)
+    assert moved["commit"] == head() != stamp["commit"] and not moved["dirty"], moved
