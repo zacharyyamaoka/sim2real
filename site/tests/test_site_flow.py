@@ -611,7 +611,8 @@ TREE_NODES_JS = """(scope) => { const root = document.querySelector(scope) || do
            rail: [r.left, r.right], box: [t.left, t.right, t.top, t.bottom],
            nodes: [...tree.querySelectorAll('button.df-node')].map((b) => ({ level: Number(b.dataset.level), value: b.dataset.value,
              label: (b.querySelector('.df-label') || {}).textContent || '', count: Number(((b.querySelector('.df-count') || {}).textContent || '').replace(/[^\\d]/g, '')),
-             pressed: b.getAttribute('aria-pressed') === 'true', shown: b.getBoundingClientRect().width > 0 })) }; }"""
+             pressed: b.getAttribute('aria-pressed') === 'true', shown: b.getBoundingClientRect().width > 0,
+             clipped: (() => { const l = b.querySelector('.df-label'); return !!l && l.scrollWidth > l.clientWidth + 1; })() })) }; }"""
 # the rows a dashboard panel's view holds after every filter (its data-views model), and the first rows' cells as drawn
 PANEL_ROWS_JS = """([name, column]) => { const s = (%s)(name); const e = s && s.querySelector(':scope > data-views'); const m = e && e.model; if (!m) return null;
   const heads = [...s.querySelectorAll('thead th')].map((h) => h.textContent.trim()); const i = heads.findIndex((h) => h.startsWith(column));
@@ -681,7 +682,9 @@ def deploy_tree_checks(data: Path, out: Path, doc: dict) -> dict:
         if n.get("runs") != sum(runs_of.get(d, 0) for d in under):
             wrong.append((n["label"], "runs", n.get("runs")))
     check(not wrong, f"every tree node carries the gate cells under it from the newest acceptance (passing, cells, worst) and its runs ({len(nodes)} nodes; wrong {wrong[:3]})")
-    import type_cards.registry as reg  # noqa: PLC0415
+    if str(REPO) not in sys.path:
+        sys.path.append(str(REPO))  # appended, as types_checks does: the repo's site/ folder never shadows the stdlib's `site`
+    from type_cards import registry as reg  # noqa: PLC0415  (CONTRACT.md: one import)
     servo = reg.card_for("servo")
     cards = {n["label"]: n.get("card") for n in nodes}
     check(servo is not None and all(cards[d] == servo.id for d in adapter_of) and not any(cards[f"fdcanusb {s}"] for s in adapters),
@@ -709,8 +712,8 @@ def deploy_tree_checks(data: Path, out: Path, doc: dict) -> dict:
           and set(env.values()) <= {*ENVIRONMENTS, "unknown"} and set(setting.values()) <= {*SETTINGS, "unknown"},
           f"every run is tagged truthfully: the rack's own recordings bench (environment) and bench (setting, type_cards SETTINGS), the rest "
           f"unknown ({counts})")
-    check(all(r.get("test_type") in (None, "") or r["test_type"] in {t.id for c in reg.CARDS.values() for t in c.tests} for r in rows),
-          "a run's test type is a type_cards TestType id it recorded, or none (nothing is inferred)")
+    check(all(r.get("test_type") == "not recorded" or r["test_type"] in {t.id for c in reg.CARDS.values() for t in c.tests} for r in rows),
+          "a run's test type is a type_cards TestType id it recorded, else 'not recorded' (nothing is inferred)")
 
     # the configuration snapshot: full only where the run's own session recorded its board's whole config, hashed
     cache = {}
@@ -767,7 +770,7 @@ def tree_rail_checks(page, base: str, data: Path, layout: dict, still) -> None:
     level0 = [n for n in t0.get("nodes", []) if n["level"] == 0 and n["shown"]]
     want0 = {node_id: (name, runs) for name, (node_id, _st, runs) in layout["adapters"].items()}
     check(bool(t0) and {n["value"] for n in level0} == set(want0) and all(n["count"] == want0[n["value"]][1] and n["label"].startswith(want0[n["value"]][0])
-                                                                          and re.search(r"\d+/\d+ pass", n["label"]) for n in level0),
+                                                                          and re.search(r" · \d+/\d+$", n["label"]) for n in level0),
           f"the Runs tab's rail opens on the rack's tree: its adapters, each labelled with its match and counting its runs "
           f"({[(n['label'], n['count']) for n in level0]})")
     panels_left = page.evaluate(f"""() => {{ const d = [...document.querySelectorAll('{scope} data-dashboard .dd-body.dd-has-rail')].find(b => b.offsetParent);
@@ -786,9 +789,11 @@ def tree_rail_checks(page, base: str, data: Path, layout: dict, still) -> None:
     want_kids = {layout["stations"][d]: layout["runs_of"].get(d, 0) for d in stations}
     check(got.get("n") == runs and got.get("cells") and set(got["cells"]) <= set(stations),
           f"a click on {name} filters the runs to its stations ({got.get('n')} of {runs} runs; stations drawn {sorted(set(got.get('cells') or []))})")
-    check({n["value"]: n["count"] for n in kids} == want_kids and all(re.search(r"\d+/\d+ pass", n["label"]) for n in kids)
+    check({n["value"]: n["count"] for n in kids} == want_kids and all(re.search(r" · \d+/\d+$", n["label"]) for n in kids)
           and any(n["pressed"] and n["value"] == adapter_id for n in t1.get("nodes", [])),
           f"{name} opens under it: its {len(want_kids)} stations, each with its match and its runs ({[(n['label'], n['count']) for n in kids]})")
+    clipped = [n["label"] for n in t0.get("nodes", []) + t1.get("nodes", []) if n["shown"] and n["clipped"]]
+    check(not clipped, f"no node's words are clipped in the rail at 1280 px (each label's scrollWidth within its box; clipped: {clipped})")
     still("13b-tree-adapter")
     can11 = layout["stations"]["CAN 11"]
     page.locator(f"{scope} .dd-rail button.df-node[data-level='1'][data-value='{can11}']").first.click()
@@ -823,7 +828,7 @@ def flat_runs_checks(page, base: str, layout: dict, still) -> None:
     check(all(any(h.startswith(w) for h in headings) for w in want), f"/runs/ facets every run flat by {', '.join(want)} ({headings})")
     t0 = page.evaluate(TREE_NODES_JS, "aside") or {}
     roots = [n for n in t0.get("nodes", []) if n["level"] == 0]
-    check(len(roots) >= 1 and any(n["value"] == DEP and n["count"] == layout["total"] and re.search(r"\d+/\d+ pass", n["label"]) for n in roots),
+    check(len(roots) >= 1 and any(n["value"] == DEP and n["count"] == layout["total"] and re.search(r" · \d+/\d+$", n["label"]) for n in roots),
           f"/runs/'s tree starts at the deployments, each with its match and runs ({[(n['label'], n['count']) for n in roots]})")
     page.locator("aside data-facets label", has_text=re.compile(r"^\s*bench")).first.click()
     page.wait_for_timeout(1500)
