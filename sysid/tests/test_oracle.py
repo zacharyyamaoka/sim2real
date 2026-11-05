@@ -201,6 +201,35 @@ def test_backlash_wear_is_recovered_and_its_crossing_predicted():
     assert doc["recalibrated"]["ratio"] <= gate["recalibrated_ratio_max"], f"after recalibration the ratio is {doc['recalibrated']['ratio']:.3f}"
 
 
+# WHY 5 % (2026-11-05): 5 % of the ~234 h crossing is ~11.7 h, under one 12 h check interval, so a point forecast inside it is off by
+# less than the spacing of the checks it replaces; the 15 % gate (~35 h, three checks) let a forecast 28 h late pass. A late forecast
+# is the unsafe side for maintenance, so the plan-by hour (the same forecast at the wear rate's upper 95 % limit) must not be late
+# at all. Not in acceptance.json: that file is pinned and may only tighten; this is an extra, tighter assertion beside its gate.
+FORECAST_ERROR_REL = 0.05
+
+
+def test_the_wear_forecast_is_close_not_late_and_reads_only_checks_up_to_its_hour():
+    from sysid import drift
+
+    gate = ACCEPTANCE["drift"]["backlash_wear"]
+    doc = drift_result("backlash_wear")
+    predicted, actual, at = doc["predicted_crossing_h"], doc["actual_crossing_h"], doc["predicted_at_h"]
+    error = (predicted - actual) / actual
+    assert abs(error) <= gate["crossing_hour_rel"], f"predicted {predicted:.1f} h, crossed at {actual:.1f} h ({100 * error:+.1f} %)"
+    assert abs(error) <= FORECAST_ERROR_REL, f"predicted {predicted:.1f} h, crossed at {actual:.1f} h ({100 * error:+.1f} %, limit 5 %)"
+    plan_by = doc["plan_by_h"]
+    assert plan_by is not None and at < plan_by <= actual, f"plan-by hour {plan_by} is late (crossed at {actual:.1f} h) or not ahead of hour {at}"
+
+    # no peeking: the forecast reads only checks at or before its hour; corrupting every later check must not move it
+    used = doc["forecast"]["checks_h"]
+    assert used == [c["h"] for c in doc["checks"] if c["h"] <= at] and max(used) <= at, used
+    tampered = [c if c["h"] <= at else {**c, "b_hat_rad": 10 * c["b_hat_rad"], "ratio": 10 * c["ratio"], "live_x_floor": 10 * c["live_x_floor"]}
+                for c in doc["checks"]]
+    clean = drift.wear_forecast(doc["checks"], forecast_h=at, curve=doc["curve"], threshold=doc["threshold"])
+    assert drift.wear_forecast(tampered, forecast_h=at, curve=doc["curve"], threshold=doc["threshold"]) == clean
+    assert math.isclose(clean["predicted_crossing_h"], predicted, rel_tol=1e-12) and math.isclose(clean["plan_by_h"], plan_by, rel_tol=1e-12)
+
+
 def test_a_knocked_camera_is_detected_and_recalibrated():
     gate = ACCEPTANCE["drift"]["camera_knock"]
     hidden = world(gate["example"])["drift"]["camera_knock"]
@@ -219,7 +248,7 @@ def test_a_knocked_camera_is_detected_and_recalibrated():
 def test_the_committed_drift_result_is_this_code(name):
     committed = json.loads((SYSID / "results" / f"drift_{name}.json").read_text())
     fresh = drift_result(name)
-    keys = ("rate_recovered", "predicted_crossing_h", "actual_crossing_h", "detector_alarm_h") if name == "backlash_wear" else ("alarm_h",)
+    keys = ("rate_recovered", "predicted_crossing_h", "plan_by_h", "actual_crossing_h", "detector_alarm_h") if name == "backlash_wear" else ("alarm_h",)
     for key in keys:
         x, y = committed[key], fresh[key]
         assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), f"{name} {key}: committed {x}, now {y}"
