@@ -28,6 +28,7 @@ import colorsys
 import contextlib
 import hashlib
 import json
+import os
 import re
 import socket
 import subprocess
@@ -362,6 +363,38 @@ def explanation_checks(data: Path, path: Path, doc: dict, out: Path) -> None:
     check(all(honest.values()), f"the coverage pages say what is drawn: exact 1/n, no floor, and that the Runs per cell voxels count runs where paths fade out ({honest})")
 
 
+WORKTREE_MARKS = (".claude/worktrees/", "sim2real-worktrees/")
+TEXT_SUFFIXES = {".json", ".html", ".base", ".js", ".css", ".md", ".txt", ".svg"}
+
+
+def portability_checks(out: Path) -> None:
+    """The built site depends on no worktree (Codex round 3, gap 1, 2026-11-04: the delivered build linked its data into a
+    retired worktree, so coverage, a run's samples and the decomposition were 404s). Written before the fix."""
+    broken, named, links = [], [], 0
+    for root, dirs, files in os.walk(out, followlinks=False):
+        for name in dirs + files:
+            path = Path(root) / name
+            if path.is_symlink():
+                links += 1
+                target = os.readlink(path)
+                if not path.exists():
+                    broken.append(f"{path.relative_to(out)} -> {target}")
+                if any(m in str(path.resolve()) or m in target for m in WORKTREE_MARKS):
+                    named.append(f"{path.relative_to(out)} -> {target}")
+        for name in files:  # regular files and linked files (a linked folder's contents are its producer's: only its target is checked)
+            path = Path(root) / name
+            if path.suffix in TEXT_SUFFIXES or name.startswith(".sim2real"):
+                try:
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                hits = [m for m in WORKTREE_MARKS if m in text]
+                if hits:
+                    named.append(f"{path.relative_to(out)} names {hits[0]}")
+    check(not broken, f"no symlink in the built site is broken ({links} links; broken: {broken[:5]})")
+    check(not named, f"no built file, link or command names a .claude/worktrees/ or sim2real-worktrees/ path ({len(named)}: {named[:5]})")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -381,7 +414,8 @@ def main() -> int:
     check(not differ, f"the gate matrix shown is the newest acceptance, cell by cell: {path.name} ({doc['generated_at']}): "
                       f"{sum(1 for v in want.values() if v == 'pass')}/{len(want)} pass; differing cells {differ[:5]}")
     explanation_checks(data, path, doc, out)
-    whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
+    portability_checks(out)
+    whole =[r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
 
     vendored = SITE / "vendor" / "catalog_workbench"
@@ -433,6 +467,12 @@ def main() -> int:
             page.wait_for_load_state("load")
             page.wait_for_timeout(600)
             still("1-home")
+            # the data the dashboards read is served (Codex round 3, gap 1): the newest run's samples and the coverage set, fetched by the page
+            newest_run = json.loads((data / "runs.json").read_text())["rows"][0]["run"]
+            loads = page.evaluate("""async (urls) => Promise.all(urls.map(async u => { try { const r = await fetch(u); const j = r.ok ? await r.json() : null;
+                return [u, r.status, j && Array.isArray(j.rows) ? j.rows.length : (Array.isArray(j) ? j.length : -1)]; } catch (e) { return [u, String(e), -1]; } }))""",
+                                  [f"/data/{DEP}/runs/{newest_run}/samples.json", f"/data/{DEP}/coverage.json"])
+            check(all(status == 200 and n > 0 for _u, status, n in loads), f"the newest run's samples and coverage.json load in the browser ({loads})")
             shell_checks(page, "home at 1280")
             tiles = page.evaluate("[...document.querySelectorAll('.groups .tile .tn')].map(t => t.textContent.trim())")
             check("One Dof Test Rack" in tiles and sum(1 for t in tiles if t.startswith("CAN ")) == 8,
