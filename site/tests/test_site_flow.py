@@ -461,6 +461,34 @@ def types_checks(page, base: str, still) -> None:
           "the Motor card says what it needs before it can be measured (a dyno)")
 
 
+def station_key_of(device: str) -> str:
+    return device.lower().replace(" ", "")
+
+
+def schedule_freshness_checks(out: Path, schedules_root: Path) -> None:
+    """The delivered schedule is the producer's current one (Codex round 4, gaps 2 and 4, 2026-11-04: the site showed 9.7 runnable
+    minutes and a plan file that no longer existed, after bam_ws e8fb212c rebuilt the producer). Written before the fix."""
+    stale, missing, n_commands = [], [], 0
+    delivered = sorted((out / "data").glob("*/schedule/*"))
+    for folder in delivered:
+        source = schedules_root / folder.parent.parent.name / folder.name / "site"
+        for name in sorted({p.name for p in source.glob("*.json")} | {p.name for p in folder.glob("*.json")}):
+            a, b = folder / name, source / name
+            if not (a.is_file() and b.is_file() and a.read_bytes() == b.read_bytes()):
+                stale.append(f"{folder.name}/{name}")
+        for c in json.loads((folder / "commands.json").read_text()) if (folder / "commands.json").is_file() else []:
+            n_commands += 1
+            plan = re.search(r"--plan (\S+)", c["command"])
+            for path in {c.get("plan"), plan.group(1) if plan else None} - {None}:
+                if not Path(path).is_file():
+                    missing.append(path)
+    stations = {f.parent.parent.name: {station_key_of(r["device"]) for r in json.loads((f.parent.parent / "devices.json").read_text())["rows"]} for f in delivered}
+    strays = [f"{f.parent.parent.name}/{f.name}" for f in delivered if f.name not in stations[f.parent.parent.name]]
+    check(not strays, f"only a station's own schedule folder is delivered, never a producer's backup beside it (strays: {strays})")
+    check(delivered and not stale, f"every delivered schedule file equals the producer's site/ file, summary.json included ({len(delivered)} stations; stale: {stale[:5]})")
+    check(n_commands > 0 and not missing, f"every schedule command's --plan file exists ({n_commands} commands; missing: {missing[:3]})")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -481,7 +509,8 @@ def main() -> int:
                       f"{sum(1 for v in want.values() if v == 'pass')}/{len(want)} pass; differing cells {differ[:5]}")
     explanation_checks(data, path, doc, out)
     portability_checks(out)
-    whole =[r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
+    schedule_freshness_checks(out, adapter.SCHEDULES)
+    whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
 
     vendored = SITE / "vendor" / "catalog_workbench"
