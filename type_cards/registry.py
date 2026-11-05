@@ -24,6 +24,10 @@ these types, and the other repos are cited by id, never forked: metrics name Rob
 ("robotparts:<model>.<term>") and bam_rack_twin's TwinParameters, views name data-ui gallery templates at the commit
 vendor/data-ui/VENDOR.md records. What they lack is listed as `proposed` with the gap named, so the gap list is generated.
 WHY "type_cards" and not "types": a top-level package named `types` shadows Python's stdlib module of that name.
+v2 (Zach, PROJECT - Sim2Real, "Proposed Work Flow Nov 5 2026"; type_cards/CONTRACT.md): every card also holds a ladder of model
+rungs (type_cards/ladders.py: physics, its wear variant, a grey-box residual and a black-box net, each counted and referenced), the
+diagnostics and gates over its metrics (one drift diagnostic each), and its test types by setting; the calibration packages are
+type_cards/calibration.py and the references type_cards/references.py, every one checked by type_cards/check_references.py.
 """
 
 from __future__ import annotations
@@ -224,11 +228,11 @@ def proc(**tools) -> dict:
     return out
 
 
-AX_Q = Axis("q", "rad", "12 cells over the joint's range from its origin")
+AX_Q = Axis("q", "rad", "12 cells over the joint's range from its origin (the bin size is range / 12, per unit: CAN 11's is 0.2565 rad)")
 AX_QD = Axis("qd", "rad/s", "signed, log-spaced to the speed budget (±1 %, 2.5 %, 5 %, 10 %, 25 %, 50 %, 100 %), a dead cell around 0")
 AX_QDD = Axis("qdd", "rad/s²", "signed, log-spaced to the accel envelope (±0.6 %, 2.5 %, 6 %, 19 %, 50 %, 100 %)")
-AX_TAU = Axis("load torque", "N·m", "0.25 N·m cells to the torque limit (the planned demand tau_pred); its own marginal")
-AX_TEMP = Axis("temperature", "°C", "10 °C bands from 20 to 80 °C; its own marginal (no schedule family varies it yet)")
+AX_TAU = Axis("load torque", "N·m", "0.25 N·m cells to the torque limit (the planned demand tau_pred); its own marginal", bin_size=0.25, marginal=True)
+AX_TEMP = Axis("temperature", "°C", "10 °C bands from 20 to 80 °C; its own marginal (no schedule family varies it yet)", bin_size=10.0, marginal=True)
 ACTUATOR_AXES = (AX_Q, AX_QD, AX_QDD, AX_TAU, AX_TEMP)
 ACTUATOR_RULE = ("headline: share of the reachable (q, qd, qdd) cells any planned target visits (bam_rack_twin.schedule's rule: a "
                  "cell is reachable when its centre's demand is inside the torque limit and the joint can brake before the range "
@@ -236,7 +240,7 @@ ACTUATOR_RULE = ("headline: share of the reachable (q, qd, qdd) cells any planne
 
 
 def _cam_axes(extra=()):
-    return (Axis("distance", "m", "0.1 / 0.3 / 0.6 / 1.2 / 2.5 m edges"),
+    return (Axis("distance", "m", "0.1 / 0.3 / 0.6 / 1.2 / 2.5 m edges (log-ish, so no single bin size)"),
             Axis("incidence angle", "°", "0 / 15 / 30 / 45 / 75° from the target normal"),
             Axis("illumination", "lux", "10 / 150 / 600 / 20 000 lux: dim, indoor, bright to daylight"),
             Axis("material", "class", "matte white, black plastic, metal, clear PET, cardboard, film"),
@@ -283,12 +287,13 @@ SERVO = Card(
             P("ripple_harmonics", "N·m", None, "robotparts:lab/models/actuator/twin.ripple_harmonics", "a rotor-angle sweep over more than one rotor turn", "yes", "cogging phase drifts ~28° across days (rack-motor-models)"),
             P("backlash_rad", "rad", None, "robotparts:lab/models/actuator/twin.backlash_rad", "full-turn ratio on camera, staircase holds; a clamp for the gap", "no", "encoder-blind: the motor encoder sits before the gear"),
             P("gear_stiffness_nm_rad", "N·m/rad", None, "robotparts:lab/models/actuator/twin.gear_stiffness_nm_rad", "a clamp test (output locked)", "no", "encoder-blind"),
-            P("gravity_nm", "N·m", 4.661, "bam_rack_twin TwinParameters.gravity_nm; CAN 11: the pendulum's m g L", "slow sweeps both ways (identify.fit_gravity)", "yes", "the load, not the servo: a rig term"),
-            P("torque_scale", "1", 1.0, "bam_rack_twin TwinParameters.torque_scale (Kt_true / Kt_board)", "a known mass (T6)", "partial", "needs a weighed mass"),
-            P("current_loop_hz", "Hz", None, "bam_rack_twin TwinParameters.current_loop_hz", "torque chirp, open loop", "partial"),
-            P("command_delay_s", "s", None, "bam_rack_twin TwinParameters.command_delay_s", "step targets, cross-correlation of command and current", "yes"),
-            P("kp_nm_rad", "N·m/rad", 31.831, "the board's config (deployment record), kp × kp_scale", "read from the config receipt", "yes"),
-            P("kd_nm_s_rad", "N·m·s/rad", 0.6366, "the board's config (deployment record), kd × kd_scale", "read from the config receipt", "yes"),
+            P("gravity_nm", "N·m", 4.661, "bam_rack_twin TwinParameters.gravity_nm; CAN 11: the pendulum's m g L", "slow sweeps both ways (identify.fit_gravity)", "yes", "the load, not the servo: a rig term",
+              role="assembly"),
+            P("torque_scale", "1", 1.0, "bam_rack_twin TwinParameters.torque_scale (Kt_true / Kt_board)", "a known mass (T6)", "partial", "needs a weighed mass", role="driver"),
+            P("current_loop_hz", "Hz", None, "bam_rack_twin TwinParameters.current_loop_hz", "torque chirp, open loop", "partial", role="driver"),
+            P("command_delay_s", "s", None, "bam_rack_twin TwinParameters.command_delay_s", "step targets, cross-correlation of command and current", "yes", role="driver"),
+            P("kp_nm_rad", "N·m/rad", 31.831, "the board's config (deployment record), kp × kp_scale", "read from the config receipt", "yes", role="config"),
+            P("kd_nm_s_rad", "N·m·s/rad", 0.6366, "the board's config (deployment record), kd × kd_scale", "read from the config receipt", "yes", role="config"),
             P("thermal_r_c", "K/W, s", None, "bam_rack_twin thermal_model (two-node)", "a heating run with a thermocouple (T8)", "no", "needs a thermocouple"),
         )),
     coverage=Coverage(ACTUATOR_AXES, ACTUATOR_RULE, cov.servo_coverage, robotdx="servo.coverage",
@@ -393,15 +398,15 @@ DRIVER = Card(
                 (
                     P("current_loop_hz", "Hz", None, "bam_rack_twin TwinParameters.current_loop_hz", "torque chirp", "partial"),
                     P("command_delay_s", "s", None, "bam_rack_twin TwinParameters.command_delay_s", "step commands", "yes"),
-                    P("max_voltage_factor", "1", None, "moteus fw max_V_factor (config record)", "read from the config receipt", "yes"),
-                    P("torque_cap_nm", "N·m", 4.0, "the runner's --cap-nm / servo.max_current_A", "config receipt", "yes"),
-                    P("telemetry_rate_hz", "Hz", None, "the host loop (record)", "timestamps", "yes"),
+                    P("max_voltage_factor", "1", None, "moteus fw max_V_factor (config record)", "read from the config receipt", "yes", role="config"),
+                    P("torque_cap_nm", "N·m", 4.0, "the runner's --cap-nm / servo.max_current_A", "config receipt", "yes", role="config"),
+                    P("telemetry_rate_hz", "Hz", None, "the host loop (record)", "timestamps", "yes", role="config"),
                     P("board_thermal", "K/W, s", None, "unknown", "heating run", "yes", "the board reports its own temperature"),
                 )),
     coverage=Coverage((Axis("current command", "A", "signed, to the current limit (±5, 15, 30, 60, 100 %)"),
                        Axis("speed", "rad/s", "signed rotor speed, to the speed limit"),
-                       Axis("bus voltage", "V", "20 / 26 / 32 / 38 / 44 V bands; marginal"),
-                       Axis("board temperature", "°C", "20 / 40 / 60 / 80 °C; marginal")),
+                       Axis("bus voltage", "V", "20 / 26 / 32 / 38 / 44 V bands; marginal", bin_size=6.0, marginal=True),
+                       Axis("board temperature", "°C", "20 / 40 / 60 / 80 °C; marginal", bin_size=20.0, marginal=True)),
                       "share of the (i_q, speed) operating map's cells visited; bus voltage and temperature as marginals", cov.driver_coverage,
                       plan_source="the servo's schedule, read at the rotor"),
     view=View("robotics-driver-gates", ("Runs", "Playback", "q-axis current i_q", "Bus voltage v_bus", "Board temperature", "Fault", "Operating map")),
@@ -430,7 +435,7 @@ ENCODER = Card(
                     P("noise_sigma", "mrad", None, "unknown", "standstill capture", "yes"),
                     P("latency_s", "s", None, "unknown", "camera vs encoder cross-correlation", "partial"),
                 )),
-    coverage=Coverage((Axis("q", "rad", "12 cells over a full turn"), Axis("qd", "rad/s", "signed log-spaced speed")),
+    coverage=Coverage((Axis("q", "rad", "12 cells over a full turn", bin_size=0.5236), Axis("qd", "rad/s", "signed log-spaced speed (0.01, 0.1, 0.5, 1 of 10 rad/s)")),
                       "share of (angle, speed) cells visited", lambda points: cov.binned([(p["q"], p["qd"]) for p in points],
                       [[-3.1416 + 0.5236 * i for i in range(13)], cov.signed((0.01, 0.1, 0.5, 1.0), 10.0)])),
     view=View("robotics-servo", ("Angle", "Angle error")),
@@ -458,7 +463,8 @@ ARM_SUB = Card(
                     P("link_inertials", "kg, kg·m²", None, "CAD export", "excitation trajectories", "partial"),
                     P("closure_tolerance", "mm", None, "five-bar geometry (fb_bench)", "loop closure residual", "yes"),
                 )),
-    coverage=Coverage((Axis("joint space", "rad", "4 cells per joint inside its limits"), Axis("tool pose", "m", "0.1 m voxels over the reach box")),
+    coverage=Coverage((Axis("joint space", "rad", "4 cells per joint inside its limits (the bin size is each joint's range / 4)"),
+                       Axis("tool pose", "m", "0.1 m voxels over the reach box", bin_size=0.1, marginal=True)),
                       "share of joint cells visited; tool voxels as a marginal", lambda points: cov.arm_coverage(points, ((-1.57, 1.57),) * 3)),
     view=View("robotics-arm", ("Path 3D", "EEF error", "Joint error", "Joint angle", "Reach")),
     observability=Observability("partial", ("fb_bench five-bar (2-DOF, real)", "D405 / D435 + ArUco"), ("a wrist on the rack",)),
@@ -485,12 +491,13 @@ ARM = Card(
                     P("dh_errors", "m, rad", None, "UR5e URDF nominal (Menagerie)", "multi-arm kinematic calibration (58-parameter chain)", "partial"),
                     P("joint_zero_offsets", "rad", None, "homing records", "kinematic calibration", "yes"),
                     P("joint_compliance", "rad/N·m", None, "unknown", "loaded poses", "partial"),
-                    P("base_frame", "m, rad", None, "the cell's layout", "camera on base tags", "yes"),
-                    P("tool_frame", "m, rad", None, "the gripper's CAD", "tool-flange tag", "yes"),
+                    P("base_frame", "m, rad", None, "the cell's layout", "camera on base tags", "yes", role="assembly"),
+                    P("tool_frame", "m, rad", None, "the gripper's CAD", "tool-flange tag", "yes", role="assembly"),
                     P("link_inertials", "kg, kg·m²", None, "URDF", "excitation trajectories", "partial"),
                 )),
-    coverage=Coverage((Axis("joint space", "rad", "4 cells per joint inside its limits (4096 cells)"), Axis("tool pose", "m", "0.1 m voxels over the 850 mm reach box"),
-                       Axis("payload", "kg", "0 / 1 / 3 / 5 kg (unplanned yet)")),
+    coverage=Coverage((Axis("joint space", "rad", "4 cells per joint inside its limits (4096 cells; the bin size is each joint's range / 4)"),
+                       Axis("tool pose", "m", "0.1 m voxels over the 850 mm reach box", bin_size=0.1, marginal=True),
+                       Axis("payload", "kg", "0 / 1 / 3 / 5 kg (unplanned yet)", marginal=True)),
                       "share of the joint cube's cells visited; tool voxels and payload as marginals", cov.arm_coverage, robotdx="arm.workspace_coverage"),
     view=View("robotics-arm-gates", ("Path 3D", "Path top", "EEF error", "Joint error", "Coverage", "Reach", "Joint range")),
     observability=Observability("no", ("none on the rack: the UR5e is sim only",), ("a real 6-DOF arm", "tool-flange tag + calibrated cameras")),
@@ -508,6 +515,9 @@ ARM_GRIPPER = Card(
         Metric("pick.sppm", "performance", "Successful picks per minute", "successes per minute vs the plan", "1/min", "pick.sppm", normalised="Wilson interval, no floor"),
         Metric("pick.sim_vs_real", "fidelity", "Pick outcome agreement", "sim success vs real success on the same scenes", "%", None,
                proposed="RobotDx's pick.vs_human compares with a human, not with the twin; this is stock.agreement on outcomes", normalised="against the real success rate's interval"),
+        Metric("pick.twin_grasp_fidelity", "fidelity", "Twin / floor (grasp pose)", "twin tool pose at closing vs the real one on the same scene and targets", "× floor", None,
+               proposed="stock.fidelity_ratio on the grasp pose; RobotDx's pick entries compare with a human or the plan, not a twin",
+               normalised="÷ RP at the grasp; <= 1.5× is twinned (the drift diagnostic divides this one: it grows when the twin gets worse)", today=False),
     ),
     floor=Floor(None, "the real pick rate's own Wilson interval over repeated scenes"),
     model=Model("Arm + gripper", None, "composite: the arm card + a gripper (RobotDx part type `gripper`, no card yet) + contact",
@@ -518,7 +528,8 @@ ARM_GRIPPER = Card(
                     P("grip_force_map", "N", None, "unknown", "force gauge in the jaws", "no"),
                     P("contact_friction", "1", None, "unknown", "pull-out tests per material", "partial"),
                 )),
-    coverage=Coverage((Axis("joint space", "rad", "as the arm"), Axis("tool pose", "m", "as the arm"), Axis("payload", "kg", "object mass classes")),
+    coverage=Coverage((Axis("joint space", "rad", "as the arm: 4 cells per joint inside its limits"), Axis("tool pose", "m", "as the arm: 0.1 m voxels", bin_size=0.1, marginal=True),
+                       Axis("payload", "kg", "object mass classes", marginal=True)),
                       "the arm's coverage at the grasp poses; object classes as a marginal (proposed)", cov.arm_coverage),
     view=View("robotics-arm-gripper-gates", ("EEF z", "Gripper width", "Grip width at grasp", "Grip force", "Tool path 3D")),
     observability=Observability("no", ("none: sim only",), ("a real arm + gripper", "scene set with known objects")),
@@ -601,15 +612,62 @@ CAMERA_HSI = Card(
                     P("smile_keystone_map", "px", None, "unknown", "bar targets", "yes", "the distortion map the cube is resampled with"),
                     P("dark_white_refs", "DN", None, "per session", "reference captures", "yes"),
                 )),
-    coverage=Coverage(_cam_axes((Axis("wavelength band", "band", "VIS / red edge / SWIR"), Axis("material class", "class", "PET, HDPE, PP, PS, PVC, paper, organic, metal, glass"))),
+    coverage=Coverage(_cam_axes((Axis("wavelength band", "band", "VIS / red edge / SWIR (categorical)"), Axis("material class", "class", "PET, HDPE, PP, PS, PVC, paper, organic, metal, glass (categorical)"))),
                       CAMERA_RULE + " × wavelength band × material class", cov.condition_coverage(cov.HSI_AXES)),
     view=View("robotics-camera", ("Sessions", "Hyperspectral band")),
     observability=Observability("no", ("none on the rack",), ("the hyperspectral camera (Windows-only driver today)", "a reference library and lamp")),
     procedure=proc(),
 )
 
-ORDER = ("gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "camera_rgb", "camera_rgbd", "camera_hsi", "encoder")
-CARDS: dict[str, Card] = {c.id: c for c in sorted((GEARBOX, DRIVER, MOTOR, SERVO, ARM_SUB, ARM, ARM_GRIPPER, CAMERA_RGB, CAMERA_RGBD, CAMERA_HSI, ENCODER),
+
+CONVEYOR = Card(
+    # WHY a card (the coordinator, 2026-11-05): Zach's landing-page examples include a conveyor belt and two UR arms over one
+    id="conveyor", title="Conveyor belt", group="actuator", zach="A conveyor belt (Nov 5, the landing-page examples)",
+    robotdx_part=None, robotdx_gap="RobotDx has no conveyor part type: its PARTS stop at servo, driver, gearbox, encoder, cameras, IMU, F/T, gripper and arm; the belt is only a frame in arm.path_tracking",
+    inputs="belt speed or position command (motor through a gearbox and a drum)", outputs="belt position and speed (motor encoder through the drum), motor current; a tracked object's position on the belt (camera)",
+    metrics=(
+        Metric("conveyor.speed_tracking", "performance", "Belt speed tracking", "belt speed vs the commanded speed", "m/s RMS", None,
+               proposed="RobotDx has no conveyor entries; it is stock.tracking_error on belt speed", normalised="÷ the run-to-run speed scatter of one profile", today=False),
+        Metric("conveyor.object_position", "performance", "Object position along the belt", "a tracked object's camera position vs where the encoder says it is after travel", "mm", None,
+               proposed="no RobotDx entry; stock.agreement between a camera track and the encoder-integrated position", normalised="÷ the camera's tag-position repeatability", today=False),
+        Metric("conveyor.twin_fidelity", "fidelity", "Twin / floor (belt position)", "twin belt position vs real on the same command", "× floor", None,
+               proposed="stock.fidelity_ratio on belt position; no conveyor entry", normalised="÷ the belt's run-to-run floor; <= 1.5× is twinned", today=False),
+        Metric("conveyor.slip", "fidelity", "Slip and stretch predicted", "twin vs real object displacement per metre of drum travel", "mm/m", None,
+               proposed="no RobotDx entry: the drum encoder cannot see slip, a camera on the belt can", normalised="÷ the camera floor per metre", today=False),
+    ),
+    floor=Floor(None, "proposed: belt position repeatability over >= 5 identical speed profiles (encoder) and the camera's tag repeatability"),
+    model=Model("Belt as a linear axis", None,
+                "robotparts has no conveyor model; pidtuna's conveyor plant (src/pidtuna/plants/conveyor_truths.py) is the stock one: belt, drum and reflected rotor mass, Coulomb, viscous and static friction, belt stretch",
+                "(m + m_load) ẍ_load = k (x_drum − x_load) + c (ẋ_drum − ẋ_load) − F_f(ẋ); m_drum ẍ_drum = N τ_motor / r − k (x_drum − x_load) − c (ẋ_drum − ẋ_load)",
+                (
+                    P("drum_radius_m", "m", 0.05, "pidtuna conveyor_truths.DRUM_RADIUS_M (a 50 mm drum)", "a tag carried one metre: drum turns vs camera distance", "partial"),
+                    P("gear_ratio", "1", 10.0, "pidtuna conveyor_truths.GEAR", "datasheet; drum turns vs motor turns", "partial"),
+                    P("moving_mass_kg", "kg", 10.3, "pidtuna conveyor_truths.NOMINAL_KG (belt 8 + drum 1.5 + reflected rotor 0.8)", "speed steps", "yes"),
+                    P("load_mass_kg", "kg", None, "the parcels on the belt: the deployment's", "speed steps with and without load", "yes", role="assembly"),
+                    P("encoder_counts_per_m", "1/m", 521527, "pidtuna conveyor_truths.COUNTS_PER_M (2^14 counts x 10 / (2 pi x 0.05 m))", "read from the drive's configuration", "yes", role="config"),
+                    P("coulomb_n", "N", 25.0, "pidtuna conveyor nominal (datasheet friction)", "velocity plateaus both ways", "yes"),
+                    P("viscous_n_s_m", "N·s/m", 20.0, "pidtuna conveyor nominal", "velocity plateaus", "yes"),
+                    P("static_n", "N", None, "unknown (pidtuna's hidden truth uses 45 N)", "slow plateaus: breakaway", "partial"),
+                    P("stretch_stiffness_n_m", "N/m", None, "unknown (pidtuna's hidden truth uses 2.5e4 N/m)", "speed steps with a camera on a belt tag", "partial",
+                      "the encoder is on the drum: stretch shows only on the camera"),
+                    P("stretch_damping_n_s_m", "N·s/m", None, "unknown (pidtuna's hidden truth uses 60 N·s/m)", "speed steps with a camera on a belt tag", "partial"),
+                )),
+    coverage=Coverage((Axis("belt speed", "m/s", "signed, 5 cells each way to the speed limit (5, 15, 30, 60, 100 %)"),
+                       Axis("load mass", "kg", "0 / 5 / 10 / 15 / 20 / 30 kg"),
+                       Axis("position", "m", "0.25 m cells along the belt", bin_size=0.25, marginal=True),
+                       Axis("acceleration", "m/s²", "signed, to the accel limit; marginal", marginal=True)),
+                      "share of the (belt speed, load mass) cells visited; position along the belt and acceleration as marginals", cov.conveyor_coverage,
+                      plan_source="proposed: a conveyor schedule (pidtuna's plant runs it in sim)"),
+    view=View(None, proposed="no data-ui conveyor template: needs belt position and speed vs command, a tracked object's error along the belt, and slip per metre"),
+    observability=Observability("no", ("none on the rack: pidtuna's conveyor plant is sim only",), ("a conveyor with a drum encoder", "a camera over the belt with tags on it")),
+    procedure=proc(nominal="pidtuna plants/conveyor_truths.py (the description's nominal model)", identify="pidtuna identify.py (a linear axis: mass, Coulomb, viscous)"),
+    members=(Member("motor", 1, "the drive motor"), Member("gearbox", 1, "10:1 gearbox"), Member("driver", 1, "the motor's driver"),
+             Member("encoder", 1, "the motor encoder: belt position through the drum")),
+    error_budget="the pick's tolerance along the belt at the arm's reach: the arm's 5 mm tool gate",
+)
+
+ORDER = ("gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "conveyor", "camera_rgb", "camera_rgbd", "camera_hsi", "encoder")
+CARDS: dict[str, Card] = {c.id: c for c in sorted((GEARBOX, DRIVER, MOTOR, SERVO, ARM_SUB, ARM, ARM_GRIPPER, CONVEYOR, CAMERA_RGB, CAMERA_RGBD, CAMERA_HSI, ENCODER),
                                                    key=lambda c: ORDER.index(c.id))}
 
 
@@ -631,10 +689,21 @@ def gaps() -> list[tuple[str, str, str]]:
 
 # --- v2: the API lanes code against (type_cards/CONTRACT.md) -------------------------------------------------------------------
 
-# Zach's calibration packages (PROJECT - Sim2Real, Nov 5 2026), filled in by type_cards/calibration.py
-CALIBRATION_PACKAGES: tuple[CalibrationPackage, ...] = ()
-# each wear law's references (real, citable), filled in by type_cards/references.py
-WEAR_LAW_REFERENCES: dict[str, tuple[Reference, ...]] = {}
+from . import calibration as _calibration  # noqa: E402
+from . import ladders as _ladders  # noqa: E402
+from . import references as _references  # noqa: E402
+
+# Zach's calibration packages (PROJECT - Sim2Real, Nov 5 2026): type_cards/calibration.py
+CALIBRATION_PACKAGES: tuple[CalibrationPackage, ...] = _calibration.PACKAGES
+# each wear law's references (real, citable): type_cards/references.py
+WEAR_LAW_REFERENCES: dict[str, tuple[Reference, ...]] = _references.WEAR_LAW_REFERENCES
+
+# The v1 cards as written above; CARDS becomes them with their v2 content (type_cards/ladders.py). The module-level card names
+# follow, so reg.SERVO is reg.CARDS["servo"].
+V1_CARDS: dict[str, Card] = CARDS
+CARDS = _ladders.build(sys.modules[__name__])
+GEARBOX, DRIVER, MOTOR, SERVO, ARM_SUB, ARM, ARM_GRIPPER, CONVEYOR, CAMERA_RGB, CAMERA_RGBD, CAMERA_HSI, ENCODER = (CARDS[k] for k in (
+    "gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "conveyor", "camera_rgb", "camera_rgbd", "camera_hsi", "encoder"))
 
 SELECTION_RULE = ("pick the lowest rung, in ladder order, whose held-out fidelity reaches the floor (held-out error ÷ the floor <= "
                   f"{TWINNED_LIMIT:g}×); a residual or learned rung is judged only on held-out data inside its covered cells, and "

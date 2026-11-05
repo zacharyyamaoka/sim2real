@@ -54,12 +54,19 @@ highest layer captured"). For the actuator types the layers are robotparts' publ
 model here and on robotparts.dev: `M0` ideal, `M2` Coulomb + viscous, `M3` Stribeck / LuGre / load-dependent, `M4` ripple +
 backlash, `M5` DC-motor electrics. robotparts' `M1` is "the datasheet": M2's terms at their stated values, which here is every
 parameter's `nominal` column, so **no actuator ladder has an M1**. The other types number their own layers from `M0` (the nominal
-model a robot description gives, nothing fitted). A wear variant is `<key>.wear`; the learned rungs follow the top physics rung
-(`M6` residual, `M7` learned on the actuators). Exactly one rung per card has `current=True`: it equals the card's `model`
-(today's single model), parameter for parameter.
+model a robot description gives, nothing fitted). A wear variant is `<key>.wear`. The learned rungs come last: on the
+robotparts-numbered types (servo, motor, gearbox, conveyor) they are `M6` (residual) and `M7` (learned), above robotparts' `M5`;
+on the others they take the next two numbers after the top physics rung (the driver's are `M3`, `M4`). Exactly one rung per card
+has `current=True`: it equals the card's `model` (today's single model), parameter for parameter.
 
 WHY (2026-11-05): bam_rack_twin already calls load-dependent Coulomb "BAM's M3 term" and robotparts' fits are named `M2.twin` …
 `M4.twin.backlash`; numbering the sim2real ladder 1, 2, 3 from scratch would make "M3" mean two models across the two catalogs.
+
+## The cards
+
+`reg.ORDER`: gearbox, driver, motor, servo, arm_subassembly, arm_6dof, arm_6dof_gripper, conveyor (actuators); camera_rgb,
+camera_rgbd, camera_hsi, encoder (sensors). The conveyor (new, 2026-11-05) is pidtuna's conveyor plant as a card. `reg.V1_CARDS`
+holds the cards before their v2 content; `reg.CARDS` (and `reg.SERVO` etc.) are the v2 cards.
 
 ## Physics, residual, learned
 

@@ -255,3 +255,21 @@ def random_plan(axes: Sequence[Sequence[Any]], n: int, seed: int = 0) -> list[tu
     rng = random.Random(seed)
     return [tuple(rng.choice(axis[1:]) if axis and axis[0] == "levels" else rng.uniform(float(axis[0]), float(axis[-1])) for axis in axes)
             for _ in range(n)]
+
+
+# --- the conveyor: belt speed by load ------------------------------------------------------------------------------------------
+
+def conveyor_coverage(points: Sequence[Mapping[str, Any]], description: Mapping[str, Any] | None = None) -> CoverageResult:
+    """Points {belt speed (m/s), load mass (kg), position (m along the belt), acceleration (m/s²)}: the (speed, load) cells, signed
+    speed to the limit; position and acceleration as their own marginals. Defaults are pidtuna's conveyor plant (0.5 m/s, a 2 m belt)."""
+    d = {"speed_limit_m_s": 0.5, "accel_limit_m_s2": 1.0, "belt_length_m": 2.0, "load_kg": (0.0, 5.0, 10.0, 15.0, 20.0, 30.0), **(description or {})}
+    speed_edges = signed((0.05, 0.15, 0.3, 0.6, 1.0), d["speed_limit_m_s"])
+    cells = int(round(d["belt_length_m"] / 0.25))
+    pos_edges = [0.25 * i for i in range(cells + 1)]
+    acc_edges = signed((0.1, 0.5, 1.0), d["accel_limit_m_s2"])
+    cube = [(p["belt speed"], p["load mass"]) for p in points]
+    pos = [p["position"] for p in points if p.get("position") is not None]
+    acc = [p["acceleration"] for p in points if p.get("acceleration") is not None]
+    return binned(cube, [speed_edges, list(d["load_kg"])], axes={"position": marginal(pos, pos_edges) if pos else None,
+                                                                "acceleration": marginal(acc, acc_edges) if acc else None},
+                  unplanned=tuple(k for k, v in (("position", pos), ("acceleration", acc)) if not v))
