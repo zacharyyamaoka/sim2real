@@ -961,8 +961,8 @@ def main() -> int:
                   f"Why it fails has one row per cell {path.name} does not pass ({len(listed)} of {len(open_cells)}), each with a number, a why and a next step")
             check(("CAN 12", "T3") in listed and next(r for r in rows if (r["device"], r["gate_id"]) == ("CAN 12", "T3"))["status"] == "fail",
                   "CAN 12 T3 is listed as a fail (the stale acceptance had it passing)")
-            check(sum(1 for r in rows if r["next"].startswith("blocked on Zach")) > 0 and any(r.get("floor_rules") and "pending" in r["floor_rules"] for r in rows),
-                  "rows name what is blocked on Zach, and the floor rules where the verdict depends on them")
+            check(sum(1 for r in rows if r["next"].startswith("blocked on Zach")) > 0 and any(r.get("floor_rules") and "the gates use the pooled floor" in r["floor_rules"] for r in rows),
+                  "rows name what is blocked on Zach, and the floor rule in force where the verdict depends on it (pooled, the 2026-11-04 default)")
             for width in (1280, 390):
                 page.set_viewport_size({"width": width, "height": 900})
                 page.wait_for_timeout(1200)
@@ -981,8 +981,8 @@ def main() -> int:
                   f"the page names its gates' source and date ({path.name}, {doc['generated_at']})")
             panel(page, "Caveats").scroll_into_view_if_needed()
             caveat_text = panel(page, "Caveats").inner_text()
-            check(all(x in caveat_text for x in ("1.72×", "2.28×", "Zach's decision, pending")),
-                  "the caveats name the pick rule on CAN 11 with both numbers (safer 1.72×, declared 2.28×) and that the rule is pending")
+            check(all(x in caveat_text for x in ("1.72×", "2.28×", "The gates use the safer pick")),
+                  "the caveats name the pick rules on CAN 11 with both numbers (safer 1.72×, declared 2.28×) and the rule in force (safer, the 2026-11-04 default)")
             gains = {r["session"]: r["gains"] for r in json.loads((data / "runs.json").read_text())["rows"] if r["device"] == "CAN 11"}
             steps = ("can11_hold_kp100", "can11_hold_kp150", "can11_hold_kp200", "can11_hold_il0.25", "can11_hold_il0.5")
             check(all(s in gains for s in steps) and len({gains[s] for s in steps}) == 5,
