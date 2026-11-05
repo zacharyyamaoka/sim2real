@@ -7,7 +7,8 @@ How the ladders are made (CONTRACT.md has the rules):
 - actuator keys are robotparts' layers (M0 ideal, M2 Coulomb + viscous, M3 Stribeck / load, M4 ripple + backlash, M5 electrics);
   the other types count their own from M0, the nominal model a robot description gives;
 - the top physics rung's wear variant (`.wear`) gives the known wear parameters a usage input and a rate;
-- residual (grey box) and learned (black box) rungs sit on top; they need far more coverage and never extrapolate.
+- residual (grey box) and learned (black box) rungs sit on top, always M6 and M7 (the same meaning on every card); they need far
+  more coverage and never extrapolate.
 WHY a function over the registry module and not module-level cards: the content reuses the v1 cards' own Parameter objects, and a
 function keeps the import one way (registry -> ladders -> schema / references), never circular.
 """
@@ -295,8 +296,8 @@ def driver(reg, card):
                worn(m2.parameters, "board_thermal", Wear(*HOURS, "linear", "board_thermal_growth_per_h", "thermal interface and fan ageing")) + (
                    P(reg, "board_thermal_growth_per_h", "K/W per h", None, "unknown: regressed over deployment", "board temperature rise per watt against hours", "yes"),),
                (R.LU_MEEKER_1993, R.MEEKER_1998), "R_th(h) = R_th0 + k·h", implemented="proposed")
-    res = residual("M3", m2w, mlp(("current command", "rotor speed", "bus voltage"), "residual q-current (A)", (32, 32)), (R.NGUYEN_TUONG_2010,))
-    net = learned("M4", "Drive network (black box)", mlp(("current command", "rotor speed", "bus voltage", "board temperature"), "q-current (A)", (32, 32, 32)),
+    res = residual("M6", m2w, mlp(("current command", "rotor speed", "bus voltage"), "residual q-current (A)", (32, 32)), (R.NGUYEN_TUONG_2010,))
+    net = learned("M7", "Drive network (black box)", mlp(("current command", "rotor speed", "bus voltage", "board temperature"), "q-current (A)", (32, 32, 32)),
                   (R.HWANGBO_2019,))
     diagnostics = (dx("driver.saturation", "<=", 2.0, "%", "RobotDx: limiter share warn 0.02", "driver.saturation"),
                    dx("driver.loop_rate", ">=", None, "Hz", "the expected rate − 10 % (RobotDx tolerance 0.1)", "driver.loop_rate"),
@@ -357,9 +358,9 @@ def arm_sub(reg, card):
                    P(reg, "joint_offset_drift_rad_per_sqrt_h", "rad/√h", None, "unknown: regressed over deployment", "tag checks repeated over hours", "yes"),),
                (R.JUNKER_1969, R.WHITMORE_1995), "δq(h) = δq0 + k √h")
     joints = ("joint 1 error", "joint 2 error", "joint 3 error", "joint 1 speed", "joint 2 speed", "joint 3 speed")
-    res = residual("M3", m2w, mlp(joints + ("joint 1 torque", "joint 2 torque", "joint 3 torque"), "residual joint torques (N·m)", (64, 64), n_outputs=3),
+    res = residual("M6", m2w, mlp(joints + ("joint 1 torque", "joint 2 torque", "joint 3 torque"), "residual joint torques (N·m)", (64, 64), n_outputs=3),
                    (R.NGUYEN_TUONG_2010, R.ZENG_2020))
-    net = learned("M4", "Sub-assembly network (black box)", mlp(joints, "joint torques (N·m)", (64, 64, 64), n_outputs=3), (R.HWANGBO_2019,))
+    net = learned("M7", "Sub-assembly network (black box)", mlp(joints, "joint torques (N·m)", (64, 64, 64), n_outputs=3), (R.HWANGBO_2019,))
     diagnostics = (dx("sub.tip_error_at_stop", "<=", None, "mm", "its share of the 5 mm tool gate, split across its joints by lever", "arm.tool_error_at_stop"),
                    dx("sub.twin_fidelity", "<=", 2.0, "× floor", robotdx="arm.sim_vs_real"),
                    drift("arm_subassembly", "sub.twin_fidelity", Forecast(*VIBRATION, "sqrt", ("joint_offsets",)), robotdx="arm.calibration_drift",
@@ -395,9 +396,9 @@ def arm(reg, card):
                    P(reg, "compliance_wear_per_nm_rev", "rad/N·m per N·m·rev", None, "unknown: regressed over deployment", "loaded poses repeated over usage", "partial"),),
                (R.ARCHARD_1953, R.FLODIN_1997), "c(u) = c0 + k·Σ|τ|·Δrev")
     joints = tuple(f"joint {i} {s}" for s in ("error", "speed") for i in range(1, 7))
-    res = residual("M4", m3w, mlp(joints + tuple(f"joint {i} torque" for i in range(1, 7)), "residual joint torques (N·m)", (64, 64), n_outputs=6),
+    res = residual("M6", m3w, mlp(joints + tuple(f"joint {i} torque" for i in range(1, 7)), "residual joint torques (N·m)", (64, 64), n_outputs=6),
                    (R.NGUYEN_TUONG_2010, R.ZENG_2020))
-    net = learned("M5", "Arm network (black box)", mlp(joints, "joint torques (N·m)", (64, 64, 64), n_outputs=6), (R.HWANGBO_2019,),
+    net = learned("M7", "Arm network (black box)", mlp(joints, "joint torques (N·m)", (64, 64, 64), n_outputs=6), (R.HWANGBO_2019,),
                   note="one net per joint (Hwangbo) is the cheaper start; a whole-arm net learns coupling and needs the most coverage")
     diagnostics = (dx("arm.tool_error_at_stop", "<=", 5.0, "mm", "RobotDx: 5 mm ('within 5mm should be ok for grasping'); Zach to confirm 5 vs 1 mm", "arm.tool_error_at_stop"),
                    dx("arm.sim_vs_real", "<=", 2.0, "× floor", robotdx="arm.sim_vs_real"),
@@ -429,8 +430,8 @@ def arm_gripper(reg, card):
                worn(m2.parameters, "contact_friction", Wear("grasp cycles", "cycles", "linear", "contact_friction_change_per_cycle", "pad wear and glazing")) + (
                    P(reg, "contact_friction_change_per_cycle", "1/cycle", None, "unknown: regressed over deployment", "pull-out tests repeated over cycles", "partial"),),
                (R.LU_MEEKER_1993, R.ARCHARD_1953), "μ(n) = μ0 + k·n")
-    res = residual("M3", m2w, mlp(("width command", "measured width", "finger current"), "residual width (m)", (32, 32)), (R.NGUYEN_TUONG_2010,))
-    net = learned("M4", "Gripper network (black box)", mlp(("width command", "width", "finger current"), "finger force (N)", (32, 32, 32), history=5),
+    res = residual("M6", m2w, mlp(("width command", "measured width", "finger current"), "residual width (m)", (32, 32)), (R.NGUYEN_TUONG_2010,))
+    net = learned("M7", "Gripper network (black box)", mlp(("width command", "width", "finger current"), "finger force (N)", (32, 32, 32), history=5),
                   (R.HWANGBO_2019,))
     diagnostics = (dx("pick.grasp_pose_error", "<=", 5.0, "mm", "RobotDx: limits 5 mm", "pick.grasp_pose_error"),
                    dx("pick.twin_grasp_fidelity", "<=", 2.0, "× floor"),
@@ -464,7 +465,7 @@ def camera_rgb(reg, card):
                worn(m3.parameters, "extrinsics", Wear(*VIBRATION, "sqrt", "extrinsic_drift_mm_per_sqrt_h", "the camera's mount working loose")) + (
                    P(reg, "extrinsic_drift_mm_per_sqrt_h", "mm/√h", None, "unknown: regressed over deployment", "a fixed tag's pose repeated over hours", "yes"),),
                (R.JUNKER_1969, R.WHITMORE_1995), "pose offset(h) = e0 + k √h")
-    res = residual("M4", m3w, Architecture("B-spline grid", ("pixel u", "pixel v"), "residual ray offset (px)", 1, None, (), "", 2, 3000), (R.SCHOPS_2020,),
+    res = residual("M6", m3w, Architecture("B-spline grid", ("pixel u", "pixel v"), "residual ray offset (px)", 1, None, (), "", 2, 3000), (R.SCHOPS_2020,),
                    note="a 50 × 30 control-point grid of 2-D offsets (Schöps et al. 2020's generic model); no black-box rung: a camera model must stay "
                         "projective to measure")
     diagnostics = (dx("camera.intrinsics", "<=", 0.5, "px", "RobotDx's proposed warn level", "camera.intrinsics"),
@@ -498,7 +499,7 @@ def camera_rgbd(reg, card):
                worn(m2.parameters, "depth_to_color", Wear(*VIBRATION, "sqrt", "depth_to_color_drift_mm_per_sqrt_h")) + (
                    P(reg, "depth_to_color_drift_mm_per_sqrt_h", "mm/√h", None, "unknown: regressed over deployment", "the colour-to-depth residual of a tag, over hours", "yes"),),
                (R.JUNKER_1969, R.WHITMORE_1995), "offset(h) = e0 + k √h")
-    res = residual("M3", m2w, Architecture("B-spline grid", ("pixel u", "pixel v", "measured depth"), "depth correction (mm)", 1, None, (), "", 1, 3840),
+    res = residual("M6", m2w, Architecture("B-spline grid", ("pixel u", "pixel v", "measured depth"), "depth correction (mm)", 1, None, (), "", 1, 3840),
                    (R.HERRERA_2012, R.SCHOPS_2020), note="40 × 24 control points × 4 depth bands; no black-box rung (the depth must stay geometric)")
     diagnostics = (dx("depth.z_accuracy", "<=", 2.0, "% of Z", "RobotDx: > 2 % poor", "depth.z_accuracy"),
                    dx("depth.plane_rms", "<=", 1.0, "% of Z", "RobotDx: > 1 % poor", "depth.plane_rms"),

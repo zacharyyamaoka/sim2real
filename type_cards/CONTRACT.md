@@ -54,10 +54,19 @@ highest layer captured"). For the actuator types the layers are robotparts' publ
 model here and on robotparts.dev: `M0` ideal, `M2` Coulomb + viscous, `M3` Stribeck / LuGre / load-dependent, `M4` ripple +
 backlash, `M5` DC-motor electrics. robotparts' `M1` is "the datasheet": M2's terms at their stated values, which here is every
 parameter's `nominal` column, so **no actuator ladder has an M1**. The other types number their own layers from `M0` (the nominal
-model a robot description gives, nothing fitted). A wear variant is `<key>.wear`. The learned rungs come last: on the
-robotparts-numbered types (servo, motor, gearbox, conveyor) they are `M6` (residual) and `M7` (learned), above robotparts' `M5`;
-on the others they take the next two numbers after the top physics rung (the driver's are `M3`, `M4`). Exactly one rung per card
-has `current=True`: it equals the card's `model` (today's single model), parameter for parameter.
+model a robot description gives, nothing fitted). A wear variant is `<key>.wear`. Exactly one rung per card has `current=True`:
+it equals the card's `model` (today's single model), parameter for parameter.
+
+What a key means, on every card (the coordinator, 2026-11-05: a reader who learns "M6 = residual" on the servo must not misread
+the arm):
+
+- **M0–M5 are physics.** On the actuator cards whose layers robotparts publishes (servo, motor, gearbox, conveyor) they follow
+  robotparts' ladder; every other card defines its own M0–M5 (the camera's M1 is Brown-Conrady distortion, the arm's M2 its DH
+  errors). Gaps are allowed (the servo has no M1).
+- **M6 is always the grey-box residual** (a physics rung plus a small net on what it misses).
+- **M7 is always the black-box net** (an actuator network, no named parameters).
+
+`tests/test_ladders.py::test_m6_and_m7_mean_the_same_on_every_card` pins it.
 
 WHY (2026-11-05): bam_rack_twin already calls load-dependent Coulomb "BAM's M3 term" and robotparts' fits are named `M2.twin` …
 `M4.twin.backlash`; numbering the sim2real ladder 1, 2, 3 from scratch would make "M3" mean two models across the two catalogs.
