@@ -251,8 +251,11 @@ def link_schedules(root: pathlib.Path, data: pathlib.Path) -> int:
     for dep in (root.iterdir() if root.is_dir() else []):
         if not (data / dep.name).is_dir() or (data / dep.name).is_symlink():
             continue
+        # WHY only the deployment's own stations (Codex round 4, 2026-11-04): a producer keeps a superseded schedule beside the live
+        # one (can11_a38fe3b8), and a folder that is not a station's key is not a schedule the site may show
+        keys = {station_key(r["device"]) for r in _rows(data / dep.name / "devices.json")}
         for station in sorted(dep.iterdir()):
-            if (station / "site" / "summary.json").is_file():
+            if station.name in keys and (station / "site" / "summary.json").is_file():
                 (data / dep.name / "schedule").mkdir(exist_ok=True)
                 shutil.copytree(station / "site", data / dep.name / "schedule" / station.name)
                 copied += 1
