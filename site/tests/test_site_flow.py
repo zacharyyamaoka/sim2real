@@ -544,9 +544,12 @@ def run_set_checks(data: Path, out: Path) -> None:
         played = [r for r in members if r["models"]]
         check(len(played) == len(members) and all("twin of record" in r["situations"] for r in played),
               f"run set {name!r}: every run plays the twin of record beside real ({len(played)} of {len(members)})")
+    modes = {r["mode"] for r in stamped}
+    check(all(name.split(" · ")[2] == members[0]["mode"] and {r["mode"] for r in members} == {members[0]["mode"]} for name, members in sets.items()),
+          f"a run set is one mode and says so ({sorted(modes)})")
     base = (out / "views" / "runs.base").read_text()
     served = json.loads((out / "data" / "search.json").read_text())["rows"]
-    check("property: run_set, label: Run set" in base and sum(1 for r in served if r.get("run_set") in sets) == len(stamped),
+    check("property: run_set, label: Run set" in base and "property: mode, label: Mode" in base and sum(1 for r in served if r.get("run_set") in sets) == len(stamped),
           f"the runs list filters by run set (the facet, and {len(stamped)} served rows carry it)")
 
 

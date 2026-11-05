@@ -1104,7 +1104,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
             "page": url, "url": url, "npz": str(path), "basis": "real", "round": (replay or {}).get("round"),
             "deployment": dep_id, "devices": [device], "label": title,
             "clock_offset_s": num(clock_offset, 6),
-            "run_set": run_set, "split": stamp.get("split"), "schedule_run": stamp.get("run"),
+            "run_set": run_set, "split": stamp.get("split"), "mode": stamp.get("mode"), "schedule_run": stamp.get("run"),
         }
         diagnostics = run_diagnostics(dep_id, slug, title, device, situations, arrays, floor)
         tracking = next((d for d in diagnostics if d["diagnostic"] == "stock.tracking_error"), None)
@@ -1235,6 +1235,7 @@ RUN_HINTS = {"title": {}, "day": {}, "session": {}, "device": {}, "class": {}, "
              "clock_offset_s": {"type": "number", "unit": "s"},
              "run_set": {"note": "a schedule session's runs (station, schedule digest, mode, session); else the session folder"},
              "split": {"note": "the run's schedule split: floor, train or held_out (blank for a run recorded before schedule stamps)"},
+             "mode": {"note": "the schedule mode the run ran under: fb, ff_fb (model feed-forward + the board's PD), ff_weakfb (the same + PD at kp x 0.1) ..."},
              "schedule_run": {},
              "tracking_mrad": {"type": "number", "unit": "mrad", "digits": 3, "note": "RMS(real − target), robotdx stock.tracking_error"},
              "best_model": {}, "best_model_mrad": {"type": "number", "unit": "mrad", "digits": 3, "note": "the closest model's RMS(real − model)"},
