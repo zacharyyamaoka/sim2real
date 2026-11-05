@@ -6,7 +6,8 @@
 Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing here is in git):
 
     OUT/data/<dep>/schedule/<station>/   a station's test schedule (bam_rack_twin.schedule), copied from SIM2REAL_SCHEDULES
-    OUT/data/<dep>/  + the rows data-ui's gate views read (site/overlays.py): gate ranks and links, the rack tree, the gate
+    OUT/data/<dep>/  + the deployment's tree and every run's place in it, its tags and its configuration snapshot (site/deploy_tree.py)
+                     + the rows data-ui's gate views read (site/overlays.py): gate ranks and links, the tree's roll-up rows, the gate
                      history from the archive's acceptance files, each station's coverage cells
     OUT/data/        the app's tables: the ones holding links copied with every old /app/?d=… link rewritten to the
                      site's path, everything else (each run's folder, coverage, dx) linked, never copied (3.8 GB)
@@ -98,7 +99,7 @@ def site_files(site):
                                        description="One card per part type: metrics, model, coverage, view and the shared procedure.",
                                        trail=breadcrumb([s2r.ROOT_CRUMB, ("Types", "/types/")]))
     yield "search/suggest.json", s2r.suggest_index(site)
-    yield from views.files()
+    yield from views.files(site)
     yield "views/runs.base", pages.runs_base(site)
 
     shell = adapter.shell_static()
@@ -132,14 +133,17 @@ def build(data: pathlib.Path, out: pathlib.Path) -> dict:
     (out / MARKER).write_text("sim2real site build folder: site/build.py clears everything here\n")
     rewritten = write_data(data, out / "data")
     schedules = adapter.link_schedules(adapter.SCHEDULES, out / "data")
+    import deploy_tree  # noqa: PLC0415
     import overlays  # noqa: PLC0415
+    # WHY before the overlays: the roll-up rows (components.json) are the tree's nodes, and runs.json gains each run's place in it
+    tree_counts = deploy_tree.write(out / "data")
     before = adapter.load(out / "data")
     overlay_counts = overlays.write(out / "data", lambda dep_id, row: pages.cell_href(before.deployment(dep_id), row))
     site = adapter.load(out / "data")
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
-              "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts,
+              "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts,
               "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments),
               "seconds": round(time.monotonic() - started, 1)}
     (out / ".sim2real-build.json").write_text(json.dumps(result, indent=1) + "\n")

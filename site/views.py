@@ -3,7 +3,8 @@
 Every panel the app showed is in exactly one tab's .base here, taken from the same functions (build_pages.deployment_page,
 deployment_gates_page, run_page, run_why_page), so a panel can never drift between the app and the site:
 
-    deployment-runs.base      the deployment's Runs tab: intro, the four KPIs, Runs · newest first (owns the URL)
+    deployment-runs.base      the deployment's Runs tab: intro, the five KPIs, Runs · newest first (owns the URL); its rail opens on
+                              the deployment's tree (data-ui's `tree` facet over node_1 …), then the run tags and the config snapshot
     deployment-gates.base     its Gates tab: the gates layer overlay (gauge, passing per gate, stations x gates, verdicts)
     deployment-why.base       its Why it fails tab: the why tables, Evidence files, Caveats
     deployment-coverage.base  its Coverage tab: phase space, time at (q, qd), the histograms and boxes, angle over time
@@ -82,11 +83,49 @@ def text_starts(panel: dict, *heads: str) -> bool:
     return "text" in panel and any(panel["text"].startswith(h) for h in heads)
 
 
-def deployment_runs() -> dict:
+def deployment_runs(levels: list[str] | None = None) -> dict:
     page = build_pages.deployment_page()
     runs = {"Runs shown", "Hours shown", "Stations shown", "Runs with models", "Runs"}
     doc = subset(page, lambda i, p: i == 0 or bool(set(panel_views(p)) & runs))
-    return picked_run(doc)
+    return picked_run(with_tree(doc, levels or []))
+
+
+TREE_INFO = ("The deployment's tree, as RobotDx draws its entity tree: the deployment, each adapter, each station (the bam_rack_twin record's "
+             "wiring). A node's n/m: n of the m gate cells under it pass. The number on the right is its runs. A click narrows the runs to "
+             "it and opens what is under it; a second click gives them back.")
+TAG_FACETS = [{"property": "environment", "label": "Environment"}, {"property": "setting", "label": "Setting"},
+              {"property": "config", "label": "Config snapshot"}]
+TAG_PROPERTIES = {"environment": {"displayName": "Environment"}, "setting": {"displayName": "Setting"}, "config": {"displayName": "Config"},
+                  "full_config_pct": {"displayName": "Full config snapshot"}, "config_detail": {"displayName": "Configuration recorded"},
+                  "test_type": {"displayName": "Test type"}, "type": {"displayName": "Type"}, "deployment_kind": {"displayName": "Deployment kind"}}
+
+
+def with_tree(doc: dict, levels: list[str]) -> dict:
+    """The runs rail opens on the deployment's tree (data-ui's `tree` facet, CONTRACT §7: one `p == v` per level), the Station facet
+    folded into it (its leaves are the stations), then the run tags and the config snapshot; a KPI says the share of runs with a full
+    config snapshot. WHY the tree in the rail (Zach, 2026-10-29: "The filter bar should always be on the left hand side"; Nov 5:
+    "each deployment, should have a tree ... look at the level you want to look at"): the tree IS a filter of the runs."""
+    ds = doc["datasets"]["runs"]
+    rest = [f for f in ds.get("facets", []) if f.get("property") != "device"]
+    tree = [{"as": "tree", "levels": list(levels), "label": "Deployment tree", "info": TREE_INFO}] if levels else []
+    ds["facets"] = tree + TAG_FACETS + rest
+    doc["properties"].update(TAG_PROPERTIES)
+    doc["views"].append({"type": "kpi", "name": "Config recorded", "from": "runs",
+                         "kpi": {"label": "Runs with a full config snapshot", "value": {"property": "full_config_pct", "summary": "Average"},
+                                 "format": {"digits": 3}}})
+    width = {"Runs shown": 3, "Hours shown": 3, "Stations shown": 2, "Runs with models": 2}
+    panels = []
+    for p in doc["layout"]["panels"]:
+        name = next((n for n in panel_views(p) if n in width), None)
+        panels.append({**p, "w": width[name]} if name else p)
+        if name == "Runs with models":
+            panels.append({"view": "Config recorded", "w": 2, "h": p.get("h", 2)})
+    doc["layout"]["panels"] = panels
+    for view in doc["views"]:
+        if view["name"] == "Runs":
+            order = view["order"]
+            view["order"] = order[:order.index("kind") + 1] + ["environment"] + order[order.index("kind") + 1:order.index("gains") + 1] + ["config"] + order[order.index("gains") + 1:]
+    return doc
 
 
 def picked_run(doc: dict) -> dict:
@@ -138,17 +177,23 @@ def deployment_gates() -> dict:
     doc = subset(page, lambda i, p: text_starts(p, "## Gates layer") or bool(set(panel_views(p)) & overlay))
     doc["datasets"]["history"] = {"data": "data/{deployment}/gate_history.json", "label": "Gate history"}
     # rollup_tree: the rack, its plates and stations; each node the worst gate under it (the Max of RobotDx's ranks)
+    # WHY passing and cells beside the worst (Zach, Nov 5 2026: "we can see like how the matching is at that level"): each node's match in
+    # numbers, the Sum and the Count of the cells' passes under it, data-ui's roll-up as the worst is
     doc["datasets"]["components"] = {"data": "data/{deployment}/components.json", "label": "The rack", "tree": {"parent": "parent"},
-                                     "rollup": {"from": "gates", "values": {"worst": {"property": "rank", "summary": "Max"}}}}
+                                     "rollup": {"from": "gates", "values": {"worst": {"property": "rank", "summary": "Max"},
+                                                                            "passing": {"property": "passes", "summary": "Sum"},
+                                                                            "cells": {"property": "passes", "summary": "Count"}}}}
     doc["links"].append({"from": "gates.device", "to": "components.id"})
     doc["views"] = [v for v in doc["views"] if v["name"] not in ("Gate cells passing", "Stations × gates")]
     doc["views"] += [kpi_trend("Gate cells passing", "Gate cells passing (newest acceptance)", 'scope == "rack"'),
                      kpi_trend("Passing per station · history", "cells passing", 'scope == "station"', group=True),
                      gate_matrix(),
                      {"type": "table", "name": "The rack", "from": "components", "tree": {"parent": "parent"}, "fold": "open",
-                      "order": ["label", "kind", "worst"], "columnSize": {"label": 210, "kind": 64, "worst": 96}, "display": {"worst": "status"}}]
+                      "order": ["label", "kind", "worst", "passing", "cells", "card"],
+                      "columnSize": {"label": 380, "kind": 96, "worst": 110, "passing": 120, "cells": 80, "card": 96}, "display": {"worst": "status"}}]
     # the matrix's peek reads its gate rows' fields by these names ("Twinned?" is the runs' verdict, not a gate's)
     doc["properties"].update({"label": {"displayName": "Component"}, "worst": {"displayName": "Worst gate"}, "verdict": {"displayName": "Verdict"},
+                              "passing": {"displayName": "Cells passing"}, "cells": {"displayName": "Cells"}, "card": {"displayName": "Type card"},
                               "value_text": {"displayName": "Value (text)"}, "target": {"displayName": "Limit"},
                               "message": {"displayName": "What it measured"}, "why_url": {"displayName": "Why it fails"},
                               "source": {"displayName": "Acceptance file"}})
@@ -161,7 +206,9 @@ def deployment_gates() -> dict:
             p = {**p, "view": name, "w": size[name][0], "h": size[name][1]}
         panels.append(p)
         if name == "Stations × gates":
-            panels += [{"view": "The rack", "w": 5, "h": 5}, {"view": "Passing per station · history", "w": 7, "h": 5}]
+            # WHY the tree full width (was 5 of 12 beside the history): it reads each node's match in numbers now (cells passing of cells,
+            # the type card) beside the worst, and at 5 of 12 those columns were cut off at 1280 px
+            panels += [{"view": "The rack", "w": 12, "h": 5}, {"view": "Passing per station · history", "w": 12, "h": 4}]
     doc["layout"]["panels"] = panels
     return doc
 
@@ -263,13 +310,17 @@ def scoped(doc: dict, device_filter: str) -> dict:
 
 def station_runs() -> dict:
     doc = scoped(deployment_runs(), 'device == "{device}"')
+    # WHY no tree here: the page is one station, a leaf; its place in the tree is the trail and the deployment's rail
+    for ds in doc.get("datasets", {}).values():
+        if ds.get("facets"):
+            ds["facets"] = [f for f in ds["facets"] if f.get("as") != "tree"]
     doc["layout"]["panels"][0] = {"text": "### {device} · runs\n**REAL data**: every run this station recorded, newest first. "
                                           "**Open ↗** plays one back against its models. Blue is real, orange is a model, grey dashed is the target.", "w": 12}
     doc["views"] = [v for v in doc["views"] if v["name"] != "Stations shown"]
     doc["layout"]["panels"] = [p for p in doc["layout"]["panels"] if "Stations shown" not in panel_views(p)]
     for p in doc["layout"]["panels"]:
-        if set(panel_views(p)) & {"Runs shown", "Hours shown", "Runs with models"}:
-            p["w"] = 4
+        if set(panel_views(p)) & {"Runs shown", "Hours shown", "Runs with models", "Config recorded"}:
+            p["w"] = 3
     return doc
 
 
@@ -421,10 +472,14 @@ PAGES = {
 }
 
 
-def files():
-    """(views/<name>.base, text) for every tab dashboard, checked to round-trip through data-ui's own reader."""
+def files(site=None):
+    """(views/<name>.base, text) for every tab dashboard, checked to round-trip through data-ui's own reader. The deployment's tree
+    facet takes its levels from the site's runs (node_1 … node_<depth>; node_0 is the deployment the page already is)."""
+    import deploy_tree  # noqa: PLC0415
+
+    levels = [f"node_{k}" for k in range(1, deploy_tree.depth(site) + 1)] if site is not None else []
     for name, (what, make) in PAGES.items():
-        doc = rooted(make())
+        doc = rooted(make(levels) if name == "deployment-runs.base" else make())
         text = (f"# sim2real · {what}\n# Written by site/views.py from tools/build_pages.py (do not edit by hand). static/sim2real.js fills "
                 f"{{deployment}}, {{run}}, {{station}} and {{device}}.\n") + data_ui_base.dumps(doc)
         assert data_ui_base.loads(text) == json.loads(json.dumps(doc)), f"{name}: the .base does not round-trip"

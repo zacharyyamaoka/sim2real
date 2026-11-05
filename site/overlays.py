@@ -4,9 +4,11 @@ data-ui computes no gate, metric or verdict: the producers write them as rows. T
 stock views, never a new number:
 
     gates.json          + gate_id (T1), rank (RobotDx's: pass 0, warn and partial 1, not run 2, fail 4; the roll-up's Max),
-                          why_url (the cell's why, or the station's gates when it passes) for the matrix's peek
+                          passes (1 when the cell passes, else 0; the roll-up's Sum and Count), why_url (the cell's why, or the
+                          station's gates when it passes) for the matrix's peek
     run_gates.json      + started (the run's, from runs.json), titled by its record, for the run checks' peek
-    components.json     the rack, its plates and its stations as a tree (the roll-up's nodes; `worst` filled by data-ui)
+    components.json     the deployment's tree (site/deploy_tree.py's tree.json: the rack, its adapters, its stations) as the
+                        roll-up's nodes; `worst`, `passing` and `cells` filled by data-ui
     gate_history.json   per bam_rack_twin acceptance file in the archive (all eight stations each): cells passing, rack and
                         per station, against every cell (the KPI cards' trend and target)
     coverage_cells.json the coverage paths on each station's own (q, qd) grid, 24 x 24 over the range it ran: one row per
@@ -43,22 +45,18 @@ def _dump(path: pathlib.Path, doc: dict) -> None:
     path.write_text(json.dumps(doc, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
 
 
-def plate_of(station_text: str) -> str:
-    """'JMC60 plates, tag 7' -> 'JMC60 plates'; 'SteadyWin GIM43 plate, …' and 'GIM43 plate, …' are one plate."""
-    head = (station_text or "").split(",", 1)[0].strip()
-    return "GIM43 plate" if head.endswith("GIM43 plate") else head or "rack"
-
-
 def gate_rows(folder: pathlib.Path, why_url) -> list[dict]:
     path = folder / "gates.json"
     doc = _load(path)
     for row in doc["rows"]:
         row["gate_id"] = row["gate"].split()[0]
         row["rank"] = RANK.get(row["verdict"], 0)
+        row["passes"] = 1 if row["verdict"] == "pass" else 0
         row["why_url"] = why_url(row)
     props = doc.setdefault("properties", {})
     props["gate_id"] = {"label": "Gate", "type": "text"}
     props["rank"] = {"label": "Rank", "type": "number", "labels": RANK_WORDS}
+    props["passes"] = {"label": "Passes", "type": "number"}
     props["why_url"] = {"label": "Why", "type": "text", "display": "link"}
     props["verdict"] = {**props.get("verdict", {}), "label": "Verdict", "labels": {"not_run": "not run"}}
     doc["titleProperty"] = "gate"  # the peek's heading: "T3 torque", not the first column
@@ -79,20 +77,23 @@ def run_gate_rows(folder: pathlib.Path, runs: list[dict]) -> None:
 
 
 def components(folder: pathlib.Path, dep_row: dict, devices: list[dict]) -> int:
-    rows = [{"id": dep_row["id"], "label": dep_row["title"], "parent": None, "kind": "rack", "worst": None}]
-    plates = []
-    for d in sorted(devices, key=lambda d: d.get("order", 0)):
-        plate = plate_of(d.get("station"))
-        if plate not in plates:
-            plates.append(plate)
-    rows += [{"id": p, "label": p, "parent": dep_row["id"], "kind": "plate", "worst": None} for p in plates]
-    rows += [{"id": d["device"], "label": f'{d["device"]} · {(d.get("station") or "").split(",", 1)[-1].strip()}', "parent": plate_of(d.get("station")),
-              "kind": "station", "worst": None} for d in sorted(devices, key=lambda d: d.get("order", 0))]
+    """The roll-up's nodes: the deployment's tree (tree.json, site/deploy_tree.py), a station's id its device (the key gates.json
+    links on), every other node its path id. WHY the tree and not the plates (Zach, PROJECT - Sim2Real, Nov 5 2026: each deployment's
+    tree is like RobotDx's entity tree, host -> adapter -> board): one tree per deployment, the rail's and the roll-up's."""
+    tree = _load(folder / "tree.json")["rows"]
+    key = {n["id"]: (n["device"] or n["id"]) for n in tree}
+    station = {d["device"]: (d.get("station") or "").split(",", 1)[-1].strip() for d in devices}
+    rows = [{"id": key[n["id"]], "label": f'{n["label"]} · {station[n["device"]]}' if n.get("device") in station and station[n["device"]] else n["label"],
+             "parent": key.get(n["parent"]) if n.get("parent") else None, "kind": n["kind"], "board": n.get("board"), "card": n.get("card"),
+             "worst": None, "passing": None, "cells": None} for n in tree]
     _dump(folder / "components.json", {
-        "title": f"The rack, its plates and its stations · {dep_row['title']}", "source": "devices.json (station text); site/overlays.py",
+        "title": f"The tree: the deployment, its adapters and its stations · {dep_row['title']}",
+        "source": "tree.json (site/deploy_tree.py, from the bam_rack_twin record's adapter_serial per board); devices.json (station text)",
         "schema": {"fields": [{"name": "id", "type": "string"}, {"name": "label", "type": "string"}, {"name": "parent", "type": "string"},
-                              {"name": "kind", "type": "string"},
-                              {"name": "worst", "type": "integer", "display": "status", "labels": RANK_WORDS}]},
+                              {"name": "kind", "type": "string"}, {"name": "board", "type": "string"}, {"name": "card", "type": "string"},
+                              {"name": "worst", "type": "integer", "display": "status", "labels": RANK_WORDS},
+                              {"name": "passing", "type": "integer", "description": "gate cells passing under the node"},
+                              {"name": "cells", "type": "integer", "description": "every gate cell under the node"}]},
         "rows": rows})
     return len(rows)
 
