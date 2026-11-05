@@ -205,10 +205,13 @@ def curve_svg(curves: dict, gate: float) -> str:
     x = lambda t: left + (w - left - 12) * t / t_max  # noqa: E731
     y = lambda v: h - bottom - (h - bottom - 10) * v / y_max  # noqa: E731
     lines, colours = [], ("#2563eb", "#d97706")
-    for (name, c), colour in zip(curves.items(), colours):
+    for k, ((name, c), colour) in enumerate(zip(curves.items(), colours)):
         pts = " ".join(f"{x(t):.1f},{y(v):.1f}" for t, v in c)
+        # WHY a legend bottom-right (the plot's empty corner): the two curves end within 0.1 % of each other, so end labels overprint
+        lx, ly = w - 300, h - bottom - 52 + 18 * k
         lines.append(f'<polyline points="{pts}" fill="none" stroke="{colour}" stroke-width="2"/>'
-                     f'<text x="{x(c[-1][0]) - 4:.0f}" y="{y(c[-1][1]) + 16:.0f}" text-anchor="end" fill="{colour}" font-size="12">{esc(name)} {c[-1][1]:g} %</text>')
+                     f'<line x1="{lx}" x2="{lx + 20}" y1="{ly}" y2="{ly}" stroke="{colour}" stroke-width="3"/>'
+                     f'<text x="{lx + 26}" y="{ly + 4}" fill="currentColor" font-size="12">{esc(name)}: {c[-1][1]:g} % after {c[-1][0] / 60:.1f} min</text>')
     ticks = "".join(f'<line x1="{left}" x2="{w - 12}" y1="{y(v):.1f}" y2="{y(v):.1f}" stroke="currentColor" opacity="0.12"/><text x="{left - 6}" y="{y(v) + 4:.1f}" text-anchor="end" font-size="11" fill="currentColor" opacity="0.7">{v:g}</text>' for v in (0, 10, 20, 30, 40, 50))
     xt = "".join(f'<text x="{x(t):.1f}" y="{h - 10}" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">{t / 60:g} min</text>' for t in range(0, int(t_max) + 1, 180))
     gate_line = f'<line x1="{left}" x2="{w - 12}" y1="{y(gate):.1f}" y2="{y(gate):.1f}" stroke="currentColor" stroke-dasharray="5 4"/><text x="{left + 6}" y="{y(gate) - 5:.1f}" font-size="11" fill="currentColor">the arm card\'s gate, {gate:g} %</text>'
@@ -252,7 +255,7 @@ def arm_coverage_section(shots: dict, docs: dict) -> str:
     return f"""<h2 id="arm-coverage">Arm coverage: the UR schedules now meet the arm card's own {gate:g} % gate</h2>
 <p>The arm_6dof card scores a plan on a 4 × 4 × 4 × 4 × 4 × 4 joint cube (each joint's range split in 4: π-wide cells on five joints, π/2 on the elbow) and
 gates it at {gate:g} % of the 4,096 cells, each visited once (every physics rung's need; the learned rungs' 95 % / 200 samples are not fitted here). The old schedules
-(40 poses, four 10 s Fourier excitations around one centre) visited about 35 cells. The new train split adds a <b>coverage sweep</b>: scrambled Sobol waypoints
+(40 poses, four 10 s Fourier excitations around one centre) visited {' and '.join(str((before_doc(d['example']) or {}).get('schedule', {}).get('coverage', {}).get('train', {}).get('visited', '?')) for d in arms)} cells. The new train split adds a <b>coverage sweep</b>: scrambled Sobol waypoints
 (<code>scipy.stats.qmc.Sobol</code>, 2^{a['sobol_points'].bit_length() - 1} points) over the card's box, one per cell where MuJoCo finds the arm {landing.num(a['floor_clearance_m'] * 100, 2)} cm clear of a floor at its base and
 {landing.num(a['self_clearance_m'] * 100, 2)} cm clear of itself; toured greedily by new cells per second in straight joint-space minimum-jerk moves at most {a['speed_rad_s']:g} rad/s (UR's limit is π) and
 {a['accel_rad_s2']:g} rad/s² (UR states none), every 10 ms sample collision-checked. The sweep is train data: the dynamics fit regresses on it with the excitations.
