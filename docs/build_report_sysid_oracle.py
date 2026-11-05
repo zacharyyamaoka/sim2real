@@ -1,7 +1,7 @@
 """The system-ID oracle report (2026-11-05): six robot descriptions in, a better model out, each checked against a hidden truth.
 
     python3 /home/bam/sim2real/site/build.py
-    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_sysid_oracle.py --oracle-tests N/N --site-tests N/N --type-cards-tests N/N
+    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_sysid_oracle.py --oracle-tests /abs/sysid-junit.xml --site-tests /abs/site-test.log --type-cards-tests /abs/type-cards-junit.xml
 
 Serves a built site (default ~/.cache/sim2real/site) with `python3 -m http.server` on a free port in 4711-4799 (never 4700, Zach's) and
 stops it by the PID it started; records the click-through home -> the oracle cards -> CAN 11's page (its ladder, its wear chart) ->
@@ -274,6 +274,7 @@ identification code, and it can fail: every gated parameter's nominal value is o
 <ul class="tight">
 <li>Decided: the package is <code>sysid/</code> (examples under <code>sysid/examples/</code>); the pipelines run in bam_rack_twin's environment (MuJoCo 3.11) and import bam_ws in place; the site reads committed results (stdlib). Undo: <code>git revert</code> the landing commits.</li>
 <li>Decided: values sit on the cards' own ladders (<code>sysid/cards.py</code> PLACE); the gripper and the tool an arm carries have no card yet (proposed for lane A).</li>
+<li>Decided: every result names what computed it: this repo's commit (<code>+dirty</code> only for uncommitted code, never for the results a run writes, which the first write had counted on every page) and each checkout used in place, with its branch and last commit (bam_ws, the io-diagnostics and robot_msgs checkouts bam_rack_twin imports, Menagerie), listed at the foot of every example page and below.</li>
 <li>Left: the arm plans cover &lt; 1 % of the arm card's 4,096-cell joint cube (the card's 40 % gate fails): the card's rule is in joint space, the calibration poses were picked for the tracker and the tags.</li>
 <li>Not done: rendered images and a real detector in the camera loops (corner detections are projections plus noise); band centres and widths (need a lamp); contact and grip force (need a gauge).</li>
 </ul>
@@ -281,13 +282,35 @@ identification code, and it can fail: every gated parameter's nominal value is o
 </body></html>"""
 
 
+def test_count(value: str) -> str:
+    """A test pill's text, read from the run's own output when given a file: a pytest --junitxml file (passed of collected, skips
+    named) or a site/tests/test_site_flow.py log (its PASS lines, and FAIL lines, which make it read FAIL). Anything else is shown
+    as given, so a count is only typed when no run output was kept."""
+    path = Path(value)
+    if not path.is_file():
+        return value
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if text.lstrip().startswith("<"):
+        import xml.etree.ElementTree as ET  # noqa: PLC0415
+
+        root = ET.fromstring(text)
+        suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+        n = {k: sum(int(s.get(k, 0)) for s in suites) for k in ("tests", "failures", "errors", "skipped")}
+        passed = n["tests"] - n["failures"] - n["errors"] - n["skipped"]
+        tail = f", {n['skipped']} skipped" if n["skipped"] else ""
+        return f"{passed}/{n['tests']}{tail}" + ("" if n["failures"] + n["errors"] == 0 else " FAIL")
+    lines = text.splitlines()
+    passes, fails = sum(x.startswith("PASS ") for x in lines), sum(x.startswith("FAIL ") for x in lines)
+    return f"{passes}/{passes + fails}" + ("" if fails == 0 and "ALL PASS" in lines else " FAIL")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--site", type=Path, default=SITE)
     parser.add_argument("--out", type=Path, default=OUT)
-    parser.add_argument("--oracle-tests", default="?")
-    parser.add_argument("--site-tests", default="?")
-    parser.add_argument("--type-cards-tests", default="?")
+    parser.add_argument("--oracle-tests", default="?", help="sysid's pytest --junitxml file (or a count)")
+    parser.add_argument("--site-tests", default="?", help="site/tests/test_site_flow.py's log (or a count)")
+    parser.add_argument("--type-cards-tests", default="?", help="type_cards' pytest --junitxml file (or a count)")
     args = parser.parse_args()
     docs = landing.load()
     shas = {"main": subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()}
@@ -298,7 +321,8 @@ def main() -> None:
             shas[s["name"]] = " / ".join(sorted(set(filter(None, shas.get(s["name"], "").split(" / "))) | {stamp}))
     with tempfile.TemporaryDirectory() as tmp:
         shots = capture(args.site, Path(tmp))
-        page = render(shots, {"oracle": args.oracle_tests, "site": args.site_tests, "type_cards": args.type_cards_tests}, shas, docs)
+        page = render(shots, {"oracle": test_count(args.oracle_tests), "site": test_count(args.site_tests),
+                              "type_cards": test_count(args.type_cards_tests)}, shas, docs)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(page, encoding="utf-8")
     print(f"wrote {args.out} ({args.out.stat().st_size / 1e6:.2f} MB)")
