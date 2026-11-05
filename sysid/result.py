@@ -79,10 +79,17 @@ def verdict(doc: dict) -> dict:
             "status": "pass" if not failing else "fail"}
 
 
-def code_version() -> str:
+# What computes a result: sysid's code, the examples' descriptions and worlds, and the type cards it reads. Not sysid/results.
+# WHY: results/ is what a run writes, not what computes it; counting it stamped every example after the first in one
+# `all --write` run "+dirty" (every result committed on 2026-11-05 read 782bd5e+dirty).
+COMPUTES_RESULTS = ("sysid", "type_cards", ":(exclude)sysid/results")
+
+
+def code_version(repo: Path = REPO) -> str:
     try:
-        sha = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "-C", str(REPO), "status", "--porcelain", "--", "sysid"], capture_output=True, text=True, check=True).stdout.strip()
+        sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--", *COMPUTES_RESULTS],
+                               capture_output=True, text=True, check=True).stdout.strip()
         return sha + ("+dirty" if dirty else "")
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
