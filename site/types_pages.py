@@ -155,8 +155,8 @@ def model_tab(site, t: TypeRecord) -> str:
             + "<p>Parameters are levers: improving the model and its calibration should move the metrics, never be one.</p>")
 
 
-def coverage_map(sched) -> str:
-    """CAN 11's train targets on the q × qd plane: per cell, the share of its reachable qdd cells the plan visits (grey: planned,
+def coverage_map(sched, st) -> str:
+    """One station's train targets on the q × qd plane: per cell, the share of its reachable qdd cells the plan visits (grey: planned,
     never blue or orange, which mean real and sim). Drawn from the card's coverage function's cells."""
     d = sched["description"]
     q_e, qd_e, qdd_e = cov.joint_edges(d)
@@ -180,10 +180,10 @@ def coverage_map(sched) -> str:
     width, height = left + len(qc) * w + 8, top + len(qdc) * h + 34
     ylabels = "".join(f'<text x="{left - 6}" y="{top + (len(qdc) - 1 - j) * h + h * 0.65}" text-anchor="end" font-size="10">{qd_e[j]:g}</text>' for j in range(len(qdc)))
     xlabels = "".join(f'<text x="{left + i * w + w / 2}" y="{top + len(qdc) * h + 12}" text-anchor="middle" font-size="10">{qc[i]:.2f}</text>' for i in range(0, len(qc), 2))
-    return (f'<figure class="s2r-covfig"><svg class="s2r-cov" viewBox="0 0 {width} {height}" width="{width}" role="img" aria-label="CAN 11 planned train coverage, q by qd" '
+    return (f'<figure class="s2r-covfig" data-station="{e(st.key)}"><svg class="s2r-cov" viewBox="0 0 {width} {height}" width="{width}" role="img" aria-label="{e(st.device)} planned train coverage, q by qd" '
             f'style="max-width:100%;height:auto;color:currentColor;fill:currentColor">{"".join(rects)}{ylabels}{xlabels}'
             f'<text x="{left + len(qc) * w / 2}" y="{height - 4}" text-anchor="middle" font-size="11">q (rad from origin) →</text></svg>'
-            f'<figcaption>CAN 11 · train targets on q × qd (rows: qd from its lower edge, rad/s). Shade: share of the cell\'s reachable qdd cells visited; '
+            f'<figcaption>{e(st.device)} · train targets on q × qd (rows: qd from its lower edge, rad/s). Shade: share of the cell\'s reachable qdd cells visited; '
             f'outlined: not visited.</figcaption></figure>')
 
 
@@ -204,7 +204,8 @@ def coverage_tab(site, t: TypeRecord) -> str:
         out.append("<h2>Planned coverage, before anything runs</h2>"
                    + table(["Station", "Schedule", "Train (q, qd, qdd)", "Held out", "Cells", "Load torque", "Temperature", "Producer's number"], rows,
                            caption="Every station of this type with a schedule (bam_rack_twin.schedule), scored by this card's coverage function"))
-        out.append(coverage_map(planned[0][1]))
+        # WHY one map per station (2026-11-04): with every servo scheduled, a single map under one station's name was another's plan
+        out.extend(coverage_map(sched, st) for st, sched in planned)
     elif t.stations:
         out.append(f"<p>No station of this type has a schedule yet.</p>")
     else:

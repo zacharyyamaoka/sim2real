@@ -63,7 +63,7 @@ def capture(site: Path, media: Path) -> dict:
             for key in ("metrics", "model", "coverage"):
                 page.click(f"nav.tabs [role=tab][href='#{key}']")
                 page.wait_for_timeout(1400)
-            page.locator("svg.s2r-cov").scroll_into_view_if_needed()
+            page.locator("figure.s2r-covfig[data-station=can11] svg.s2r-cov").scroll_into_view_if_needed()
             page.wait_for_timeout(2500)
             video = page.video.path()
             ctx.close()
@@ -77,7 +77,7 @@ def capture(site: Path, media: Path) -> dict:
                 page.screenshot(path=str(path), full_page=full)
                 shots[name] = path
             page.goto(base + "/types/servo/#coverage")
-            fig = page.locator("figure.s2r-covfig")
+            fig = page.locator("figure.s2r-covfig[data-station=can11]")
             page.wait_for_timeout(600)
             fig.screenshot(path=str(media / "coverage-map.png"))
             shots["coverage-map"] = media / "coverage-map.png"
