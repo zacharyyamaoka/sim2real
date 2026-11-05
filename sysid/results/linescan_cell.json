@@ -1,0 +1,2373 @@
+{
+ "title": "Hyperspectral + RGBD line scan",
+ "subtitle": "SWIR line-scan camera + D435 over the belt",
+ "summary": "The scan tunnel's two optical sensors over the conveyor: a 16-band SWIR (925-1675 nm) push-broom line-scan camera triggered by the belt encoder, and a D435 RGBD camera downstream. The description gives the line camera's lens, height and position, the vendor's per-band gain and dark level, and the D435's nominal intrinsics. Calibration finds where the scan line really falls on the belt and its lens scale, each band's radiometric gain and dark level from white / grey / black / dark references, and the D435's intrinsics, pose and depth scale and offset.",
+ "description": {
+  "manifest": "sysid/examples/linescan_cell/description.json",
+  "model": {
+   "format": "mjcf-composed",
+   "source": "sysid's conveyor.xml + two MuJoCo cameras (the line camera's row is its centre row)",
+   "parts": [
+    {
+     "id": "conveyor",
+     "path": "sysid/examples/conveyor/conveyor.xml",
+     "prefix": "conv_"
+    }
+   ],
+   "cameras": [
+    {
+     "name": "hsi_line",
+     "pos": [
+      0.0,
+      0.0,
+      1.47
+     ],
+     "look_at": [
+      0.0,
+      0.0,
+      0.72
+     ],
+     "up_hint": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "fovy_deg": 39.2,
+     "resolution": [
+      640,
+      1
+     ],
+     "source": "a 640-pixel SWIR push-broom line (Specim FX17 class): fx 900 px nominal"
+    },
+    {
+     "name": "rgbd",
+     "pos": [
+      0.6,
+      0.0,
+      1.27
+     ],
+     "look_at": [
+      0.45,
+      0.0,
+      0.72
+     ],
+     "fovy_deg": 42.5,
+     "resolution": [
+      640,
+      480
+     ],
+     "source": "a D435 at 640 x 480 (intel_rgbd: baseline 49.9 mm, depth unit 1 mm)"
+    }
+   ]
+  },
+  "sensors": [
+   {
+    "id": "hsi_line",
+    "kind": "line_scan",
+    "on": "hsi_line",
+    "measures": "16-band DN per pixel per line; dot centres (pixel, belt position at the line)"
+   },
+   {
+    "id": "rgbd",
+    "kind": "rgbd",
+    "on": "rgbd",
+    "measures": "dot centres (u, v) and depth"
+   },
+   {
+    "id": "belt_encoder",
+    "kind": "joint_state",
+    "on": "conv_drive_roller",
+    "measures": "belt travel; it triggers the line camera"
+   }
+  ],
+  "known": {
+   "bands_nm": [
+    925,
+    975,
+    1025,
+    1075,
+    1125,
+    1175,
+    1225,
+    1275,
+    1325,
+    1375,
+    1425,
+    1475,
+    1525,
+    1575,
+    1625,
+    1675
+   ],
+   "band_fwhm_nm": 30.0,
+   "note": "band centres and widths are the vendor's (not identified here); the belt speed and encoder trigger come from the conveyor example; the target card's printed geometry and the references' reflectance are certified",
+   "target": {
+    "dots_flat_m": [
+     [
+      -0.06,
+      -0.15
+     ],
+     [
+      -0.06,
+      -0.075
+     ],
+     [
+      -0.06,
+      0.0
+     ],
+     [
+      -0.06,
+      0.075
+     ],
+     [
+      -0.06,
+      0.15
+     ],
+     [
+      0.0,
+      -0.15
+     ],
+     [
+      0.0,
+      -0.075
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.075
+     ],
+     [
+      0.0,
+      0.15
+     ],
+     [
+      0.06,
+      -0.15
+     ],
+     [
+      0.06,
+      -0.075
+     ],
+     [
+      0.06,
+      0.0
+     ],
+     [
+      0.06,
+      0.075
+     ],
+     [
+      0.06,
+      0.15
+     ]
+    ],
+    "dots_step_m": [
+     [
+      0.12,
+      -0.12
+     ],
+     [
+      0.12,
+      -0.04
+     ],
+     [
+      0.12,
+      0.04
+     ],
+     [
+      0.12,
+      0.12
+     ],
+     [
+      0.18,
+      -0.12
+     ],
+     [
+      0.18,
+      -0.04
+     ],
+     [
+      0.18,
+      0.04
+     ],
+     [
+      0.18,
+      0.12
+     ]
+    ],
+    "step_height_m": 0.04,
+    "references": {
+     "white": 0.95,
+     "grey": 0.5,
+     "black": 0.05,
+     "dark": 0.0
+    },
+    "risers_m": [
+     0.0,
+     0.15
+    ],
+    "risers_note": "the D435 frames alternate the card flat on the belt and on a certified 150 mm riser: depth relief for its focal length, standoff and depth scale"
+   }
+  },
+  "components": 4
+ },
+ "tree": [
+  {
+   "id": "tunnel",
+   "title": "scan tunnel",
+   "word": "deployment",
+   "type": "deployment",
+   "type_title": "Deployment",
+   "group": "structure",
+   "type_source": "structural",
+   "parent": null,
+   "depth": 0,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "conveyor",
+   "title": "belt conveyor (encoder-triggered lines)",
+   "word": "conveyor belt",
+   "type": "conveyor",
+   "type_title": "Conveyor belt",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "tunnel",
+   "depth": 1,
+   "binds": {
+    "joint": "conv_belt"
+   },
+   "parameters": []
+  },
+  {
+   "id": "hsi_line",
+   "title": "SWIR line-scan camera, 16 bands",
+   "word": "hyperspectral camera",
+   "type": "camera_hsi",
+   "type_title": "Hyperspectral camera",
+   "group": "sensor",
+   "type_source": "type_cards",
+   "parent": "tunnel",
+   "depth": 1,
+   "binds": {
+    "camera": "hsi_line"
+   },
+   "parameters": [
+    "hsi.focal_px",
+    "hsi.principal_px",
+    "hsi.height_m",
+    "hsi.across_offset_m",
+    "hsi.scan_line_x_m",
+    "hsi.scan_yaw_rad",
+    "hsi.gain_b00",
+    "hsi.gain_b01",
+    "hsi.gain_b02",
+    "hsi.gain_b03",
+    "hsi.gain_b04",
+    "hsi.gain_b05",
+    "hsi.gain_b06",
+    "hsi.gain_b07",
+    "hsi.gain_b08",
+    "hsi.gain_b09",
+    "hsi.gain_b10",
+    "hsi.gain_b11",
+    "hsi.gain_b12",
+    "hsi.gain_b13",
+    "hsi.gain_b14",
+    "hsi.gain_b15",
+    "hsi.dark_b00",
+    "hsi.dark_b01",
+    "hsi.dark_b02",
+    "hsi.dark_b03",
+    "hsi.dark_b04",
+    "hsi.dark_b05",
+    "hsi.dark_b06",
+    "hsi.dark_b07",
+    "hsi.dark_b08",
+    "hsi.dark_b09",
+    "hsi.dark_b10",
+    "hsi.dark_b11",
+    "hsi.dark_b12",
+    "hsi.dark_b13",
+    "hsi.dark_b14",
+    "hsi.dark_b15"
+   ]
+  },
+  {
+   "id": "rgbd",
+   "title": "D435 RGBD",
+   "word": "d435",
+   "type": "camera_rgbd",
+   "type_title": "RGBD camera",
+   "group": "sensor",
+   "type_source": "type_cards",
+   "parent": "tunnel",
+   "depth": 1,
+   "binds": {
+    "camera": "rgbd"
+   },
+   "parameters": [
+    "rgbd.fx_px",
+    "rgbd.fy_px",
+    "rgbd.cx_px",
+    "rgbd.cy_px",
+    "rgbd.dx_m",
+    "rgbd.dy_m",
+    "rgbd.dz_m",
+    "rgbd.rx_rad",
+    "rgbd.ry_rad",
+    "rgbd.rz_rad",
+    "rgbd.depth_scale",
+    "rgbd.depth_offset_m"
+   ]
+  }
+ ],
+ "schedule": {
+  "train": {
+   "passes": 6,
+   "dots": 138,
+   "rgbd_frames": 12,
+   "references": [
+    "white",
+    "grey",
+    "black",
+    "dark"
+   ]
+  },
+  "held_out": {
+   "passes": 3,
+   "dots": 69,
+   "rgbd_points": 116,
+   "materials": [
+    "PET",
+    "HDPE",
+    "PP"
+   ]
+  },
+  "coverage": {
+   "train": {
+    "pct": 87.5,
+    "visited": 28,
+    "reachable": 32,
+    "samples": 138,
+    "axes": {
+     "bands x reference levels": 100.0,
+     "rgbd frames": 12
+    },
+    "unplanned": [
+     "illumination",
+     "exposure",
+     "incidence angle"
+    ]
+   },
+   "held_out": {
+    "pct": 62.5,
+    "visited": 20,
+    "reachable": 32,
+    "samples": 69,
+    "axes": {
+     "bands x reference levels": null,
+     "rgbd frames": 6
+    },
+    "unplanned": [
+     "illumination",
+     "exposure",
+     "incidence angle"
+    ]
+   },
+   "function": "sysid adapter: across-track bins (16 of the 640-pixel line) x the card's two heights",
+   "rule": "share of the 32 (line bin, height) cells the planned dots fall in; the radiometric references cover every band at four levels"
+  }
+ },
+ "parameters": [
+  {
+   "key": "hsi.focal_px",
+   "component": "hsi",
+   "name": "focal_px",
+   "unit": "px",
+   "nominal": 900.0,
+   "nominal_source": "the lens (f / pixel pitch) in the description",
+   "true": 912.0,
+   "recovered": 908.630398224703,
+   "ci95": [
+    894.6447574293322,
+    922.6160390200737
+   ],
+   "rung": "M3",
+   "card": "camera_hsi",
+   "card_parameter": "line_geometry",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of the push-broom model on 138 dot crossings (pixel, belt travel) over 6 passes",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.01
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.principal_px",
+   "component": "hsi",
+   "name": "principal_px",
+   "unit": "px",
+   "nominal": 320.0,
+   "nominal_source": "the line's centre",
+   "true": 323.5,
+   "recovered": 323.6203068340281,
+   "ci95": [
+    321.53691467103505,
+    325.70369899702115
+   ],
+   "rung": "M3",
+   "card": "camera_hsi",
+   "card_parameter": "line_geometry",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of the push-broom model on 138 dot crossings (pixel, belt travel) over 6 passes",
+   "tolerance": {
+    "kind": "abs",
+    "value": 1.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.height_m",
+   "component": "hsi",
+   "name": "height_m",
+   "unit": "m",
+   "nominal": 0.75,
+   "nominal_source": "the drawing: 750 mm over the belt",
+   "true": 0.758,
+   "recovered": 0.7553932322439996,
+   "ci95": [
+    0.7439698351662176,
+    0.7668166293217815
+   ],
+   "rung": "M3",
+   "card": "camera_hsi",
+   "card_parameter": "line_geometry",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of the push-broom model on 138 dot crossings (pixel, belt travel) over 6 passes",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.003
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.across_offset_m",
+   "component": "hsi",
+   "name": "across_offset_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the drawing: on the belt's centre line",
+   "true": 0.004,
+   "recovered": 0.003912145174889288,
+   "ci95": [
+    0.0022137284199062295,
+    0.005610561929872346
+   ],
+   "rung": "M3",
+   "card": "camera_hsi",
+   "card_parameter": "line_geometry",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of the push-broom model on 138 dot crossings (pixel, belt travel) over 6 passes",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.scan_line_x_m",
+   "component": "hsi",
+   "name": "scan_line_x_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the drawing: the scan line at the tunnel's x = 0",
+   "true": 0.006,
+   "recovered": 0.0059770035618235086,
+   "ci95": [
+    0.005920946622165864,
+    0.006033060501481153
+   ],
+   "rung": "M3",
+   "card": "camera_hsi",
+   "card_parameter": "line_geometry",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of the push-broom model on 138 dot crossings (pixel, belt travel) over 6 passes",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.scan_yaw_rad",
+   "component": "hsi",
+   "name": "scan_yaw_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the drawing: the line square to the belt",
+   "true": 0.008,
+   "recovered": 0.008012370924334503,
+   "ci95": [
+    0.007533008246425082,
+    0.008491733602243923
+   ],
+   "rung": "M3",
+   "card": "camera_hsi",
+   "card_parameter": "line_geometry",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of the push-broom model on 138 dot crossings (pixel, belt travel) over 6 passes",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b00",
+   "component": "hsi",
+   "name": "gain_b00",
+   "unit": "DN per unit reflectance",
+   "nominal": 3149.5,
+   "nominal_source": "the vendor's nominal response at 925 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3554.7,
+   "recovered": 3552.720059599124,
+   "ci95": [
+    3549.5028427720977,
+    3555.93727642615
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b01",
+   "component": "hsi",
+   "name": "gain_b01",
+   "unit": "DN per unit reflectance",
+   "nominal": 3296.5,
+   "nominal_source": "the vendor's nominal response at 975 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3768.8,
+   "recovered": 3771.1462207805494,
+   "ci95": [
+    3767.756438140302,
+    3774.5360034207965
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b02",
+   "component": "hsi",
+   "name": "gain_b02",
+   "unit": "DN per unit reflectance",
+   "nominal": 3439.7,
+   "nominal_source": "the vendor's nominal response at 1025 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3954.9,
+   "recovered": 3954.413672509045,
+   "ci95": [
+    3950.8049249917863,
+    3958.022420026304
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b03",
+   "component": "hsi",
+   "name": "gain_b03",
+   "unit": "DN per unit reflectance",
+   "nominal": 3569.9,
+   "nominal_source": "the vendor's nominal response at 1075 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 4095.4,
+   "recovered": 4096.585329273313,
+   "ci95": [
+    4093.1334205355306,
+    4100.037238011095
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b04",
+   "component": "hsi",
+   "name": "gain_b04",
+   "unit": "DN per unit reflectance",
+   "nominal": 3677.6,
+   "nominal_source": "the vendor's nominal response at 1125 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 4177.4,
+   "recovered": 4180.044539874167,
+   "ci95": [
+    4176.41125357329,
+    4183.677826175043
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b05",
+   "component": "hsi",
+   "name": "gain_b05",
+   "unit": "DN per unit reflectance",
+   "nominal": 3754.7,
+   "nominal_source": "the vendor's nominal response at 1175 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 4196.3,
+   "recovered": 4198.290462984872,
+   "ci95": [
+    4194.557160545493,
+    4202.02376542425
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b06",
+   "component": "hsi",
+   "name": "gain_b06",
+   "unit": "DN per unit reflectance",
+   "nominal": 3794.9,
+   "nominal_source": "the vendor's nominal response at 1225 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 4155.9,
+   "recovered": 4158.0162975726425,
+   "ci95": [
+    4154.2972893139,
+    4161.735305831385
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b07",
+   "component": "hsi",
+   "name": "gain_b07",
+   "unit": "DN per unit reflectance",
+   "nominal": 3794.9,
+   "nominal_source": "the vendor's nominal response at 1275 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 4067.6,
+   "recovered": 4070.7145078010376,
+   "ci95": [
+    4067.0269559253625,
+    4074.4020596767127
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b08",
+   "component": "hsi",
+   "name": "gain_b08",
+   "unit": "DN per unit reflectance",
+   "nominal": 3754.7,
+   "nominal_source": "the vendor's nominal response at 1325 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3947.5,
+   "recovered": 3946.3327955901623,
+   "ci95": [
+    3942.9422322316695,
+    3949.723358948655
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b09",
+   "component": "hsi",
+   "name": "gain_b09",
+   "unit": "DN per unit reflectance",
+   "nominal": 3677.6,
+   "nominal_source": "the vendor's nominal response at 1375 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3812.7,
+   "recovered": 3811.902845329863,
+   "ci95": [
+    3808.3690246058436,
+    3815.436666053882
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b10",
+   "component": "hsi",
+   "name": "gain_b10",
+   "unit": "DN per unit reflectance",
+   "nominal": 3569.9,
+   "nominal_source": "the vendor's nominal response at 1425 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3677.8,
+   "recovered": 3679.7782431410697,
+   "ci95": [
+    3676.3125017312504,
+    3683.243984550889
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b11",
+   "component": "hsi",
+   "name": "gain_b11",
+   "unit": "DN per unit reflectance",
+   "nominal": 3439.7,
+   "nominal_source": "the vendor's nominal response at 1475 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3552.6,
+   "recovered": 3553.8157943946885,
+   "ci95": [
+    3550.587535720363,
+    3557.044053069014
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b12",
+   "component": "hsi",
+   "name": "gain_b12",
+   "unit": "DN per unit reflectance",
+   "nominal": 3296.5,
+   "nominal_source": "the vendor's nominal response at 1525 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3441.9,
+   "recovered": 3443.0343851961265,
+   "ci95": [
+    3439.867783638811,
+    3446.200986753442
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b13",
+   "component": "hsi",
+   "name": "gain_b13",
+   "unit": "DN per unit reflectance",
+   "nominal": 3149.5,
+   "nominal_source": "the vendor's nominal response at 1575 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3346.0,
+   "recovered": 3341.362870985352,
+   "ci95": [
+    3338.1820205119147,
+    3344.543721458789
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b14",
+   "component": "hsi",
+   "name": "gain_b14",
+   "unit": "DN per unit reflectance",
+   "nominal": 3006.7,
+   "nominal_source": "the vendor's nominal response at 1625 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3261.9,
+   "recovered": 3261.5029934906615,
+   "ci95": [
+    3258.394185348553,
+    3264.61180163277
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.gain_b15",
+   "component": "hsi",
+   "name": "gain_b15",
+   "unit": "DN per unit reflectance",
+   "nominal": 2874.6,
+   "nominal_source": "the vendor's nominal response at 1675 nm (lamp x QE), DN for a perfect white at full light",
+   "true": 3185.5,
+   "recovered": 3184.4029600641047,
+   "ci95": [
+    3181.37515827487,
+    3187.4307618533394
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (white)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b00",
+   "component": "hsi",
+   "name": "dark_b00",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 133.7,
+   "recovered": 133.04381770046865,
+   "ci95": [
+    131.3150313379099,
+    134.77260406302742
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b01",
+   "component": "hsi",
+   "name": "dark_b01",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 124.3,
+   "recovered": 125.34159127041715,
+   "ci95": [
+    123.52007586888458,
+    127.16310667194973
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b02",
+   "component": "hsi",
+   "name": "dark_b02",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 108.8,
+   "recovered": 108.33828511184913,
+   "ci95": [
+    106.3991079195174,
+    110.27746230418086
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b03",
+   "component": "hsi",
+   "name": "dark_b03",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 92.1,
+   "recovered": 91.92681422497088,
+   "ci95": [
+    90.07191507719067,
+    93.7817133727511
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b04",
+   "component": "hsi",
+   "name": "dark_b04",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 79.5,
+   "recovered": 78.98252324079546,
+   "ci95": [
+    77.03016001943551,
+    80.9348864621554
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b05",
+   "component": "hsi",
+   "name": "dark_b05",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 75.0,
+   "recovered": 74.68270815038532,
+   "ci95": [
+    72.6766007937762,
+    76.68881550699444
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b06",
+   "component": "hsi",
+   "name": "dark_b06",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 80.0,
+   "recovered": 79.42003800194288,
+   "ci95": [
+    77.42161168950189,
+    81.41846431438388
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b07",
+   "component": "hsi",
+   "name": "dark_b07",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 92.9,
+   "recovered": 92.54937375624814,
+   "ci95": [
+    90.56785067693883,
+    94.53089683555746
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b08",
+   "component": "hsi",
+   "name": "dark_b08",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 109.7,
+   "recovered": 109.87837060789138,
+   "ci95": [
+    108.0564356837938,
+    111.70030553198897
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b09",
+   "component": "hsi",
+   "name": "dark_b09",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 125.0,
+   "recovered": 125.23002433218433,
+   "ci95": [
+    123.33110939922383,
+    127.12893926514482
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b10",
+   "component": "hsi",
+   "name": "dark_b10",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 133.9,
+   "recovered": 133.4256168607566,
+   "ci95": [
+    131.56328466259117,
+    135.28794905892204
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b11",
+   "component": "hsi",
+   "name": "dark_b11",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 133.7,
+   "recovered": 134.3530175118326,
+   "ci95": [
+    132.6182977614873,
+    136.0877372621779
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b12",
+   "component": "hsi",
+   "name": "dark_b12",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 124.3,
+   "recovered": 123.45697057525373,
+   "ci95": [
+    121.75538256229883,
+    125.15855858820863
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b13",
+   "component": "hsi",
+   "name": "dark_b13",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 108.8,
+   "recovered": 109.66619452337628,
+   "ci95": [
+    107.95694978934945,
+    111.3754392574031
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b14",
+   "component": "hsi",
+   "name": "dark_b14",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 92.1,
+   "recovered": 92.33754238140276,
+   "ci95": [
+    90.66700992777996,
+    94.00807483502555
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "hsi.dark_b15",
+   "component": "hsi",
+   "name": "dark_b15",
+   "unit": "DN",
+   "nominal": 100.0,
+   "nominal_source": "the vendor's nominal dark level",
+   "true": 79.5,
+   "recovered": 79.63642880981489,
+   "ci95": [
+    78.00942549509026,
+    81.26343212453952
+   ],
+   "rung": "M0",
+   "card": "camera_hsi",
+   "card_parameter": "dark_white_refs (dark)",
+   "on_card": true,
+   "fit_step": "per",
+   "method": "per band, linear least squares of DN on the reference reflectance (white, grey, black, dark; 120 pixels each)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.fx_px",
+   "component": "rgbd",
+   "name": "fx_px",
+   "unit": "px",
+   "nominal": 617.1589761579678,
+   "nominal_source": "camera rgbd: fovy 42.5 deg at 640 x 480 (fx)",
+   "true": 626.416,
+   "recovered": 625.8073897241369,
+   "ci95": [
+    624.7521361747987,
+    626.8626432734751
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "fx_fy (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.fy_px",
+   "component": "rgbd",
+   "name": "fy_px",
+   "unit": "px",
+   "nominal": 617.1589761579678,
+   "nominal_source": "camera rgbd: fovy 42.5 deg at 640 x 480 (fy)",
+   "true": 625.182,
+   "recovered": 624.8056305271094,
+   "ci95": [
+    623.7371231945556,
+    625.8741378596633
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "fx_fy (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.cx_px",
+   "component": "rgbd",
+   "name": "cx_px",
+   "unit": "px",
+   "nominal": 320.0,
+   "nominal_source": "camera rgbd: fovy 42.5 deg at 640 x 480 (cx)",
+   "true": 325.0,
+   "recovered": 324.96070470588404,
+   "ci95": [
+    324.48876922313497,
+    325.4326401886331
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "cx_cy (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.cy_px",
+   "component": "rgbd",
+   "name": "cy_px",
+   "unit": "px",
+   "nominal": 240.0,
+   "nominal_source": "camera rgbd: fovy 42.5 deg at 640 x 480 (cy)",
+   "true": 236.0,
+   "recovered": 236.0391278007093,
+   "ci95": [
+    235.51007962223946,
+    236.56817597917916
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "cx_cy (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.dx_m",
+   "component": "rgbd",
+   "name": "dx_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the drawing's D435 pose (a correction of 0 = as drawn)",
+   "true": 0.005,
+   "recovered": 0.004864077294955879,
+   "ci95": [
+    0.004620261838697604,
+    0.0051078927512141535
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.dy_m",
+   "component": "rgbd",
+   "name": "dy_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the drawing's D435 pose (a correction of 0 = as drawn)",
+   "true": -0.004,
+   "recovered": -0.004060387193115219,
+   "ci95": [
+    -0.0042696265292802,
+    -0.003851147856950238
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.dz_m",
+   "component": "rgbd",
+   "name": "dz_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the drawing's D435 pose (a correction of 0 = as drawn)",
+   "true": 0.006,
+   "recovered": 0.005629928261084281,
+   "ci95": [
+    0.004862537769947718,
+    0.006397318752220845
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.rx_rad",
+   "component": "rgbd",
+   "name": "rx_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the drawing's D435 pose (a correction of 0 = as drawn)",
+   "true": 0.01,
+   "recovered": 0.01004417369558103,
+   "ci95": [
+    0.009441944964537237,
+    0.010646402426624823
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.ry_rad",
+   "component": "rgbd",
+   "name": "ry_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the drawing's D435 pose (a correction of 0 = as drawn)",
+   "true": -0.012,
+   "recovered": -0.012143473004242641,
+   "ci95": [
+    -0.012863840005629703,
+    -0.01142310600285558
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.rz_rad",
+   "component": "rgbd",
+   "name": "rz_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the drawing's D435 pose (a correction of 0 = as drawn)",
+   "true": 0.008,
+   "recovered": 0.008032079739427773,
+   "ci95": [
+    0.007767687361617101,
+    0.008296472117238446
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics (the D435's colour stream)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.depth_scale",
+   "component": "rgbd",
+   "name": "depth_scale",
+   "unit": "1",
+   "nominal": 1.0,
+   "nominal_source": "the D435's depth unit taken as exact (intel_rgbd D435_DEPTH_SCALE_M)",
+   "true": 1.008,
+   "recovered": 1.0077900342767823,
+   "ci95": [
+    1.0066393688418205,
+    1.008940699711744
+   ],
+   "rung": "M0",
+   "card": "camera_rgbd",
+   "card_parameter": "depth_scale",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "rgbd.depth_offset_m",
+   "component": "rgbd",
+   "name": "depth_offset_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "no depth offset in the description",
+   "true": -0.002,
+   "recovered": -0.0015637136093072715,
+   "ci95": [
+    -0.002501964813053716,
+    -0.0006254624055608267
+   ],
+   "rung": "M2",
+   "card": "camera_rgbd",
+   "card_parameter": "depth_bias_coeffs (its constant term)",
+   "on_card": true,
+   "fit_step": "Levenberg-Marquardt",
+   "method": "Levenberg-Marquardt of 194 dot pixels and depths (12 frames), depth weighted by intel_rgbd's stereo law",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  }
+ ],
+ "metrics": [
+  {
+   "id": "held_out_spectral_angle_mrad",
+   "title": "Plastics' recovered reflectance vs true (spectral angle)",
+   "unit": "mrad",
+   "split": "held_out",
+   "before": 37.11863177744972,
+   "after": 0.5989248182666052,
+   "factor": 61.97544440532225,
+   "factor_needed": 5.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "PET, HDPE, PP (synthetic stand-ins, held out)"
+  },
+  {
+   "id": "held_out_scan_position_mm",
+   "title": "Where a dot is on the belt, from its line pixel and travel",
+   "unit": "mm",
+   "split": "held_out",
+   "before": 9.457234958193027,
+   "after": 0.4210276309367705,
+   "factor": 22.462266757055918,
+   "factor_needed": 5.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "69 held-out dot crossings"
+  },
+  {
+   "id": "held_out_cloud_mm",
+   "title": "D435 point cloud vs the true dots",
+   "unit": "mm",
+   "split": "held_out",
+   "before": 17.068114050394236,
+   "after": 0.7626278424335968,
+   "factor": 22.380659478584906,
+   "factor_needed": 5.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "116 held-out points"
+  }
+ ],
+ "models": [
+  {
+   "model": "nominal",
+   "spectral_angle_mrad": 37.11863177744972,
+   "scan_position_mm": 9.457234958193027,
+   "cloud_mm": 17.068114050394236
+  },
+  {
+   "model": "fitted",
+   "spectral_angle_mrad": 0.5989248182666052,
+   "scan_position_mm": 0.4210276309367705,
+   "cloud_mm": 0.7626278424335968
+  }
+ ],
+ "card_ladders": [
+  {
+   "card": "camera_hsi",
+   "title": "Hyperspectral camera",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Ideal spectral bands",
+     "kind": "physics",
+     "n_parameters": 2,
+     "parameters": [
+      "band_centres",
+      "dark_white_refs"
+     ],
+     "equation": "R(\u03bb) = (DN \u2212 dark) / (white \u2212 dark)",
+     "current": false,
+     "references": [
+      {
+       "title": "Burger, Gowen (2011). Data handling in hyperspectral image analysis. Chemometrics and Intelligent Laboratory Systems.",
+       "doi": "10.1016/j.chemolab.2011.04.001",
+       "url": "https://doi.org/10.1016/j.chemolab.2011.04.001"
+      }
+     ],
+     "wear": [],
+     "card": "camera_hsi",
+     "added": [
+      "band_centres",
+      "dark_white_refs"
+     ],
+     "identified": [
+      "hsi.gain_b00",
+      "hsi.dark_b00",
+      "hsi.gain_b01",
+      "hsi.dark_b01",
+      "hsi.gain_b02",
+      "hsi.dark_b02",
+      "hsi.gain_b03",
+      "hsi.dark_b03",
+      "hsi.gain_b04",
+      "hsi.dark_b04",
+      "hsi.gain_b05",
+      "hsi.dark_b05",
+      "hsi.gain_b06",
+      "hsi.dark_b06",
+      "hsi.gain_b07",
+      "hsi.dark_b07",
+      "hsi.gain_b08",
+      "hsi.dark_b08",
+      "hsi.gain_b09",
+      "hsi.dark_b09",
+      "hsi.gain_b10",
+      "hsi.dark_b10",
+      "hsi.gain_b11",
+      "hsi.dark_b11",
+      "hsi.gain_b12",
+      "hsi.dark_b12",
+      "hsi.gain_b13",
+      "hsi.dark_b13",
+      "hsi.gain_b14",
+      "hsi.dark_b14",
+      "hsi.gain_b15",
+      "hsi.dark_b15"
+     ]
+    },
+    {
+     "key": "M1",
+     "name": "+ band widths",
+     "kind": "physics",
+     "n_parameters": 3,
+     "parameters": [
+      "band_centres",
+      "dark_white_refs",
+      "band_fwhm"
+     ],
+     "equation": "each band a Gaussian of its FWHM",
+     "current": false,
+     "references": [
+      {
+       "title": "Burger, Gowen (2011). Data handling in hyperspectral image analysis. Chemometrics and Intelligent Laboratory Systems.",
+       "doi": "10.1016/j.chemolab.2011.04.001",
+       "url": "https://doi.org/10.1016/j.chemolab.2011.04.001"
+      },
+      {
+       "title": "Kruse, Lefkoff, Boardman, Heidebrecht, Shapiro, Barloon, Goetz (1993). The spectral image processing system (SIPS)\u2014interactive visualization and analysis of imaging spectrometer data. Remote Sensing of Environment.",
+       "doi": "10.1016/0034-4257(93)90013-N",
+       "url": "https://doi.org/10.1016/0034-4257(93)90013-N"
+      }
+     ],
+     "wear": [],
+     "card": "camera_hsi",
+     "added": [
+      "band_fwhm"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M2",
+     "name": "+ smile and keystone (today's model)",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "band_centres",
+      "band_fwhm",
+      "smile_keystone_map",
+      "dark_white_refs"
+     ],
+     "equation": "R(\u03bb) = (DN \u2212 dark) / (white \u2212 dark), per band with its centre and width",
+     "current": true,
+     "references": [
+      {
+       "title": "Mouroulis, Green, Chrien (2000). Design of pushbroom imaging spectrometers for optimum recovery of spectroscopic and spatial information. Applied Optics.",
+       "doi": "10.1364/AO.39.002210",
+       "url": "https://doi.org/10.1364/AO.39.002210"
+      }
+     ],
+     "wear": [],
+     "card": "camera_hsi",
+     "added": [
+      "smile_keystone_map"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3",
+     "name": "+ pushbroom line geometry",
+     "kind": "physics",
+     "n_parameters": 5,
+     "parameters": [
+      "band_centres",
+      "band_fwhm",
+      "smile_keystone_map",
+      "dark_white_refs",
+      "line_geometry"
+     ],
+     "equation": "a line camera swept by the belt",
+     "current": false,
+     "references": [
+      {
+       "title": "Gupta, Hartley (1997). Linear pushbroom cameras. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/34.615446",
+       "url": "https://doi.org/10.1109/34.615446"
+      }
+     ],
+     "wear": [],
+     "card": "camera_hsi",
+     "added": [
+      "line_geometry"
+     ],
+     "identified": [
+      "hsi.focal_px",
+      "hsi.principal_px",
+      "hsi.height_m",
+      "hsi.across_offset_m",
+      "hsi.scan_line_x_m",
+      "hsi.scan_yaw_rad"
+     ]
+    },
+    {
+     "key": "M3.wear",
+     "name": "+ references that drift with hours",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "band_centres",
+      "band_fwhm",
+      "smile_keystone_map",
+      "dark_white_refs",
+      "line_geometry",
+      "reference_drift_per_h"
+     ],
+     "equation": "white(h) = w0 + k\u00b7h",
+     "current": false,
+     "references": [
+      {
+       "title": "Lu, Meeker (1993). Using degradation measures to estimate a time-to-failure distribution. Technometrics.",
+       "doi": "10.1080/00401706.1993.10485038",
+       "url": "https://doi.org/10.1080/00401706.1993.10485038"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "dark_white_refs",
+       "usage": "deployment hours",
+       "unit": "h",
+       "law": "linear",
+       "rate": "reference_drift_per_h"
+      }
+     ],
+     "card": "camera_hsi",
+     "added": [
+      "reference_drift_per_h"
+     ],
+     "identified": []
+    }
+   ]
+  },
+  {
+   "card": "camera_rgb",
+   "title": "RGB camera",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Pinhole",
+     "kind": "physics",
+     "n_parameters": 3,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "extrinsics"
+     ],
+     "equation": "p = K [R | t] X",
+     "current": false,
+     "references": [
+      {
+       "title": "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/34.888718",
+       "url": "https://doi.org/10.1109/34.888718"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "fx_fy",
+      "cx_cy",
+      "extrinsics"
+     ],
+     "identified": [
+      "rgbd.fx_px",
+      "rgbd.fy_px",
+      "rgbd.cx_px",
+      "rgbd.cy_px",
+      "rgbd.dx_m",
+      "rgbd.dy_m",
+      "rgbd.dz_m",
+      "rgbd.rx_rad",
+      "rgbd.ry_rad",
+      "rgbd.rz_rad"
+     ]
+    },
+    {
+     "key": "M1",
+     "name": "+ Brown-Conrady distortion",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "extrinsics",
+      "distortion"
+     ],
+     "equation": "radial (k1, k2, k3) and tangential (p1, p2) distortion",
+     "current": false,
+     "references": [
+      {
+       "title": "Brown (1966). Decentering distortion of lenses. Photogrammetric Engineering.",
+       "doi": "",
+       "url": ""
+      },
+      {
+       "title": "Heikkil\u00e4, Silv\u00e9n (1997). A four-step camera calibration procedure with implicit image correction. IEEE Conference on Computer Vision and Pattern Recognition.",
+       "doi": "10.1109/CVPR.1997.609468",
+       "url": "https://doi.org/10.1109/CVPR.1997.609468"
+      },
+      {
+       "title": "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/34.888718",
+       "url": "https://doi.org/10.1109/34.888718"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "distortion"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M2",
+     "name": "+ exposure response and latency (today's model)",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s"
+     ],
+     "equation": "p = K [R | t] X, distorted by (k1, k2, p1, p2, k3)",
+     "current": true,
+     "references": [
+      {
+       "title": "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/34.888718",
+       "url": "https://doi.org/10.1109/34.888718"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "exposure_response",
+      "latency_s"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3",
+     "name": "Rolling shutter: + line delay",
+     "kind": "physics",
+     "n_parameters": 7,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s",
+      "line_delay_s"
+     ],
+     "equation": "row v exposed at t0 + v \u00b7 line_delay",
+     "current": false,
+     "references": [
+      {
+       "title": "Oth, Furgale, Kneip, Siegwart (2013). Rolling shutter camera calibration. IEEE Conference on Computer Vision and Pattern Recognition.",
+       "doi": "10.1109/CVPR.2013.179",
+       "url": "https://doi.org/10.1109/CVPR.2013.179"
+      },
+      {
+       "title": "Meingast, Geyer, Sastry (2005). Geometric models of rolling-shutter cameras. arXiv:cs/0503076.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/cs/0503076"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "line_delay_s"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3.wear",
+     "name": "+ a mount that loosens over vibration hours",
+     "kind": "physics",
+     "n_parameters": 8,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s",
+      "line_delay_s",
+      "extrinsic_drift_mm_per_sqrt_h"
+     ],
+     "equation": "pose offset(h) = e0 + k \u221ah",
+     "current": false,
+     "references": [
+      {
+       "title": "Junker (1969). New criteria for self-loosening of fasteners under vibration. SAE Technical Paper.",
+       "doi": "10.4271/690055",
+       "url": "https://doi.org/10.4271/690055"
+      },
+      {
+       "title": "Whitmore (1995). Estimating degradation by a Wiener diffusion process subject to measurement error. Lifetime Data Analysis.",
+       "doi": "10.1007/BF00985762",
+       "url": "https://doi.org/10.1007/BF00985762"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "extrinsics",
+       "usage": "vibration hours",
+       "unit": "h",
+       "law": "sqrt",
+       "rate": "extrinsic_drift_mm_per_sqrt_h"
+      }
+     ],
+     "card": "camera_rgb",
+     "added": [
+      "extrinsic_drift_mm_per_sqrt_h"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M3.wear",
+     "kind": "residual",
+     "n_parameters": 3008,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s",
+      "line_delay_s",
+      "extrinsic_drift_mm_per_sqrt_h"
+     ],
+     "equation": "M3.wear + MLP residual (residual ray offset (px)) from 1 samples of pixel u, pixel v",
+     "current": false,
+     "references": [
+      {
+       "title": "Sch\u00f6ps, Larsson, Pollefeys, Sattler (2020). Why having 10,000 parameters in your camera model is better than twelve. IEEE/CVF Conference on Computer Vision and Pattern Recognition.",
+       "doi": "10.1109/CVPR42600.2020.00261",
+       "url": "https://doi.org/10.1109/CVPR42600.2020.00261"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "extrinsics",
+       "usage": "vibration hours",
+       "unit": "h",
+       "law": "sqrt",
+       "rate": "extrinsic_drift_mm_per_sqrt_h"
+      }
+     ],
+     "card": "camera_rgb",
+     "added": [],
+     "identified": []
+    }
+   ]
+  },
+  {
+   "card": "camera_rgbd",
+   "title": "RGBD camera",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Ideal stereo",
+     "kind": "physics",
+     "n_parameters": 3,
+     "parameters": [
+      "baseline_m",
+      "depth_scale",
+      "depth_to_color"
+     ],
+     "equation": "z = f b / d",
+     "current": false,
+     "references": [
+      {
+       "title": "Khoshelham, Elberink (2012). Accuracy and resolution of Kinect depth data for indoor mapping applications. Sensors.",
+       "doi": "10.3390/s120201437",
+       "url": "https://doi.org/10.3390/s120201437"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgbd",
+     "added": [
+      "baseline_m",
+      "depth_scale",
+      "depth_to_color"
+     ],
+     "identified": [
+      "rgbd.depth_scale"
+     ]
+    },
+    {
+     "key": "M1",
+     "name": "+ disparity noise (today's model)",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "baseline_m",
+      "depth_scale",
+      "subpixel_sigma",
+      "depth_to_color"
+     ],
+     "equation": "z = f b / d, \u03c3_z = z\u00b2 \u03c3_d / (f b); RGB terms from camera_rgb",
+     "current": true,
+     "references": [
+      {
+       "title": "Khoshelham, Elberink (2012). Accuracy and resolution of Kinect depth data for indoor mapping applications. Sensors.",
+       "doi": "10.3390/s120201437",
+       "url": "https://doi.org/10.3390/s120201437"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgbd",
+     "added": [
+      "subpixel_sigma"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M2",
+     "name": "+ depth bias",
+     "kind": "physics",
+     "n_parameters": 5,
+     "parameters": [
+      "baseline_m",
+      "depth_scale",
+      "subpixel_sigma",
+      "depth_to_color",
+      "depth_bias_coeffs"
+     ],
+     "equation": "z_true = z + b(u, v, z)",
+     "current": false,
+     "references": [
+      {
+       "title": "Herrera C., Kannala, Heikkil\u00e4 (2012). Joint depth and color camera calibration with distortion correction. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/TPAMI.2012.125",
+       "url": "https://doi.org/10.1109/TPAMI.2012.125"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgbd",
+     "added": [
+      "depth_bias_coeffs"
+     ],
+     "identified": [
+      "rgbd.depth_offset_m"
+     ]
+    },
+    {
+     "key": "M2.wear",
+     "name": "+ a depth-to-colour mount that loosens over vibration hours",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "baseline_m",
+      "depth_scale",
+      "subpixel_sigma",
+      "depth_to_color",
+      "depth_bias_coeffs",
+      "depth_to_color_drift_mm_per_sqrt_h"
+     ],
+     "equation": "offset(h) = e0 + k \u221ah",
+     "current": false,
+     "references": [
+      {
+       "title": "Junker (1969). New criteria for self-loosening of fasteners under vibration. SAE Technical Paper.",
+       "doi": "10.4271/690055",
+       "url": "https://doi.org/10.4271/690055"
+      },
+      {
+       "title": "Whitmore (1995). Estimating degradation by a Wiener diffusion process subject to measurement error. Lifetime Data Analysis.",
+       "doi": "10.1007/BF00985762",
+       "url": "https://doi.org/10.1007/BF00985762"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "depth_to_color",
+       "usage": "vibration hours",
+       "unit": "h",
+       "law": "sqrt",
+       "rate": "depth_to_color_drift_mm_per_sqrt_h"
+      }
+     ],
+     "card": "camera_rgbd",
+     "added": [
+      "depth_to_color_drift_mm_per_sqrt_h"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M2.wear",
+     "kind": "residual",
+     "n_parameters": 3846,
+     "parameters": [
+      "baseline_m",
+      "depth_scale",
+      "subpixel_sigma",
+      "depth_to_color",
+      "depth_bias_coeffs",
+      "depth_to_color_drift_mm_per_sqrt_h"
+     ],
+     "equation": "M2.wear + MLP residual (depth correction (mm)) from 1 samples of pixel u, pixel v, measured depth",
+     "current": false,
+     "references": [
+      {
+       "title": "Herrera C., Kannala, Heikkil\u00e4 (2012). Joint depth and color camera calibration with distortion correction. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/TPAMI.2012.125",
+       "url": "https://doi.org/10.1109/TPAMI.2012.125"
+      },
+      {
+       "title": "Sch\u00f6ps, Larsson, Pollefeys, Sattler (2020). Why having 10,000 parameters in your camera model is better than twelve. IEEE/CVF Conference on Computer Vision and Pattern Recognition.",
+       "doi": "10.1109/CVPR42600.2020.00261",
+       "url": "https://doi.org/10.1109/CVPR42600.2020.00261"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "depth_to_color",
+       "usage": "vibration hours",
+       "unit": "h",
+       "law": "sqrt",
+       "rate": "depth_to_color_drift_mm_per_sqrt_h"
+      }
+     ],
+     "card": "camera_rgbd",
+     "added": [],
+     "identified": []
+    }
+   ]
+  }
+ ],
+ "selected_rung": null,
+ "notes": [
+  "Band centres and widths are the vendor's: identifying them needs a spectral lamp, not simulated.",
+  "The plastics are synthetic spectra shaped like the polymers' SWIR features, not library data.",
+  "Dot detections are simulated as exact crossings plus noise (no rendered line images, no detector in the loop)."
+ ],
+ "schema": "sysid.result/1",
+ "example": "linescan_cell",
+ "verdict": {
+  "parameters_pass": 50,
+  "parameters": 50,
+  "metrics_pass": 3,
+  "metrics": 3,
+  "failing": [],
+  "status": "pass"
+ },
+ "provenance": {
+  "identify_sealed": true,
+  "code": "782bd5e+dirty",
+  "seconds": 0.1
+ }
+}

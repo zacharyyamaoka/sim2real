@@ -321,8 +321,8 @@ def identify(description, measurements: dict[str, RunData]) -> Fit:
     est3 = m3(rows)
     local = np.geomspace(est3[6] / 1.6, est3[6] * 1.6, 15)
     boot3 = rack_identify.block_bootstrap(groups, lambda r: m3(r, local), rows_per_block=blocks, resamples=RESAMPLES // 2)
-    # M4: the rigid terms again, on the rows where the gear is in contact. WHY (measured 2026-11-05, noise-free truths): on a rigid M3
-    # truth the regression returns G to 0.14 %; with 2 mrad of gap the same regression reads G -6 %, Fs +16 %, the drop +39 %, because
+    # M4: the rigid terms again, on the rows where the gear is in contact. WHY (measured 2026-11-05, noise-free plants): on a rigid M3
+    # plant the regression returns G to 0.14 %; with 2 mrad of gap the same regression reads G -6 %, Fs +16 %, the drop +39 %, because
     # while the motor crosses the gap it carries neither the link's weight nor its inertia. The lower rungs keep that bias (they have
     # no gap to explain it); M4, which knows the gap, regresses only where the motor drives the link.
     groups4 = [g[contact[g]] for g in groups]

@@ -195,3 +195,4 @@
 .s2r-svg-warntext { fill: var(--s2r-fail); }
 @media (max-width: 520px) { .s2r-ex-grid { grid-template-columns: minmax(0, 1fr); } .s2r-ex { padding: 10px; } }
 .s2r-ex-rule { color: var(--ink3); }
+.s2r-ex-key { white-space: nowrap; }

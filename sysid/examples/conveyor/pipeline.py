@@ -209,7 +209,7 @@ def identify(description, runs: list[Run]) -> Fit:
         return np.concatenate([belt.run(r.command, commanded_radius)[0][::2] - r.theta[::2] for r in runs]) / 1e-3
 
     # WHY a physics start before the output-error fit (measured 2026-11-05: from the nominal start, least_squares stopped at a cost
-    # 8000x the truth's, mass barely off nominal, because Coulomb drag makes the cost non-smooth for finite differences): the
+    # 8000x its minimum, mass barely off nominal, because Coulomb drag makes the cost non-smooth for finite differences): the
     # steady-state droop at each commanded level is linear in the drag, kv (w_cmd - w) = r (b r w + F sgn w); then the mass by a 1-D
     # golden section on the transients; then all three polished together.
     kv = float(belt.model.actuator_gainprm[belt.vfd, 0])

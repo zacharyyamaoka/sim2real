@@ -1,0 +1,2077 @@
+{
+ "title": "6-DOF UR arm with gripper",
+ "subtitle": "UR5e + Robotiq 2F-85",
+ "summary": "Menagerie's UR5e with Menagerie's Robotiq 2F-85 on its flange, composed the way bam_arm.cell composes them (attach at attachment_site, prefix grip_). Beyond the arm's joint zeros and joint friction, calibration finds the tool the arm carries (the gripper's mass and centre of mass, the TCP at the pads) and the gripper's drive (the force per command count and the closing damping, which set its width map).",
+ "description": {
+  "manifest": "sysid/examples/ur5e_2f85/description.json",
+  "model": {
+   "format": "mjcf",
+   "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",
+   "source": "MuJoCo Menagerie universal_robots_ur5e + robotiq_2f85 @ 71f066a"
+  },
+  "attach": [
+   {
+    "site": "attachment_site",
+    "path": "/home/bam/.cache/like_keras/mujoco_menagerie/robotiq_2f85/2f85.xml",
+    "body": "base_mount",
+    "prefix": "grip_",
+    "source": "bam_ws src/core/mdp/env/sim/bam_arm/bam_arm/cell.py ArmCell._compose (the same attach call)"
+   }
+  ],
+  "sensors": [
+   {
+    "id": "joint_encoders",
+    "kind": "joint_state",
+    "on": "the six arm joints",
+    "measures": "joint angle (the encoder, offset from the link by the joint zero) and speed"
+   },
+   {
+    "id": "joint_torque",
+    "kind": "joint_effort",
+    "on": "the six arm joints",
+    "measures": "motor torque from current (what the UR controller reports)"
+   },
+   {
+    "id": "tool_tracker",
+    "kind": "pose_tracker",
+    "on": "attachment_site",
+    "measures": "the flange pose from a tag on the flange, seen by a calibrated external camera"
+   },
+   {
+    "id": "gripper_position",
+    "kind": "joint_state",
+    "on": "grip_right_driver_joint",
+    "measures": "the finger drive's angle (the 2F-85 reports its position)"
+   },
+   {
+    "id": "tcp_tracker",
+    "kind": "point_tracker",
+    "on": "grip_pinch",
+    "measures": "a marker held between the pads, seen by the same external camera"
+   }
+  ],
+  "known": {
+   "note": "the arm's position servos as in the UR5e example; the gripper's position spring (biasprm[1] = -100) and its force limit (5 N) as Menagerie states them"
+  },
+  "components": 11
+ },
+ "tree": [
+  {
+   "id": "cell",
+   "title": "bench cell",
+   "word": "deployment",
+   "type": "deployment",
+   "type_title": "Deployment",
+   "group": "structure",
+   "type_source": "structural",
+   "parent": null,
+   "depth": 0,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "ur5e_2f85",
+   "title": "UR5e + 2F-85",
+   "word": "arm + gripper",
+   "type": "arm_6dof_gripper",
+   "type_title": "6-DOF arm + gripper",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "cell",
+   "depth": 1,
+   "binds": {
+    "tcp_site": "grip_pinch"
+   },
+   "parameters": []
+  },
+  {
+   "id": "ur5e",
+   "title": "UR5e arm",
+   "word": "ur5e",
+   "type": "arm_6dof",
+   "type_title": "6-DOF robot arm",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e_2f85",
+   "depth": 2,
+   "binds": {
+    "base_body": "base",
+    "flange_site": "attachment_site"
+   },
+   "parameters": []
+  },
+  {
+   "id": "shoulder_pan",
+   "title": "shoulder pan joint (harmonic drive servo)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 3,
+   "binds": {
+    "joint": "shoulder_pan_joint",
+    "actuator": "shoulder_pan"
+   },
+   "parameters": [
+    "shoulder_pan.zero_offset_rad",
+    "shoulder_pan.armature_kg_m2",
+    "shoulder_pan.damping_nm_s_rad",
+    "shoulder_pan.frictionloss_nm"
+   ]
+  },
+  {
+   "id": "shoulder_lift",
+   "title": "shoulder lift joint (harmonic drive servo)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 3,
+   "binds": {
+    "joint": "shoulder_lift_joint",
+    "actuator": "shoulder_lift"
+   },
+   "parameters": [
+    "shoulder_lift.zero_offset_rad",
+    "shoulder_lift.armature_kg_m2",
+    "shoulder_lift.damping_nm_s_rad",
+    "shoulder_lift.frictionloss_nm"
+   ]
+  },
+  {
+   "id": "elbow",
+   "title": "elbow joint (harmonic drive servo)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 3,
+   "binds": {
+    "joint": "elbow_joint",
+    "actuator": "elbow"
+   },
+   "parameters": [
+    "elbow.zero_offset_rad",
+    "elbow.armature_kg_m2",
+    "elbow.damping_nm_s_rad",
+    "elbow.frictionloss_nm"
+   ]
+  },
+  {
+   "id": "wrist_1",
+   "title": "wrist 1 joint (harmonic drive servo)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 3,
+   "binds": {
+    "joint": "wrist_1_joint",
+    "actuator": "wrist_1"
+   },
+   "parameters": [
+    "wrist_1.zero_offset_rad",
+    "wrist_1.armature_kg_m2",
+    "wrist_1.damping_nm_s_rad",
+    "wrist_1.frictionloss_nm"
+   ]
+  },
+  {
+   "id": "wrist_2",
+   "title": "wrist 2 joint (harmonic drive servo)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 3,
+   "binds": {
+    "joint": "wrist_2_joint",
+    "actuator": "wrist_2"
+   },
+   "parameters": [
+    "wrist_2.zero_offset_rad",
+    "wrist_2.armature_kg_m2",
+    "wrist_2.damping_nm_s_rad",
+    "wrist_2.frictionloss_nm"
+   ]
+  },
+  {
+   "id": "wrist_3",
+   "title": "wrist 3 joint (harmonic drive servo)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 3,
+   "binds": {
+    "joint": "wrist_3_joint",
+    "actuator": "wrist_3"
+   },
+   "parameters": [
+    "wrist_3.zero_offset_rad",
+    "wrist_3.armature_kg_m2",
+    "wrist_3.damping_nm_s_rad",
+    "wrist_3.frictionloss_nm"
+   ]
+  },
+  {
+   "id": "gripper",
+   "title": "Robotiq 2F-85",
+   "word": "gripper",
+   "type": "gripper",
+   "type_title": "Gripper",
+   "group": "actuator",
+   "type_source": "sysid adapter (no card yet)",
+   "parent": "ur5e_2f85",
+   "depth": 2,
+   "binds": {
+    "actuator": "grip_fingers_actuator",
+    "joint": "grip_right_driver_joint",
+    "body": "grip_base"
+   },
+   "parameters": [
+    "gripper.actuator_gain",
+    "gripper.damping"
+   ]
+  },
+  {
+   "id": "tool",
+   "title": "the tool the arm carries (gripper + coupling) and its TCP",
+   "word": "tool",
+   "type": "tool",
+   "type_title": "Tool (payload + TCP)",
+   "group": "actuator",
+   "type_source": "sysid adapter (no card yet)",
+   "parent": "ur5e_2f85",
+   "depth": 2,
+   "binds": {
+    "body": "grip_base",
+    "site": "grip_pinch"
+   },
+   "parameters": [
+    "tool.mass_kg",
+    "tool.com_z_m",
+    "tool.tcp_x_m",
+    "tool.tcp_z_m"
+   ]
+  }
+ ],
+ "schedule": {
+  "train": {
+   "poses": 40,
+   "excitations": 4,
+   "seconds": 40.0
+  },
+  "held_out": {
+   "poses": 20,
+   "excitations": 2,
+   "seconds": 20.0
+  },
+  "gripper": {
+   "train_s": 12.0,
+   "held_out_s": 5.6
+  },
+  "excitation": "Fourier series per joint (Swevers 1997): 5 harmonics of 0.2 Hz, 10 s, inside the joint and speed limits",
+  "coverage": {
+   "train": {
+    "pct": 0.88,
+    "visited": 36,
+    "reachable": 4096,
+    "samples": 840,
+    "axes": {
+     "tool pose": null,
+     "payload": null
+    },
+    "unplanned": [
+     "payload"
+    ]
+   },
+   "held_out": {
+    "pct": 0.61,
+    "visited": 25,
+    "reachable": 4096,
+    "samples": 420,
+    "axes": {
+     "tool pose": null,
+     "payload": null
+    },
+    "unplanned": [
+     "payload"
+    ]
+   },
+   "function": "type_cards.coverage.arm_coverage (4 cells per joint inside the limits: the 4096-cell joint cube)",
+   "rule": "share of the joint cube's cells the static poses and the excitations (every 50 ms) visit; tool voxels need FK (a marginal, not planned here)"
+  }
+ },
+ "parameters": [
+  {
+   "key": "shoulder_pan.zero_offset_rad",
+   "component": "shoulder_pan",
+   "name": "zero_offset_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's joint zeros: no per-robot UR calibration file is given",
+   "true": -0.0038,
+   "recovered": -0.003820008972802686,
+   "ci95": [
+    -0.0038781183163709263,
+    -0.0037618996292344453
+   ],
+   "rung": "M1",
+   "card": "arm_6dof",
+   "card_parameter": "joint_zero_offsets",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.0005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "shoulder_pan.armature_kg_m2",
+   "component": "shoulder_pan",
+   "name": "armature_kg_m2",
+   "unit": "kg\u00b7m\u00b2",
+   "nominal": 0.1,
+   "nominal_source": "ur5e.xml joint shoulder_pan_joint armature",
+   "true": 0.129,
+   "recovered": 0.12949794045390575,
+   "ci95": [
+    0.12634420942234545,
+    0.131853007979744
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "armature_kg_m2 (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "shoulder_pan.damping_nm_s_rad",
+   "component": "shoulder_pan",
+   "name": "damping_nm_s_rad",
+   "unit": "N\u00b7m\u00b7s/rad",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint shoulder_pan_joint damping",
+   "true": 2.4,
+   "recovered": 2.3900155426123137,
+   "ci95": [
+    2.3693832069291063,
+    2.4184965410548735
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "damping_nm_s_rad (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.2
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "shoulder_pan.frictionloss_nm",
+   "component": "shoulder_pan",
+   "name": "frictionloss_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint shoulder_pan_joint frictionloss",
+   "true": 4.8,
+   "recovered": 4.800967133933918,
+   "ci95": [
+    4.788801396076804,
+    4.81139172471311
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "frictionloss_nm (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "shoulder_lift.zero_offset_rad",
+   "component": "shoulder_lift",
+   "name": "zero_offset_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's joint zeros: no per-robot UR calibration file is given",
+   "true": 0.0047,
+   "recovered": 0.004648356801028283,
+   "ci95": [
+    0.0045770801176442015,
+    0.004719633484412364
+   ],
+   "rung": "M1",
+   "card": "arm_6dof",
+   "card_parameter": "joint_zero_offsets",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.0005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "shoulder_lift.armature_kg_m2",
+   "component": "shoulder_lift",
+   "name": "armature_kg_m2",
+   "unit": "kg\u00b7m\u00b2",
+   "nominal": 0.1,
+   "nominal_source": "ur5e.xml joint shoulder_lift_joint armature",
+   "true": 0.142,
+   "recovered": 0.1410330153063636,
+   "ci95": [
+    0.13724228551472445,
+    0.1448697080576372
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "armature_kg_m2 (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "shoulder_lift.damping_nm_s_rad",
+   "component": "shoulder_lift",
+   "name": "damping_nm_s_rad",
+   "unit": "N\u00b7m\u00b7s/rad",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint shoulder_lift_joint damping",
+   "true": 2.7,
+   "recovered": 2.676987191904701,
+   "ci95": [
+    2.650912091196599,
+    2.698186215684303
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "damping_nm_s_rad (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.2
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "shoulder_lift.frictionloss_nm",
+   "component": "shoulder_lift",
+   "name": "frictionloss_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint shoulder_lift_joint frictionloss",
+   "true": 5.4,
+   "recovered": 5.40896825877331,
+   "ci95": [
+    5.396491658783602,
+    5.4197783033790765
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "frictionloss_nm (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "elbow.zero_offset_rad",
+   "component": "elbow",
+   "name": "zero_offset_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's joint zeros: no per-robot UR calibration file is given",
+   "true": -0.0029,
+   "recovered": -0.002772005996120429,
+   "ci95": [
+    -0.0028867363017917153,
+    -0.0026572756904491425
+   ],
+   "rung": "M1",
+   "card": "arm_6dof",
+   "card_parameter": "joint_zero_offsets",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.0005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "elbow.armature_kg_m2",
+   "component": "elbow",
+   "name": "armature_kg_m2",
+   "unit": "kg\u00b7m\u00b2",
+   "nominal": 0.1,
+   "nominal_source": "ur5e.xml joint elbow_joint armature",
+   "true": 0.081,
+   "recovered": 0.08439388928101983,
+   "ci95": [
+    0.08146487993606978,
+    0.0882767873527508
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "armature_kg_m2 (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "elbow.damping_nm_s_rad",
+   "component": "elbow",
+   "name": "damping_nm_s_rad",
+   "unit": "N\u00b7m\u00b7s/rad",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint elbow_joint damping",
+   "true": 1.5,
+   "recovered": 1.479351880470306,
+   "ci95": [
+    1.459306175450986,
+    1.5013600808192074
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "damping_nm_s_rad (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.2
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "elbow.frictionloss_nm",
+   "component": "elbow",
+   "name": "frictionloss_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint elbow_joint frictionloss",
+   "true": 3.0,
+   "recovered": 3.007343299891941,
+   "ci95": [
+    2.998623159183503,
+    3.0158840228749026
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "frictionloss_nm (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_1.zero_offset_rad",
+   "component": "wrist_1",
+   "name": "zero_offset_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's joint zeros: no per-robot UR calibration file is given",
+   "true": 0.0052,
+   "recovered": 0.005135114845761752,
+   "ci95": [
+    0.004979700315798282,
+    0.005290529375725222
+   ],
+   "rung": "M1",
+   "card": "arm_6dof",
+   "card_parameter": "joint_zero_offsets",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.0005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_1.armature_kg_m2",
+   "component": "wrist_1",
+   "name": "armature_kg_m2",
+   "unit": "kg\u00b7m\u00b2",
+   "nominal": 0.1,
+   "nominal_source": "ur5e.xml joint wrist_1_joint armature",
+   "true": 0.036,
+   "recovered": 0.036423508702737015,
+   "ci95": [
+    0.03581757046681154,
+    0.03717247840290277
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "armature_kg_m2 (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_1.damping_nm_s_rad",
+   "component": "wrist_1",
+   "name": "damping_nm_s_rad",
+   "unit": "N\u00b7m\u00b7s/rad",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint wrist_1_joint damping",
+   "true": 0.52,
+   "recovered": 0.5197822901767176,
+   "ci95": [
+    0.5170825677708139,
+    0.5229757491678093
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "damping_nm_s_rad (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.2
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_1.frictionloss_nm",
+   "component": "wrist_1",
+   "name": "frictionloss_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint wrist_1_joint frictionloss",
+   "true": 1.25,
+   "recovered": 1.2500028181555698,
+   "ci95": [
+    1.248533454074586,
+    1.251514781448125
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "frictionloss_nm (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_2.zero_offset_rad",
+   "component": "wrist_2",
+   "name": "zero_offset_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's joint zeros: no per-robot UR calibration file is given",
+   "true": -0.0041,
+   "recovered": -0.0041262404778321165,
+   "ci95": [
+    -0.004245096364190176,
+    -0.004007384591474057
+   ],
+   "rung": "M1",
+   "card": "arm_6dof",
+   "card_parameter": "joint_zero_offsets",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.0005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_2.armature_kg_m2",
+   "component": "wrist_2",
+   "name": "armature_kg_m2",
+   "unit": "kg\u00b7m\u00b2",
+   "nominal": 0.1,
+   "nominal_source": "ur5e.xml joint wrist_2_joint armature",
+   "true": 0.028,
+   "recovered": 0.027909552252481786,
+   "ci95": [
+    0.027442809107012477,
+    0.028433904347041433
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "armature_kg_m2 (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_2.damping_nm_s_rad",
+   "component": "wrist_2",
+   "name": "damping_nm_s_rad",
+   "unit": "N\u00b7m\u00b7s/rad",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint wrist_2_joint damping",
+   "true": 0.39,
+   "recovered": 0.3868348956652353,
+   "ci95": [
+    0.38177944250714685,
+    0.39165110101149175
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "damping_nm_s_rad (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.2
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_2.frictionloss_nm",
+   "component": "wrist_2",
+   "name": "frictionloss_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint wrist_2_joint frictionloss",
+   "true": 0.95,
+   "recovered": 0.9514902672000949,
+   "ci95": [
+    0.9495471985835819,
+    0.9534717028456591
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "frictionloss_nm (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_3.zero_offset_rad",
+   "component": "wrist_3",
+   "name": "zero_offset_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's joint zeros: no per-robot UR calibration file is given",
+   "true": 0.0035,
+   "recovered": 0.0034213896432038343,
+   "ci95": [
+    0.0032206211584763656,
+    0.003622158127931303
+   ],
+   "rung": "M1",
+   "card": "arm_6dof",
+   "card_parameter": "joint_zero_offsets",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.0005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_3.armature_kg_m2",
+   "component": "wrist_3",
+   "name": "armature_kg_m2",
+   "unit": "kg\u00b7m\u00b2",
+   "nominal": 0.1,
+   "nominal_source": "ur5e.xml joint wrist_3_joint armature",
+   "true": 0.031,
+   "recovered": 0.03067916875513972,
+   "ci95": [
+    0.030171606515464928,
+    0.031122415647288834
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "armature_kg_m2 (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_3.damping_nm_s_rad",
+   "component": "wrist_3",
+   "name": "damping_nm_s_rad",
+   "unit": "N\u00b7m\u00b7s/rad",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint wrist_3_joint damping",
+   "true": 0.41,
+   "recovered": 0.4134775672766594,
+   "ci95": [
+    0.40930167826583047,
+    0.4174939919289332
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "damping_nm_s_rad (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.2
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "wrist_3.frictionloss_nm",
+   "component": "wrist_3",
+   "name": "frictionloss_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml joint wrist_3_joint frictionloss",
+   "true": 1.0,
+   "recovered": 0.999133740237581,
+   "ci95": [
+    0.9973492086232558,
+    1.000812591931173
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "frictionloss_nm (each joint is a servo)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "tool.mass_kg",
+   "component": "tool",
+   "name": "mass_kg",
+   "unit": "kg",
+   "nominal": 0.777441,
+   "nominal_source": "ur5e.xml body grip_base mass",
+   "true": 0.917,
+   "recovered": 0.9164392145249778,
+   "ci95": [
+    0.9158749532374328,
+    0.9171506119491049
+   ],
+   "rung": "M3",
+   "card": "arm_6dof",
+   "card_parameter": "link_inertials (the tool)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.05
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "tool.com_z_m",
+   "component": "tool",
+   "name": "com_z_m",
+   "unit": "m",
+   "nominal": 0.0354675,
+   "nominal_source": "ur5e.xml body grip_base ipos[2]",
+   "true": 0.0435,
+   "recovered": 0.04360916019487275,
+   "ci95": [
+    0.04338243255356961,
+    0.04384740785415081
+   ],
+   "rung": "M3",
+   "card": "arm_6dof",
+   "card_parameter": "link_inertials (the tool)",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 45,377 moving rows of 4 excitations (95 % from the covariance)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.003
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "tool.tcp_x_m",
+   "component": "tool",
+   "name": "tcp_x_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "ur5e.xml site grip_pinch pos[0]",
+   "true": 0.0015,
+   "recovered": 0.0015164605817578403,
+   "ci95": [
+    0.0014758547889939708,
+    0.0015570663745217098
+   ],
+   "rung": "M0",
+   "card": "arm_6dof_gripper",
+   "card_parameter": "tcp_offset",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.0005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "tool.tcp_z_m",
+   "component": "tool",
+   "name": "tcp_z_m",
+   "unit": "m",
+   "nominal": 0.145,
+   "nominal_source": "ur5e.xml site grip_pinch pos[2]",
+   "true": 0.152,
+   "recovered": 0.152009172708904,
+   "ci95": [
+    0.15196883303436556,
+    0.15204951238344241
+   ],
+   "rung": "M0",
+   "card": "arm_6dof_gripper",
+   "card_parameter": "tcp_offset",
+   "on_card": true,
+   "fit_step": "kinematics",
+   "method": "least squares of FK(q_encoder + offset) on the tracker's flange pose and the TCP marker at 40 static poses (Levenberg-Marquardt; 95 % from the Jacobian)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "gripper.actuator_gain",
+   "component": "gripper",
+   "name": "actuator_gain",
+   "unit": "N per count",
+   "nominal": 0.3137255,
+   "nominal_source": "ur5e.xml actuator grip_fingers_actuator gainprm[0]",
+   "true": 0.2745,
+   "recovered": 0.27450117920949185,
+   "ci95": [
+    0.2744974456999236,
+    0.2745049127190601
+   ],
+   "rung": "M1",
+   "card": "arm_6dof_gripper",
+   "card_parameter": "finger_width_map (the drive that sets it)",
+   "on_card": true,
+   "fit_step": "gripper",
+   "method": "least squares of the simulated driver angle on the measured one (12 simulations of the 12.0 s train command)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.05
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "gripper.damping",
+   "component": "gripper",
+   "name": "damping",
+   "unit": "N\u00b7s/m",
+   "nominal": 10.0,
+   "nominal_source": "ur5e.xml actuator grip_fingers_actuator biasprm[2]",
+   "true": 16.0,
+   "recovered": 15.999811528377627,
+   "ci95": [
+    15.998972476904546,
+    16.00065057985071
+   ],
+   "rung": "M1",
+   "card": "arm_6dof_gripper",
+   "card_parameter": "finger_width_map (the drive that sets it)",
+   "on_card": true,
+   "fit_step": "gripper",
+   "method": "least squares of the simulated driver angle on the measured one (12 simulations of the 12.0 s train command)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.15
+   },
+   "pass": true,
+   "nominal_pass": false
+  }
+ ],
+ "metrics": [
+  {
+   "id": "held_out_tcp_position_mm",
+   "title": "TCP position, twin vs tracker (held-out poses)",
+   "unit": "mm",
+   "split": "held_out",
+   "before": 8.479126263505057,
+   "after": 0.22768341760277058,
+   "factor": 37.24085993077556,
+   "factor_needed": 5.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "20 held-out poses; the twin settles its own servo loop at each command, then FK"
+  },
+  {
+   "id": "held_out_torque_rms_nm",
+   "title": "Joint torque, twin vs real (held-out excitations)",
+   "unit": "N\u00b7m",
+   "split": "held_out",
+   "before": 3.8087431450005362,
+   "after": 0.21587722912870366,
+   "factor": 17.64309816451185,
+   "factor_needed": 3.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "2 held-out Fourier excitations, all six joints pooled"
+  },
+  {
+   "id": "held_out_finger_rms_mrad",
+   "title": "Finger drive angle, twin vs real (held-out command)",
+   "unit": "mrad",
+   "split": "held_out",
+   "before": 53.673377890721916,
+   "after": 0.1969183335544,
+   "factor": 272.56668752934723,
+   "factor_needed": 3.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": ""
+  }
+ ],
+ "models": [
+  {
+   "model": "nominal",
+   "what": "the description as given",
+   "tool_mm": 8.479126263505057,
+   "torque_nm": 3.8087431450005362,
+   "finger_mrad": 53.673377890721916
+  },
+  {
+   "model": "kinematics",
+   "what": "+ the joint zeros (arm_6dof M1)",
+   "tool_mm": 1.9812301537835315,
+   "torque_nm": 3.8093169847673343,
+   "finger_mrad": 53.673366110941025
+  },
+  {
+   "model": "fitted",
+   "what": "+ every joint servo's M2 dynamics, the tool (arm_6dof M3) and the TCP and drive (arm_6dof_gripper M0-M1)",
+   "tool_mm": 0.22768341760277058,
+   "torque_nm": 0.21587722912870366,
+   "finger_mrad": 0.1969183335544
+  }
+ ],
+ "card_ladders": [
+  {
+   "card": "arm_6dof",
+   "title": "6-DOF robot arm",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Nominal kinematics (URDF / DH)",
+     "kind": "physics",
+     "n_parameters": 2,
+     "parameters": [
+      "base_frame",
+      "tool_frame"
+     ],
+     "equation": "tool = base \u00b7 FK(q; nominal DH) \u00b7 tool frame",
+     "current": false,
+     "references": [
+      {
+       "title": "Denavit, Hartenberg (1955). A kinematic notation for lower-pair mechanisms based on matrices. Journal of Applied Mechanics.",
+       "doi": "10.1115/1.4011045",
+       "url": "https://doi.org/10.1115/1.4011045"
+      },
+      {
+       "title": "Universal Robots (2026). DH parameters for calculations of kinematics and dynamics.",
+       "doi": "",
+       "url": "https://www.universal-robots.com/articles/ur/application-installation/dh-parameters-for-calculations-of-kinematics-and-dynamics/"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "base_frame",
+      "tool_frame"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M1",
+     "name": "+ joint zero offsets",
+     "kind": "physics",
+     "n_parameters": 3,
+     "parameters": [
+      "base_frame",
+      "tool_frame",
+      "joint_zero_offsets"
+     ],
+     "equation": "FK(q + \u03b4q)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hollerbach, Wampler (1996). The calibration index and taxonomy for robot kinematic calibration methods. The International Journal of Robotics Research.",
+       "doi": "10.1177/027836499601500604",
+       "url": "https://doi.org/10.1177/027836499601500604"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "joint_zero_offsets"
+     ],
+     "identified": [
+      "shoulder_pan.zero_offset_rad",
+      "shoulder_lift.zero_offset_rad",
+      "elbow.zero_offset_rad",
+      "wrist_1.zero_offset_rad",
+      "wrist_2.zero_offset_rad",
+      "wrist_3.zero_offset_rad"
+     ]
+    },
+    {
+     "key": "M2",
+     "name": "+ geometric (DH) errors",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "base_frame",
+      "tool_frame",
+      "joint_zero_offsets",
+      "dh_errors"
+     ],
+     "equation": "FK(q + \u03b4q; DH + \u03b4DH)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hayati (1983). Robot arm geometric link parameter estimation. The 22nd IEEE Conference on Decision and Control.",
+       "doi": "10.1109/CDC.1983.269783",
+       "url": "https://doi.org/10.1109/CDC.1983.269783"
+      },
+      {
+       "title": "Okamura, Park (1996). Kinematic calibration using the product of exponentials formula. Robotica.",
+       "doi": "10.1017/S0263574700019810",
+       "url": "https://doi.org/10.1017/S0263574700019810"
+      },
+      {
+       "title": "Hollerbach, Khalil, Gautier (2016). Model identification. In Springer Handbook of Robotics, 2nd ed. Springer.",
+       "doi": "10.1007/978-3-319-32552-1_6",
+       "url": "https://doi.org/10.1007/978-3-319-32552-1_6"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "dh_errors"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3",
+     "name": "+ joint compliance and link inertials (today's model)",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "dh_errors",
+      "joint_zero_offsets",
+      "joint_compliance",
+      "base_frame",
+      "tool_frame",
+      "link_inertials"
+     ],
+     "equation": "tool = FK(q + \u03b4q; DH + \u03b4DH) \u00b7 tool frame; joints are servo twins",
+     "current": true,
+     "references": [
+      {
+       "title": "Spong (1987). Modeling and control of elastic joint robots. Journal of Dynamic Systems, Measurement, and Control.",
+       "doi": "10.1115/1.3143860",
+       "url": "https://doi.org/10.1115/1.3143860"
+      },
+      {
+       "title": "Atkeson, An, Hollerbach (1986). Estimation of inertial parameters of manipulator loads and links. The International Journal of Robotics Research.",
+       "doi": "10.1177/027836498600500306",
+       "url": "https://doi.org/10.1177/027836498600500306"
+      },
+      {
+       "title": "Gautier, Khalil (1990). Direct calculation of minimum set of inertial parameters of serial robots. IEEE Transactions on Robotics and Automation.",
+       "doi": "10.1109/70.56655",
+       "url": "https://doi.org/10.1109/70.56655"
+      },
+      {
+       "title": "Swevers, Ganseman, T\u00fckel, De Schutter, Van Brussel (1997). Optimal robot excitation and identification. IEEE Transactions on Robotics and Automation.",
+       "doi": "10.1109/70.631234",
+       "url": "https://doi.org/10.1109/70.631234"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "joint_compliance",
+      "link_inertials"
+     ],
+     "identified": [
+      "tool.mass_kg",
+      "tool.com_z_m"
+     ]
+    },
+    {
+     "key": "M3.wear",
+     "name": "+ joint compliance that grows with use (Archard)",
+     "kind": "physics",
+     "n_parameters": 7,
+     "parameters": [
+      "dh_errors",
+      "joint_zero_offsets",
+      "joint_compliance",
+      "base_frame",
+      "tool_frame",
+      "link_inertials",
+      "compliance_wear_per_nm_rev"
+     ],
+     "equation": "c(u) = c0 + k\u00b7\u03a3|\u03c4|\u00b7\u0394rev",
+     "current": false,
+     "references": [
+      {
+       "title": "Archard (1953). Contact and rubbing of flat surfaces. Journal of Applied Physics.",
+       "doi": "10.1063/1.1721448",
+       "url": "https://doi.org/10.1063/1.1721448"
+      },
+      {
+       "title": "Flodin, Andersson (1997). Simulation of mild wear in spur gears. Wear.",
+       "doi": "10.1016/S0043-1648(96)07467-4",
+       "url": "https://doi.org/10.1016/S0043-1648(96)07467-4"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "joint_compliance",
+       "usage": "torque-weighted joint revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "compliance_wear_per_nm_rev"
+      }
+     ],
+     "card": "arm_6dof",
+     "added": [
+      "compliance_wear_per_nm_rev"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M3.wear",
+     "kind": "residual",
+     "n_parameters": 8077,
+     "parameters": [
+      "dh_errors",
+      "joint_zero_offsets",
+      "joint_compliance",
+      "base_frame",
+      "tool_frame",
+      "link_inertials",
+      "compliance_wear_per_nm_rev"
+     ],
+     "equation": "M3.wear + MLP residual (residual joint torques (N\u00b7m)) from 3 samples of joint 1 error, joint 2 error, joint 3 error, joint 4 error, joint 5 error, joint 6 error, joint 1 speed, joint 2 speed, joint 3 speed, joint 4 speed, joint 5 speed, joint 6 speed, joint 1 torque, joint 2 torque, joint 3 torque, joint 4 torque, joint 5 torque, joint 6 torque",
+     "current": false,
+     "references": [
+      {
+       "title": "Nguyen-Tuong, Peters (2010). Using model knowledge for learning inverse dynamics. IEEE International Conference on Robotics and Automation.",
+       "doi": "10.1109/ROBOT.2010.5509858",
+       "url": "https://doi.org/10.1109/ROBOT.2010.5509858"
+      },
+      {
+       "title": "Zeng, Song, Lee, Rodriguez, Funkhouser (2020). TossingBot: learning to throw arbitrary objects with residual physics. IEEE Transactions on Robotics.",
+       "doi": "10.1109/TRO.2020.2988642",
+       "url": "https://doi.org/10.1109/TRO.2020.2988642"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "joint_compliance",
+       "usage": "torque-weighted joint revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "compliance_wear_per_nm_rev"
+      }
+     ],
+     "card": "arm_6dof",
+     "added": [],
+     "identified": []
+    },
+    {
+     "key": "M7",
+     "name": "Arm network (black box)",
+     "kind": "learned",
+     "n_parameters": 11078,
+     "parameters": [],
+     "equation": "MLP over 3 samples of joint 1 error, joint 2 error, joint 3 error, joint 4 error, joint 5 error, joint 6 error, joint 1 speed, joint 2 speed, joint 3 speed, joint 4 speed, joint 5 speed, joint 6 speed \u2192 joint torques (N\u00b7m)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. Science Robotics.",
+       "doi": "10.1126/scirobotics.aau5872",
+       "url": "https://doi.org/10.1126/scirobotics.aau5872"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [],
+     "identified": []
+    }
+   ]
+  },
+  {
+   "card": "arm_6dof_gripper",
+   "title": "6-DOF arm + gripper",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Rigid gripper at the TCP",
+     "kind": "physics",
+     "n_parameters": 1,
+     "parameters": [
+      "tcp_offset"
+     ],
+     "equation": "tool = arm \u00b7 tcp_offset",
+     "current": false,
+     "references": [
+      {
+       "title": "Siciliano, Sciavicco, Villani, Oriolo (2009). Robotics: Modelling, Planning and Control. Springer.",
+       "doi": "10.1007/978-1-84628-642-1",
+       "url": "https://doi.org/10.1007/978-1-84628-642-1"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof_gripper",
+     "added": [
+      "tcp_offset"
+     ],
+     "identified": [
+      "tool.tcp_x_m",
+      "tool.tcp_y_m",
+      "tool.tcp_z_m"
+     ]
+    },
+    {
+     "key": "M1",
+     "name": "+ finger width map",
+     "kind": "physics",
+     "n_parameters": 2,
+     "parameters": [
+      "tcp_offset",
+      "finger_width_map"
+     ],
+     "equation": "width = f(command)",
+     "current": false,
+     "references": [
+      {
+       "title": "Prattichizzo, Trinkle (2016). Grasping. In Springer Handbook of Robotics, 2nd ed. Springer.",
+       "doi": "10.1007/978-3-319-32552-1_38",
+       "url": "https://doi.org/10.1007/978-3-319-32552-1_38"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof_gripper",
+     "added": [
+      "finger_width_map"
+     ],
+     "identified": [
+      "gripper.actuator_gain",
+      "gripper.damping"
+     ]
+    },
+    {
+     "key": "M2",
+     "name": "+ grip force and contact friction (today's model)",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "tcp_offset",
+      "finger_width_map",
+      "grip_force_map",
+      "contact_friction"
+     ],
+     "equation": "pick = arm(path) \u2218 gripper(width, force) \u2218 contact(\u03bc, object)",
+     "current": true,
+     "references": [
+      {
+       "title": "Prattichizzo, Trinkle (2016). Grasping. In Springer Handbook of Robotics, 2nd ed. Springer.",
+       "doi": "10.1007/978-3-319-32552-1_38",
+       "url": "https://doi.org/10.1007/978-3-319-32552-1_38"
+      },
+      {
+       "title": "MuJoCo (2026). Computation: the contact model.",
+       "doi": "",
+       "url": "https://mujoco.readthedocs.io/en/stable/computation/index.html"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof_gripper",
+     "added": [
+      "grip_force_map",
+      "contact_friction"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M2.wear",
+     "name": "+ finger pads that glaze with grasps",
+     "kind": "physics",
+     "n_parameters": 5,
+     "parameters": [
+      "tcp_offset",
+      "finger_width_map",
+      "grip_force_map",
+      "contact_friction",
+      "contact_friction_change_per_cycle"
+     ],
+     "equation": "\u03bc(n) = \u03bc0 + k\u00b7n",
+     "current": false,
+     "references": [
+      {
+       "title": "Lu, Meeker (1993). Using degradation measures to estimate a time-to-failure distribution. Technometrics.",
+       "doi": "10.1080/00401706.1993.10485038",
+       "url": "https://doi.org/10.1080/00401706.1993.10485038"
+      },
+      {
+       "title": "Archard (1953). Contact and rubbing of flat surfaces. Journal of Applied Physics.",
+       "doi": "10.1063/1.1721448",
+       "url": "https://doi.org/10.1063/1.1721448"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "contact_friction",
+       "usage": "grasp cycles",
+       "unit": "cycles",
+       "law": "linear",
+       "rate": "contact_friction_change_per_cycle"
+      }
+     ],
+     "card": "arm_6dof_gripper",
+     "added": [
+      "contact_friction_change_per_cycle"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M2.wear",
+     "kind": "residual",
+     "n_parameters": 1414,
+     "parameters": [
+      "tcp_offset",
+      "finger_width_map",
+      "grip_force_map",
+      "contact_friction",
+      "contact_friction_change_per_cycle"
+     ],
+     "equation": "M2.wear + MLP residual (residual width (m)) from 3 samples of width command, measured width, finger current",
+     "current": false,
+     "references": [
+      {
+       "title": "Nguyen-Tuong, Peters (2010). Using model knowledge for learning inverse dynamics. IEEE International Conference on Robotics and Automation.",
+       "doi": "10.1109/ROBOT.2010.5509858",
+       "url": "https://doi.org/10.1109/ROBOT.2010.5509858"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "contact_friction",
+       "usage": "grasp cycles",
+       "unit": "cycles",
+       "law": "linear",
+       "rate": "contact_friction_change_per_cycle"
+      }
+     ],
+     "card": "arm_6dof_gripper",
+     "added": [],
+     "identified": []
+    },
+    {
+     "key": "M7",
+     "name": "Gripper network (black box)",
+     "kind": "learned",
+     "n_parameters": 2657,
+     "parameters": [],
+     "equation": "MLP over 5 samples of width command, width, finger current \u2192 finger force (N)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. Science Robotics.",
+       "doi": "10.1126/scirobotics.aau5872",
+       "url": "https://doi.org/10.1126/scirobotics.aau5872"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof_gripper",
+     "added": [],
+     "identified": []
+    }
+   ]
+  },
+  {
+   "card": "servo",
+   "title": "Integrated servo",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Ideal: rigid inertia under the board's PD",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad"
+     ],
+     "equation": "J q\u0308 = kp (q* \u2212 q) + kd (q\u0307* \u2212 q\u0307) + \u03c4_ff \u2212 G sin(q \u2212 q_bottom)",
+     "current": false,
+     "references": [
+      {
+       "title": "Siciliano, Sciavicco, Villani, Oriolo (2009). Robotics: Modelling, Planning and Control. Springer.",
+       "doi": "10.1007/978-1-84628-642-1",
+       "url": "https://doi.org/10.1007/978-1-84628-642-1"
+      },
+      {
+       "title": "MuJoCo (2026). XML reference: joint armature.",
+       "doi": "",
+       "url": "https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-joint-armature"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad"
+     ],
+     "identified": [
+      "shoulder_pan.armature_kg_m2",
+      "shoulder_lift.armature_kg_m2",
+      "elbow.armature_kg_m2",
+      "wrist_1.armature_kg_m2",
+      "wrist_2.armature_kg_m2",
+      "wrist_3.armature_kg_m2"
+     ]
+    },
+    {
+     "key": "M2",
+     "name": "Coulomb + viscous friction",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "frictionloss_nm",
+      "damping_nm_s_rad"
+     ],
+     "equation": "M0 \u2212 Fc sign(q\u0307) \u2212 b q\u0307",
+     "current": false,
+     "references": [
+      {
+       "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+       "doi": "10.1016/0005-1098(94)90209-7",
+       "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+      },
+      {
+       "title": "Olsson, \u00c5str\u00f6m, Canudas de Wit, G\u00e4fvert, Lischinsky (1998). Friction models and friction compensation. European Journal of Control.",
+       "doi": "10.1016/S0947-3580(98)70113-X",
+       "url": "https://doi.org/10.1016/S0947-3580(98)70113-X"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "frictionloss_nm",
+      "damping_nm_s_rad"
+     ],
+     "identified": [
+      "shoulder_pan.damping_nm_s_rad",
+      "shoulder_pan.frictionloss_nm",
+      "shoulder_lift.damping_nm_s_rad",
+      "shoulder_lift.frictionloss_nm",
+      "elbow.damping_nm_s_rad",
+      "elbow.frictionloss_nm",
+      "wrist_1.damping_nm_s_rad",
+      "wrist_1.frictionloss_nm",
+      "wrist_2.damping_nm_s_rad",
+      "wrist_2.frictionloss_nm",
+      "wrist_3.damping_nm_s_rad",
+      "wrist_3.frictionloss_nm"
+     ]
+    },
+    {
+     "key": "M3",
+     "name": "Stribeck, weakening and capture",
+     "kind": "physics",
+     "n_parameters": 9,
+     "parameters": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm"
+     ],
+     "equation": "level(v) = Fs \u2212 w\u00b7min(|v|, limit) \u2212 drop\u00b7(1 \u2212 exp(\u2212(v/vs)\u00b2)); the capture level while just slowed",
+     "current": false,
+     "references": [
+      {
+       "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+       "doi": "10.1016/0005-1098(94)90209-7",
+       "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+      },
+      {
+       "title": "Canudas de Wit, Olsson, \u00c5str\u00f6m, Lischinsky (1995). A new model for control of systems with friction. IEEE Transactions on Automatic Control.",
+       "doi": "10.1109/9.376053",
+       "url": "https://doi.org/10.1109/9.376053"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M4",
+     "name": "Rack twin: + cogging, delay, backlash, drive and heat (today's model)",
+     "kind": "physics",
+     "n_parameters": 16,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c"
+     ],
+     "equation": "J q\u0308 = \u03c4_motor(\u03c4_cmd, delay, current loop, scale) \u2212 \u03c4_r(q, q\u0307) \u2212 G sin(q \u2212 q_bottom); \u03c4_r = friction level(v) sign(v) + b v + ripple(r q)",
+     "current": true,
+     "references": [
+      {
+       "title": "Jahns, Soong (1996). Pulsating torque minimization techniques for permanent magnet AC motor drives\u2014a review. IEEE Transactions on Industrial Electronics.",
+       "doi": "10.1109/41.491356",
+       "url": "https://doi.org/10.1109/41.491356"
+      },
+      {
+       "title": "Nordin, Gutman (2002). Controlling mechanical systems with backlash\u2014a survey. Automatica.",
+       "doi": "10.1016/S0005-1098(02)00047-X",
+       "url": "https://doi.org/10.1016/S0005-1098(02)00047-X"
+      },
+      {
+       "title": "Tuttle, Seering (1996). A nonlinear model of a harmonic drive gear transmission. IEEE Transactions on Robotics and Automation.",
+       "doi": "10.1109/70.499819",
+       "url": "https://doi.org/10.1109/70.499819"
+      },
+      {
+       "title": "Krishnan (2010). Permanent Magnet Synchronous and Brushless DC Motor Drives. CRC Press.",
+       "doi": "10.1201/9781420014235",
+       "url": "https://doi.org/10.1201/9781420014235"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "thermal_r_c"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M5",
+     "name": "+ drive ceilings and motor electrics",
+     "kind": "physics",
+     "n_parameters": 20,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c",
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a"
+     ],
+     "equation": "motoring torque \u2264 kt_out (V_avail \u2212 |\u03c9| kt_out / 1.5) / R; any torque \u2264 kt_out \u00b7 I_max",
+     "current": false,
+     "references": [
+      {
+       "title": "Krause, Wasynczuk, Sudhoff, Pekarek (2013). Analysis of Electric Machinery and Drive Systems, 3rd ed. Wiley-IEEE Press.",
+       "doi": "10.1002/9781118524336",
+       "url": "https://doi.org/10.1002/9781118524336"
+      },
+      {
+       "title": "MuJoCo (2026). XML reference: the dcmotor actuator.",
+       "doi": "",
+       "url": "https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-dcmotor"
+      },
+      {
+       "title": "mjbots (2026). moteus reference manual (docs/reference.md).",
+       "doi": "",
+       "url": "https://github.com/mjbots/moteus/blob/main/docs/reference.md"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M5.wear",
+     "name": "+ wear: backlash and friction grow with use",
+     "kind": "physics",
+     "n_parameters": 22,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c",
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a",
+      "backlash_wear_rad_per_nm_rev",
+      "friction_growth_nm_per_h"
+     ],
+     "equation": "backlash(u) = b0 + k_b\u00b7\u03a3|\u03c4|\u00b7\u0394rev (Archard); Fs(h) = Fs0 + k_f\u00b7h (linear)",
+     "current": false,
+     "references": [
+      {
+       "title": "Archard (1953). Contact and rubbing of flat surfaces. Journal of Applied Physics.",
+       "doi": "10.1063/1.1721448",
+       "url": "https://doi.org/10.1063/1.1721448"
+      },
+      {
+       "title": "Flodin, Andersson (1997). Simulation of mild wear in spur gears. Wear.",
+       "doi": "10.1016/S0043-1648(96)07467-4",
+       "url": "https://doi.org/10.1016/S0043-1648(96)07467-4"
+      },
+      {
+       "title": "Lu, Meeker (1993). Using degradation measures to estimate a time-to-failure distribution. Technometrics.",
+       "doi": "10.1080/00401706.1993.10485038",
+       "url": "https://doi.org/10.1080/00401706.1993.10485038"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "frictionloss_nm",
+       "usage": "deployment hours",
+       "unit": "h",
+       "law": "linear",
+       "rate": "friction_growth_nm_per_h"
+      },
+      {
+       "parameter": "backlash_rad",
+       "usage": "torque-weighted output revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "backlash_wear_rad_per_nm_rev"
+      }
+     ],
+     "card": "servo",
+     "added": [
+      "backlash_wear_rad_per_nm_rev",
+      "friction_growth_nm_per_h"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M5.wear",
+     "kind": "residual",
+     "n_parameters": 1431,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c",
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a",
+      "backlash_wear_rad_per_nm_rev",
+      "friction_growth_nm_per_h"
+     ],
+     "equation": "M5.wear + MLP residual (residual torque (N\u00b7m)) from 3 samples of position error, velocity, torque command",
+     "current": false,
+     "references": [
+      {
+       "title": "Nguyen-Tuong, Peters (2010). Using model knowledge for learning inverse dynamics. IEEE International Conference on Robotics and Automation.",
+       "doi": "10.1109/ROBOT.2010.5509858",
+       "url": "https://doi.org/10.1109/ROBOT.2010.5509858"
+      },
+      {
+       "title": "Zeng, Song, Lee, Rodriguez, Funkhouser (2020). TossingBot: learning to throw arbitrary objects with residual physics. IEEE Transactions on Robotics.",
+       "doi": "10.1109/TRO.2020.2988642",
+       "url": "https://doi.org/10.1109/TRO.2020.2988642"
+      },
+      {
+       "title": "Kovalev, Chaikovskaia, Davydenko, Gorbachev et al. (2026). Trajectory-based actuator identification via differentiable simulation. arXiv:2604.10351.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/2604.10351"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "frictionloss_nm",
+       "usage": "deployment hours",
+       "unit": "h",
+       "law": "linear",
+       "rate": "friction_growth_nm_per_h"
+      },
+      {
+       "parameter": "backlash_rad",
+       "usage": "torque-weighted output revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "backlash_wear_rad_per_nm_rev"
+      }
+     ],
+     "card": "servo",
+     "added": [],
+     "identified": []
+    },
+    {
+     "key": "M7",
+     "name": "Actuator network (black box)",
+     "kind": "learned",
+     "n_parameters": 2369,
+     "parameters": [],
+     "equation": "MLP over 3 samples of position error, velocity \u2192 torque (N\u00b7m)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. Science Robotics.",
+       "doi": "10.1126/scirobotics.aau5872",
+       "url": "https://doi.org/10.1126/scirobotics.aau5872"
+      },
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. arXiv:1901.08652.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/1901.08652"
+      },
+      {
+       "title": "Zhu, Tanaka, Rafeedi, Hong (2025). Cycloidal quasi-direct drive actuator designs with learning-based torque estimation for legged robotics. arXiv:2410.16591.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/2410.16591"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [],
+     "identified": []
+    }
+   ]
+  }
+ ],
+ "selected_rung": null,
+ "fit": {
+  "kinematic_rms_mm": 0.14356151842169002,
+  "dynamic_rows": 45377,
+  "torque_residual_nm": [
+   0.08655386114638686,
+   0.10753236697799047,
+   0.07972386234837388,
+   0.015324133999087535,
+   0.014325235451852207,
+   0.014256179812572009
+  ]
+ },
+ "notes": [
+  "The tracker sees the flange through a calibrated external camera: its frame is the arm's base frame (hand-eye is the dual-arm cell's job).",
+  "Contacts are off: no example here calibrates contact (the gripper card's grip force and contact friction stay unidentified).",
+  "The 2F-85's grip force map and contact friction (arm_6dof_gripper's parameters) need a force gauge and pull-out tests; not simulated."
+ ],
+ "schema": "sysid.result/1",
+ "example": "ur5e_2f85",
+ "verdict": {
+  "parameters_pass": 30,
+  "parameters": 30,
+  "metrics_pass": 3,
+  "metrics": 3,
+  "failing": [],
+  "status": "pass"
+ },
+ "provenance": {
+  "identify_sealed": true,
+  "code": "782bd5e+dirty",
+  "seconds": 7.9
+ }
+}

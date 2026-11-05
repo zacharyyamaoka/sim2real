@@ -1,0 +1,599 @@
+{
+ "title": "Conveyor belt",
+ "subtitle": "1.6 m belt, VFD drive",
+ "summary": "A 1.6 x 0.55 m belt (bam_robot_descriptions' conveyor layout object) on a VFD-driven drive roller with an encoder. The description says the roller is 50 mm in radius and the belt carries 12 kg with light drag. Calibration finds the roller's effective radius (what turns encoder counts into belt millimetres, the number a pick on a moving belt depends on), the moving mass and the belt's viscous and Coulomb drag.",
+ "description": {
+  "manifest": "sysid/examples/conveyor/description.json",
+  "model": {
+   "format": "mjcf",
+   "path": "sysid/examples/conveyor/conveyor.xml",
+   "source": "sysid/examples/conveyor/conveyor.xml (new: no dynamic conveyor exists in bam_ws; dimensions from bam_robot_descriptions scene_authoring's conveyor)"
+  },
+  "sensors": [
+   {
+    "id": "roller_encoder",
+    "kind": "joint_state",
+    "on": "drive_roller",
+    "measures": "roller angle"
+   },
+   {
+    "id": "belt_tracker",
+    "kind": "surface_tracker",
+    "on": "belt_marker",
+    "measures": "belt surface travel (a camera following a mark on the belt)"
+   }
+  ],
+  "known": {
+   "note": "the VFD's speed loop (kv 40 N.m.s/rad on the roller, 25 N.m limit) and the roller's own inertia, as the description states; the VFD is set in belt speed through the NOMINAL radius"
+  },
+  "components": 4
+ },
+ "tree": [
+  {
+   "id": "line",
+   "title": "sorting line",
+   "word": "deployment",
+   "type": "deployment",
+   "type_title": "Deployment",
+   "group": "structure",
+   "type_source": "structural",
+   "parent": null,
+   "depth": 0,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "conveyor",
+   "title": "belt conveyor",
+   "word": "conveyor belt",
+   "type": "conveyor",
+   "type_title": "Conveyor belt",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "line",
+   "depth": 1,
+   "binds": {
+    "joint": "belt",
+    "equality": "belt_drive"
+   },
+   "parameters": [
+    "belt.roller_radius_m",
+    "belt.moving_mass_kg",
+    "belt.viscous_drag_n_s_m",
+    "belt.coulomb_drag_n"
+   ]
+  },
+  {
+   "id": "vfd",
+   "title": "VFD + gearmotor (velocity servo on the drive roller)",
+   "word": "driver",
+   "type": "driver",
+   "type_title": "Driver (BLDC board)",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "conveyor",
+   "depth": 2,
+   "binds": {
+    "actuator": "vfd"
+   },
+   "parameters": []
+  },
+  {
+   "id": "roller_encoder",
+   "title": "drive-roller encoder",
+   "word": "encoder",
+   "type": "encoder",
+   "type_title": "Encoder",
+   "group": "sensor",
+   "type_source": "type_cards",
+   "parent": "conveyor",
+   "depth": 2,
+   "binds": {
+    "joint": "drive_roller"
+   },
+   "parameters": []
+  }
+ ],
+ "schedule": {
+  "train": {
+   "profiles": 6,
+   "seconds": 72.0
+  },
+  "held_out": {
+   "profiles": 3,
+   "seconds": 36.0
+  },
+  "levels_m_s": [
+   0.1,
+   0.2,
+   0.3,
+   0.45,
+   0.6
+  ],
+  "coverage": {
+   "train": {
+    "pct": 100.0,
+    "visited": 35,
+    "reachable": 35,
+    "samples": 36000,
+    "axes": {
+     "load": null
+    },
+    "unplanned": [
+     "load (no profile carries product)"
+    ]
+   },
+   "held_out": {
+    "pct": 100.0,
+    "visited": 35,
+    "reachable": 35,
+    "samples": 18000,
+    "axes": {
+     "load": null
+    },
+    "unplanned": [
+     "load (no profile carries product)"
+    ]
+   },
+   "function": "sysid adapter (no conveyor card yet): occupancy of the (belt speed, belt acceleration) grid by the nominal model's response",
+   "rule": "share of the 7 speed x 5 acceleration cells the planned profiles visit; every cell counted reachable; belt load named unplanned",
+   "edges": [
+    [
+     -0.25,
+     -0.05,
+     0.05,
+     0.15,
+     0.25,
+     0.35,
+     0.5,
+     0.65
+    ],
+    [
+     -30.0,
+     -2.0,
+     -0.2,
+     0.2,
+     2.0,
+     30.0
+    ]
+   ],
+   "axes": [
+    "belt speed (m/s)",
+    "belt acceleration (m/s^2)"
+   ]
+  }
+ },
+ "parameters": [
+  {
+   "key": "belt.roller_radius_m",
+   "component": "belt",
+   "name": "roller_radius_m",
+   "unit": "m",
+   "nominal": 0.05,
+   "nominal_source": "conveyor.xml equality belt_drive data[1]",
+   "true": 0.0496,
+   "recovered": 0.04960031381397378,
+   "ci95": [
+    0.04959960899781546,
+    0.049601018630132096
+   ],
+   "rung": "M0",
+   "card": "conveyor",
+   "card_parameter": "drum_radius_m",
+   "on_card": true,
+   "fit_step": "radius",
+   "method": "least squares of tracker travel on encoder angle, 6 train profiles, one zero each",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "belt.moving_mass_kg",
+   "component": "belt",
+   "name": "moving_mass_kg",
+   "unit": "kg",
+   "nominal": 12.0,
+   "nominal_source": "conveyor.xml body belt mass",
+   "true": 16.0,
+   "recovered": 15.999682385835486,
+   "ci95": [
+    15.998964006939143,
+    16.00040076473183
+   ],
+   "rung": "M0",
+   "card": "conveyor",
+   "card_parameter": "moving_mass_kg",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "drag from the steady-state droop of 31 dwells (linear), mass by golden section on the transients, then least squares of the simulated roller angle on the encoder's over the train profiles (4 simulations), radius fixed at M1's",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "belt.viscous_drag_n_s_m",
+   "component": "belt",
+   "name": "viscous_drag_n_s_m",
+   "unit": "N\u00b7s/m",
+   "nominal": 15.0,
+   "nominal_source": "conveyor.xml joint belt damping",
+   "true": 28.0,
+   "recovered": 28.003143449042337,
+   "ci95": [
+    28.00012329637732,
+    28.006163601707353
+   ],
+   "rung": "M2",
+   "card": "conveyor",
+   "card_parameter": "viscous_n_s_m",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "drag from the steady-state droop of 31 dwells (linear), mass by golden section on the transients, then least squares of the simulated roller angle on the encoder's over the train profiles (4 simulations), radius fixed at M1's",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.15
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "belt.coulomb_drag_n",
+   "component": "belt",
+   "name": "coulomb_drag_n",
+   "unit": "N",
+   "nominal": 5.0,
+   "nominal_source": "conveyor.xml joint belt frictionloss",
+   "true": 11.0,
+   "recovered": 10.999057370949208,
+   "ci95": [
+    10.99817640319748,
+    10.999938338700936
+   ],
+   "rung": "M2",
+   "card": "conveyor",
+   "card_parameter": "coulomb_n",
+   "on_card": true,
+   "fit_step": "dynamics",
+   "method": "drag from the steady-state droop of 31 dwells (linear), mass by golden section on the transients, then least squares of the simulated roller angle on the encoder's over the train profiles (4 simulations), radius fixed at M1's",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  }
+ ],
+ "metrics": [
+  {
+   "id": "held_out_belt_position_mm",
+   "title": "Belt travel, twin (from the command) vs tracker",
+   "unit": "mm",
+   "split": "held_out",
+   "before": 12.42255005936801,
+   "after": 0.5896883411696193,
+   "factor": 21.066297554278353,
+   "factor_needed": 5.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "3 held-out profiles; max 38.5 -> 2.22 mm"
+  }
+ ],
+ "models": [
+  {
+   "model": "nominal",
+   "what": "the description as given",
+   "belt_mm": 12.42255005936801,
+   "belt_max_mm": 38.455323276050656
+  },
+  {
+   "model": "radius",
+   "what": "+ the drum's effective radius (conveyor M0)",
+   "belt_mm": 2.289002054392669,
+   "belt_max_mm": 7.0387732385289254
+  },
+  {
+   "model": "fitted",
+   "what": "+ the moving mass (M0) and the drag (M2)",
+   "belt_mm": 0.5896883411696193,
+   "belt_max_mm": 2.2209153044554775
+  }
+ ],
+ "card_ladders": [
+  {
+   "card": "conveyor",
+   "title": "Conveyor belt",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Ideal belt: kinematics and a rigid mass",
+     "kind": "physics",
+     "n_parameters": 5,
+     "parameters": [
+      "drum_radius_m",
+      "gear_ratio",
+      "moving_mass_kg",
+      "load_mass_kg",
+      "encoder_counts_per_m"
+     ],
+     "equation": "x = \u03b8_motor r / N; (m + m_load) \u1e8d = F",
+     "current": false,
+     "references": [
+      {
+       "title": "Zhang, Xia (2011). Modeling and energy efficiency optimization of belt conveyors. Applied Energy.",
+       "doi": "10.1016/j.apenergy.2011.03.015",
+       "url": "https://doi.org/10.1016/j.apenergy.2011.03.015"
+      }
+     ],
+     "wear": [],
+     "card": "conveyor",
+     "added": [
+      "drum_radius_m",
+      "gear_ratio",
+      "moving_mass_kg",
+      "load_mass_kg",
+      "encoder_counts_per_m"
+     ],
+     "identified": [
+      "belt.roller_radius_m",
+      "belt.moving_mass_kg"
+     ]
+    },
+    {
+     "key": "M2",
+     "name": "Coulomb + viscous friction",
+     "kind": "physics",
+     "n_parameters": 7,
+     "parameters": [
+      "drum_radius_m",
+      "gear_ratio",
+      "moving_mass_kg",
+      "load_mass_kg",
+      "encoder_counts_per_m",
+      "coulomb_n",
+      "viscous_n_s_m"
+     ],
+     "equation": "\u2212 Fc sign(\u1e8b) \u2212 b \u1e8b",
+     "current": false,
+     "references": [
+      {
+       "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+       "doi": "10.1016/0005-1098(94)90209-7",
+       "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+      },
+      {
+       "title": "Zhang, Xia (2011). Modeling and energy efficiency optimization of belt conveyors. Applied Energy.",
+       "doi": "10.1016/j.apenergy.2011.03.015",
+       "url": "https://doi.org/10.1016/j.apenergy.2011.03.015"
+      }
+     ],
+     "wear": [],
+     "card": "conveyor",
+     "added": [
+      "coulomb_n",
+      "viscous_n_s_m"
+     ],
+     "identified": [
+      "belt.viscous_drag_n_s_m",
+      "belt.coulomb_drag_n"
+     ]
+    },
+    {
+     "key": "M3",
+     "name": "+ static friction (Stribeck)",
+     "kind": "physics",
+     "n_parameters": 8,
+     "parameters": [
+      "drum_radius_m",
+      "gear_ratio",
+      "moving_mass_kg",
+      "load_mass_kg",
+      "encoder_counts_per_m",
+      "coulomb_n",
+      "viscous_n_s_m",
+      "static_n"
+     ],
+     "equation": "breakaway Fs falling to Fc",
+     "current": false,
+     "references": [
+      {
+       "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+       "doi": "10.1016/0005-1098(94)90209-7",
+       "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+      }
+     ],
+     "wear": [],
+     "card": "conveyor",
+     "added": [
+      "static_n"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M4",
+     "name": "+ belt stretch: drum and load as two masses",
+     "kind": "physics",
+     "n_parameters": 10,
+     "parameters": [
+      "drum_radius_m",
+      "gear_ratio",
+      "moving_mass_kg",
+      "load_mass_kg",
+      "encoder_counts_per_m",
+      "coulomb_n",
+      "viscous_n_s_m",
+      "static_n",
+      "stretch_stiffness_n_m",
+      "stretch_damping_n_s_m"
+     ],
+     "equation": "(m + m_load) \u1e8d_load = k (x_drum \u2212 x_load) + c (\u1e8b_drum \u2212 \u1e8b_load) \u2212 F_f(\u1e8b); m_drum \u1e8d_drum = N \u03c4_motor / r \u2212 k (x_drum \u2212 x_load) \u2212 c (\u1e8b_drum \u2212 \u1e8b_load)",
+     "current": true,
+     "references": [
+      {
+       "title": "He, Pang, Lodewijks (2017). Green operations of belt conveyors by means of speed control. Applied Energy.",
+       "doi": "10.1016/j.apenergy.2016.12.017",
+       "url": "https://doi.org/10.1016/j.apenergy.2016.12.017"
+      },
+      {
+       "title": "Spong (1987). Modeling and control of elastic joint robots. Journal of Dynamic Systems, Measurement, and Control.",
+       "doi": "10.1115/1.3143860",
+       "url": "https://doi.org/10.1115/1.3143860"
+      }
+     ],
+     "wear": [],
+     "card": "conveyor",
+     "added": [
+      "stretch_stiffness_n_m",
+      "stretch_damping_n_s_m"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M4.wear",
+     "name": "+ friction that grows with belt distance",
+     "kind": "physics",
+     "n_parameters": 11,
+     "parameters": [
+      "drum_radius_m",
+      "gear_ratio",
+      "moving_mass_kg",
+      "load_mass_kg",
+      "encoder_counts_per_m",
+      "coulomb_n",
+      "viscous_n_s_m",
+      "static_n",
+      "stretch_stiffness_n_m",
+      "stretch_damping_n_s_m",
+      "coulomb_growth_n_per_km"
+     ],
+     "equation": "Fc(s) = Fc0 + k\u00b7s",
+     "current": false,
+     "references": [
+      {
+       "title": "Lu, Meeker (1993). Using degradation measures to estimate a time-to-failure distribution. Technometrics.",
+       "doi": "10.1080/00401706.1993.10485038",
+       "url": "https://doi.org/10.1080/00401706.1993.10485038"
+      },
+      {
+       "title": "Zhang, Xia (2011). Modeling and energy efficiency optimization of belt conveyors. Applied Energy.",
+       "doi": "10.1016/j.apenergy.2011.03.015",
+       "url": "https://doi.org/10.1016/j.apenergy.2011.03.015"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "coulomb_n",
+       "usage": "belt distance",
+       "unit": "km",
+       "law": "linear",
+       "rate": "coulomb_growth_n_per_km"
+      }
+     ],
+     "card": "conveyor",
+     "added": [
+      "coulomb_growth_n_per_km"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M4.wear",
+     "kind": "residual",
+     "n_parameters": 1420,
+     "parameters": [
+      "drum_radius_m",
+      "gear_ratio",
+      "moving_mass_kg",
+      "load_mass_kg",
+      "encoder_counts_per_m",
+      "coulomb_n",
+      "viscous_n_s_m",
+      "static_n",
+      "stretch_stiffness_n_m",
+      "stretch_damping_n_s_m",
+      "coulomb_growth_n_per_km"
+     ],
+     "equation": "M4.wear + MLP residual (residual drive force (N)) from 3 samples of belt speed error, belt speed, motor current",
+     "current": false,
+     "references": [
+      {
+       "title": "Nguyen-Tuong, Peters (2010). Using model knowledge for learning inverse dynamics. IEEE International Conference on Robotics and Automation.",
+       "doi": "10.1109/ROBOT.2010.5509858",
+       "url": "https://doi.org/10.1109/ROBOT.2010.5509858"
+      },
+      {
+       "title": "Zeng, Song, Lee, Rodriguez, Funkhouser (2020). TossingBot: learning to throw arbitrary objects with residual physics. IEEE Transactions on Robotics.",
+       "doi": "10.1109/TRO.2020.2988642",
+       "url": "https://doi.org/10.1109/TRO.2020.2988642"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "coulomb_n",
+       "usage": "belt distance",
+       "unit": "km",
+       "law": "linear",
+       "rate": "coulomb_growth_n_per_km"
+      }
+     ],
+     "card": "conveyor",
+     "added": [],
+     "identified": []
+    },
+    {
+     "key": "M7",
+     "name": "Belt network (black box)",
+     "kind": "learned",
+     "n_parameters": 2369,
+     "parameters": [],
+     "equation": "MLP over 3 samples of position error, belt speed \u2192 drive force (N)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. Science Robotics.",
+       "doi": "10.1126/scirobotics.aau5872",
+       "url": "https://doi.org/10.1126/scirobotics.aau5872"
+      },
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. arXiv:1901.08652.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/1901.08652"
+      }
+     ],
+     "wear": [],
+     "card": "conveyor",
+     "added": [],
+     "identified": []
+    }
+   ]
+  }
+ ],
+ "selected_rung": null,
+ "notes": [
+  "The coverage rule is sysid's (the conveyor card's axes are belt speed, load and temperature; this plan varies speed and acceleration).",
+  "The VFD's speed loop and torque limit are the description's; the belt's elasticity (a two-mass belt) is not modelled."
+ ],
+ "schema": "sysid.result/1",
+ "example": "conveyor",
+ "verdict": {
+  "parameters_pass": 4,
+  "parameters": 4,
+  "metrics_pass": 1,
+  "metrics": 1,
+  "failing": [],
+  "status": "pass"
+ },
+ "provenance": {
+  "identify_sealed": true,
+  "code": "782bd5e+dirty",
+  "seconds": 6.7
+ }
+}

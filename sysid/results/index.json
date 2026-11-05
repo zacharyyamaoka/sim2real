@@ -1,0 +1,94 @@
+{
+ "schema": "sysid.index/1",
+ "example": "index",
+ "examples": [
+  {
+   "example": "pendulum_can11",
+   "title": "One-DOF pendulum arm",
+   "subtitle": "CAN 11 on the One Dof Test Rack",
+   "verdict": {
+    "parameters_pass": 8,
+    "parameters": 8,
+    "metrics_pass": 1,
+    "metrics": 1,
+    "failing": [],
+    "status": "pass"
+   },
+   "code": "782bd5e+dirty"
+  },
+  {
+   "example": "ur5e",
+   "title": "6-DOF UR arm",
+   "subtitle": "UR5e",
+   "verdict": {
+    "parameters_pass": 24,
+    "parameters": 24,
+    "metrics_pass": 2,
+    "metrics": 2,
+    "failing": [],
+    "status": "pass"
+   },
+   "code": "782bd5e+dirty"
+  },
+  {
+   "example": "ur5e_2f85",
+   "title": "6-DOF UR arm with gripper",
+   "subtitle": "UR5e + Robotiq 2F-85",
+   "verdict": {
+    "parameters_pass": 30,
+    "parameters": 30,
+    "metrics_pass": 3,
+    "metrics": 3,
+    "failing": [],
+    "status": "pass"
+   },
+   "code": "782bd5e+dirty"
+  },
+  {
+   "example": "conveyor",
+   "title": "Conveyor belt",
+   "subtitle": "1.6 m belt, VFD drive",
+   "verdict": {
+    "parameters_pass": 4,
+    "parameters": 4,
+    "metrics_pass": 1,
+    "metrics": 1,
+    "failing": [],
+    "status": "pass"
+   },
+   "code": "782bd5e+dirty"
+  },
+  {
+   "example": "dual_arm_cell",
+   "title": "Two arms over the belt",
+   "subtitle": "2 x UR5e + 2F-85, humanoid mount, head camera",
+   "verdict": {
+    "parameters_pass": 22,
+    "parameters": 22,
+    "metrics_pass": 2,
+    "metrics": 2,
+    "failing": [],
+    "status": "pass"
+   },
+   "code": "782bd5e+dirty"
+  },
+  {
+   "example": "linescan_cell",
+   "title": "Hyperspectral + RGBD line scan",
+   "subtitle": "SWIR line-scan camera + D435 over the belt",
+   "verdict": {
+    "parameters_pass": 50,
+    "parameters": 50,
+    "metrics_pass": 3,
+    "metrics": 3,
+    "failing": [],
+    "status": "pass"
+   },
+   "code": "782bd5e+dirty"
+  }
+ ],
+ "drift": [
+  "drift_backlash_wear",
+  "drift_camera_knock"
+ ]
+}

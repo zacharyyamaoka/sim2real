@@ -278,7 +278,7 @@ def page_body(doc: dict, docs: dict) -> str:
     sensors = "".join(f"<li><b>{e(s['id'])}</b> ({e(s['kind'])}) on {e(s['on'])}: {e(s['measures'])}</li>" for s in doc["description"].get("sensors", []))
     tree = "".join(f'<tr><td style="padding-left:{8 + 16 * r["depth"]}px">{e(r["title"])}</td><td>{e(r["word"])}</td>'
                    f'<td>{(chr(60) + "a href=" + chr(34) + "/types/" + e(r["type"]) + "/" + chr(34) + ">" + e(r["type_title"]) + "</a>") if r["type_source"] == "type_cards" else e(r["type_title"])}</td>'
-                   f'<td><small>{e(r["type_source"])}</small></td><td><small>{e(", ".join(r["parameters"])[:160])}</small></td></tr>' for r in doc["tree"])
+                   f'<td><small>{e(SOURCE_WORD.get(r["type_source"], r["type_source"]))}</small></td><td><small>{e(", ".join(r["parameters"])[:160])}</small></td></tr>' for r in doc["tree"])
     ladders = ladders_html(doc)
     extra = servo_extra(doc) if ex == "pendulum_can11" else ""
     drift = drift_html(docs.get(DRIFT_OF.get(ex, ""), None), ex) if ex in DRIFT_OF else ""
@@ -309,10 +309,13 @@ def page_body(doc: dict, docs: dict) -> str:
 <p><small>Code {e(str(prov.get('code', '')))} · {e(str(prov.get('seconds', '')))} s · identification ran with the world sealed: {e(str(prov.get('identify_sealed')))}{' · ' + e(prov['bam_rack_twin']) if prov.get('bam_rack_twin') else ''}</small></p>"""
 
 
+SOURCE_WORD = {"type_cards": "type card", "sysid adapter (no card yet)": "sysid adapter", "structural": "structure"}
+
+
 def ladders_html(doc: dict) -> str:
     out = []
     for lad in doc.get("card_ladders", []):
-        rows = "".join(f'<tr class="{"s2r-ex-hit" if r["identified"] else ""}"><td><b>{e(r["key"])}</b></td><td>{e(r["name"])}</td><td>{r["n_parameters"]:,}</td>'
+        rows = "".join(f'<tr class="{"s2r-ex-hit" if r["identified"] else ""}"><td class="s2r-ex-key"><b>{e(r["key"])}</b></td><td>{e(r["name"])}</td><td>{r["n_parameters"]:,}</td>'
                        f'<td><small>{e(", ".join(r.get("added", [])))}</small></td><td><small>{e(", ".join(r["identified"]))}</small></td></tr>' for r in lad["rungs"])
         out.append(f'<h3><a href="/types/{e(lad["card"])}/">{e(lad["title"])}</a></h3><div class="s2r-scroll"><table class="s2r-table"><thead><tr><th>rung</th><th>model</th>'
                    f'<th>parameters</th><th>adds</th><th>identified here</th></tr></thead><tbody>{rows}</tbody></table></div>')
@@ -391,7 +394,8 @@ def wear_svg(d: dict) -> str:
     if act is not None:
         marks += f'<line x1="{sx(act):.1f}" x2="{sx(act):.1f}" y1="{top + 14}" y2="{h - bottom}" class="s2r-svg-act"/><text x="{sx(act) + 4:.1f}" y="{top + 24}" class="s2r-svg-lab">crossed {act:.0f} h</text>'
     if alarm is not None:
-        marks += f'<text x="{sx(alarm) + 4:.1f}" y="{thr - 6:.1f}" class="s2r-svg-lab s2r-svg-warntext">detector {alarm:.0f} h</text>'
+        # below the threshold line, clear of the forecast and crossing labels at the top
+        marks += f'<text x="{sx(alarm) + 4:.1f}" y="{thr + 16:.1f}" class="s2r-svg-lab s2r-svg-warntext">detector {alarm:.0f} h</text>'
     return f"""<figure class="s2r-ex-fig"><svg viewBox="0 0 {w} {h}" role="img" aria-label="drift ratio against deployment hours">
 <rect x="{sx(0):.1f}" y="{top}" width="{sx(early) - sx(0):.1f}" height="{h - top - bottom}" class="s2r-svg-early"/>
 <text x="{sx(early / 2):.1f}" y="{h - bottom - 6}" class="s2r-svg-lab" text-anchor="middle">early life (rate fitted)</text>

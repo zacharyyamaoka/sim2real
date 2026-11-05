@@ -1,0 +1,574 @@
+{
+ "schema": "sysid.drift/1",
+ "name": "backlash_wear",
+ "example": "pendulum_can11",
+ "title": "Backlash wear on CAN 11: detected after the fact vs forecast ahead",
+ "check_every_h": 12,
+ "horizon_h": 480,
+ "early_life_h": 168,
+ "check": "the held-out H2 operate runs under FB (pickplace, cycle, jog, sweep x seeds 3-5, 77.7 s): the motions the joint makes all day",
+ "check_runs": [
+  "cycle-s3/fb",
+  "cycle-s4/fb",
+  "cycle-s5/fb",
+  "jog-s3/fb",
+  "jog-s4/fb",
+  "jog-s5/fb",
+  "pickplace-s3/fb",
+  "pickplace-s4/fb",
+  "pickplace-s5/fb",
+  "sweep-s3/fb",
+  "sweep-s4/fb",
+  "sweep-s5/fb"
+ ],
+ "check_seconds": 77.7,
+ "calibrated_x_floor": 1.4964105456831507,
+ "threshold": 1.25,
+ "threshold_rule": "the servo card's drift diagnostic: live fidelity / calibrated <= 1.25 (reg.DRIFT_THRESHOLD; settable); calibrated 1.496 x floor at hour 0",
+ "diagnostic": {
+  "id": "servo.drift",
+  "message": "model drift detected \u2014 recalibration required",
+  "forecast": "fit the drift ratio's history on deployment hours, solve for the threshold (backlash's torque-weighted revolutions convert at the station's duty)"
+ },
+ "checks": [
+  {
+   "h": 0.0,
+   "b_true_rad": 0.001991169895766281,
+   "b_hat_rad": 0.001959119874441362,
+   "live_x_floor": 1.4964105456831507,
+   "floor_mrad": 0.4279613079798561,
+   "link_mrad": 0.6404058144054114,
+   "ratio": 1.0,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 12.0,
+   "b_true_rad": 0.0020518917725504135,
+   "b_hat_rad": 0.0020330506088526434,
+   "live_x_floor": 1.5245294321604186,
+   "floor_mrad": 0.4215392968154104,
+   "link_mrad": 0.6426490648072999,
+   "ratio": 1.018790890346493,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 24.0,
+   "b_true_rad": 0.0020471965373511296,
+   "b_hat_rad": 0.0020414378534817645,
+   "live_x_floor": 1.5235769291668007,
+   "floor_mrad": 0.41976875059461044,
+   "link_mrad": 0.6395499839911212,
+   "ratio": 1.018154365165375,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 36.0,
+   "b_true_rad": 0.002055274403999688,
+   "b_hat_rad": 0.0020279103669540444,
+   "live_x_floor": 1.5301676624685272,
+   "floor_mrad": 0.42649881850415566,
+   "link_mrad": 0.6526147001560926,
+   "ratio": 1.0225587268699483,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 48.0,
+   "b_true_rad": 0.002093650536656875,
+   "b_hat_rad": 0.002069584987791931,
+   "live_x_floor": 1.529397633858707,
+   "floor_mrad": 0.4225205914898606,
+   "link_mrad": 0.6462019928811741,
+   "ratio": 1.0220441430800642,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 60.0,
+   "b_true_rad": 0.0021106779675061403,
+   "b_hat_rad": 0.002093123210255912,
+   "live_x_floor": 1.5641129151517674,
+   "floor_mrad": 0.42573004326734115,
+   "link_mrad": 0.665889859042569,
+   "ratio": 1.0452431785273932,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 72.0,
+   "b_true_rad": 0.0021280066685504546,
+   "b_hat_rad": 0.00210266416471383,
+   "live_x_floor": 1.555767407963824,
+   "floor_mrad": 0.4283006168071977,
+   "link_mrad": 0.666336140439441,
+   "ratio": 1.0396661614367169,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 84.0,
+   "b_true_rad": 0.002153290391557262,
+   "b_hat_rad": 0.0021201372117150563,
+   "live_x_floor": 1.5917049395626608,
+   "floor_mrad": 0.42746285177346327,
+   "link_mrad": 0.6803947326473629,
+   "ratio": 1.0636819849702448,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 96.0,
+   "b_true_rad": 0.0021760335047599855,
+   "b_hat_rad": 0.002158644632678147,
+   "live_x_floor": 1.6314871212423512,
+   "floor_mrad": 0.425270677925782,
+   "link_mrad": 0.6938236340779171,
+   "ratio": 1.0902670566903379,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 108.0,
+   "b_true_rad": 0.0021991599362898464,
+   "b_hat_rad": 0.0021772335992953917,
+   "live_x_floor": 1.6205166189180822,
+   "floor_mrad": 0.42201337454728083,
+   "link_mrad": 0.6838796868595698,
+   "ratio": 1.0829358451081177,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 120.0,
+   "b_true_rad": 0.0022297892022256722,
+   "b_hat_rad": 0.002224823485063143,
+   "live_x_floor": 1.668743377480489,
+   "floor_mrad": 0.4220481498407427,
+   "link_mrad": 0.7042900550246324,
+   "ratio": 1.1151641388083535,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 132.0,
+   "b_true_rad": 0.0022460923982598304,
+   "b_hat_rad": 0.002229382673799289,
+   "live_x_floor": 1.668557731285274,
+   "floor_mrad": 0.4255402204881015,
+   "link_mrad": 0.7100384248682619,
+   "ratio": 1.115040077804005,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 144.0,
+   "b_true_rad": 0.002261049842931708,
+   "b_hat_rad": 0.0022507159190041787,
+   "live_x_floor": 1.6857462349230965,
+   "floor_mrad": 0.42887164518915283,
+   "link_mrad": 0.7229687611428884,
+   "ratio": 1.1265265670481552,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 156.0,
+   "b_true_rad": 0.0022879449193326062,
+   "b_hat_rad": 0.002267772882141833,
+   "live_x_floor": 1.7167583288815045,
+   "floor_mrad": 0.4267942889784723,
+   "link_mrad": 0.732702650322852,
+   "ratio": 1.1472508890250832,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 168.0,
+   "b_true_rad": 0.0023116299549813786,
+   "b_hat_rad": 0.0022970842740703823,
+   "live_x_floor": 1.7579224137636604,
+   "floor_mrad": 0.4222800252521139,
+   "link_mrad": 0.7423355212753755,
+   "ratio": 1.1747594394031236,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 180.0,
+   "b_true_rad": 0.0023224439454109643,
+   "b_hat_rad": 0.002311395162369889,
+   "live_x_floor": 1.7828178498009863,
+   "floor_mrad": 0.42457906585655575,
+   "link_mrad": 0.7569471372608961,
+   "ratio": 1.1913962080420137,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 192.0,
+   "b_true_rad": 0.0023552142223030263,
+   "b_hat_rad": 0.0023482113767231277,
+   "live_x_floor": 1.8145622172600764,
+   "floor_mrad": 0.4247750528453157,
+   "link_mrad": 0.7707807617277621,
+   "ratio": 1.2126098833603722,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 204.0,
+   "b_true_rad": 0.00237597366613188,
+   "b_hat_rad": 0.0023616351547506714,
+   "live_x_floor": 1.8309524184294597,
+   "floor_mrad": 0.4278262182704172,
+   "link_mrad": 0.7833294490097503,
+   "ratio": 1.2235628943617087,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 216.0,
+   "b_true_rad": 0.002389444096544219,
+   "b_hat_rad": 0.002381623950552733,
+   "live_x_floor": 1.853205173481932,
+   "floor_mrad": 0.41882900005532264,
+   "link_mrad": 0.7761760697067882,
+   "ratio": 1.2384336496612265,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 228.0,
+   "b_true_rad": 0.0024079153879622197,
+   "b_hat_rad": 0.00239819995066215,
+   "live_x_floor": 1.833558183255349,
+   "floor_mrad": 0.42657857487316564,
+   "link_mrad": 0.7821566367600975,
+   "ratio": 1.2253042378943417,
+   "status": "ok",
+   "message": ""
+  },
+  {
+   "h": 240.0,
+   "b_true_rad": 0.0024325630978009375,
+   "b_hat_rad": 0.0024196825304596548,
+   "live_x_floor": 1.9042384247607742,
+   "floor_mrad": 0.4287293839671472,
+   "link_mrad": 0.8164029667742576,
+   "ratio": 1.2725374264797362,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 252.0,
+   "b_true_rad": 0.002456067399850534,
+   "b_hat_rad": 0.0024426474572362897,
+   "live_x_floor": 1.9336579553408377,
+   "floor_mrad": 0.4247056645449624,
+   "link_mrad": 0.8212354869256837,
+   "ratio": 1.292197492806409,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 264.0,
+   "b_true_rad": 0.002482181972821054,
+   "b_hat_rad": 0.0024673056105823654,
+   "live_x_floor": 1.935283962052144,
+   "floor_mrad": 0.43103777046726083,
+   "link_mrad": 0.8341804842240033,
+   "ratio": 1.2932840974925341,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 276.0,
+   "b_true_rad": 0.002487798279120472,
+   "b_hat_rad": 0.0024715749190672986,
+   "live_x_floor": 1.9871678729909772,
+   "floor_mrad": 0.4248835591364421,
+   "link_mrad": 0.8443149584779998,
+   "ratio": 1.3279563410746902,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 288.0,
+   "b_true_rad": 0.002522809618053562,
+   "b_hat_rad": 0.00249587486194372,
+   "live_x_floor": 2.026382204898015,
+   "floor_mrad": 0.4176179023692331,
+   "link_mrad": 0.8462534858078504,
+   "ratio": 1.3541619382085537,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 300.0,
+   "b_true_rad": 0.002566566985602193,
+   "b_hat_rad": 0.0025553567772495095,
+   "live_x_floor": 2.0822158376564883,
+   "floor_mrad": 0.4221076963155787,
+   "link_mrad": 0.8789193304649934,
+   "ratio": 1.391473645827524,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 312.0,
+   "b_true_rad": 0.002548583414789803,
+   "b_hat_rad": 0.0025300650596695173,
+   "live_x_floor": 2.0240434348069756,
+   "floor_mrad": 0.4266417709209586,
+   "link_mrad": 0.8635414754469879,
+   "ratio": 1.3525990181277068,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 324.0,
+   "b_true_rad": 0.0025769951627272578,
+   "b_hat_rad": 0.002570167082333291,
+   "live_x_floor": 2.045880061171649,
+   "floor_mrad": 0.4297609602582688,
+   "link_mrad": 0.8792393796623735,
+   "ratio": 1.3671916888541114,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 336.0,
+   "b_true_rad": 0.002579604489366051,
+   "b_hat_rad": 0.002555243647737515,
+   "live_x_floor": 2.083235448011317,
+   "floor_mrad": 0.4267673368294348,
+   "link_mrad": 0.8890568441364642,
+   "ratio": 1.3921550165634962,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 348.0,
+   "b_true_rad": 0.0026281944086192994,
+   "b_hat_rad": 0.002601917084120664,
+   "live_x_floor": 2.1560276129597464,
+   "floor_mrad": 0.42265043436968847,
+   "link_mrad": 0.9112460071304794,
+   "ratio": 1.4407995313715618,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 360.0,
+   "b_true_rad": 0.00265740111996987,
+   "b_hat_rad": 0.002640930677497988,
+   "live_x_floor": 2.1831983008829705,
+   "floor_mrad": 0.4223683279278636,
+   "link_mrad": 0.9221138158788932,
+   "ratio": 1.4589567730467197,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 372.0,
+   "b_true_rad": 0.002671827368113705,
+   "b_hat_rad": 0.0026537579911893733,
+   "live_x_floor": 2.1760003474727534,
+   "floor_mrad": 0.4266555907397063,
+   "link_mrad": 0.9284027137007939,
+   "ratio": 1.4541466269066903,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 384.0,
+   "b_true_rad": 0.0026861056740558296,
+   "b_hat_rad": 0.00266754137253844,
+   "live_x_floor": 2.2224149478683866,
+   "floor_mrad": 0.4256622291253771,
+   "link_mrad": 0.9459981007512162,
+   "ratio": 1.4851639172683027,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 396.0,
+   "b_true_rad": 0.002711519954089077,
+   "b_hat_rad": 0.0026952751338550907,
+   "live_x_floor": 2.2467749790235048,
+   "floor_mrad": 0.4233984026871468,
+   "link_mrad": 0.9512809373159996,
+   "ratio": 1.5014428931318398,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 408.0,
+   "b_true_rad": 0.002748564234187483,
+   "b_hat_rad": 0.0027446035556770165,
+   "live_x_floor": 2.3070352599080572,
+   "floor_mrad": 0.4262961657228175,
+   "link_mrad": 0.9834802854861485,
+   "ratio": 1.5417127783303846,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 420.0,
+   "b_true_rad": 0.0027497937102762882,
+   "b_hat_rad": 0.0027277789530764374,
+   "live_x_floor": 2.308127645376908,
+   "floor_mrad": 0.4247945197390493,
+   "link_mrad": 0.9804799746143064,
+   "ratio": 1.542442782186614,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 432.0,
+   "b_true_rad": 0.0027648555572396746,
+   "b_hat_rad": 0.002742348313171189,
+   "live_x_floor": 2.343017733178842,
+   "floor_mrad": 0.4246759003926244,
+   "link_mrad": 0.9950231654736106,
+   "ratio": 1.5657586348465575,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 444.0,
+   "b_true_rad": 0.002786440678495687,
+   "b_hat_rad": 0.0027600691388754706,
+   "live_x_floor": 2.361124195693016,
+   "floor_mrad": 0.42963770383142263,
+   "link_mrad": 1.014427977898362,
+   "ratio": 1.5778585646194445,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 456.0,
+   "b_true_rad": 0.0028349151084695397,
+   "b_hat_rad": 0.002816135281214674,
+   "live_x_floor": 2.451819855516788,
+   "floor_mrad": 0.4269849840801642,
+   "link_mrad": 1.0468902619752662,
+   "ratio": 1.638467372867563,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 468.0,
+   "b_true_rad": 0.0028439588026358464,
+   "b_hat_rad": 0.0028349666388840927,
+   "live_x_floor": 2.454140008338283,
+   "floor_mrad": 0.4233731955206037,
+   "link_mrad": 1.03901709758514,
+   "ratio": 1.6400178516637651,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  },
+  {
+   "h": 480.0,
+   "b_true_rad": 0.002873743025595886,
+   "b_hat_rad": 0.0028428322573038622,
+   "live_x_floor": 2.5351400727839284,
+   "floor_mrad": 0.42316664295856055,
+   "link_mrad": 1.0727867140296958,
+   "ratio": 1.6941474250480977,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
+  }
+ ],
+ "detector_alarm_h": 240.0,
+ "actual_crossing_h": 234.2741719147781,
+ "rate_recovered": 1.8798454553536437e-06,
+ "rate_ci95": [
+  1.7185062703276326e-06,
+  2.041184640379655e-06
+ ],
+ "b0_recovered_rad": 0.001978938698034221,
+ "rate_true": 1.8e-06,
+ "b0_true_rad": 0.002,
+ "predicted_at_h": 168.0,
+ "predicted_crossing_h": 262.22659477321685,
+ "remaining_h_at_prediction": 94.22659477321679,
+ "gap_at_threshold_rad": 0.0024718841704915143,
+ "curve": [
+  {
+   "backlash_rad": 0.001978938698034221,
+   "ratio": 1.0223818832110665
+  },
+  {
+   "backlash_rad": 0.002178938698034221,
+   "ratio": 1.055563714461701
+  },
+  {
+   "backlash_rad": 0.0023789386980342213,
+   "ratio": 1.1593857802271652
+  },
+  {
+   "backlash_rad": 0.002578938698034221,
+   "ratio": 1.3543693923971298
+  },
+  {
+   "backlash_rad": 0.002778938698034221,
+   "ratio": 1.4883915266125964
+  },
+  {
+   "backlash_rad": 0.002978938698034221,
+   "ratio": 1.6607368567003649
+  },
+  {
+   "backlash_rad": 0.003178938698034221,
+   "ratio": 1.9192366131400407
+  },
+  {
+   "backlash_rad": 0.0033789386980342213,
+   "ratio": 2.1733597843442216
+  },
+  {
+   "backlash_rad": 0.003578938698034221,
+   "ratio": 2.372193439989037
+  },
+  {
+   "backlash_rad": 0.0037789386980342215,
+   "ratio": 2.5569822281054493
+  },
+  {
+   "backlash_rad": 0.003978938698034221,
+   "ratio": 2.7898451488202216
+  }
+ ],
+ "card_trend_remaining_h": 96.48192027470463,
+ "card_trend_unit": "h",
+ "recalibrated": {
+  "h": 240.0,
+  "backlash_rad": 0.0024196825304596548,
+  "live_x_floor": 1.4431394496401084,
+  "ratio": 0.9644007480455689,
+  "status": "ok"
+ },
+ "wear": {
+  "card": "servo",
+  "rung": "M5.wear",
+  "parameter": "backlash_rad",
+  "usage": "torque-weighted output revolutions",
+  "unit": "N\u00b7m\u00b7rev",
+  "law": "archard",
+  "rate": "backlash_wear_rad_per_nm_rev",
+  "duty_nm_rev_per_h": 189.9436123876341,
+  "rate_recovered_per_nm_rev": 9.896860608912098e-09,
+  "rate_true_per_nm_rev": 9.476496615882964e-09,
+  "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"
+ },
+ "provenance": {
+  "code": "782bd5e+dirty",
+  "seconds": 175.7,
+  "commissioned_twin": "19d8c27f",
+  "identify_sealed": true
+ }
+}

@@ -1,0 +1,1411 @@
+{
+ "title": "Two arms over the belt",
+ "subtitle": "2 x UR5e + 2F-85, humanoid mount, head camera",
+ "summary": "A humanoid-style sorting cell: two UR5e + 2F-85 mounted on the sides of a torso at shoulder height (each arm's base axis pointing outward), the conveyor from the conveyor example in front, and a D435-class colour camera in the head looking down at the belt. The arms come calibrated from the bench (the UR5e + 2F-85 example); this is the deployment calibration: where each arm is really mounted, and the head camera's intrinsics and pose, from tags on the grippers and on the belt.",
+ "description": {
+  "manifest": "sysid/examples/dual_arm_cell/description.json",
+  "model": {
+   "format": "mjcf-composed",
+   "source": "Menagerie ur5e + 2f85 (bam_arm.cell's attach) x 2, sysid's conveyor.xml, one MuJoCo camera",
+   "parts": [
+    {
+     "id": "conveyor",
+     "path": "sysid/examples/conveyor/conveyor.xml",
+     "prefix": "conv_"
+    },
+    {
+     "id": "left_arm",
+     "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",
+     "prefix": "left_"
+    },
+    {
+     "id": "right_arm",
+     "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",
+     "prefix": "right_"
+    }
+   ],
+   "cameras": [
+    {
+     "name": "head_camera",
+     "pos": [
+      0.1,
+      0.0,
+      1.55
+     ],
+     "look_at": [
+      0.55,
+      0.0,
+      0.72
+     ],
+     "fovy_deg": 42.5,
+     "resolution": [
+      640,
+      480
+     ],
+     "source": "a D435 colour stream at 640 x 480 (intel_rgbd's sensor contract), as a MuJoCo fovy camera"
+    }
+   ]
+  },
+  "sensors": [
+   {
+    "id": "head_camera",
+    "kind": "camera",
+    "on": "head_camera",
+    "measures": "tag corner pixels (ArUco detections)"
+   },
+   {
+    "id": "arm_encoders",
+    "kind": "joint_state",
+    "on": "both arms",
+    "measures": "joint angles (bench-calibrated)"
+   },
+   {
+    "id": "belt_encoder",
+    "kind": "joint_state",
+    "on": "conv_drive_roller",
+    "measures": "belt travel (calibrated radius)"
+   }
+  ],
+  "known": {
+   "note": "the arms' joint zeros and TCPs (bench-calibrated, the UR5e + 2F-85 example), the conveyor's radius (the conveyor example) and the tags' printed geometry",
+   "pose_correction": "a pose correction is a world-frame translation (dx, dy, dz) and rotation vector (rx, ry, rz) applied to the drawn pose: R = exp([r]) R_drawn",
+   "gripper_tag": {
+    "size_m": 0.04,
+    "offset_m": [
+     0.0,
+     0.0,
+     0.07
+    ],
+    "note": "a 40 mm tag on the gripper body, 70 mm out along the tool axis, facing the tool's +x"
+   },
+   "belt_tags": {
+    "size_m": 0.06,
+    "positions_m": [
+     [
+      -0.6,
+      -0.12
+     ],
+     [
+      -0.3,
+      0.1
+     ],
+     [
+      0.0,
+      -0.05
+     ],
+     [
+      0.3,
+      0.12
+     ],
+     [
+      0.6,
+      -0.1
+     ],
+     [
+      0.45,
+      0.0
+     ]
+    ],
+    "note": "tags printed on the belt (belt frame: x along travel, y across)"
+   }
+  },
+  "components": 6
+ },
+ "tree": [
+  {
+   "id": "cell",
+   "title": "dual-arm sorting cell",
+   "word": "deployment",
+   "type": "deployment",
+   "type_title": "Deployment",
+   "group": "structure",
+   "type_source": "structural",
+   "parent": null,
+   "depth": 0,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "torso",
+   "title": "torso (the two shoulder mounts and the head)",
+   "word": "mount",
+   "type": "mount",
+   "type_title": "Mount",
+   "group": "structure",
+   "type_source": "structural",
+   "parent": "cell",
+   "depth": 1,
+   "binds": {
+    "body": "torso"
+   },
+   "parameters": []
+  },
+  {
+   "id": "left_arm",
+   "title": "left UR5e + 2F-85",
+   "word": "arm + gripper",
+   "type": "arm_6dof_gripper",
+   "type_title": "6-DOF arm + gripper",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "torso",
+   "depth": 2,
+   "binds": {
+    "base_body": "left_base",
+    "marker_body": "left_grip_base"
+   },
+   "parameters": [
+    "left_mount.dx_m",
+    "left_mount.dy_m",
+    "left_mount.dz_m",
+    "left_mount.rx_rad",
+    "left_mount.ry_rad",
+    "left_mount.rz_rad"
+   ]
+  },
+  {
+   "id": "right_arm",
+   "title": "right UR5e + 2F-85",
+   "word": "arm + gripper",
+   "type": "arm_6dof_gripper",
+   "type_title": "6-DOF arm + gripper",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "torso",
+   "depth": 2,
+   "binds": {
+    "base_body": "right_base",
+    "marker_body": "right_grip_base"
+   },
+   "parameters": [
+    "right_mount.dx_m",
+    "right_mount.dy_m",
+    "right_mount.dz_m",
+    "right_mount.rx_rad",
+    "right_mount.ry_rad",
+    "right_mount.rz_rad"
+   ]
+  },
+  {
+   "id": "head_camera",
+   "title": "head camera (D435-class colour, 640 x 480)",
+   "word": "rgb camera",
+   "type": "camera_rgb",
+   "type_title": "RGB camera",
+   "group": "sensor",
+   "type_source": "type_cards",
+   "parent": "torso",
+   "depth": 2,
+   "binds": {
+    "camera": "head_camera"
+   },
+   "parameters": [
+    "head_camera.dx_m",
+    "head_camera.dy_m",
+    "head_camera.dz_m",
+    "head_camera.rx_rad",
+    "head_camera.ry_rad",
+    "head_camera.rz_rad",
+    "head_camera.fx_px",
+    "head_camera.fy_px",
+    "head_camera.cx_px",
+    "head_camera.cy_px"
+   ]
+  },
+  {
+   "id": "conveyor",
+   "title": "belt conveyor (calibrated in the conveyor example)",
+   "word": "conveyor belt",
+   "type": "conveyor",
+   "type_title": "Conveyor belt",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "cell",
+   "depth": 1,
+   "binds": {
+    "joint": "conv_belt"
+   },
+   "parameters": []
+  }
+ ],
+ "schedule": {
+  "train": {
+   "views": 92,
+   "arm_poses": 60,
+   "belt_travels": 10
+  },
+  "held_out": {
+   "views": 48,
+   "arm_poses": 30,
+   "belt_travels": 6,
+   "picks": 40
+  },
+  "coverage": {
+   "train": {
+    "pct": 52.08,
+    "visited": 75,
+    "reachable": 144,
+    "samples": 382,
+    "axes": {
+     "image cells (8 x 6)": 87.5
+    },
+    "unplanned": [
+     "illumination",
+     "material",
+     "exposure"
+    ]
+   },
+   "held_out": {
+    "pct": 40.97,
+    "visited": 59,
+    "reachable": 144,
+    "samples": 217,
+    "axes": {
+     "image cells (8 x 6)": 85.42
+    },
+    "unplanned": [
+     "illumination",
+     "material",
+     "exposure"
+    ]
+   },
+   "function": "sysid adapter: the corners' image cells (8 x 6) x depth bands (< 0.8, 0.8-1.1, > 1.1 m)",
+   "rule": "share of the 144 (image cell, depth band) cells the planned tag corners fall in; the camera card's scene conditions other than distance are not planned"
+  }
+ },
+ "parameters": [
+  {
+   "key": "left_mount.dx_m",
+   "component": "left_mount",
+   "name": "dx_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's left mount pose (a correction of 0 = as drawn)",
+   "true": 0.004,
+   "recovered": 0.004361138592291797,
+   "ci95": [
+    0.003279116642445742,
+    0.005443160542137852
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "left_mount.dy_m",
+   "component": "left_mount",
+   "name": "dy_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's left mount pose (a correction of 0 = as drawn)",
+   "true": -0.006,
+   "recovered": -0.006284703527202472,
+   "ci95": [
+    -0.007187710250533448,
+    -0.0053816968038714955
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "left_mount.dz_m",
+   "component": "left_mount",
+   "name": "dz_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's left mount pose (a correction of 0 = as drawn)",
+   "true": 0.003,
+   "recovered": 0.003281007849821727,
+   "ci95": [
+    0.0020120524219789304,
+    0.004549963277664524
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "left_mount.rx_rad",
+   "component": "left_mount",
+   "name": "rx_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's left mount pose (a correction of 0 = as drawn)",
+   "true": 0.012,
+   "recovered": 0.012011394546092787,
+   "ci95": [
+    0.010965071985315147,
+    0.013057717106870427
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "left_mount.ry_rad",
+   "component": "left_mount",
+   "name": "ry_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's left mount pose (a correction of 0 = as drawn)",
+   "true": -0.009,
+   "recovered": -0.008351293670279822,
+   "ci95": [
+    -0.010283296887970427,
+    -0.006419290452589217
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "left_mount.rz_rad",
+   "component": "left_mount",
+   "name": "rz_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's left mount pose (a correction of 0 = as drawn)",
+   "true": 0.015,
+   "recovered": 0.015389253461275626,
+   "ci95": [
+    0.014775736000312565,
+    0.016002770922238688
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "right_mount.dx_m",
+   "component": "right_mount",
+   "name": "dx_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's right mount pose (a correction of 0 = as drawn)",
+   "true": -0.005,
+   "recovered": -0.004502003507721449,
+   "ci95": [
+    -0.005569741584585605,
+    -0.003434265430857293
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "right_mount.dy_m",
+   "component": "right_mount",
+   "name": "dy_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's right mount pose (a correction of 0 = as drawn)",
+   "true": 0.004,
+   "recovered": 0.003793661113253864,
+   "ci95": [
+    0.0028854804955196706,
+    0.004701841730988057
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "right_mount.dz_m",
+   "component": "right_mount",
+   "name": "dz_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's right mount pose (a correction of 0 = as drawn)",
+   "true": -0.002,
+   "recovered": -0.0015958973343763538,
+   "ci95": [
+    -0.00291820773754955,
+    -0.0002735869312031579
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "right_mount.rx_rad",
+   "component": "right_mount",
+   "name": "rx_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's right mount pose (a correction of 0 = as drawn)",
+   "true": -0.01,
+   "recovered": -0.009809656408156378,
+   "ci95": [
+    -0.010856906933748564,
+    -0.008762405882564193
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "right_mount.ry_rad",
+   "component": "right_mount",
+   "name": "ry_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's right mount pose (a correction of 0 = as drawn)",
+   "true": 0.014,
+   "recovered": 0.014824122636670996,
+   "ci95": [
+    0.012890747616290893,
+    0.016757497657051097
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "right_mount.rz_rad",
+   "component": "right_mount",
+   "name": "rz_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's right mount pose (a correction of 0 = as drawn)",
+   "true": -0.008,
+   "recovered": -0.007918056899558518,
+   "ci95": [
+    -0.008572909723063042,
+    -0.0072632040760539935
+   ],
+   "rung": "M0",
+   "card": "arm_6dof",
+   "card_parameter": "base_frame",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.001
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.dx_m",
+   "component": "head_camera",
+   "name": "dx_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's head camera pose (a correction of 0 = as drawn)",
+   "true": 0.012,
+   "recovered": 0.012683042424451495,
+   "ci95": [
+    0.011102391833231964,
+    0.014263693015671026
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.dy_m",
+   "component": "head_camera",
+   "name": "dy_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's head camera pose (a correction of 0 = as drawn)",
+   "true": -0.008,
+   "recovered": -0.008228066192979175,
+   "ci95": [
+    -0.009340729158684861,
+    -0.00711540322727349
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.dz_m",
+   "component": "head_camera",
+   "name": "dz_m",
+   "unit": "m",
+   "nominal": 0.0,
+   "nominal_source": "the description's head camera pose (a correction of 0 = as drawn)",
+   "true": 0.006,
+   "recovered": 0.006308454928771378,
+   "ci95": [
+    0.005082087712807035,
+    0.007534822144735722
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.rx_rad",
+   "component": "head_camera",
+   "name": "rx_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's head camera pose (a correction of 0 = as drawn)",
+   "true": 0.02,
+   "recovered": 0.01931449130928161,
+   "ci95": [
+    0.01838565894655577,
+    0.02024332367200745
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.ry_rad",
+   "component": "head_camera",
+   "name": "ry_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's head camera pose (a correction of 0 = as drawn)",
+   "true": -0.015,
+   "recovered": -0.01428473624569809,
+   "ci95": [
+    -0.016522686840515735,
+    -0.012046785650880444
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.rz_rad",
+   "component": "head_camera",
+   "name": "rz_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "the description's head camera pose (a correction of 0 = as drawn)",
+   "true": 0.01,
+   "recovered": 0.009750919918802893,
+   "ci95": [
+    0.009244465907713646,
+    0.010257373929892141
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "extrinsics",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.002
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.fx_px",
+   "component": "head_camera",
+   "name": "fx_px",
+   "unit": "px",
+   "nominal": 617.1589761579678,
+   "nominal_source": "camera head_camera: fovy 42.5 deg at 640 x 480 (fx)",
+   "true": 629.502,
+   "recovered": 629.6202313504122,
+   "ci95": [
+    629.0955079628194,
+    630.1449547380049
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "fx_fy",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.fy_px",
+   "component": "head_camera",
+   "name": "fy_px",
+   "unit": "px",
+   "nominal": 617.1589761579678,
+   "nominal_source": "camera head_camera: fovy 42.5 deg at 640 x 480 (fy)",
+   "true": 628.268,
+   "recovered": 628.2767858526565,
+   "ci95": [
+    627.755635082033,
+    628.7979366232801
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "fx_fy",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.cx_px",
+   "component": "head_camera",
+   "name": "cx_px",
+   "unit": "px",
+   "nominal": 320.0,
+   "nominal_source": "camera head_camera: fovy 42.5 deg at 640 x 480 (cx)",
+   "true": 326.0,
+   "recovered": 326.59888761973394,
+   "ci95": [
+    325.88462422876864,
+    327.31315101069924
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "cx_cy",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "head_camera.cy_px",
+   "component": "head_camera",
+   "name": "cy_px",
+   "unit": "px",
+   "nominal": 240.0,
+   "nominal_source": "camera head_camera: fovy 42.5 deg at 640 x 480 (cy)",
+   "true": 235.0,
+   "recovered": 234.91467117200847,
+   "ci95": [
+    234.00012517115556,
+    235.82921717286138
+   ],
+   "rung": "M0",
+   "card": "camera_rgb",
+   "card_parameter": "cx_cy",
+   "on_card": true,
+   "fit_step": "bundle adjustment",
+   "method": "Levenberg-Marquardt on 368 corner pixels (60 gripper views, 32 belt tags), 22 parameters; 95 % from the Jacobian",
+   "tolerance": {
+    "kind": "abs",
+    "value": 2.0
+   },
+   "pass": true,
+   "nominal_pass": false
+  }
+ ],
+ "metrics": [
+  {
+   "id": "held_out_reprojection_px",
+   "title": "Tag corners, twin vs detected (held-out views)",
+   "unit": "px",
+   "split": "held_out",
+   "before": 16.259554124618433,
+   "after": 0.3035955412879105,
+   "factor": 53.55663016539138,
+   "factor_needed": 5.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "corner detection noise 0.3 px is the floor"
+  },
+  {
+   "id": "held_out_pick_point_mm",
+   "title": "A belt point the camera sees, in each arm's base frame",
+   "unit": "mm",
+   "split": "held_out",
+   "before": 35.74532510124011,
+   "after": 0.6480282795570603,
+   "factor": 55.16013147709036,
+   "factor_needed": 4.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "fitted",
+   "note": "40 held-out belt points x 2 arms"
+  }
+ ],
+ "models": [
+  {
+   "model": "nominal",
+   "reprojection_px": 16.259554124618433,
+   "pick_mm": 35.74532510124011
+  },
+  {
+   "model": "fitted",
+   "reprojection_px": 0.3035955412879105,
+   "pick_mm": 0.6480282795570603
+  }
+ ],
+ "card_ladders": [
+  {
+   "card": "arm_6dof",
+   "title": "6-DOF robot arm",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Nominal kinematics (URDF / DH)",
+     "kind": "physics",
+     "n_parameters": 2,
+     "parameters": [
+      "base_frame",
+      "tool_frame"
+     ],
+     "equation": "tool = base \u00b7 FK(q; nominal DH) \u00b7 tool frame",
+     "current": false,
+     "references": [
+      {
+       "title": "Denavit, Hartenberg (1955). A kinematic notation for lower-pair mechanisms based on matrices. Journal of Applied Mechanics.",
+       "doi": "10.1115/1.4011045",
+       "url": "https://doi.org/10.1115/1.4011045"
+      },
+      {
+       "title": "Universal Robots (2026). DH parameters for calculations of kinematics and dynamics.",
+       "doi": "",
+       "url": "https://www.universal-robots.com/articles/ur/application-installation/dh-parameters-for-calculations-of-kinematics-and-dynamics/"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "base_frame",
+      "tool_frame"
+     ],
+     "identified": [
+      "left_mount.dx_m",
+      "left_mount.dy_m",
+      "left_mount.dz_m",
+      "left_mount.rx_rad",
+      "left_mount.ry_rad",
+      "left_mount.rz_rad",
+      "right_mount.dx_m",
+      "right_mount.dy_m",
+      "right_mount.dz_m",
+      "right_mount.rx_rad",
+      "right_mount.ry_rad",
+      "right_mount.rz_rad"
+     ]
+    },
+    {
+     "key": "M1",
+     "name": "+ joint zero offsets",
+     "kind": "physics",
+     "n_parameters": 3,
+     "parameters": [
+      "base_frame",
+      "tool_frame",
+      "joint_zero_offsets"
+     ],
+     "equation": "FK(q + \u03b4q)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hollerbach, Wampler (1996). The calibration index and taxonomy for robot kinematic calibration methods. The International Journal of Robotics Research.",
+       "doi": "10.1177/027836499601500604",
+       "url": "https://doi.org/10.1177/027836499601500604"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "joint_zero_offsets"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M2",
+     "name": "+ geometric (DH) errors",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "base_frame",
+      "tool_frame",
+      "joint_zero_offsets",
+      "dh_errors"
+     ],
+     "equation": "FK(q + \u03b4q; DH + \u03b4DH)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hayati (1983). Robot arm geometric link parameter estimation. The 22nd IEEE Conference on Decision and Control.",
+       "doi": "10.1109/CDC.1983.269783",
+       "url": "https://doi.org/10.1109/CDC.1983.269783"
+      },
+      {
+       "title": "Okamura, Park (1996). Kinematic calibration using the product of exponentials formula. Robotica.",
+       "doi": "10.1017/S0263574700019810",
+       "url": "https://doi.org/10.1017/S0263574700019810"
+      },
+      {
+       "title": "Hollerbach, Khalil, Gautier (2016). Model identification. In Springer Handbook of Robotics, 2nd ed. Springer.",
+       "doi": "10.1007/978-3-319-32552-1_6",
+       "url": "https://doi.org/10.1007/978-3-319-32552-1_6"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "dh_errors"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3",
+     "name": "+ joint compliance and link inertials (today's model)",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "dh_errors",
+      "joint_zero_offsets",
+      "joint_compliance",
+      "base_frame",
+      "tool_frame",
+      "link_inertials"
+     ],
+     "equation": "tool = FK(q + \u03b4q; DH + \u03b4DH) \u00b7 tool frame; joints are servo twins",
+     "current": true,
+     "references": [
+      {
+       "title": "Spong (1987). Modeling and control of elastic joint robots. Journal of Dynamic Systems, Measurement, and Control.",
+       "doi": "10.1115/1.3143860",
+       "url": "https://doi.org/10.1115/1.3143860"
+      },
+      {
+       "title": "Atkeson, An, Hollerbach (1986). Estimation of inertial parameters of manipulator loads and links. The International Journal of Robotics Research.",
+       "doi": "10.1177/027836498600500306",
+       "url": "https://doi.org/10.1177/027836498600500306"
+      },
+      {
+       "title": "Gautier, Khalil (1990). Direct calculation of minimum set of inertial parameters of serial robots. IEEE Transactions on Robotics and Automation.",
+       "doi": "10.1109/70.56655",
+       "url": "https://doi.org/10.1109/70.56655"
+      },
+      {
+       "title": "Swevers, Ganseman, T\u00fckel, De Schutter, Van Brussel (1997). Optimal robot excitation and identification. IEEE Transactions on Robotics and Automation.",
+       "doi": "10.1109/70.631234",
+       "url": "https://doi.org/10.1109/70.631234"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [
+      "joint_compliance",
+      "link_inertials"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3.wear",
+     "name": "+ joint compliance that grows with use (Archard)",
+     "kind": "physics",
+     "n_parameters": 7,
+     "parameters": [
+      "dh_errors",
+      "joint_zero_offsets",
+      "joint_compliance",
+      "base_frame",
+      "tool_frame",
+      "link_inertials",
+      "compliance_wear_per_nm_rev"
+     ],
+     "equation": "c(u) = c0 + k\u00b7\u03a3|\u03c4|\u00b7\u0394rev",
+     "current": false,
+     "references": [
+      {
+       "title": "Archard (1953). Contact and rubbing of flat surfaces. Journal of Applied Physics.",
+       "doi": "10.1063/1.1721448",
+       "url": "https://doi.org/10.1063/1.1721448"
+      },
+      {
+       "title": "Flodin, Andersson (1997). Simulation of mild wear in spur gears. Wear.",
+       "doi": "10.1016/S0043-1648(96)07467-4",
+       "url": "https://doi.org/10.1016/S0043-1648(96)07467-4"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "joint_compliance",
+       "usage": "torque-weighted joint revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "compliance_wear_per_nm_rev"
+      }
+     ],
+     "card": "arm_6dof",
+     "added": [
+      "compliance_wear_per_nm_rev"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M3.wear",
+     "kind": "residual",
+     "n_parameters": 8077,
+     "parameters": [
+      "dh_errors",
+      "joint_zero_offsets",
+      "joint_compliance",
+      "base_frame",
+      "tool_frame",
+      "link_inertials",
+      "compliance_wear_per_nm_rev"
+     ],
+     "equation": "M3.wear + MLP residual (residual joint torques (N\u00b7m)) from 3 samples of joint 1 error, joint 2 error, joint 3 error, joint 4 error, joint 5 error, joint 6 error, joint 1 speed, joint 2 speed, joint 3 speed, joint 4 speed, joint 5 speed, joint 6 speed, joint 1 torque, joint 2 torque, joint 3 torque, joint 4 torque, joint 5 torque, joint 6 torque",
+     "current": false,
+     "references": [
+      {
+       "title": "Nguyen-Tuong, Peters (2010). Using model knowledge for learning inverse dynamics. IEEE International Conference on Robotics and Automation.",
+       "doi": "10.1109/ROBOT.2010.5509858",
+       "url": "https://doi.org/10.1109/ROBOT.2010.5509858"
+      },
+      {
+       "title": "Zeng, Song, Lee, Rodriguez, Funkhouser (2020). TossingBot: learning to throw arbitrary objects with residual physics. IEEE Transactions on Robotics.",
+       "doi": "10.1109/TRO.2020.2988642",
+       "url": "https://doi.org/10.1109/TRO.2020.2988642"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "joint_compliance",
+       "usage": "torque-weighted joint revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "compliance_wear_per_nm_rev"
+      }
+     ],
+     "card": "arm_6dof",
+     "added": [],
+     "identified": []
+    },
+    {
+     "key": "M7",
+     "name": "Arm network (black box)",
+     "kind": "learned",
+     "n_parameters": 11078,
+     "parameters": [],
+     "equation": "MLP over 3 samples of joint 1 error, joint 2 error, joint 3 error, joint 4 error, joint 5 error, joint 6 error, joint 1 speed, joint 2 speed, joint 3 speed, joint 4 speed, joint 5 speed, joint 6 speed \u2192 joint torques (N\u00b7m)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. Science Robotics.",
+       "doi": "10.1126/scirobotics.aau5872",
+       "url": "https://doi.org/10.1126/scirobotics.aau5872"
+      }
+     ],
+     "wear": [],
+     "card": "arm_6dof",
+     "added": [],
+     "identified": []
+    }
+   ]
+  },
+  {
+   "card": "camera_rgb",
+   "title": "RGB camera",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Pinhole",
+     "kind": "physics",
+     "n_parameters": 3,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "extrinsics"
+     ],
+     "equation": "p = K [R | t] X",
+     "current": false,
+     "references": [
+      {
+       "title": "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/34.888718",
+       "url": "https://doi.org/10.1109/34.888718"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "fx_fy",
+      "cx_cy",
+      "extrinsics"
+     ],
+     "identified": [
+      "head_camera.dx_m",
+      "head_camera.dy_m",
+      "head_camera.dz_m",
+      "head_camera.rx_rad",
+      "head_camera.ry_rad",
+      "head_camera.rz_rad",
+      "head_camera.fx_px",
+      "head_camera.fy_px",
+      "head_camera.cx_px",
+      "head_camera.cy_px"
+     ]
+    },
+    {
+     "key": "M1",
+     "name": "+ Brown-Conrady distortion",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "extrinsics",
+      "distortion"
+     ],
+     "equation": "radial (k1, k2, k3) and tangential (p1, p2) distortion",
+     "current": false,
+     "references": [
+      {
+       "title": "Brown (1966). Decentering distortion of lenses. Photogrammetric Engineering.",
+       "doi": "",
+       "url": ""
+      },
+      {
+       "title": "Heikkil\u00e4, Silv\u00e9n (1997). A four-step camera calibration procedure with implicit image correction. IEEE Conference on Computer Vision and Pattern Recognition.",
+       "doi": "10.1109/CVPR.1997.609468",
+       "url": "https://doi.org/10.1109/CVPR.1997.609468"
+      },
+      {
+       "title": "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/34.888718",
+       "url": "https://doi.org/10.1109/34.888718"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "distortion"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M2",
+     "name": "+ exposure response and latency (today's model)",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s"
+     ],
+     "equation": "p = K [R | t] X, distorted by (k1, k2, p1, p2, k3)",
+     "current": true,
+     "references": [
+      {
+       "title": "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+       "doi": "10.1109/34.888718",
+       "url": "https://doi.org/10.1109/34.888718"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "exposure_response",
+      "latency_s"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3",
+     "name": "Rolling shutter: + line delay",
+     "kind": "physics",
+     "n_parameters": 7,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s",
+      "line_delay_s"
+     ],
+     "equation": "row v exposed at t0 + v \u00b7 line_delay",
+     "current": false,
+     "references": [
+      {
+       "title": "Oth, Furgale, Kneip, Siegwart (2013). Rolling shutter camera calibration. IEEE Conference on Computer Vision and Pattern Recognition.",
+       "doi": "10.1109/CVPR.2013.179",
+       "url": "https://doi.org/10.1109/CVPR.2013.179"
+      },
+      {
+       "title": "Meingast, Geyer, Sastry (2005). Geometric models of rolling-shutter cameras. arXiv:cs/0503076.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/cs/0503076"
+      }
+     ],
+     "wear": [],
+     "card": "camera_rgb",
+     "added": [
+      "line_delay_s"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M3.wear",
+     "name": "+ a mount that loosens over vibration hours",
+     "kind": "physics",
+     "n_parameters": 8,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s",
+      "line_delay_s",
+      "extrinsic_drift_mm_per_sqrt_h"
+     ],
+     "equation": "pose offset(h) = e0 + k \u221ah",
+     "current": false,
+     "references": [
+      {
+       "title": "Junker (1969). New criteria for self-loosening of fasteners under vibration. SAE Technical Paper.",
+       "doi": "10.4271/690055",
+       "url": "https://doi.org/10.4271/690055"
+      },
+      {
+       "title": "Whitmore (1995). Estimating degradation by a Wiener diffusion process subject to measurement error. Lifetime Data Analysis.",
+       "doi": "10.1007/BF00985762",
+       "url": "https://doi.org/10.1007/BF00985762"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "extrinsics",
+       "usage": "vibration hours",
+       "unit": "h",
+       "law": "sqrt",
+       "rate": "extrinsic_drift_mm_per_sqrt_h"
+      }
+     ],
+     "card": "camera_rgb",
+     "added": [
+      "extrinsic_drift_mm_per_sqrt_h"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M3.wear",
+     "kind": "residual",
+     "n_parameters": 3008,
+     "parameters": [
+      "fx_fy",
+      "cx_cy",
+      "distortion",
+      "extrinsics",
+      "exposure_response",
+      "latency_s",
+      "line_delay_s",
+      "extrinsic_drift_mm_per_sqrt_h"
+     ],
+     "equation": "M3.wear + MLP residual (residual ray offset (px)) from 1 samples of pixel u, pixel v",
+     "current": false,
+     "references": [
+      {
+       "title": "Sch\u00f6ps, Larsson, Pollefeys, Sattler (2020). Why having 10,000 parameters in your camera model is better than twelve. IEEE/CVF Conference on Computer Vision and Pattern Recognition.",
+       "doi": "10.1109/CVPR42600.2020.00261",
+       "url": "https://doi.org/10.1109/CVPR42600.2020.00261"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "extrinsics",
+       "usage": "vibration hours",
+       "unit": "h",
+       "law": "sqrt",
+       "rate": "extrinsic_drift_mm_per_sqrt_h"
+      }
+     ],
+     "card": "camera_rgb",
+     "added": [],
+     "identified": []
+    }
+   ]
+  }
+ ],
+ "selected_rung": null,
+ "fit": {
+  "train_rms_px": 0.2914205916427813
+ },
+ "notes": [
+  "The arms' joint zeros and TCPs are the bench calibration's (the UR5e + 2F-85 example); the belt's travel is the conveyor example's.",
+  "The pixels are tag-corner detections simulated as projections plus 0.3 px noise, not rendered images (no detector in the loop)."
+ ],
+ "schema": "sysid.result/1",
+ "example": "dual_arm_cell",
+ "verdict": {
+  "parameters_pass": 22,
+  "parameters": 22,
+  "metrics_pass": 2,
+  "metrics": 2,
+  "failing": [],
+  "status": "pass"
+ },
+ "provenance": {
+  "identify_sealed": true,
+  "code": "782bd5e+dirty",
+  "seconds": 1.5
+ }
+}

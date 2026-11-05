@@ -270,16 +270,16 @@ def identify(description, measured: Measured) -> Fit:
         ci[f"hsi.gain_b{k:02d}"] = (float(coef[0] - half[0]), float(coef[0] + half[0]))
         ci[f"hsi.dark_b{k:02d}"] = (float(coef[1] - half[1]), float(coef[1] + half[1]))
 
-    world = np.vstack([w for w, _, _ in measured.rgbd])
+    points = np.vstack([w for w, _, _ in measured.rgbd])
     px = np.vstack([p for _, p, _ in measured.rgbd])
     depth = np.concatenate([d for _, _, d in measured.rgbd])
     sigma = stereo_sigma_m(np.maximum(depth, 0.1), nominal["rgbd.fx_px"], 0.08)
-    cam.check_against_stock(rgbd_pinhole(description, nominal), world[:5])
+    cam.check_against_stock(rgbd_pinhole(description, nominal), points[:5])
 
     def rgbd_residual(x):
         v = {**nominal, **dict(zip(RGBD, x))}
         pin = rgbd_pinhole(description, v)
-        pred, z = pin.project(world)
+        pred, z = pin.project(points)
         return np.concatenate([((pred - px) / 0.3).ravel(), (v["rgbd.depth_scale"] * z + v["rgbd.depth_offset_m"] - depth) / sigma])
 
     x0 = np.array([nominal[n] for n in RGBD])
@@ -289,7 +289,7 @@ def identify(description, measured: Measured) -> Fit:
     ci.update(ci_r)
     methods = {"geometry": f"Levenberg-Marquardt of the push-broom model on {len(dots)} dot crossings (pixel, belt travel) over {len(measured.line)} passes",
                "radiometry": f"per band, linear least squares of DN on the reference reflectance ({', '.join(refs)}; {REFERENCE_PIXELS} pixels each)",
-               "rgbd": f"Levenberg-Marquardt of {len(world)} dot pixels and depths ({len(measured.rgbd)} frames), depth weighted by intel_rgbd's stereo law"}
+               "rgbd": f"Levenberg-Marquardt of {len(points)} dot pixels and depths ({len(measured.rgbd)} frames), depth weighted by intel_rgbd's stereo law"}
     return Fit(values, ci, methods)
 
 

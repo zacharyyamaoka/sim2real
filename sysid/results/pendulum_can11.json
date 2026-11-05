@@ -1,0 +1,1801 @@
+{
+ "title": "One-DOF pendulum arm",
+ "subtitle": "CAN 11 on the One Dof Test Rack",
+ "summary": "The rack's JMC60 plate link: a JMC 60ASM200 + AD60-G10 10:1 gearmotor on a moteus r4.11, a pendulum link with ArUco tags 8-12 that a D405 watches. The model file is the station's twin of record as bam_rack_twin wrote it; the nominal values are the joint description bam_rack_twin.schedule builds CAN 11's test schedule from.",
+ "description": {
+  "manifest": "sysid/examples/pendulum_can11/description.json",
+  "model": {
+   "format": "mjcf",
+   "path": "/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/twin/scenes/can11_hinge__89b6fde5__dt2000.xml",
+   "source": "bam_rack_twin twin of record lugre-d-M1-e37b0e7d (followup A), the bare hinge bam_rack_twin.schedule build --replay wrote for CAN 11's schedule 581ffd3e",
+   "sha256": "bb1c7c98c3509e7ddfe3c8d0788e5ea0e1d662471884377c317b223767d21e3d"
+  },
+  "record": {
+   "path": "/home/bam/bam_ws/src/dev/bam_rack_twin/records/one-dof-test-rack/deployment.json",
+   "component": "can11",
+   "station": 11
+  },
+  "sensors": [
+   {
+    "id": "encoder",
+    "kind": "joint_state",
+    "on": "can11_hinge",
+    "measures": "motor-side angle and speed at the output (what the board reports)"
+   },
+   {
+    "id": "torque",
+    "kind": "joint_effort",
+    "on": "can11_hinge",
+    "measures": "the firmware's torque (q-current x Kt), what moteus reports"
+   },
+   {
+    "id": "link_camera",
+    "kind": "camera_angle",
+    "on": "can11_hinge_link",
+    "measures": "the link angle after the gear, from tags 8-12 (D405)"
+   }
+  ],
+  "known": {
+   "note": "configuration the description states and identification does not touch (the board's own numbers, the gear split)",
+   "board_pid": "bam_rack_twin.stations: CAN 11's output_pid() (kp 200, ki 16000, kd 4 N.m/rev, ilimit 0.5), conf get 2026-10-29",
+   "board_knobs": "the twin of record's current_loop_hz 200, command_delay_s 0.001, current_limit (0.732 N.m/A, 4 A), hard friction solref",
+   "rotor_inertia_fraction": 0.022,
+   "rotor_inertia_fraction_source": "the record's inertia prior terms: JMC 60ASM200 rotor 1.83e-3 + gearbox input 1.3e-3 kg.m^2 at the output, of a ~0.14 kg.m^2 axis",
+   "output_friction_fraction": 0.5,
+   "output_friction_fraction_source": "assumed: which side of the gap carries the friction no measurement has said (bam_rack_twin twin.py)"
+  },
+  "components": 7
+ },
+ "tree": [
+  {
+   "id": "rack",
+   "title": "One Dof Test Rack",
+   "word": "deployment",
+   "type": "deployment",
+   "type_title": "Deployment",
+   "group": "structure",
+   "type_source": "structural",
+   "parent": null,
+   "depth": 0,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "can11",
+   "title": "CAN 11 servo (JMC60 plate link, tags 8-12)",
+   "word": "moteus_servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "rack",
+   "depth": 1,
+   "binds": {
+    "joint": "can11_hinge",
+    "station": 11
+   },
+   "parameters": [
+    "can11.gravity_nm",
+    "can11.gravity_bottom_rad",
+    "can11.armature_kg_m2",
+    "can11.frictionloss_nm",
+    "can11.damping_nm_s_rad",
+    "can11.friction_stribeck_drop_nm",
+    "can11.friction_stribeck_speed_rad_s",
+    "can11.backlash_rad"
+   ]
+  },
+  {
+   "id": "can11_motor",
+   "title": "JMC 60ASM200 (inferred from Kv/R)",
+   "word": "motor",
+   "type": "motor",
+   "type_title": "Motor",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "can11",
+   "depth": 2,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "can11_gearbox",
+   "title": "StepperOnline AD60-G10-D14, 10:1 planetary",
+   "word": "gearbox",
+   "type": "gearbox",
+   "type_title": "Gearbox",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "can11",
+   "depth": 2,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "can11_driver",
+   "title": "moteus r4.11, firmware 1.1.2",
+   "word": "driver",
+   "type": "driver",
+   "type_title": "Driver (BLDC board)",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "can11",
+   "depth": 2,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "can11_encoder",
+   "title": "the board's motor encoder (output frame through 10:1)",
+   "word": "encoder",
+   "type": "encoder",
+   "type_title": "Encoder",
+   "group": "sensor",
+   "type_source": "type_cards",
+   "parent": "can11",
+   "depth": 2,
+   "binds": {
+    "joint": "can11_hinge"
+   },
+   "parameters": []
+  },
+  {
+   "id": "link_camera",
+   "title": "D405 on tags 8-12 (the link angle after the gear)",
+   "word": "d405",
+   "type": "camera_rgbd",
+   "type_title": "RGBD camera",
+   "group": "sensor",
+   "type_source": "type_cards",
+   "parent": "rack",
+   "depth": 1,
+   "binds": {
+    "observes": "can11_hinge_link"
+   },
+   "parameters": []
+  }
+ ],
+ "schedule": {
+  "source": "bam_rack_twin.schedule.build_schedule(describe_station(11), seed=0)",
+  "digest": "581ffd3e61e5b1fc",
+  "frozen_digest": "581ffd3e61e5b1fc",
+  "same_as_frozen": true,
+  "train": {
+   "runs": 46,
+   "seconds": 771.8,
+   "families": [
+    "chirp",
+    "chirp_log",
+    "cycle",
+    "dither",
+    "gravity",
+    "jog",
+    "multisine",
+    "pickplace",
+    "plateaus",
+    "sin_sin",
+    "staircase",
+    "sweep"
+   ]
+  },
+  "held_out": {
+   "runs": 29,
+   "seconds": 424.5,
+   "families": [
+    "chirp",
+    "chirp_log",
+    "cycle",
+    "dither",
+    "gravity",
+    "jog",
+    "multisine",
+    "pickplace",
+    "plateaus",
+    "sin_sin",
+    "staircase",
+    "sweep"
+   ]
+  },
+  "coverage": {
+   "train": {
+    "pct": 66.15,
+    "visited": 1069,
+    "reachable": 1616,
+    "samples": 77228,
+    "axes": {
+     "load torque": 100.0,
+     "temperature": null
+    },
+    "unplanned": [
+     "temperature"
+    ]
+   },
+   "held_out": {
+    "pct": 67.2,
+    "visited": 1086,
+    "reachable": 1616,
+    "samples": 42482,
+    "axes": {
+     "load torque": 95.45,
+     "temperature": null
+    },
+    "unplanned": [
+     "temperature"
+    ]
+   },
+   "function": "type_cards.coverage.servo_coverage (bam_rack_twin.schedule's rule, byte for byte)",
+   "rule": "share of the reachable (q, qd, qdd) cells any planned target visits; load torque a marginal, temperature unplanned",
+   "edges": [
+    [
+     -0.33,
+     -0.275,
+     -0.22,
+     -0.165,
+     -0.11,
+     -0.055,
+     0.0,
+     0.055,
+     0.11,
+     0.165,
+     0.22,
+     0.275,
+     0.33
+    ],
+    [
+     -2.0,
+     -1.0,
+     -0.5,
+     -0.2,
+     -0.1,
+     -0.05,
+     -0.02,
+     0.02,
+     0.05,
+     0.1,
+     0.2,
+     0.5,
+     1.0,
+     2.0
+    ],
+    [
+     -7.3896,
+     -3.6948,
+     -1.38555,
+     -0.46185,
+     -0.18474,
+     -0.046185,
+     0.046185,
+     0.18474,
+     0.46185,
+     1.38555,
+     3.6948,
+     7.3896
+    ]
+   ],
+   "axes": [
+    "q (rad from origin)",
+    "qd (rad/s)",
+    "qdd (rad/s^2)"
+   ],
+   "plane": {
+    "q_edges": [
+     -0.33,
+     -0.275,
+     -0.22,
+     -0.165,
+     -0.11,
+     -0.055,
+     0.0,
+     0.055,
+     0.11,
+     0.165,
+     0.22,
+     0.275,
+     0.33
+    ],
+    "qd_edges": [
+     -2.0,
+     -1.0,
+     -0.5,
+     -0.2,
+     -0.1,
+     -0.05,
+     -0.02,
+     0.02,
+     0.05,
+     0.1,
+     0.2,
+     0.5,
+     1.0,
+     2.0
+    ],
+    "counts": [
+     [
+      0,
+      3,
+      49,
+      46,
+      220,
+      23,
+      510,
+      24,
+      227,
+      47,
+      49,
+      4,
+      0
+     ],
+     [
+      0,
+      84,
+      338,
+      145,
+      310,
+      50,
+      320,
+      42,
+      307,
+      74,
+      391,
+      88,
+      0
+     ],
+     [
+      15,
+      252,
+      482,
+      272,
+      459,
+      101,
+      792,
+      95,
+      468,
+      220,
+      518,
+      267,
+      16
+     ],
+     [
+      39,
+      434,
+      342,
+      304,
+      360,
+      42,
+      211,
+      51,
+      356,
+      254,
+      410,
+      426,
+      40
+     ],
+     [
+      79,
+      466,
+      370,
+      322,
+      360,
+      51,
+      724,
+      47,
+      353,
+      265,
+      481,
+      426,
+      80
+     ],
+     [
+      107,
+      490,
+      1146,
+      2115,
+      2782,
+      2301,
+      3931,
+      2458,
+      2793,
+      2317,
+      1176,
+      444,
+      114
+     ],
+     [
+      88,
+      511,
+      1108,
+      2293,
+      2744,
+      2746,
+      6309,
+      2480,
+      2933,
+      2278,
+      1316,
+      480,
+      92
+     ],
+     [
+      66,
+      424,
+      471,
+      387,
+      345,
+      255,
+      984,
+      69,
+      407,
+      398,
+      631,
+      395,
+      67
+     ],
+     [
+      39,
+      383,
+      379,
+      338,
+      311,
+      28,
+      74,
+      31,
+      198,
+      323,
+      484,
+      383,
+      34
+     ],
+     [
+      4,
+      276,
+      499,
+      346,
+      388,
+      113,
+      760,
+      95,
+      342,
+      305,
+      619,
+      279,
+      0
+     ],
+     [
+      0,
+      75,
+      404,
+      204,
+      181,
+      60,
+      338,
+      63,
+      179,
+      91,
+      515,
+      56,
+      0
+     ],
+     [
+      0,
+      6,
+      32,
+      63,
+      117,
+      12,
+      509,
+      17,
+      122,
+      39,
+      56,
+      6,
+      0
+     ]
+    ]
+   }
+  }
+ },
+ "parameters": [
+  {
+   "key": "can11.gravity_nm",
+   "component": "can11",
+   "name": "gravity_nm",
+   "unit": "N\u00b7m",
+   "nominal": 4.6611971558188605,
+   "nominal_source": "bam_rack_twin.schedule.describe_station(11).gravity_nm",
+   "true": 5.05,
+   "recovered": 5.0706338276143645,
+   "ci95": [
+    5.067980514136571,
+    5.08236427388031
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "gravity_nm",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.02
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "can11.gravity_bottom_rad",
+   "component": "can11",
+   "name": "gravity_bottom_rad",
+   "unit": "rad",
+   "nominal": -0.373684718743872,
+   "nominal_source": "bam_rack_twin.schedule.describe_station(11).gravity_bottom_rad",
+   "true": -0.35,
+   "recovered": -0.35007802361082146,
+   "ci95": [
+    -0.35017983216134535,
+    -0.3499855445761087
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "gravity_nm (its bottom)",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "abs",
+    "value": 0.005
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "can11.armature_kg_m2",
+   "component": "can11",
+   "name": "armature_kg_m2",
+   "unit": "kg\u00b7m\u00b2",
+   "nominal": 0.12192564375276548,
+   "nominal_source": "bam_rack_twin.schedule.describe_station(11).inertia_kg_m2",
+   "true": 0.14,
+   "recovered": 0.13843396125393795,
+   "ci95": [
+    0.13830073398230952,
+    0.13871760447583145
+   ],
+   "rung": "M0",
+   "card": "servo",
+   "card_parameter": "armature_kg_m2",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.05
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "can11.frictionloss_nm",
+   "component": "can11",
+   "name": "frictionloss_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.8331252513929015,
+   "nominal_source": "bam_rack_twin.schedule.describe_station(11).coulomb_nm",
+   "true": 1.05,
+   "recovered": 1.051523435989359,
+   "ci95": [
+    1.0178159305312462,
+    1.0441308425189677
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "frictionloss_nm",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "can11.damping_nm_s_rad",
+   "component": "can11",
+   "name": "damping_nm_s_rad",
+   "unit": "N\u00b7m\u00b7s/rad",
+   "nominal": 0.149963,
+   "nominal_source": "can11_hinge__89b6fde5__dt2000.xml joint can11_hinge damping",
+   "true": 0.3,
+   "recovered": 0.3040567638808796,
+   "ci95": [
+    0.30251350998003607,
+    0.30548732480425006
+   ],
+   "rung": "M2",
+   "card": "servo",
+   "card_parameter": "damping_nm_s_rad",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.2
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "can11.friction_stribeck_drop_nm",
+   "component": "can11",
+   "name": "friction_stribeck_drop_nm",
+   "unit": "N\u00b7m",
+   "nominal": 0.0,
+   "nominal_source": "the description gives no Stribeck curve: M2 at its datasheet values has none",
+   "true": 0.35,
+   "recovered": 0.35650994614822984,
+   "ci95": [
+    0.3254026509256194,
+    0.35068014627727523
+   ],
+   "rung": "M3",
+   "card": "servo",
+   "card_parameter": "friction_stribeck_drop_nm",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.25
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "can11.friction_stribeck_speed_rad_s",
+   "component": "can11",
+   "name": "friction_stribeck_speed_rad_s",
+   "unit": "rad/s",
+   "nominal": null,
+   "nominal_source": "no Stribeck curve in the description",
+   "true": 0.1,
+   "recovered": 0.10350378324869619,
+   "ci95": [
+    0.10097964419278467,
+    0.10438557576963348
+   ],
+   "rung": "M3",
+   "card": "servo",
+   "card_parameter": "friction_stribeck_drop_nm (its speed)",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.3
+   },
+   "pass": true,
+   "nominal_pass": false
+  },
+  {
+   "key": "can11.backlash_rad",
+   "component": "can11",
+   "name": "backlash_rad",
+   "unit": "rad",
+   "nominal": 0.0,
+   "nominal_source": "a rigid twin: the AD60-G10 datasheet bounds backlash (<= 15 arcmin) but states no value",
+   "true": 0.002,
+   "recovered": 0.0019574149240806915,
+   "ci95": [
+    0.0019133433922690387,
+    0.0019808992429474594
+   ],
+   "rung": "M4",
+   "card": "servo",
+   "card_parameter": "backlash_rad",
+   "on_card": true,
+   "fit_step": "fitted with M4",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "tolerance": {
+    "kind": "rel",
+    "value": 0.1
+   },
+   "pass": true,
+   "nominal_pass": false
+  }
+ ],
+ "metrics": [
+  {
+   "id": "held_out_link_fidelity",
+   "title": "Link angle, twin vs real (the camera on tags 8-12)",
+   "unit": "x floor",
+   "split": "held_out",
+   "before": 17.483900305126372,
+   "after": 1.4472902771378042,
+   "factor": 12.080437892323129,
+   "factor_needed": 4.0,
+   "gated": true,
+   "pass": true,
+   "before_model": "nominal",
+   "after_model": "M4",
+   "note": "floor 0.426 mrad (two camera draws of one run); 29 held-out FB runs, 424.5 s"
+  },
+  {
+   "id": "held_out_motor_mrad",
+   "title": "Motor encoder, twin vs real",
+   "unit": "mrad",
+   "split": "held_out",
+   "before": 7.2087948648239735,
+   "after": 0.5336502887660027,
+   "factor": 13.50846240801889,
+   "factor_needed": null,
+   "gated": false,
+   "pass": null,
+   "before_model": "nominal",
+   "after_model": "M4",
+   "note": ""
+  },
+  {
+   "id": "held_out_torque_rms_nm",
+   "title": "Reported torque, twin vs real",
+   "unit": "N\u00b7m",
+   "split": "held_out",
+   "before": 0.30886888093357207,
+   "after": 0.03510942041612421,
+   "factor": 8.797322122461532,
+   "factor_needed": null,
+   "gated": false,
+   "pass": null,
+   "before_model": "nominal",
+   "after_model": "M4",
+   "note": ""
+  }
+ ],
+ "rungs": [
+  {
+   "key": "M0",
+   "name": "Ideal: rigid inertia under the board's PD",
+   "kind": "physics",
+   "n_parameters": 4,
+   "parameters": [
+    "armature_kg_m2",
+    "gravity_nm",
+    "kp_nm_rad",
+    "kd_nm_s_rad"
+   ],
+   "equation": "J q\u0308 = kp (q* \u2212 q) + kd (q\u0307* \u2212 q\u0307) + \u03c4_ff \u2212 G sin(q \u2212 q_bottom)",
+   "current": false,
+   "references": [
+    {
+     "title": "Siciliano, Sciavicco, Villani, Oriolo (2009). Robotics: Modelling, Planning and Control. Springer.",
+     "doi": "10.1007/978-1-84628-642-1",
+     "url": "https://doi.org/10.1007/978-1-84628-642-1"
+    },
+    {
+     "title": "MuJoCo (2026). XML reference: joint armature.",
+     "doi": "",
+     "url": "https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-joint-armature"
+    }
+   ],
+   "wear": [],
+   "card": "servo",
+   "added": [
+    "armature_kg_m2",
+    "gravity_nm",
+    "kp_nm_rad",
+    "kd_nm_s_rad"
+   ],
+   "held_out_ratio": 73.27397673108794,
+   "limit": 1.5,
+   "link_mrad": 31.19969325021819,
+   "motor_mrad": 30.88848700480319,
+   "values": {
+    "armature_kg_m2": 0.16991955093803127,
+    "gravity_nm": 6.352566113971208,
+    "gravity_bottom_rad": -0.35337912171995206,
+    "frictionloss_nm": 0.0,
+    "damping_nm_s_rad": 0.0,
+    "friction_stribeck_drop_nm": 0.0,
+    "friction_stribeck_speed_rad_s": null,
+    "backlash_rad": 0.0
+   },
+   "ci95": {
+    "armature_kg_m2": [
+     0.16462817358161697,
+     0.1777275148551404
+    ],
+    "gravity_nm": [
+     6.067794422947595,
+     6.8592950850873855
+    ],
+    "gravity_bottom_rad": [
+     -0.3575851468146434,
+     -0.34068766510845694
+    ]
+   },
+   "method": "the same regression without friction terms: tau = J qdd + G sin(q - bottom) (the card's ideal rung, rigid under the board's PD)"
+  },
+  {
+   "key": "M2",
+   "name": "Coulomb + viscous friction",
+   "kind": "physics",
+   "n_parameters": 6,
+   "parameters": [
+    "armature_kg_m2",
+    "gravity_nm",
+    "kp_nm_rad",
+    "kd_nm_s_rad",
+    "frictionloss_nm",
+    "damping_nm_s_rad"
+   ],
+   "equation": "M0 \u2212 Fc sign(q\u0307) \u2212 b q\u0307",
+   "current": false,
+   "references": [
+    {
+     "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+     "doi": "10.1016/0005-1098(94)90209-7",
+     "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+    },
+    {
+     "title": "Olsson, \u00c5str\u00f6m, Canudas de Wit, G\u00e4fvert, Lischinsky (1998). Friction models and friction compensation. European Journal of Control.",
+     "doi": "10.1016/S0947-3580(98)70113-X",
+     "url": "https://doi.org/10.1016/S0947-3580(98)70113-X"
+    }
+   ],
+   "wear": [],
+   "card": "servo",
+   "added": [
+    "frictionloss_nm",
+    "damping_nm_s_rad"
+   ],
+   "held_out_ratio": 16.492913012185735,
+   "limit": 1.5,
+   "link_mrad": 7.022599969852719,
+   "motor_mrad": 6.6453729813211355,
+   "values": {
+    "armature_kg_m2": 0.1354889108694238,
+    "gravity_nm": 4.8398295471457216,
+    "gravity_bottom_rad": -0.3497451270359293,
+    "frictionloss_nm": 0.7553700730683965,
+    "damping_nm_s_rad": 0.236821522639002,
+    "friction_stribeck_drop_nm": 0.0,
+    "friction_stribeck_speed_rad_s": null,
+    "backlash_rad": 0.0
+   },
+   "ci95": {
+    "armature_kg_m2": [
+     0.13501448941849264,
+     0.13666901384037655
+    ],
+    "gravity_nm": [
+     4.824708284245336,
+     4.8719949347204095
+    ],
+    "gravity_bottom_rad": [
+     -0.3500114930081665,
+     -0.3493986818921789
+    ],
+    "frictionloss_nm": [
+     0.7505665770047588,
+     0.7587404015576615
+    ],
+    "damping_nm_s_rad": [
+     0.2336992992153526,
+     0.24347517657986267
+    ]
+   },
+   "method": "tau(t -0.80 ms) = J qdd + G sin(q - bottom) + Fc sgn(qd) + b qd over 31,170 moving rows of 42 train runs (identify.filtered's 5 ms grid, one Savitzky-Golay); block bootstrap"
+  },
+  {
+   "key": "M3",
+   "name": "Stribeck, weakening and capture",
+   "kind": "physics",
+   "n_parameters": 9,
+   "parameters": [
+    "armature_kg_m2",
+    "gravity_nm",
+    "kp_nm_rad",
+    "kd_nm_s_rad",
+    "frictionloss_nm",
+    "damping_nm_s_rad",
+    "friction_weakening_nm_s_rad",
+    "friction_stribeck_drop_nm",
+    "friction_capture_nm"
+   ],
+   "equation": "level(v) = Fs \u2212 w\u00b7min(|v|, limit) \u2212 drop\u00b7(1 \u2212 exp(\u2212(v/vs)\u00b2)); the capture level while just slowed",
+   "current": false,
+   "references": [
+    {
+     "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+     "doi": "10.1016/0005-1098(94)90209-7",
+     "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+    },
+    {
+     "title": "Canudas de Wit, Olsson, \u00c5str\u00f6m, Lischinsky (1995). A new model for control of systems with friction. IEEE Transactions on Automatic Control.",
+     "doi": "10.1109/9.376053",
+     "url": "https://doi.org/10.1109/9.376053"
+    }
+   ],
+   "wear": [],
+   "card": "servo",
+   "added": [
+    "friction_weakening_nm_s_rad",
+    "friction_stribeck_drop_nm",
+    "friction_capture_nm"
+   ],
+   "held_out_ratio": 24.418076565999055,
+   "limit": 1.5,
+   "link_mrad": 10.397095020724969,
+   "motor_mrad": 10.379728332760521,
+   "values": {
+    "armature_kg_m2": 0.1357514158544523,
+    "gravity_nm": 4.8697463237188865,
+    "gravity_bottom_rad": -0.34968817708535566,
+    "frictionloss_nm": 1.328369914131623,
+    "damping_nm_s_rad": 0.2721811655459342,
+    "friction_stribeck_drop_nm": 0.600363640570777,
+    "friction_stribeck_speed_rad_s": 0.08310536033843603,
+    "backlash_rad": 0.0
+   },
+   "ci95": {
+    "armature_kg_m2": [
+     0.13529827142082468,
+     0.13695872124142452
+    ],
+    "gravity_nm": [
+     4.85511600195734,
+     4.895676802058257
+    ],
+    "gravity_bottom_rad": [
+     -0.3499373819887134,
+     -0.34945890423623555
+    ],
+    "frictionloss_nm": [
+     1.2753297409317517,
+     1.4463608989058039
+    ],
+    "damping_nm_s_rad": [
+     0.266906761944358,
+     0.27529310256402545
+    ],
+    "friction_stribeck_drop_nm": [
+     0.5479310262218289,
+     0.715517321920784
+    ],
+    "friction_stribeck_speed_rad_s": [
+     0.07653931342663503,
+     0.08821546372368912
+    ]
+   },
+   "method": "the same regression + D sgn(qd) exp(-(qd/vs)^2), vs profiled (41-point grid, golden section); Fs = Fc + D"
+  },
+  {
+   "key": "M4",
+   "name": "Rack twin: + cogging, delay, backlash, drive and heat (today's model)",
+   "kind": "physics",
+   "n_parameters": 16,
+   "parameters": [
+    "armature_kg_m2",
+    "frictionloss_nm",
+    "damping_nm_s_rad",
+    "friction_weakening_nm_s_rad",
+    "friction_stribeck_drop_nm",
+    "friction_capture_nm",
+    "ripple_harmonics",
+    "backlash_rad",
+    "gear_stiffness_nm_rad",
+    "gravity_nm",
+    "torque_scale",
+    "current_loop_hz",
+    "command_delay_s",
+    "kp_nm_rad",
+    "kd_nm_s_rad",
+    "thermal_r_c"
+   ],
+   "equation": "J q\u0308 = \u03c4_motor(\u03c4_cmd, delay, current loop, scale) \u2212 \u03c4_r(q, q\u0307) \u2212 G sin(q \u2212 q_bottom); \u03c4_r = friction level(v) sign(v) + b v + ripple(r q)",
+   "current": true,
+   "references": [
+    {
+     "title": "Jahns, Soong (1996). Pulsating torque minimization techniques for permanent magnet AC motor drives\u2014a review. IEEE Transactions on Industrial Electronics.",
+     "doi": "10.1109/41.491356",
+     "url": "https://doi.org/10.1109/41.491356"
+    },
+    {
+     "title": "Nordin, Gutman (2002). Controlling mechanical systems with backlash\u2014a survey. Automatica.",
+     "doi": "10.1016/S0005-1098(02)00047-X",
+     "url": "https://doi.org/10.1016/S0005-1098(02)00047-X"
+    },
+    {
+     "title": "Tuttle, Seering (1996). A nonlinear model of a harmonic drive gear transmission. IEEE Transactions on Robotics and Automation.",
+     "doi": "10.1109/70.499819",
+     "url": "https://doi.org/10.1109/70.499819"
+    },
+    {
+     "title": "Krishnan (2010). Permanent Magnet Synchronous and Brushless DC Motor Drives. CRC Press.",
+     "doi": "10.1201/9781420014235",
+     "url": "https://doi.org/10.1201/9781420014235"
+    }
+   ],
+   "wear": [],
+   "card": "servo",
+   "added": [
+    "ripple_harmonics",
+    "backlash_rad",
+    "gear_stiffness_nm_rad",
+    "torque_scale",
+    "current_loop_hz",
+    "command_delay_s",
+    "thermal_r_c"
+   ],
+   "held_out_ratio": 1.4472902771378042,
+   "limit": 1.5,
+   "link_mrad": 0.6162489700325607,
+   "motor_mrad": 0.5336502887660027,
+   "values": {
+    "armature_kg_m2": 0.13843396125393795,
+    "gravity_nm": 5.0706338276143645,
+    "gravity_bottom_rad": -0.35007802361082146,
+    "frictionloss_nm": 1.051523435989359,
+    "damping_nm_s_rad": 0.3040567638808796,
+    "friction_stribeck_drop_nm": 0.35650994614822984,
+    "friction_stribeck_speed_rad_s": 0.10350378324869619,
+    "backlash_rad": 0.0019574149240806915
+   },
+   "ci95": {
+    "armature_kg_m2": [
+     0.13830073398230952,
+     0.13871760447583145
+    ],
+    "gravity_nm": [
+     5.067980514136571,
+     5.08236427388031
+    ],
+    "gravity_bottom_rad": [
+     -0.35017983216134535,
+     -0.3499855445761087
+    ],
+    "frictionloss_nm": [
+     1.0178159305312462,
+     1.0441308425189677
+    ],
+    "damping_nm_s_rad": [
+     0.30251350998003607,
+     0.30548732480425006
+    ],
+    "friction_stribeck_drop_nm": [
+     0.3254026509256194,
+     0.35068014627727523
+    ],
+    "friction_stribeck_speed_rad_s": [
+     0.10097964419278467,
+     0.10438557576963348
+    ],
+    "backlash_rad": [
+     0.0019133433922690387,
+     0.0019808992429474594
+    ]
+   },
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)"
+  },
+  {
+   "key": "M5",
+   "name": "+ drive ceilings and motor electrics",
+   "kind": "physics",
+   "n_parameters": 20,
+   "parameters": [
+    "armature_kg_m2",
+    "frictionloss_nm",
+    "damping_nm_s_rad",
+    "friction_weakening_nm_s_rad",
+    "friction_stribeck_drop_nm",
+    "friction_capture_nm",
+    "ripple_harmonics",
+    "backlash_rad",
+    "gear_stiffness_nm_rad",
+    "gravity_nm",
+    "torque_scale",
+    "current_loop_hz",
+    "command_delay_s",
+    "kp_nm_rad",
+    "kd_nm_s_rad",
+    "thermal_r_c",
+    "voltage_available_v",
+    "kt_out_nm_a",
+    "phase_resistance_ohm",
+    "max_current_a"
+   ],
+   "equation": "motoring torque \u2264 kt_out (V_avail \u2212 |\u03c9| kt_out / 1.5) / R; any torque \u2264 kt_out \u00b7 I_max",
+   "current": false,
+   "references": [
+    {
+     "title": "Krause, Wasynczuk, Sudhoff, Pekarek (2013). Analysis of Electric Machinery and Drive Systems, 3rd ed. Wiley-IEEE Press.",
+     "doi": "10.1002/9781118524336",
+     "url": "https://doi.org/10.1002/9781118524336"
+    },
+    {
+     "title": "MuJoCo (2026). XML reference: the dcmotor actuator.",
+     "doi": "",
+     "url": "https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-dcmotor"
+    },
+    {
+     "title": "mjbots (2026). moteus reference manual (docs/reference.md).",
+     "doi": "",
+     "url": "https://github.com/mjbots/moteus/blob/main/docs/reference.md"
+    }
+   ],
+   "wear": [],
+   "card": "servo",
+   "added": [
+    "voltage_available_v",
+    "kt_out_nm_a",
+    "phase_resistance_ohm",
+    "max_current_a"
+   ]
+  },
+  {
+   "key": "M5.wear",
+   "name": "+ wear: backlash and friction grow with use",
+   "kind": "physics",
+   "n_parameters": 22,
+   "parameters": [
+    "armature_kg_m2",
+    "frictionloss_nm",
+    "damping_nm_s_rad",
+    "friction_weakening_nm_s_rad",
+    "friction_stribeck_drop_nm",
+    "friction_capture_nm",
+    "ripple_harmonics",
+    "backlash_rad",
+    "gear_stiffness_nm_rad",
+    "gravity_nm",
+    "torque_scale",
+    "current_loop_hz",
+    "command_delay_s",
+    "kp_nm_rad",
+    "kd_nm_s_rad",
+    "thermal_r_c",
+    "voltage_available_v",
+    "kt_out_nm_a",
+    "phase_resistance_ohm",
+    "max_current_a",
+    "backlash_wear_rad_per_nm_rev",
+    "friction_growth_nm_per_h"
+   ],
+   "equation": "backlash(u) = b0 + k_b\u00b7\u03a3|\u03c4|\u00b7\u0394rev (Archard); Fs(h) = Fs0 + k_f\u00b7h (linear)",
+   "current": false,
+   "references": [
+    {
+     "title": "Archard (1953). Contact and rubbing of flat surfaces. Journal of Applied Physics.",
+     "doi": "10.1063/1.1721448",
+     "url": "https://doi.org/10.1063/1.1721448"
+    },
+    {
+     "title": "Flodin, Andersson (1997). Simulation of mild wear in spur gears. Wear.",
+     "doi": "10.1016/S0043-1648(96)07467-4",
+     "url": "https://doi.org/10.1016/S0043-1648(96)07467-4"
+    },
+    {
+     "title": "Lu, Meeker (1993). Using degradation measures to estimate a time-to-failure distribution. Technometrics.",
+     "doi": "10.1080/00401706.1993.10485038",
+     "url": "https://doi.org/10.1080/00401706.1993.10485038"
+    }
+   ],
+   "wear": [
+    {
+     "parameter": "frictionloss_nm",
+     "usage": "deployment hours",
+     "unit": "h",
+     "law": "linear",
+     "rate": "friction_growth_nm_per_h"
+    },
+    {
+     "parameter": "backlash_rad",
+     "usage": "torque-weighted output revolutions",
+     "unit": "N\u00b7m\u00b7rev",
+     "law": "archard",
+     "rate": "backlash_wear_rad_per_nm_rev"
+    }
+   ],
+   "card": "servo",
+   "added": [
+    "backlash_wear_rad_per_nm_rev",
+    "friction_growth_nm_per_h"
+   ]
+  },
+  {
+   "key": "M6",
+   "name": "Grey-box residual on M5.wear",
+   "kind": "residual",
+   "n_parameters": 1431,
+   "parameters": [
+    "armature_kg_m2",
+    "frictionloss_nm",
+    "damping_nm_s_rad",
+    "friction_weakening_nm_s_rad",
+    "friction_stribeck_drop_nm",
+    "friction_capture_nm",
+    "ripple_harmonics",
+    "backlash_rad",
+    "gear_stiffness_nm_rad",
+    "gravity_nm",
+    "torque_scale",
+    "current_loop_hz",
+    "command_delay_s",
+    "kp_nm_rad",
+    "kd_nm_s_rad",
+    "thermal_r_c",
+    "voltage_available_v",
+    "kt_out_nm_a",
+    "phase_resistance_ohm",
+    "max_current_a",
+    "backlash_wear_rad_per_nm_rev",
+    "friction_growth_nm_per_h"
+   ],
+   "equation": "M5.wear + MLP residual (residual torque (N\u00b7m)) from 3 samples of position error, velocity, torque command",
+   "current": false,
+   "references": [
+    {
+     "title": "Nguyen-Tuong, Peters (2010). Using model knowledge for learning inverse dynamics. IEEE International Conference on Robotics and Automation.",
+     "doi": "10.1109/ROBOT.2010.5509858",
+     "url": "https://doi.org/10.1109/ROBOT.2010.5509858"
+    },
+    {
+     "title": "Zeng, Song, Lee, Rodriguez, Funkhouser (2020). TossingBot: learning to throw arbitrary objects with residual physics. IEEE Transactions on Robotics.",
+     "doi": "10.1109/TRO.2020.2988642",
+     "url": "https://doi.org/10.1109/TRO.2020.2988642"
+    },
+    {
+     "title": "Kovalev, Chaikovskaia, Davydenko, Gorbachev et al. (2026). Trajectory-based actuator identification via differentiable simulation. arXiv:2604.10351.",
+     "doi": "",
+     "url": "https://arxiv.org/abs/2604.10351"
+    }
+   ],
+   "wear": [
+    {
+     "parameter": "frictionloss_nm",
+     "usage": "deployment hours",
+     "unit": "h",
+     "law": "linear",
+     "rate": "friction_growth_nm_per_h"
+    },
+    {
+     "parameter": "backlash_rad",
+     "usage": "torque-weighted output revolutions",
+     "unit": "N\u00b7m\u00b7rev",
+     "law": "archard",
+     "rate": "backlash_wear_rad_per_nm_rev"
+    }
+   ],
+   "card": "servo",
+   "added": []
+  },
+  {
+   "key": "M7",
+   "name": "Actuator network (black box)",
+   "kind": "learned",
+   "n_parameters": 2369,
+   "parameters": [],
+   "equation": "MLP over 3 samples of position error, velocity \u2192 torque (N\u00b7m)",
+   "current": false,
+   "references": [
+    {
+     "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. Science Robotics.",
+     "doi": "10.1126/scirobotics.aau5872",
+     "url": "https://doi.org/10.1126/scirobotics.aau5872"
+    },
+    {
+     "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. arXiv:1901.08652.",
+     "doi": "",
+     "url": "https://arxiv.org/abs/1901.08652"
+    },
+    {
+     "title": "Zhu, Tanaka, Rafeedi, Hong (2025). Cycloidal quasi-direct drive actuator designs with learning-based torque estimation for legged robotics. arXiv:2410.16591.",
+     "doi": "",
+     "url": "https://arxiv.org/abs/2410.16591"
+    }
+   ],
+   "wear": [],
+   "card": "servo",
+   "added": []
+  }
+ ],
+ "ladder_source": "type_cards",
+ "card_ladders": [
+  {
+   "card": "servo",
+   "title": "Integrated servo",
+   "source": "type_cards",
+   "rungs": [
+    {
+     "key": "M0",
+     "name": "Ideal: rigid inertia under the board's PD",
+     "kind": "physics",
+     "n_parameters": 4,
+     "parameters": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad"
+     ],
+     "equation": "J q\u0308 = kp (q* \u2212 q) + kd (q\u0307* \u2212 q\u0307) + \u03c4_ff \u2212 G sin(q \u2212 q_bottom)",
+     "current": false,
+     "references": [
+      {
+       "title": "Siciliano, Sciavicco, Villani, Oriolo (2009). Robotics: Modelling, Planning and Control. Springer.",
+       "doi": "10.1007/978-1-84628-642-1",
+       "url": "https://doi.org/10.1007/978-1-84628-642-1"
+      },
+      {
+       "title": "MuJoCo (2026). XML reference: joint armature.",
+       "doi": "",
+       "url": "https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-joint-armature"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad"
+     ],
+     "identified": [
+      "can11.gravity_nm",
+      "can11.gravity_bottom_rad",
+      "can11.armature_kg_m2"
+     ]
+    },
+    {
+     "key": "M2",
+     "name": "Coulomb + viscous friction",
+     "kind": "physics",
+     "n_parameters": 6,
+     "parameters": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "frictionloss_nm",
+      "damping_nm_s_rad"
+     ],
+     "equation": "M0 \u2212 Fc sign(q\u0307) \u2212 b q\u0307",
+     "current": false,
+     "references": [
+      {
+       "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+       "doi": "10.1016/0005-1098(94)90209-7",
+       "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+      },
+      {
+       "title": "Olsson, \u00c5str\u00f6m, Canudas de Wit, G\u00e4fvert, Lischinsky (1998). Friction models and friction compensation. European Journal of Control.",
+       "doi": "10.1016/S0947-3580(98)70113-X",
+       "url": "https://doi.org/10.1016/S0947-3580(98)70113-X"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "frictionloss_nm",
+      "damping_nm_s_rad"
+     ],
+     "identified": [
+      "can11.frictionloss_nm",
+      "can11.damping_nm_s_rad"
+     ]
+    },
+    {
+     "key": "M3",
+     "name": "Stribeck, weakening and capture",
+     "kind": "physics",
+     "n_parameters": 9,
+     "parameters": [
+      "armature_kg_m2",
+      "gravity_nm",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm"
+     ],
+     "equation": "level(v) = Fs \u2212 w\u00b7min(|v|, limit) \u2212 drop\u00b7(1 \u2212 exp(\u2212(v/vs)\u00b2)); the capture level while just slowed",
+     "current": false,
+     "references": [
+      {
+       "title": "Armstrong-H\u00e9louvry, Dupont, Canudas de Wit (1994). A survey of models, analysis tools and compensation methods for the control of machines with friction. Automatica.",
+       "doi": "10.1016/0005-1098(94)90209-7",
+       "url": "https://doi.org/10.1016/0005-1098(94)90209-7"
+      },
+      {
+       "title": "Canudas de Wit, Olsson, \u00c5str\u00f6m, Lischinsky (1995). A new model for control of systems with friction. IEEE Transactions on Automatic Control.",
+       "doi": "10.1109/9.376053",
+       "url": "https://doi.org/10.1109/9.376053"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm"
+     ],
+     "identified": [
+      "can11.friction_stribeck_drop_nm",
+      "can11.friction_stribeck_speed_rad_s"
+     ]
+    },
+    {
+     "key": "M4",
+     "name": "Rack twin: + cogging, delay, backlash, drive and heat (today's model)",
+     "kind": "physics",
+     "n_parameters": 16,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c"
+     ],
+     "equation": "J q\u0308 = \u03c4_motor(\u03c4_cmd, delay, current loop, scale) \u2212 \u03c4_r(q, q\u0307) \u2212 G sin(q \u2212 q_bottom); \u03c4_r = friction level(v) sign(v) + b v + ripple(r q)",
+     "current": true,
+     "references": [
+      {
+       "title": "Jahns, Soong (1996). Pulsating torque minimization techniques for permanent magnet AC motor drives\u2014a review. IEEE Transactions on Industrial Electronics.",
+       "doi": "10.1109/41.491356",
+       "url": "https://doi.org/10.1109/41.491356"
+      },
+      {
+       "title": "Nordin, Gutman (2002). Controlling mechanical systems with backlash\u2014a survey. Automatica.",
+       "doi": "10.1016/S0005-1098(02)00047-X",
+       "url": "https://doi.org/10.1016/S0005-1098(02)00047-X"
+      },
+      {
+       "title": "Tuttle, Seering (1996). A nonlinear model of a harmonic drive gear transmission. IEEE Transactions on Robotics and Automation.",
+       "doi": "10.1109/70.499819",
+       "url": "https://doi.org/10.1109/70.499819"
+      },
+      {
+       "title": "Krishnan (2010). Permanent Magnet Synchronous and Brushless DC Motor Drives. CRC Press.",
+       "doi": "10.1201/9781420014235",
+       "url": "https://doi.org/10.1201/9781420014235"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "thermal_r_c"
+     ],
+     "identified": [
+      "can11.backlash_rad"
+     ]
+    },
+    {
+     "key": "M5",
+     "name": "+ drive ceilings and motor electrics",
+     "kind": "physics",
+     "n_parameters": 20,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c",
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a"
+     ],
+     "equation": "motoring torque \u2264 kt_out (V_avail \u2212 |\u03c9| kt_out / 1.5) / R; any torque \u2264 kt_out \u00b7 I_max",
+     "current": false,
+     "references": [
+      {
+       "title": "Krause, Wasynczuk, Sudhoff, Pekarek (2013). Analysis of Electric Machinery and Drive Systems, 3rd ed. Wiley-IEEE Press.",
+       "doi": "10.1002/9781118524336",
+       "url": "https://doi.org/10.1002/9781118524336"
+      },
+      {
+       "title": "MuJoCo (2026). XML reference: the dcmotor actuator.",
+       "doi": "",
+       "url": "https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-dcmotor"
+      },
+      {
+       "title": "mjbots (2026). moteus reference manual (docs/reference.md).",
+       "doi": "",
+       "url": "https://github.com/mjbots/moteus/blob/main/docs/reference.md"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M5.wear",
+     "name": "+ wear: backlash and friction grow with use",
+     "kind": "physics",
+     "n_parameters": 22,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c",
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a",
+      "backlash_wear_rad_per_nm_rev",
+      "friction_growth_nm_per_h"
+     ],
+     "equation": "backlash(u) = b0 + k_b\u00b7\u03a3|\u03c4|\u00b7\u0394rev (Archard); Fs(h) = Fs0 + k_f\u00b7h (linear)",
+     "current": false,
+     "references": [
+      {
+       "title": "Archard (1953). Contact and rubbing of flat surfaces. Journal of Applied Physics.",
+       "doi": "10.1063/1.1721448",
+       "url": "https://doi.org/10.1063/1.1721448"
+      },
+      {
+       "title": "Flodin, Andersson (1997). Simulation of mild wear in spur gears. Wear.",
+       "doi": "10.1016/S0043-1648(96)07467-4",
+       "url": "https://doi.org/10.1016/S0043-1648(96)07467-4"
+      },
+      {
+       "title": "Lu, Meeker (1993). Using degradation measures to estimate a time-to-failure distribution. Technometrics.",
+       "doi": "10.1080/00401706.1993.10485038",
+       "url": "https://doi.org/10.1080/00401706.1993.10485038"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "frictionloss_nm",
+       "usage": "deployment hours",
+       "unit": "h",
+       "law": "linear",
+       "rate": "friction_growth_nm_per_h"
+      },
+      {
+       "parameter": "backlash_rad",
+       "usage": "torque-weighted output revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "backlash_wear_rad_per_nm_rev"
+      }
+     ],
+     "card": "servo",
+     "added": [
+      "backlash_wear_rad_per_nm_rev",
+      "friction_growth_nm_per_h"
+     ],
+     "identified": []
+    },
+    {
+     "key": "M6",
+     "name": "Grey-box residual on M5.wear",
+     "kind": "residual",
+     "n_parameters": 1431,
+     "parameters": [
+      "armature_kg_m2",
+      "frictionloss_nm",
+      "damping_nm_s_rad",
+      "friction_weakening_nm_s_rad",
+      "friction_stribeck_drop_nm",
+      "friction_capture_nm",
+      "ripple_harmonics",
+      "backlash_rad",
+      "gear_stiffness_nm_rad",
+      "gravity_nm",
+      "torque_scale",
+      "current_loop_hz",
+      "command_delay_s",
+      "kp_nm_rad",
+      "kd_nm_s_rad",
+      "thermal_r_c",
+      "voltage_available_v",
+      "kt_out_nm_a",
+      "phase_resistance_ohm",
+      "max_current_a",
+      "backlash_wear_rad_per_nm_rev",
+      "friction_growth_nm_per_h"
+     ],
+     "equation": "M5.wear + MLP residual (residual torque (N\u00b7m)) from 3 samples of position error, velocity, torque command",
+     "current": false,
+     "references": [
+      {
+       "title": "Nguyen-Tuong, Peters (2010). Using model knowledge for learning inverse dynamics. IEEE International Conference on Robotics and Automation.",
+       "doi": "10.1109/ROBOT.2010.5509858",
+       "url": "https://doi.org/10.1109/ROBOT.2010.5509858"
+      },
+      {
+       "title": "Zeng, Song, Lee, Rodriguez, Funkhouser (2020). TossingBot: learning to throw arbitrary objects with residual physics. IEEE Transactions on Robotics.",
+       "doi": "10.1109/TRO.2020.2988642",
+       "url": "https://doi.org/10.1109/TRO.2020.2988642"
+      },
+      {
+       "title": "Kovalev, Chaikovskaia, Davydenko, Gorbachev et al. (2026). Trajectory-based actuator identification via differentiable simulation. arXiv:2604.10351.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/2604.10351"
+      }
+     ],
+     "wear": [
+      {
+       "parameter": "frictionloss_nm",
+       "usage": "deployment hours",
+       "unit": "h",
+       "law": "linear",
+       "rate": "friction_growth_nm_per_h"
+      },
+      {
+       "parameter": "backlash_rad",
+       "usage": "torque-weighted output revolutions",
+       "unit": "N\u00b7m\u00b7rev",
+       "law": "archard",
+       "rate": "backlash_wear_rad_per_nm_rev"
+      }
+     ],
+     "card": "servo",
+     "added": [],
+     "identified": []
+    },
+    {
+     "key": "M7",
+     "name": "Actuator network (black box)",
+     "kind": "learned",
+     "n_parameters": 2369,
+     "parameters": [],
+     "equation": "MLP over 3 samples of position error, velocity \u2192 torque (N\u00b7m)",
+     "current": false,
+     "references": [
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. Science Robotics.",
+       "doi": "10.1126/scirobotics.aau5872",
+       "url": "https://doi.org/10.1126/scirobotics.aau5872"
+      },
+      {
+       "title": "Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, Hutter (2019). Learning agile and dynamic motor skills for legged robots. arXiv:1901.08652.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/1901.08652"
+      },
+      {
+       "title": "Zhu, Tanaka, Rafeedi, Hong (2025). Cycloidal quasi-direct drive actuator designs with learning-based torque estimation for legged robotics. arXiv:2410.16591.",
+       "doi": "",
+       "url": "https://arxiv.org/abs/2410.16591"
+      }
+     ],
+     "wear": [],
+     "card": "servo",
+     "added": [],
+     "identified": []
+    }
+   ]
+  }
+ ],
+ "selected_rung": "M4",
+ "selection_rule": "pick the lowest rung, in ladder order, whose held-out fidelity reaches the floor (held-out error \u00f7 the floor <= 1.5\u00d7); a residual or learned rung is judged only on held-out data inside its covered cells, and held-out samples outside them are flagged 'out of coverage', never scored",
+ "stock_fit": {
+  "estimates": {
+   "gravity_nm": {
+    "value": 5.753338445022121,
+    "ci95": [
+     5.541510052090989,
+     5.941187708159172
+    ],
+    "refused": "",
+    "true": 5.05,
+    "error_pct": 13.927493960834077
+   },
+   "gravity_bottom_rad": {
+    "value": -0.34708497408146993,
+    "ci95": [
+     -0.3510912735430327,
+     -0.3403644384745141
+    ],
+    "refused": "",
+    "true": -0.35,
+    "error_pct": 0.8328645481514416
+   },
+   "armature_kg_m2": {
+    "value": 0.15326305472088073,
+    "ci95": [
+     0.1507005807168353,
+     0.15454566469142042
+    ],
+    "refused": "",
+    "true": 0.14,
+    "error_pct": 9.473610514914794
+   },
+   "frictionloss_nm": {
+    "value": 0.8619290528560593,
+    "ci95": [
+     0.8116575915902713,
+     0.8921207524723822
+    ],
+    "refused": "",
+    "true": 1.05
+   },
+   "damping_nm_s_rad": {
+    "value": -0.47274303040808274,
+    "ci95": [
+     -0.6307481728627581,
+     -0.2668494701214402
+    ],
+    "refused": "negative viscous -0.4727 (CI excludes zero): Stribeck-like, not a damping a twin can run",
+    "true": 0.3
+   }
+  },
+  "runs": 14,
+  "what": "bam_rack_twin.identify.identify_without_cad: gravity sweeps, plateaus, chirps"
+ },
+ "fit": {
+  "rows": 31170,
+  "runs": 42
+ },
+ "provenance": {
+  "bam_rack_twin": "bam_ws main, src/dev/bam_rack_twin (imported in place) @ e46c5335 2026-11-05T11:19:53-07:00",
+  "twin_of_record": "twin of record (followup A)",
+  "twin_of_record_digest": "89b6fde5",
+  "identify_sealed": true,
+  "code": "782bd5e+dirty",
+  "seconds": 491.7
+ },
+ "notes": [
+  "The real CAN 11 is bam_rack_twin's own twin at world.json's truth; the floor is the oracle's measurement noise alone (two camera draws of one deterministic run), so real floors are larger.",
+  "The truth's friction is BAM's M3 Stribeck curve (static above sliding); the real CAN 11's twin of record has LuGre with its static level BELOW the sliding one, which a Stribeck drop cannot express.",
+  "Torque ripple (robotparts' M4 layer holds ripple and backlash) is not in the truth and not fitted."
+ ],
+ "schema": "sysid.result/1",
+ "example": "pendulum_can11",
+ "verdict": {
+  "parameters_pass": 8,
+  "parameters": 8,
+  "metrics_pass": 1,
+  "metrics": 1,
+  "failing": [],
+  "status": "pass"
+ }
+}

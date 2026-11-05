@@ -1,0 +1,374 @@
+{
+ "schema": "sysid.drift/1",
+ "name": "camera_knock",
+ "example": "dual_arm_cell",
+ "title": "The head camera knocked out of pose",
+ "check_every_h": 12,
+ "horizon_h": 480,
+ "check": "the belt tags at 4 belt positions each check (the belt runs past the head camera all day)",
+ "threshold": 1.25,
+ "diagnostic": {
+  "id": "camera_rgb.drift"
+ },
+ "calibrated_reprojection_px": 0.31566901609493797,
+ "checks": [
+  {
+   "h": 0.0,
+   "reprojection_px": 0.31566901609493797,
+   "ratio": 1.0,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 12.0,
+   "reprojection_px": 0.30434822517423554,
+   "ratio": 0.9641371489012476,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 24.0,
+   "reprojection_px": 0.28277265234637405,
+   "ratio": 0.8957884300603317,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 36.0,
+   "reprojection_px": 0.2698513258218512,
+   "ratio": 0.854855282156336,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 48.0,
+   "reprojection_px": 0.3175469469090875,
+   "ratio": 1.0059490501709067,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 60.0,
+   "reprojection_px": 0.29619626266011506,
+   "ratio": 0.9383127502479799,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 72.0,
+   "reprojection_px": 0.2871737967362102,
+   "ratio": 0.9097307055623166,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 84.0,
+   "reprojection_px": 0.3107118145046685,
+   "ratio": 0.9842962047666453,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 96.0,
+   "reprojection_px": 0.2974327441500676,
+   "ratio": 0.9422297691092185,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 108.0,
+   "reprojection_px": 0.3579022935423154,
+   "ratio": 1.1337897458858481,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 120.0,
+   "reprojection_px": 0.2942810642277367,
+   "ratio": 0.9322456409191303,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 132.0,
+   "reprojection_px": 0.32156211701684595,
+   "ratio": 1.0186686073749336,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 144.0,
+   "reprojection_px": 0.31551364643806,
+   "ratio": 0.9995078083405208,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 156.0,
+   "reprojection_px": 0.3041895234625645,
+   "ratio": 0.9636344017085257,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 168.0,
+   "reprojection_px": 0.2943354013688093,
+   "ratio": 0.9324177741925975,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 180.0,
+   "reprojection_px": 0.3100370164410847,
+   "ratio": 0.9821585288175403,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 192.0,
+   "reprojection_px": 0.33366079050142344,
+   "ratio": 1.056995693239258,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 204.0,
+   "reprojection_px": 0.3024217375726208,
+   "ratio": 0.9580342768948441,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 216.0,
+   "reprojection_px": 0.3256130694503135,
+   "ratio": 1.0315015185157888,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 228.0,
+   "reprojection_px": 0.30982149240933055,
+   "ratio": 0.98147577561477,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 240.0,
+   "reprojection_px": 0.2915765452921409,
+   "ratio": 0.9236780628620478,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 252.0,
+   "reprojection_px": 0.29298046525726146,
+   "ratio": 0.9281255058911043,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 264.0,
+   "reprojection_px": 0.2929529414478783,
+   "ratio": 0.9280383139020911,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 276.0,
+   "reprojection_px": 0.30066958287518064,
+   "ratio": 0.952483669745889,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 288.0,
+   "reprojection_px": 0.2593706918339264,
+   "ratio": 0.8216539432426281,
+   "status": "ok",
+   "message": "",
+   "knocked": false
+  },
+  {
+   "h": 300.0,
+   "reprojection_px": 4.867049510945396,
+   "ratio": 15.418204710599861,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 312.0,
+   "reprojection_px": 4.929034015069228,
+   "ratio": 15.614563874671859,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 324.0,
+   "reprojection_px": 4.9152115164184,
+   "ratio": 15.5707759260736,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 336.0,
+   "reprojection_px": 4.810261781613225,
+   "ratio": 15.238308279728447,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 348.0,
+   "reprojection_px": 4.965256904984619,
+   "ratio": 15.72931346385706,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 360.0,
+   "reprojection_px": 4.884097442901181,
+   "ratio": 15.472210428888848,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 372.0,
+   "reprojection_px": 4.888567094969265,
+   "ratio": 15.486369728155456,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 384.0,
+   "reprojection_px": 4.973914674363459,
+   "ratio": 15.75674019545696,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 396.0,
+   "reprojection_px": 4.954474122036521,
+   "ratio": 15.695154954791175,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 408.0,
+   "reprojection_px": 4.930712859722311,
+   "ratio": 15.619882244760413,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 420.0,
+   "reprojection_px": 4.817861224538504,
+   "ratio": 15.26238236536184,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 432.0,
+   "reprojection_px": 4.856085387263177,
+   "ratio": 15.38347173674689,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 444.0,
+   "reprojection_px": 4.98613931745411,
+   "ratio": 15.795466337293364,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 456.0,
+   "reprojection_px": 4.871777441074483,
+   "ratio": 15.433182202491766,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 468.0,
+   "reprojection_px": 4.908515659055689,
+   "ratio": 15.549564286598988,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  },
+  {
+   "h": 480.0,
+   "reprojection_px": 4.9253213413356,
+   "ratio": 15.602802588184016,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
+   "knocked": true
+  }
+ ],
+ "alarm_h": 300.0,
+ "knock_h": 300.0,
+ "recalibrated": {
+  "h": 300.0,
+  "ratio": 0.9636740990878918,
+  "reprojection_px": 0.3042020546952506,
+  "status": "ok",
+  "views": 65
+ },
+ "shift_recovered": {
+  "dx_m": 0.0029626936867277603,
+  "dy_m": -0.002040526030870375,
+  "dz_m": 0.0010842144855602864,
+  "rx_rad": 0.00014802489513666075,
+  "ry_rad": 0.013946169483841163,
+  "rz_rad": 0.0038840602517446784
+ },
+ "shift_true": {
+  "dx_m": 0.003,
+  "dy_m": -0.002,
+  "dz_m": 0.001,
+  "rx_rad": 0.0,
+  "ry_rad": 0.014,
+  "rz_rad": 0.004
+ },
+ "provenance": {
+  "code": "782bd5e+dirty",
+  "seconds": 1.5,
+  "identify_sealed": true
+ }
+}
