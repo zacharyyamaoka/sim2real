@@ -97,8 +97,9 @@ def test_every_checkout_outside_this_repo_is_stamped(tmp_path):
         imports[name] = repo / rel
     loose = tmp_path / "not_a_checkout"
     loose.mkdir()
-    venv = tmp_path / "bam_ws" / "src/dev/bam_rack_twin/.venv/lib/site-packages"
+    venv = tmp_path / "bam_ws" / ".venv/lib/site-packages"
     venv.mkdir(parents=True)
+    (venv / "numpy.py").write_text("0\n")  # a virtualenv sits in a checkout as untracked files: stamping it would read +dirty
     paths = [imports["bam_ws"].parent, imports["menagerie"], imports["io-diagnostics"].parent, here / "sysid", loose, venv,
              tmp_path / "missing"]
     stamps = result.external_checkouts(paths, exclude=here)
