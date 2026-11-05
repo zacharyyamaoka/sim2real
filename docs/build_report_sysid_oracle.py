@@ -27,6 +27,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "site" / "tests"))
 sys.path.insert(1, str(REPO / "site"))
 sys.path.insert(2, str(REPO / "site" / "vendor"))
+sys.path.insert(3, str(REPO))  # type_cards (stdlib): the arm card's own gate
 
 from test_site_flow import EXE, free_port  # noqa: E402
 
@@ -36,6 +37,9 @@ OUT = Path("/home/bam/sim2real/reports/media/sysid-oracle-2026-11-05/report.html
 SITE = Path.home() / ".cache" / "sim2real" / "site"
 RESULTS = REPO / "sysid" / "results"
 EXAMPLES = landing.EXAMPLES
+ARM_EXAMPLES = ("ur5e", "ur5e_2f85")
+# the commit whose committed results are the arm schedules' "before" (main before the arm-coverage lane): read with git show, never typed
+ARM_BEFORE = "508e927"
 
 
 MIME = {".webp": "image/webp", ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4"}
@@ -114,6 +118,13 @@ def capture(site: Path, media: Path) -> dict:
                     fig.scroll_into_view_if_needed()
                     shots[f"drift-{example}"] = media / f"drift-{example}.png"
                     fig.screenshot(path=str(shots[f"drift-{example}"]), type="png")
+                if example in ARM_EXAMPLES:
+                    sched = page.locator("#schedule")
+                    sched.scroll_into_view_if_needed()
+                    box = sched.bounding_box()
+                    shots[f"schedule-{example}"] = media / f"schedule-{example}.png"
+                    page.screenshot(path=str(shots[f"schedule-{example}"]), type="png", full_page=True,
+                                    clip={"x": 0, "y": box["y"] - 8 + page.evaluate("window.scrollY"), "width": 1280, "height": 150})
                 if example == "pendulum_can11":
                     lad = page.locator("#rungs ~ div.s2r-scroll").first
                     lad.scroll_into_view_if_needed()
@@ -179,6 +190,88 @@ def metric_lines(doc: dict) -> str:
     return "".join(f"<li>{esc(m['title'])}: <b>{landing.num(m['before'], 4)} → {landing.num(m['after'], 4)} {esc(m['unit'])}</b> "
                    f"({landing.num(m['factor'], 3)}× better; {'needs ' + landing.num(m['factor_needed'], 2) + '×' if m.get('factor_needed') else 'observed'}"
                    f"{'' if m['pass'] is None else (', pass' if m['pass'] else ', FAIL')})</li>" for m in doc["metrics"])
+
+
+def before_doc(example: str) -> dict | None:
+    out = subprocess.run(["git", "-C", str(REPO), "show", f"{ARM_BEFORE}:sysid/results/{example}.json"], capture_output=True, text=True)
+    return json.loads(out.stdout) if out.returncode == 0 else None
+
+
+def curve_svg(curves: dict, gate: float) -> str:
+    """Train coverage (% of the 4096 cells) against sweep seconds, one line per example, the card's gate dashed."""
+    w, h, left, bottom = 760, 260, 46, 30
+    t_max = max(c[-1][0] for c in curves.values()) or 1
+    y_max = 50.0
+    x = lambda t: left + (w - left - 12) * t / t_max  # noqa: E731
+    y = lambda v: h - bottom - (h - bottom - 10) * v / y_max  # noqa: E731
+    lines, colours = [], ("#2563eb", "#d97706")
+    for (name, c), colour in zip(curves.items(), colours):
+        pts = " ".join(f"{x(t):.1f},{y(v):.1f}" for t, v in c)
+        lines.append(f'<polyline points="{pts}" fill="none" stroke="{colour}" stroke-width="2"/>'
+                     f'<text x="{x(c[-1][0]) - 4:.0f}" y="{y(c[-1][1]) + 16:.0f}" text-anchor="end" fill="{colour}" font-size="12">{esc(name)} {c[-1][1]:g} %</text>')
+    ticks = "".join(f'<line x1="{left}" x2="{w - 12}" y1="{y(v):.1f}" y2="{y(v):.1f}" stroke="currentColor" opacity="0.12"/><text x="{left - 6}" y="{y(v) + 4:.1f}" text-anchor="end" font-size="11" fill="currentColor" opacity="0.7">{v:g}</text>' for v in (0, 10, 20, 30, 40, 50))
+    xt = "".join(f'<text x="{x(t):.1f}" y="{h - 10}" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">{t / 60:g} min</text>' for t in range(0, int(t_max) + 1, 180))
+    gate_line = f'<line x1="{left}" x2="{w - 12}" y1="{y(gate):.1f}" y2="{y(gate):.1f}" stroke="currentColor" stroke-dasharray="5 4"/><text x="{left + 6}" y="{y(gate) - 5:.1f}" font-size="11" fill="currentColor">the arm card\'s gate, {gate:g} %</text>'
+    return f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="coverage against sweep time" style="max-width:100%;color:var(--fg)">{ticks}{xt}{gate_line}{"".join(lines)}</svg>'
+
+
+def bins_table(doc: dict) -> str:
+    rows = doc["schedule"]["coverage"]["train"].get("visited_by_joint_bin") or []
+    names = ("shoulder pan", "shoulder lift", "elbow", "wrist 1", "wrist 2", "wrist 3")
+    body = "".join(f"<tr><td>{n}</td>" + "".join(f"<td>{c:,}</td>" for c in r) + "</tr>" for n, r in zip(names, rows))
+    return f"<div class='scroll'><table><thead><tr><th>visited cells, by the joint's bin</th><th>bin 0</th><th>bin 1</th><th>bin 2</th><th>bin 3</th></tr></thead><tbody>{body}</tbody></table></div>"
+
+
+def arm_coverage_section(shots: dict, docs: dict) -> str:
+    img = lambda k, alt: f'<img src="{data_uri(shots[k])}" alt="{esc(alt)}" loading="lazy">' if k in shots else ""  # noqa: E731
+    arms = [docs[x] for x in ARM_EXAMPLES if x in docs]
+    if not arms or not arms[0]["schedule"].get("sweep"):
+        return ""
+    from type_cards import registry as reg  # noqa: PLC0415
+
+    gate = reg.CARDS["arm_6dof"].coverage.gate_pct
+    rows, curves = [], {}
+    for d in arms:
+        x, sch, cov = d["example"], d["schedule"], d["schedule"]["coverage"]
+        sw = sch["sweep"]
+        before = before_doc(x)
+        bcov = before["schedule"]["coverage"]["train"] if before else {}
+        curves[x] = [tuple(p) for p in sw["curve"]]
+        rows.append(f"<tr><td><b>{esc(d['title'])}</b> <span class='mute'>{esc(d.get('subtitle', ''))}</span></td>"
+                    f"<td>{landing.num(bcov.get('pct'), 3)} % ({bcov.get('visited', 0):,} cells)</td>"
+                    f"<td class='{'ok' if cov['train']['pct'] >= gate else 'no'}'>{landing.num(cov['train']['pct'], 4)} % ({cov['train']['visited']:,} cells)</td>"
+                    f"<td>{landing.num(cov['train']['without_sweep_pct'], 3)} %</td>"
+                    f"<td>{sw['waypoints']:,} moves, {sw['seconds'] / 60:.1f} min in {sw['trajectories']} trajectories</td>"
+                    f"<td>{sch['train']['seconds'] / 60:.1f} min motion + {sch['train']['settle_s'] / 60:.1f} min settling (before: {(before['schedule']['train']['seconds'] if before else 0) / 60:.1f} + {(before['schedule']['train']['poses'] * 1.5 if before else 0) / 60:.1f})</td>"
+                    f"<td>{d['verdict']['parameters_pass']} / {d['verdict']['parameters']}</td>"
+                    f"<td>{'<br>'.join(esc(m['id']) + ': ' + landing.num(m['before'], 3) + ' → ' + landing.num(m['after'], 3) + ' (' + landing.num(m['factor'], 3) + '×)' for m in d['metrics'])}</td></tr>")
+    a = arms[0]["schedule"]["sweep"]
+    cand = min(d["schedule"]["sweep"]["candidate_cells"] for d in arms)
+    need = int(-(-gate * 4096 // 100))
+    stills = "".join(f"<figure><figcaption>{esc(d['title'])} · {esc(d.get('subtitle', ''))}: the example page's schedule and coverage on the built site</figcaption>{img('schedule-' + d['example'], d['title'] + ' schedule')}</figure>" for d in arms)
+    return f"""<h2 id="arm-coverage">Arm coverage: the UR schedules now meet the arm card's own {gate:g} % gate</h2>
+<p>The arm_6dof card scores a plan on a 4 × 4 × 4 × 4 × 4 × 4 joint cube (each joint's range split in 4: π-wide cells on five joints, π/2 on the elbow) and
+gates it at {gate:g} % of the 4,096 cells, each visited once (every physics rung's need; the learned rungs' 95 % / 200 samples are not fitted here). The old schedules
+(40 poses, four 10 s Fourier excitations around one centre) visited about 35 cells. The new train split adds a <b>coverage sweep</b>: scrambled Sobol waypoints
+(<code>scipy.stats.qmc.Sobol</code>, 2^{a['sobol_points'].bit_length() - 1} points) over the card's box, one per cell where MuJoCo finds the arm {landing.num(a['floor_clearance_m'] * 100, 2)} cm clear of a floor at its base and
+{landing.num(a['self_clearance_m'] * 100, 2)} cm clear of itself; toured greedily by new cells per second in straight joint-space minimum-jerk moves at most {a['speed_rad_s']:g} rad/s (UR's limit is π) and
+{a['accel_rad_s2']:g} rad/s² (UR states none), every 10 ms sample collision-checked. The sweep is train data: the dynamics fit regresses on it with the excitations.
+The static poses and excitations are now also drawn until clear (8 of the bare arm's 40 old train poses were in the floor or in the arm, and three of the gripper example's excitations clipped it).
+<code>sysid/tests/test_arm_coverage.py</code> (committed red first) holds both to the card's gate, the joint ranges, 180 °/s and its own collision check.</p>
+<div class="scroll"><table><thead><tr><th>example</th><th>train coverage before ({ARM_BEFORE})</th><th>after</th><th>after, without the sweep</th><th>the sweep</th><th>schedule duration (train)</th><th>parameters in tolerance</th><th>held-out before → after</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
+<figure><figcaption>Train coverage while the sweep runs (from the plan; starts at what the poses and excitations visit)</figcaption>{curve_svg(curves, gate)}</figure>
+<figure><figcaption>{esc(arms[0]['title'])}: visited cells per joint bin. The shoulder lift's bin 3 is empty on purpose (below)</figcaption>{bins_table(arms[0])}</figure>
+{stills}
+<h3>Is {gate:g} % the right gate for a 6-DOF cube? Met, but it asks for {100 * need / cand:.0f} % of what a floor-mounted arm can reach</h3>
+<ul class="tight">
+<li>The card counts every cell reachable ("the limits are a box"). On a floor, only {landing.num(cand, 4)} cells hold a collision-free waypoint in the shoulder lift's reachable span
+({a['lift_span_rad'][0]:g} to {a['lift_span_rad'][1]:g} rad; {landing.num(100 * cand / 4096, 3)} % of the cube): the gate's {need:,} cells are {100 * need / cand:.0f} % of them.</li>
+<li>The shoulder lift's bins 1 ([−π, 0)) and 3 ([π, 2π]) are the same physical posture 2π apart; going from one to the other swings the upper arm through whatever the
+arm is mounted on, so one installed arm covers one of them. That makes bin 3 (1,024 cells, 25 % of the cube) unreachable, and bins 0 and 2 are reachable only
+as slivers just past horizontal, with the elbow folded up (they hold about 5 % of a bin's volume).</li>
+<li>Recommendation for lane A (not changed here: type_cards is its contract): give arm_coverage a reachable rule like the servo's: drop cells that are not
+collision-free and connected to home (FK + the collision geoms), or bin the shoulder lift over its physical span. Then {gate:g} % would mean {gate:g} % of what the arm can reach (about {int(gate / 100 * cand):,} cells here), not {100 * need / cand:.0f} % of it.</li>
+</ul>"""
 
 
 def render(shots: dict, tests: dict, shas: dict, docs: dict) -> str:
@@ -263,6 +356,8 @@ identification code, and it can fail: every gated parameter's nominal value is o
 <figure><figcaption>390 px: the cards stack, no sideways scroll</figcaption>{img('phone', 'phone')}</figure>
 {''.join(sections)}
 
+{arm_coverage_section(shots, docs)}
+
 <h2>Drift</h2>
 {drift}
 
@@ -283,7 +378,7 @@ identification code, and it can fail: every gated parameter's nominal value is o
 <li>Decided: the package is <code>sysid/</code> (examples under <code>sysid/examples/</code>); the pipelines run in bam_rack_twin's environment (MuJoCo 3.11) and import bam_ws in place; the site reads committed results (stdlib). Undo: <code>git revert</code> the landing commits.</li>
 <li>Decided: values sit on the cards' own ladders (<code>sysid/cards.py</code> PLACE); the gripper and the tool an arm carries have no card yet (proposed for lane A).</li>
 <li>Decided: every result names what computed it: this repo's commit (<code>+dirty</code> only for uncommitted code, never for the results a run writes, which the first write had counted on every page) and each checkout used in place, with its branch and last commit (bam_ws, the io-diagnostics and robot_msgs checkouts bam_rack_twin imports, Menagerie), listed at the foot of every example page and below.</li>
-<li>Left: the arm plans cover &lt; 1 % of the arm card's 4,096-cell joint cube (the card's 40 % gate fails): the card's rule is in joint space, the calibration poses were picked for the tracker and the tags.</li>
+<li>Decided (arm-coverage lane): the UR train schedules carry a collision-free Sobol coverage sweep that meets the arm card's 40 % gate (above); the gate itself is left to lane A, with a recommendation. Undo: <code>git revert</code> the arm-coverage commits.</li>
 <li>Not done: rendered images and a real detector in the camera loops (corner detections are projections plus noise); band centres and widths (need a lamp); contact and grip force (need a gauge).</li>
 </ul>
 <p class="mute">{sha_line}</p>

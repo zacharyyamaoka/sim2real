@@ -154,7 +154,13 @@ def schedule_line(doc: dict) -> str:
     s = doc["schedule"]
     def part(d):
         keys = [k for k in ("runs", "poses", "excitations", "profiles", "views", "passes", "dots", "rgbd_frames", "arm_poses", "belt_travels") if k in d]
-        return ", ".join(f"{d[k]:,} {k.replace('_', ' ')}" for k in keys[:3])
+        text = ", ".join(f"{d[k]:,} {k.replace('_', ' ')}" for k in keys[:3])
+        # the arm plans state their motion and the coverage sweep's share of it (sysid.arm.arm_coverage)
+        if d.get("sweep_s"):
+            text += f", a {d['sweep_s'] / 60:.1f} min coverage sweep"
+        if d.get("seconds") is not None and "sweep_s" in d:
+            text += f" ({d['seconds'] / 60:.1f} min of motion, {d.get('settle_s', 0) / 60:.1f} min settling)"
+        return text
     return f"train {part(s['train'])} · held out {part(s['held_out'])}"
 
 
