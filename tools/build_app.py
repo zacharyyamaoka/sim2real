@@ -233,6 +233,17 @@ def replays_by_path() -> dict[str, dict]:
         for run in document["runs"]:
             out[run["run_path"]] = {"origin": "twin_replays", **run, "source_file": str(TWIN_REPLAYS)}
         out["__envelopes__"] = document.get("envelopes", {})
+    # WHY a session's own replays (2026-11-05, CAN 11's frozen schedule): a schedule session's producer (bam_rack_twin
+    # docs/can11_frozen_1105.py) writes the twin of record's replay of every run beside the runs, <session>/analysis/twin_replays.json,
+    # in this file's twin_replays shape; found under the registry's archive folders, never copied into this repo
+    for entry in json.loads(REGISTRY.read_text())["deployments"]:
+        for root in entry["archive"]:
+            for path in sorted(Path(root).glob("*/analysis/twin_replays.json")):
+                document = json.loads(path.read_text())
+                if document.get("schema") != "sim2real.twin_replays/1":
+                    continue
+                for run in document["runs"]:
+                    out.setdefault(run["run_path"], {"origin": "session_replays", **run, "source_file": str(path)})
     return out
 
 
@@ -730,6 +741,53 @@ def headline(gid: str, gate: dict) -> str:
     return "no judged number" + (f" · limit {_fmt(limit)}{unit}" if limit is not None else "")
 
 
+WORST_WINDOW_S = 1.0  # the playback window a session-scored T2 row opens: the 1 s of the judged tape where the twin is furthest from real
+
+
+def worst_window(replay: dict, prelude_s: float) -> tuple[float, float, float] | None:
+    """(t0, t1, RMS mrad) of the WORST_WINDOW_S window with the largest RMS(real - twin) after the prelude, rows both in position mode, on the
+    run's own clock (the page clock: the replay's t starts at the run's first row)."""
+
+    t = np.asarray(replay["t"], float)
+    model = next(iter(replay["models"].values()))
+    real = np.asarray([np.nan if v is None else v for v in replay["q_rad"]], float)
+    twin = np.asarray([np.nan if v is None else v for v in model["q_rad"]], float)
+    error = np.where((t >= prelude_s) & np.isfinite(real) & np.isfinite(twin), real - twin, np.nan)
+    best = None
+    for start in np.arange(prelude_s, max(prelude_s, t[-1] - WORST_WINDOW_S) + 1e-9, 0.1):
+        rows = error[(t >= start) & (t < start + WORST_WINDOW_S)]
+        rows = rows[np.isfinite(rows)]
+        if rows.size and (best is None or np.sqrt(np.mean(rows**2)) > best[2]):
+            best = (float(start), float(start + WORST_WINDOW_S), float(np.sqrt(np.mean(rows**2))))
+    return None if best is None else (best[0], best[1], 1e3 * best[2])
+
+
+def session_t2(res: dict, cited_path: Path, by_slug: dict, dep_id: str, sid: str) -> tuple[str, bool, bool, str, str | None]:
+    """A schedule session's T2 (its scored file's fidelity.t2): both floor rules, the reason in numbers, and the worst window of the judged tape."""
+
+    t2, the_floors = res["fidelity"]["t2"], res["floors"]
+    a, b = t2["session"], t2["pooled"]
+    floors = (f"session floor ({the_floors['session']['all']:.2f} mrad): moves {a['moves_over_floor']:.2f}×, hold {a['hold_offset_over_floor']:.2f}× "
+              f"({'pass' if a['passes'] else 'fail'}) · pooled floor ({the_floors['pooled']['all']:.2f} mrad, {the_floors['pooled']['pairs']} pairs): "
+              f"moves {b['moves_over_floor']:.2f}×, hold {b['hold_offset_over_floor']:.2f}× ({'pass' if b['passes'] else 'fail'})")
+    run = Path(a["t2_run"])
+    body = (f"on the frozen schedule {str(res.get('schedule_digest', ''))[:8]}'s held-out operate runs ({t2['runs']}, H2), the twin's moving error on the worst "
+            f"{t2['floor_class']} tape ({run.stem}) is {a['moves_mrad']:.2f} mrad against the floor's moving part; its rest offset {abs(a['rest_offset_mrad']):.2f} mrad "
+            f"passes. This session's floor is {the_floors['session']['all'] / the_floors['il0.5']['all']:.2f}× the 10-29 floor, so the verdict depends on which "
+            f"floor divides it")
+    link = None
+    slug = slug_of(str(run))
+    replays = cited_path.parent / "twin_replays.json"
+    if slug in by_slug and replays.is_file():
+        replay = next((r for r in json.loads(replays.read_text())["runs"] if r["run_path"] == str(run)), None)
+        window = worst_window(replay, float(replay.get("prelude_s") or 0.0)) if replay else None
+        if window:
+            t0, t1, rms_mrad = window
+            link = f"{APP_URL}?d={dep_id}&run={slug}&why={sid}#t={t0:.3f}&tr={t0:.3f},{t1:.3f}"
+            body += f"; its worst {WORST_WINDOW_S:g} s is {t0:.2f}-{t1:.2f} s, {rms_mrad:.2f} mrad RMS (twin vs real)"
+    return floors, bool(a["passes"]), bool(b["passes"]), body, link
+
+
 def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_rows: list[dict]) -> list[dict]:
     """One row per (station, gate) the newest acceptance does not pass, plus each pass that flips under the pooled floor: the judged
     statistics against their limits (headline), why (from the result file the acceptance cites, else the acceptance's own words),
@@ -775,6 +833,9 @@ def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_r
             cited_path, cited_model = cited_result(facts, gid)
             model = model_of(gid, facts, cited_model)
             res = result_doc(cited_path)
+            if str(res.get("schema", "")).startswith("bam_rack_twin.can11_frozen") and (res.get("twin") or {}).get("version"):
+                # a schedule session's scored file names its twin itself; the acceptance's source line opens with the schedule instead
+                cited_model = model = f"twin of record: followup {res['twin']['label']} ({res['twin']['version']})" if gid in RATIO_GATES else model
             res_station = (res.get("stations") or {}).get(sid) or {}
             res_stamp = res.get("scored_at") or res.get("written_at")
             limiting = res_station.get("labels", {}).get("pick")  # a modelling round's pick: t2/t9/t10 keyed by its label
@@ -791,6 +852,11 @@ def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_r
                     session_pass, pooled_pass = a["passes"], b["passes"]
                     floors = (f"session floor: moves {a['moves_over_floor']:.2f}×, hold {a['hold_offset_over_floor']:.2f}× ({'pass' if a['passes'] else 'fail'}) · "
                               f"pooled floor: moves {b['moves_over_floor']:.2f}×, hold {b['hold_offset_over_floor']:.2f}× ({'pass' if b['passes'] else 'fail'})")
+                elif ((res.get("fidelity") or {}).get("t2") or {}).get("pooled"):
+                    # a schedule session's scored file (bam_rack_twin docs/can11_frozen_1105.py): its own T2 on the session's held-out set
+                    floors, session_pass, pooled_pass, body, link = session_t2(res, cited_path, by_slug, dep_id, sid)
+                    floors = labelled(cited_path, res_stamp, cited_model, floors, "the same result")
+                    why_parts.append(labelled(cited_path, res_stamp, cited_model, body, "the same result"))
                 else:
                     p2 = (pooled.get(sid) or {}).get("t2") or {}
                     if p2.get("session") and p2.get("pooled"):
@@ -1014,6 +1080,13 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         names = [s["situation"] for s in situations]
         models = [s["situation"] for s in situations if s["source"] == "sim"]
         title = f"{session} · {path.stem}"
+        # WHY a run set (2026-11-05): a schedule session's runs carry their schedule stamp (bam_rack_twin.hardware.session); they are one
+        # set to read together (one frozen schedule, one mode, one sitting), so the runs table groups and filters by it
+        stamp = meta.get("schedule") or {}
+        run_set = (f"{device} · schedule {str(stamp['digest'])[:8]} · {stamp.get('mode')} · {Path(session).name}" if stamp.get("digest")
+                   else session)
+        if stamp.get("run"):
+            title += f" · {stamp['run']}"
         url = f"{APP_URL}?d={dep_id}&run={slug}"
         t = arrays["t"]
         row = {
@@ -1031,6 +1104,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
             "page": url, "url": url, "npz": str(path), "basis": "real", "round": (replay or {}).get("round"),
             "deployment": dep_id, "devices": [device], "label": title,
             "clock_offset_s": num(clock_offset, 6),
+            "run_set": run_set, "split": stamp.get("split"), "schedule_run": stamp.get("run"),
         }
         diagnostics = run_diagnostics(dep_id, slug, title, device, situations, arrays, floor)
         tracking = next((d for d in diagnostics if d["diagnostic"] == "stock.tracking_error"), None)
@@ -1138,7 +1212,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
 SOURCE_SLOT = {"real": 1, "sim": 2, "target": 0}  # data-ui badge slots: 1 blue = real, 2 orange = sim, 0 muted = target
 VERDICT_SLOT = {"pass": 3, "warn": 4, "partial": 4, "fail": 8, "not_run": 0}  # green and red mean pass/fail only
 # WHY every kind muted: an unlisted badge value gets a hashed slot, and "waypoints" landed on green, which means pass here
-KIND_SLOT = {kind: 0 for kind in ("waypoints", "sine", "tape", "gravity", "friction", "chirp", "hardstop", "thermal", "staircase", "impact", "?")}
+KIND_SLOT = {kind: 0 for kind in ("waypoints", "sine", "tape", "gravity", "friction", "chirp", "hardstop", "thermal", "staircase", "impact", "samples", "?")}
 SAMPLE_PROPS = {"t": {"unit": "s", "digits": 4}, "q_deg": {"unit": "°", "digits": 5}, "qd_deg_s": {"unit": "°/s", "digits": 4},
                 "qdd_deg_s2": {"unit": "°/s²", "digits": 4, "note": "derived: a 5-sample moving mean of qd, then central differences (the board logs no qdd)"},
                 "tau_nm": {"unit": "N·m", "digits": 4}, "i_q_a": {"unit": "A", "digits": 4}, "temp_c": {"unit": "°C", "digits": 3},
@@ -1159,11 +1233,14 @@ RUN_HINTS = {"title": {}, "day": {}, "session": {}, "device": {}, "class": {}, "
              "ki": {"type": "number", "unit": "board"}, "kd": {"type": "number", "unit": "board"}, "ilimit": {"type": "number", "unit": "N·m"},
              "gains": {}, "models": {"type": "integer"}, "compare": {}, "page": {"display": "link"}, "npz": {}, "round": {},
              "clock_offset_s": {"type": "number", "unit": "s"},
+             "run_set": {"note": "a schedule session's runs (station, schedule digest, mode, session); else the session folder"},
+             "split": {"note": "the run's schedule split: floor, train or held_out (blank for a run recorded before schedule stamps)"},
+             "schedule_run": {},
              "tracking_mrad": {"type": "number", "unit": "mrad", "digits": 3, "note": "RMS(real − target), robotdx stock.tracking_error"},
              "best_model": {}, "best_model_mrad": {"type": "number", "unit": "mrad", "digits": 3, "note": "the closest model's RMS(real − model)"},
              "verdict": {"display": "badge", "colors": {"pass": 3, "warn": 4, "partial": 4, "fail": 8, "not_run": 0},
                          "note": "the closest model's whole-run RMS against 1.5x the station's floor (not the T2 moves/holds split); not_run = no model played this run"},
-             "kind": {"display": "badge", "colors": {k: 0 for k in ("waypoints", "sine", "tape", "gravity", "friction", "chirp", "hardstop", "thermal", "staircase", "impact", "?")}},
+             "kind": {"display": "badge", "colors": {k: 0 for k in ("waypoints", "sine", "tape", "gravity", "friction", "chirp", "hardstop", "thermal", "staircase", "impact", "samples", "?")}},
              "basis": {"display": "badge", "colors": {"real": 1}}, "duration_s": {"digits": 3}, "rate_hz": {"digits": 3}}
 DEVICE_PROPS = {"q_min_deg": {"unit": "°"}, "q_max_deg": {"unit": "°"}, "qd_max_deg_s": {"unit": "°/s"}}
 GATE_PROPS = {"verdict": {"display": "badge", "colors": VERDICT_SLOT}}

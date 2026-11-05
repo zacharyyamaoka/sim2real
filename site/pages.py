@@ -448,7 +448,8 @@ def run_diagnostics(site, row: dict) -> str:
 def run_evidence(site, row: dict) -> str:
     folder = f"/data/{row['deployment']}/runs/{row['run']}/"
     files = " · ".join(a(folder + name, name) for name in ("samples.json", "poses.json", "diff_samples.json", "diff_poses.json", "run.json", "diagnostics.json"))
-    keep = ("run", "started", "session", "day", "device", "kind", "duration_s", "samples", "rate_hz", "gains", "situations", "compare", "npz", "round", "basis", "clock_offset_s")
+    keep = ("run", "started", "session", "run_set", "split", "schedule_run", "day", "device", "kind", "duration_s", "samples", "rate_hz", "gains", "situations", "compare", "npz",
+            "round", "basis", "clock_offset_s")
     fields = table(["Field", "Value"], [[e(k), file_link(row[k]) if k == "npz" else e(", ".join(row[k]) if isinstance(row[k], list) else num(row[k]))]
                                          for k in keep if k in row], caption="This run as runs.json records it")
     return f"<h2>The recording</h2>{fields}<h2>The tables this page reads</h2><p>{files}</p>"
@@ -530,6 +531,8 @@ facets:
   - { as: current, label: Your filters }
   - { property: title, as: search, properties: [title, device, kind, session, compare], label: Find, placeholder: "Run, station or kind" }
   - { property: device, label: Station }
+  - { property: run_set, label: Run set, limit: 8 }
+  - { property: split, label: Split }
   - { property: kind, label: Kind, limit: 8 }
   - { property: compare, label: Situations }
   - { property: day, label: Day }
@@ -547,6 +550,8 @@ properties:
   verdict: { displayName: Twinned? }
   day: { displayName: Day }
   session: { displayName: Session }
+  run_set: { displayName: Run set }
+  split: { displayName: Split }
   url: { displayName: Open }
 views:
   - type: table
@@ -559,7 +564,7 @@ views:
 
 
 def search_rows(site: Site) -> str:
-    keep = ("title", "device", "started", "kind", "compare", "duration_s", "gains", "tracking_mrad", "best_model", "verdict", "day", "session")
+    keep = ("title", "device", "started", "kind", "compare", "duration_s", "gains", "tracking_mrad", "best_model", "verdict", "day", "session", "run_set", "split")
     rows = [{**{k: r.get(k) for k in keep}, "id": r["run"], "url": run_url(r)} for r in sorted(site.runs, key=lambda r: r["started"], reverse=True)]
     return json.dumps({"id": "runs", "title": "Every run", "titleProperty": "title", "linkProperty": "url", "rows": rows},
                       ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n"

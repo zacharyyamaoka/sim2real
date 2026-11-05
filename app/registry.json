@@ -15,7 +15,8 @@
     "/archive/datasets/bam_rig/rack_2026-10-24",
     "/archive/datasets/bam_rig/rack_2026-10-25",
     "/archive/datasets/bam_rig/rack_2026-10-28",
-    "/archive/datasets/bam_rig/rack_2026-10-29"
+    "/archive/datasets/bam_rig/rack_2026-10-29",
+    "/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/runs"
    ],
    "scored": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_scored.json",
    "earlier_floors": "/archive/datasets/bam_rig/rack_2026-10-24/analysis/floors.json",

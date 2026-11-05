@@ -526,6 +526,30 @@ def served_explanation_checks(out: Path) -> None:
                       f"({gmax.group(1) if gmax else 'not stated'})")
 
 
+def run_set_checks(data: Path, out: Path) -> None:
+    """A schedule session is one run set (2026-11-05, CAN 11's frozen schedule): every run carrying a schedule stamp is in the set named
+    for its station, digest, mode and session, the set holds exactly the session's completed steps, its replayed runs play the twin
+    beside real, and the served runs list filters by it (the Run set facet, the rows' run_set)."""
+    rows = json.loads((data / "runs.json").read_text())["rows"]
+    stamped = [r for r in rows if r.get("split")]
+    sets: dict[str, list[dict]] = {}
+    for r in stamped:
+        sets.setdefault(r["run_set"], []).append(r)
+    check(bool(sets) and all("· schedule " in name for name in sets), f"every schedule-stamped run sits in a named run set ({sorted(sets)})")
+    for name, members in sets.items():
+        session = Path(members[0]["npz"]).parent.parent
+        steps = [st for st in json.loads((session / "session.json").read_text())["steps"] if st["kind"] != "pause" and st["status"] == "complete"]
+        check(len(members) == len(steps) and {r["npz"] for r in members} == {str(session / f) for st in steps for f in st["files"] if f.endswith(".npz")},
+              f"run set {name!r} holds exactly its session's {len(steps)} completed runs ({len(members)})")
+        played = [r for r in members if r["models"]]
+        check(len(played) == len(members) and all("twin of record" in r["situations"] for r in played),
+              f"run set {name!r}: every run plays the twin of record beside real ({len(played)} of {len(members)})")
+    base = (out / "views" / "runs.base").read_text()
+    served = json.loads((out / "data" / "search.json").read_text())["rows"]
+    check("property: run_set, label: Run set" in base and sum(1 for r in served if r.get("run_set") in sets) == len(stamped),
+          f"the runs list filters by run set (the facet, and {len(stamped)} served rows carry it)")
+
+
 def station_key_of(device: str) -> str:
     return device.lower().replace(" ", "")
 
@@ -578,6 +602,7 @@ def main() -> int:
     served_explanation_checks(out)
     whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
+    run_set_checks(data, out)
 
     vendored = SITE / "vendor" / "catalog_workbench"
     manifest = json.loads((vendored / "MANIFEST.json").read_text())["files"]
