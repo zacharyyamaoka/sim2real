@@ -4,6 +4,10 @@
 
 Stdlib only. Writes the note to the vault directly when it does not exist yet; an existing note is Obsidian's, so it is
 rewritten only through ~/zach_brain/Settings/Scripts/obsidian-edit.py (the script says so and prints the path to pass it).
+
+Since 2026-11-05 it renders v2 (Zach's Nov 5 workflow: model rungs, diagnostics and gates, test types, coverage bins, calibration
+packages) into a NEW note, NOTE_V2; the Nov 4 note (NOTE) is never rewritten by this script (WHY: the dispatcher's brief, "Don't
+overwrite the Nov 4 note": it is the record of what v1 said).
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from type_cards import coverage as cov  # noqa: E402
 from type_cards import registry as reg  # noqa: E402
 
 NOTE = Path("/home/bam/zach_brain/Projects/BAM Robotics/Notes/Sim2Real Type Cards — Metrics, Models, Coverage and Views per Part Type (2026-11-04).md")
+NOTE_V2 = NOTE.with_name("Sim2Real Type Cards v2 — Model Rungs, Diagnostics, Test Types and Calibration Packages (2026-11-05).md")
 SCHEDULE = Path("/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/schedule.json")
 MODEL = "Claude Code · Opus 5.5 (`claude-opus-5-5`)"
 CATALOG_NOTE = "Stock Diagnostics per Robot Part Type — Catalog and Library (2026-10-28)"
@@ -60,9 +65,12 @@ def card_section(card: reg.Card, can11) -> str:
             f"robotparts: {'`' + m.robotparts + '`' if m.robotparts else 'none'}{(' · ' + m.proposed) if m.proposed else ''}. Equation: `{m.equation}`.", "",
             table(["Parameter", "Unit", "Nominal", "Source", "Identified by", "Outputs see it?", "Note"],
                   [[f"`{p.name}`", p.unit, p.nominal, p.source, p.identified_by, WORD[p.observable], p.note] for p in m.parameters])]
+    out += rungs_section(card) + checks_section(card) + tests_section(card)
     c = card.coverage
-    out += ["", "### Coverage", "", f"{c.rule}." + (f" RobotDx: `{c.robotdx}`." if c.robotdx else "") + (f" Plan from: {c.plan_source}." if c.plan_source else ""), "",
-            table(["Axis", "Unit", "Binning"], [[a.name, a.unit, a.binning] for a in c.axes])]
+    out += ["", "### Coverage", "", f"{c.rule}." + (f" RobotDx: `{c.robotdx}`." if c.robotdx else "") + (f" Plan from: {c.plan_source}." if c.plan_source else "")
+            + (f" **Coverage gate:** a plan passes when it visits ≥ {c.gate_pct:g} % of the reachable headline cells." if c.gate_pct is not None else ""), "",
+            table(["Axis", "Unit", "Bin size", "Binning", "Marginal"], [[a.name, a.unit, "—" if a.bin_size is None else f"{a.bin_size:g} {a.unit}", a.binning,
+                                                                         "yes" if a.marginal else "headline"] for a in c.axes])]
     if card.id == "servo" and can11:
         train, held = cov.servo_coverage(can11), cov.servo_coverage(can11, split="held_out")
         out += ["", f"**CAN 11's planned schedule** (`{can11['digest']}`, not run yet): train visits **{train.pct} %** of the {train.reachable} reachable "
@@ -79,15 +87,95 @@ def card_section(card: reg.Card, can11) -> str:
     return "\n".join(out)
 
 
+def short(ref) -> str:
+    """'Hwangbo et al. 2019' from 'Hwangbo, Lee, ... (2019). Title. Venue.' (the site's types_pages.ref_short, the same rule)."""
+    head, _, rest = ref.title.partition(" (")
+    year, _, after = rest.partition(").")
+    authors = [a for a in head.split(", ") if a]
+    who = authors[0] + (" et al." if len(authors) > 2 else f" & {authors[1]}" if len(authors) == 2 else "")
+    return (f"{who} {year}".strip() + (": " + after.strip().rstrip(".") if ref.kind in ("doc", "standard", "code") else "")
+            + (" (arXiv)" if ref.kind == "preprint" and "arXiv" in ref.title else ""))
+
+
+def cite(ref) -> str:
+    """A reference as a short markdown link; the full citation is in the note's References."""
+    return f"[{short(ref)}]({ref.url})" if ref.url else short(ref)
+
+
+def references_section() -> str:
+    seen = {}
+    for card in reg.CARDS.values():
+        for r in card.rungs:
+            for ref in r.references:
+                seen.setdefault(ref.title, ref)
+    for pkg in reg.CALIBRATION_PACKAGES:
+        for ref in pkg.references:
+            seen.setdefault(ref.title, ref)
+    for refs in reg.WEAR_LAW_REFERENCES.values():
+        for ref in refs:
+            seen.setdefault(ref.title, ref)
+    lines = [f"- {ref.title}" + (f" [{('doi:' + ref.doi) if ref.doi else 'link'}]({ref.url})" if ref.url else "") + (f" — {ref.note}" if ref.note else "")
+             for _t, ref in sorted(seen.items())]
+    return (f"## References\n\nEvery work the rungs, packages and wear laws cite ({len(lines)}), each DOI resolved at Crossref with its title matched and "
+            "every URL fetched (`type_cards/check_references.py`, results in `type_cards/references_checked.json`).\n\n" + "\n".join(lines))
+
+
+def rungs_section(card) -> list[str]:
+    rows, below = [], set()
+    for r in card.rungs:
+        names = ", ".join(f"**{n}**" if n not in below else n for n in r.parameter_names) or "—"
+        size = f"{r.n_parameters:,}" + (f" ({r.n_named} named + {r.architecture.weights:,} weights)" if r.architecture and r.n_named
+                                        else " weights" if r.architecture else "")
+        need = r.needs
+        needs = (f"{need.min_pct:g} % × ≥ {need.min_samples}" + ("" if need.extrapolates else ", no extrapolation")) if need else "—"
+        rows.append([f"{r.key}{' (today)' if r.current else ''}", r.name, r.kind, size, names, needs,
+                     "<br>".join(cite(x) for x in r.references)])
+        below = set(r.parameter_names)
+    out = ["", "### Model rungs", "", table(["Rung", "Model", "Kind", "Parameters", "Names (new in bold)", "Coverage it needs", "Learn it"], rows)]
+    arch = [[r.key, r.architecture.family, f"{', '.join(r.architecture.inputs)} × {r.architecture.history}", " × ".join(map(str, r.architecture.hidden)) or "—",
+             r.architecture.activation or "—", r.architecture.output, f"{r.architecture.weights:,}"] for r in card.rungs if r.architecture]
+    if arch:
+        out += ["", table(["Learned rung", "Family", "Inputs × history", "Hidden", "Activation", "Predicts", "Weights"], arch)]
+    worn = [[r.key, f"`{p.name}`", f"{p.wear.usage} ({p.wear.unit})", p.wear.law, f"`{p.wear.rate}`"] for r in card.rungs if r.kind == "physics"
+            for p in r.wear_parameters]
+    if worn:
+        out += ["", table(["Wear rung", "Parameter", "Usage", "Law", "Rate"], worn)]
+    return out
+
+
+def checks_section(card) -> list[str]:
+    gate_of = {g.diagnostic: g for g in card.gates}
+    rows = []
+    for d in card.diagnostics:
+        g = gate_of.get(d.id)
+        rows.append([d.metric, d.kind, d.threshold.text() + (f" — *{d.message}*" if d.kind == "drift" else ""),
+                     (g.target.text() + (f" ({g.acceptance})" if g.acceptance else "")) if g else "observed",
+                     (f"{d.forecast.usage} left, {d.forecast.law} law of {', '.join(d.forecast.parameters)}" if d.forecast else "")])
+    observed = [m.title for m in card.metrics if reg.metric_status(card, m.id) == "observed"]
+    return ["", "### Diagnostics and gates", "", "A diagnostic is a metric + a threshold; a gate is a diagnostic + a target." +
+            (f" Observed, not gated: {', '.join(observed)}." if observed else ""), "",
+            table(["Reads metric", "Kind", "Threshold (fine side)", "Gate target", "Forecast"], rows)]
+
+
+def tests_section(card) -> list[str]:
+    rows = [[t.title, t.setting, ", ".join(f"`{n}`" for n in t.identifies), t.how, "yes" if t.recalibration else "—", t.exists or "—"] for t in card.tests]
+    return ["", "### Test types", "", table(["Test", "Setting", "Identifies", "How", "Recalibrates", "Today"], rows)]
+
+
 def render() -> str:
     can11 = json.loads(SCHEDULE.read_text()) if SCHEDULE.is_file() else None
     cards = list(reg.CARDS.values())
     n_metrics = sum(len(c.metrics) for c in cards)
     n_prop = sum(1 for c in cards for x in c.metrics if not x.robotdx)
     today = [c.title for c in cards if c.observability.today == "yes"]
-    glance = table(["Type", "Metrics (proposed)", "Model params", "Coverage axes", "View (data-ui)", "Measurable today?"],
-                   [[f"[[#{c.title}]]", f"{len(c.metrics)} ({sum(1 for x in c.metrics if not x.robotdx)})", len(c.model.parameters),
-                     ", ".join(a.name for a in c.coverage.axes), f"`{c.view.template}`" if c.view.template else "proposed", WORD[c.observability.today]] for c in cards])
+    glance = table(["Type", "Model rungs (parameters)", "Metrics (proposed)", "Gates", "Test types", "Coverage axes", "Measurable today?"],
+                   [[f"[[#{c.title}]]", " · ".join(f"{r.key} {r.n_parameters:,}" for r in c.rungs), f"{len(c.metrics)} ({sum(1 for x in c.metrics if not x.robotdx)})",
+                     len(c.gates), len(c.tests), ", ".join(a.name for a in c.coverage.axes), WORD[c.observability.today]] for c in cards])
+    packages = table(["Package", "Serves", "Code today", "Status"],
+                     [[f"**{p.group}**: {p.title}", ", ".join(f"[[#{reg.CARDS[s].title}]]" for s in p.serves),
+                       "<br>".join(f"`{h.repo.replace('/home/bam/', '')}:{h.path}`" + (f" @ `{h.ref}`" if h.ref else "") for h in p.code) or "unknown",
+                       p.status + (f": {p.note}" if p.note else "")] for p in reg.CALIBRATION_PACKAGES])
+    servo = reg.CARDS["servo"]
     steps = table(["#", "Step", "File", "What"], [[i + 1, s.title, f"`{s.artifact}`", s.does] for i, s in enumerate(reg.STEPS)])
     gaps = {}
     for repo, card, what in reg.gaps():
@@ -97,7 +185,7 @@ def render() -> str:
     if can11:
         servo_line = f" The Servo card's coverage function gives CAN 11's planned schedule **{cov.servo_coverage(can11).pct} %**, the same number `bam_rack_twin.schedule` computes."
     head = f"""---
-date created: 2026-11-04T21:00:00-07:00
+date created: 2026-11-05T12:00:00-07:00
 familiarity: Created by AI
 model: {MODEL}
 tags:
@@ -109,25 +197,34 @@ parent: "[[PROJECT - Sim2Real]]"
 generated_by: "/home/bam/sim2real/type_cards/render_note.py (sim2real {sha(reg.REPO)})"
 ---
 
-> [!ai]- AI handoff: {len(cards)} type cards in code, each with metrics, a model, coverage, a view and the shared procedure; servo is the only one fully measurable today
-> **What this is:** your Nov 4 journal list ([[PROJECT - Sim2Real#Nov 4 2026]]) turned into one card per part type. The cards are code: `/home/bam/sim2real/type_cards/registry.py`. This note is rendered from it by `type_cards/render_note.py`, so change the registry and re-render; don't edit this note by hand.
-> **Kept:** your 10 types, plus `encoder`, because the servo is made of a motor, a driver, a gearbox and an encoder. Metrics are black box only. Model parameters are levers, never metrics.
-> **Verify:** whether the two metric families (performance and fidelity) are the right split, and whether the coverage bins are where you want them. The gate numbers marked "Zach to confirm" are still yours to decide.
+> [!ai]- AI handoff: your Nov 5 workflow per type card: {sum(len(c.rungs) for c in cards)} model rungs on {len(cards)} cards, diagnostics and gates, test types, coverage bins and the calibration packages
+> **What this is:** [[PROJECT - Sim2Real#Proposed Work Flow Nov 5 2026]] applied to every type card, plus your two additions of the same day (wear; learned rungs at the top). It supersedes, and leaves untouched, the v1 note [[Sim2Real Type Cards — Metrics, Models, Coverage and Views per Part Type (2026-11-04)]]. Rendered from `/home/bam/sim2real/type_cards/registry.py` by `type_cards/render_note.py`; the API other lanes code against is `type_cards/CONTRACT.md`.
+> **Kept:** every v1 metric, parameter and axis; today's single model is now the rung it equals (the servo's is M4, its 16 parameters unchanged).
+> **Decided for you:** the rung numbers follow robotparts' published actuator ladder (so "M3" means the same model there), M6 is always the grey-box residual and M7 the black-box net; learned rungs need 95 % of cells with ≥ 200 samples (your schedule note's stricter target) and never extrapolate.
+> **Verify:** the rung choices per type, the 1.25× drift threshold, and the gate numbers marked "Zach to confirm".
 > *{MODEL}*
 
-# Sim2Real Type Cards — Metrics, Models, Coverage and Views per Part Type (2026-11-04)
+# Sim2Real Type Cards v2 — Model Rungs, Diagnostics, Test Types and Calibration Packages (2026-11-05)
 
 ## The answer
 
-- **One card per type, {len(cards)} cards.** Each card has black-box metrics ({n_metrics} in all, {n_prop} of them proposed), a model with every parameter's unit, nominal value or source, the experiment that identifies it and whether the outputs can see it, coverage axes with a scoring function, a standard data-ui view, and the same seven-step procedure.{servo_line}
-- **Two metric families per type, both measured on outputs only.** *Performance* is the device against its commanded target. *Fidelity* is the twin against the real device on the same input. Each is divided by the device's own repeatability floor where one can be measured ([[{FLOOR_NOTE}]]), so different types can be compared.
-- **Measurable today on the rack:** {", ".join(today)}. The gearbox and the motor alone need a dyno ([[Dyno — Buy, Build or Skip (2026-10-03)]]). The arm cards are sim only.
+- **Every type has a ladder of models, {sum(len(c.rungs) for c in cards)} rungs on {len(cards)} cards**, each with its parameter count, the names, the coverage it needs and where to learn it. The servo climbs {" → ".join(f"{r.key} ({r.n_parameters:,})" for r in servo.rungs)}; M4 is today's twin.
+- **The rule that picks one:** {reg.SELECTION_RULE}.
+- **Metrics → diagnostics → gates.** Metrics are black box (performance: real vs target; fidelity: twin vs real). A diagnostic adds a threshold, a gate adds a target; a metric no gate reads is observed. Every type has a drift diagnostic, "{reg.DRIFT_MESSAGE}", at {reg.DRIFT_THRESHOLD:g}× its calibrated fidelity (settable), with a forecast of the usage left where the type wears ([[C - Model Drift]], [[C - Predictive Maintenance]]).
+- **Test types per setting** (bench in the office, deployed in the facility), each with what it identifies; every type has a recalibration method in both. The servo's deployed one is `bam_rack_twin` `live_reid` (T10).
+- **Coverage** axes carry bin sizes; every type has a coverage gate ({reg.CARDS["servo"].coverage.gate_pct:g} %, `bam_rack_twin.schedule`'s); CAN 11's plan passes it.{servo_line}
+- **Calibration packages:** your six groups, ten packages, with the code each has today (one unknown: hyperspectral).
+- **Measurable today on the rack:** {", ".join(today)}. The gearbox and the motor alone need a dyno ([[Dyno — Buy, Build or Skip (2026-10-03)]]). The arm cards and the conveyor are sim only. Fidelity is divided by the device's own floor ([[{FLOOR_NOTE}]]).
 - **Reused, not forked:** metrics cite [[{CATALOG_NOTE}|RobotDx's stock catalog]] by id (io-diagnostics `{reg.ROBOTDX_COMMIT}`). Parameters cite [[PROJECT - Robot Parts|robotparts]]' twin and actuator terms and `bam_rack_twin`'s TwinParameters. Views cite [[PROJECT - Data UI|data-ui]]'s robotics gallery templates at `{reg.data_ui_commit()}`. Coverage generalises `bam_rack_twin.schedule` ([[{SCHEDULE_NOTE}]]).
 - **See it:** the **Types** area of the sim2real site (`/types/`). Every rack station links to its Servo card.
 
 ## At a glance
 
 {glance}
+
+## Calibration packages
+
+{packages}
 
 ## The procedure (the same for every type)
 
@@ -149,7 +246,12 @@ Generated from the proposals in the registry. Nothing was changed in RobotDx, ro
 
 ## Sources
 
-- [[PROJECT - Sim2Real]] (the Nov 4 journal), [[MOC - Summary of Sim to Real Thinking To Date (Nov 4 2026)]]
+- [[PROJECT - Sim2Real]] (the Nov 5 workflow and the Nov 4 journal), [[MOC - Summary of Sim to Real Thinking To Date (Nov 4 2026)]], [[MOC - System Identification]]
+- [[Sim2Real Type Cards — Metrics, Models, Coverage and Views per Part Type (2026-11-04)]]: v1, unchanged
+- [[C - Actuator Network (Learned Actuator Model)]], [[Servo System Identification — State of the Art and Our Plan (2026-10-25)]]: the learned rungs
+- [[C - Coulomb and Viscous Friction]], [[C - Dynamic Friction Models (LuGre, GMS)]], [[C - Galling (Adhesive Wear)]]: the friction and wear rungs
+- [[C - Covariate Shift (Fit Where You Excite, Weight Where You Operate)]]: why learned rungs are judged only inside their covered cells
+- [[C - Hand-Eye Calibration]]: the hand-eye package
 - [[{CATALOG_NOTE}]]: the RobotDx metric ids
 - [[{SCHEDULE_NOTE}]]: the servo's coverage and schedule
 - [[{FLOOR_NOTE}]], [[DP - Reality as Oracle]]: the floor and the 1.5× ruler
@@ -157,18 +259,20 @@ Generated from the proposals in the registry. Nothing was changed in RobotDx, ro
 - [[C - Backlash]], [[C - Kinematic Calibration]], [[Multi Arm Kinematic Calibration — Prior Art (2026-10-08)]], [[MOC - Hyperspectral]]
 - [[C - Grey, White vs Black box Modeling, System Design]]: why the metrics are black box and the models grey box
 """
-    return head + body + tail
+    return head + body + tail + "\n" + references_section() + "\n"
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=NOTE)
+    parser.add_argument("--out", type=Path, default=NOTE_V2)
     args = parser.parse_args(argv)
+    if args.out.resolve() == NOTE.resolve():
+        raise SystemExit(f"{NOTE.name} is the Nov 4 (v1) note: this script no longer writes it (pass --out elsewhere)")
     text = render()
-    if args.out == NOTE and NOTE.exists():
-        staged = Path.home() / ".cache" / "sim2real" / NOTE.name
+    if args.out == NOTE_V2 and NOTE_V2.exists():
+        staged = Path.home() / ".cache" / "sim2real" / NOTE_V2.name
         staged.write_text(text, encoding="utf-8")
-        print(f"{NOTE} exists: Obsidian owns it. Rewrite it with ~/zach_brain/Settings/Scripts/obsidian-edit.py from {staged}")
+        print(f"{NOTE_V2} exists: Obsidian owns it. Rewrite it with ~/zach_brain/Settings/Scripts/obsidian-edit.py from {staged}")
         return
     args.out.write_text(text, encoding="utf-8")
     print(f"wrote {args.out} ({len(text):,} chars)")

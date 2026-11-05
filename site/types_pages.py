@@ -211,6 +211,8 @@ def ref_short(ref) -> str:
     label = f"{who} {year}".strip()
     if ref.kind in ("doc", "standard", "code"):
         label += ": " + after.strip().rstrip(".")
+    if ref.kind == "preprint" and "arXiv" in ref.title:
+        label += " (arXiv)"
     return label
 
 
@@ -258,7 +260,7 @@ def model_tab(site, t: TypeRecord) -> str:
         out.append("<h2>Learned rungs</h2><p>Their size is a weight count, not named parameters. They are judged only on held-out data inside the "
                    f"cells they were trained on; outside, a sample is flagged <b>{e(reg.OUT_OF_COVERAGE)}</b>.</p>"
                    + table(["Rung", "Family", "Inputs × history", "Hidden layers", "Predicts", "Weights", "On rung"], arows))
-    worn = [(r, p) for r in c.rungs for p in r.wear_parameters]
+    worn = [(r, p) for r in c.rungs if r.kind == "physics" for p in r.wear_parameters]  # a residual inherits its base's worn terms
     if worn:
         wrows = [tr([e(r.key), code(p.name), e(p.wear.usage) + f" ({e(p.wear.unit)})", e(p.wear.law) + f": {e(reg.WEAR_LAWS[p.wear.law])}", code(p.wear.rate),
                      "; ".join(ref_link(x) for x in reg.WEAR_LAW_REFERENCES[p.wear.law])], wear=p.name) for r, p in worn]
