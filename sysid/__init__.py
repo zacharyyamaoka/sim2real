@@ -12,7 +12,7 @@ backlash that wears with hours (its rate recovered, its threshold crossing forec
 
 The pipelines run under bam_rack_twin's environment (MuJoCo 3.11, numpy, scipy; bam_rack_twin itself for the CAN 11 example):
 
-    env -u VIRTUAL_ENV /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid run --all
+    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid run --all --write
 
 The site (stdlib only) reads the committed results in sysid/results/, never this package's numerics.
 """

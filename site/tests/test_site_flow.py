@@ -9,6 +9,10 @@ gate matrix (cells, columns' x, tones), its peek, the KPI trend against its targ
 guides and y scale), the evidence peek and its link, the path overlay (the scene's painted segments and tube), the verdict voxels
 (every drawn cell's value), and a run picked from the runs table (the network log, the clock, Back and Forward).
 
+Since 2026-11-05 also the system-ID oracle on the landing page (site/landing.py over sysid/results): six example cards, each with its
+description in, typed tree, schedule coverage, parameters true / nominal / recovered and held-out error before -> after, every number
+the committed result's; one page per example at /sysid/<id>/ with every parameter row and, for CAN 11 and the cell, the drift demos.
+
 Since 2026-10-29 also a station's Schedule tab (bam_rack_twin.schedule's plan, before anything runs), its checks written before
 the tab. A port of app/tests/test_app_flow.py's 25 checks onto the migrated site (every one keeps its meaning; where a step moved,
 the check says where to), plus the checks that the shell IS the workbench's: the same bar (wordmark, one centred search,
@@ -952,6 +956,92 @@ def run_config_checks(page, base: str, data: Path) -> None:
           f"a run whose session kept no board config says 'config not recorded' in its header and what is recorded on Evidence ({bare['run'][:60]})")
 
 
+ORACLE_EXAMPLES = ("pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell")
+
+
+def oracle_results() -> dict:
+    """The committed sysid results, read here from the repo (the ruler), not from the built site."""
+    out = {}
+    for path in sorted((REPO / "sysid" / "results").glob("*.json")):
+        out[path.stem] = json.loads(path.read_text())
+    return out
+
+
+def oracle_data_checks(out: Path) -> None:
+    """No browser: the site serves the committed results byte for byte, and the landing page and every example page print the
+    result's own numbers (landing.num of the displayed value: the same formatter the page uses, never a re-derivation)."""
+    import landing  # noqa: PLC0415
+
+    results = oracle_results()
+    served = {p.stem for p in (out / "data" / "sysid").glob("*.json")}
+    same = [name for name in results if (out / "data" / "sysid" / f"{name}.json").read_bytes() == (REPO / "sysid" / "results" / f"{name}.json").read_bytes()]
+    check(served == set(results) and len(same) == len(results), f"the site serves sysid/results byte for byte ({len(same)} of {len(results)} files)")
+    home = (out / "index.html").read_text()
+    section = home[home.find('id="oracle"'):]
+    cards = re.findall(r'<article class="s2r-ex" data-example="([^"]+)" data-params="(\d+)" data-params-pass="(\d+)"', section)
+    want = [(x, str(results[x]["verdict"]["parameters"]), str(results[x]["verdict"]["parameters_pass"])) for x in ORACLE_EXAMPLES if x in results]
+    check(cards == want and len(cards) == 6, f"the landing page has one card per example in order, each with its verdict counts ({[c[0] for c in cards]})")
+    for x in ORACLE_EXAMPLES:
+        doc = results.get(x)
+        if doc is None:
+            continue
+        start = section.find(f'data-example="{x}"')
+        card_html = section[start: section.find("</article>", start)]
+        model = doc["description"]["model"]
+        files = [Path(model["path"]).name] if model.get("path") else [Path(pt["path"]).name for pt in model.get("parts", [])]
+        metrics = [m for m in doc["metrics"] if m.get("gated")]
+        nums = [landing.num(m["before"], 3) for m in metrics] + [landing.num(m["after"], 3) for m in metrics]
+        coverage = landing.num(doc["schedule"]["coverage"]["train"]["pct"], 3)
+        missing = [t for t in [doc["title"]] + files + nums + [coverage] if t not in card_html]
+        types = re.findall(r'data-type="([^"]+)"', card_html)
+        check(not missing and types and all(t == r["type"] for t, r in zip(types, [r for r in doc["tree"] if r["group"] != "structure" or r["depth"] > 0])),
+              f"the {x} card shows its description in, its typed tree, its coverage and its held-out before -> after (missing {missing[:4]})")
+        page_html = (out / "sysid" / x / "index.html").read_text()
+        keys = re.findall(r'<tr data-key="([^"]+)"', page_html)
+        printed = [r for r in doc["parameters"] if landing.num(landing.display(r["recovered"], r["unit"])[0]) not in page_html]
+        check(keys == [r["key"] for r in doc["parameters"]] and not printed,
+              f"/sysid/{x}/ lists every parameter ({len(keys)} of {len(doc['parameters'])}) with its recovered value printed (unprinted {[r['key'] for r in printed][:3]})")
+    wear, knock = results.get("drift_backlash_wear"), results.get("drift_camera_knock")
+    if wear:
+        html = (out / "sysid" / "pendulum_can11" / "index.html").read_text()
+        got = {k: re.search(rf'data-{k}="([^"]+)"', html) for k in ("predicted", "actual", "alarm", "rate")}
+        want_w = {"predicted": wear["predicted_crossing_h"], "actual": wear["actual_crossing_h"], "alarm": wear["detector_alarm_h"], "rate": wear["rate_recovered"]}
+        check(all(got[k] and float(got[k].group(1)) == float(v) for k, v in want_w.items()),
+              f"CAN 11's page carries the wear demo's forecast, crossing, alarm and rate as committed ({ {k: g.group(1) if g else None for k, g in got.items()} })")
+    if knock:
+        html = (out / "sysid" / "dual_arm_cell" / "index.html").read_text()
+        m = re.search(r'data-alarm="([^"]+)"', html)
+        check(bool(m) and float(m.group(1)) == float(knock["alarm_h"]), f"the cell's page carries the camera knock's alarm hour ({m.group(1) if m else None} vs {knock['alarm_h']})")
+
+
+def oracle_checks(page, base: str, still) -> None:
+    """In the browser: the oracle section on the landing page lays its six cards out in a grid (measured), each card's parts are
+    drawn, and a card opens its example's page."""
+    results = oracle_results()
+    page.goto(f"{base}/")
+    page.wait_for_load_state("load")
+    page.locator("#oracle").scroll_into_view_if_needed()
+    page.wait_for_timeout(500)
+    boxes = page.evaluate("""[...document.querySelectorAll('#oracle article.s2r-ex')].map(a => { const r = a.getBoundingClientRect();
+        return {x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height),
+                parts: [...a.querySelectorAll('h4')].map(h => h.textContent.trim()), rows: a.querySelectorAll('.s2r-ex-params tbody tr[data-key]').length}; })""")
+    columns = len({b["x"] for b in boxes})
+    parts = ["Description in", "Typed tree", "Schedule and coverage", "Parameters: true / nominal / recovered", "Held-out error, before → after"]
+    check(len(boxes) == 6 and columns >= 2 and all(b["w"] >= 300 and b["h"] > 200 for b in boxes) and all(b["parts"] == parts for b in boxes)
+          and all(b["rows"] >= 4 for b in boxes),
+          f"the landing page draws six oracle cards in {columns} columns, each at least 300 px wide with its five parts and its parameter rows "
+          f"({[(b['w'], b['rows']) for b in boxes]})")
+    still("20-oracle-cards")
+    page.locator("#oracle article[data-example=pendulum_can11] .s2r-ex-open a").click()
+    page.wait_for_url(re.compile(r"/sysid/pendulum_can11/$"), timeout=20000)
+    page.wait_for_load_state("load")
+    rows = page.locator("table.s2r-ex-full tbody tr").count()
+    drift_fig = page.locator("#drift ~ figure svg polyline").count()
+    check(rows == len(results["pendulum_can11"]["parameters"]) and drift_fig >= 1,
+          f"a card opens its example: /sysid/pendulum_can11/ lists {rows} parameters and draws the wear chart ({drift_fig} line)")
+    still("21-oracle-can11")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -978,6 +1068,7 @@ def main() -> int:
     whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
     run_set_checks(data, out)
+    oracle_data_checks(out)
     # the deployment tree, the run tags and the configuration snapshot (Zach, PROJECT - Sim2Real, Nov 5 2026)
     layout = deploy_tree_checks(data, out, doc)
     import tempfile  # noqa: PLC0415
@@ -1603,6 +1694,10 @@ def main() -> int:
             with guard("the Types area"):
                 types_checks(page, base, still)
 
+            # 14. the system-ID oracle on the landing page (sysid/, site/landing.py; Zach's Nov 5 examples)
+            with guard("the oracle cards"):
+                oracle_checks(page, base, still)
+
             # 13. the deployment tree in the rail, every run flat, a run's configuration (Zach, PROJECT - Sim2Real, Nov 5 2026)
             with guard("the deployment tree in the rail"):
                 tree_rail_checks(page, base, data, layout, still)
@@ -1615,7 +1710,7 @@ def main() -> int:
             page.set_viewport_size({"width": 390, "height": 844})
             for url in ("/", f"/{DEP}/", f"/{DEP}/runs/{run_slug}/", f"/{DEP}/can12/", f"/{DEP}/can11/#schedule", "/analysis/why-it-fails/",
                         f"/{DEP}/#gates", f"/{DEP}/can12/#gates", "/types/", "/types/servo/#coverage", "/types/servo/#model", "/types/servo/#tests",
-                        "/types/servo/#metrics", "/types/conveyor/#model", "/runs/"):
+                        "/types/servo/#metrics", "/types/conveyor/#model", "/runs/", "/sysid/pendulum_can11/", "/sysid/linescan_cell/"):
                 page.goto(base + url)
                 page.wait_for_load_state("load")
                 page.wait_for_timeout(1500)

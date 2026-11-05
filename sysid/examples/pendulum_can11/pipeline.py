@@ -22,6 +22,7 @@ motor encoder minus the link camera. The nominal model is M2's terms at the desc
 from __future__ import annotations
 
 import dataclasses
+import functools
 import json
 import math
 import zlib
@@ -44,18 +45,32 @@ CEILING_FRACTION = 0.97
 BLOCK_ROWS = 100  # 0.5 s blocks on the 5 ms grid (identify.BOOTSTRAP_BLOCK_S)
 RESAMPLES = 200
 VS_GRID = np.geomspace(0.02, 0.8, 41)
-RUNGS = ("M2", "M3", "M4")
+RUNGS = ("M0", "M2", "M3", "M4")  # the servo card's physics rungs the hidden truth's terms reach (M5 electrics: the board's known knobs)
 SERVO_KEYS = ("gravity_nm", "gravity_bottom_rad", "armature_kg_m2", "frictionloss_nm", "damping_nm_s_rad",
               "friction_stribeck_drop_nm", "friction_stribeck_speed_rad_s", "backlash_rad")
 
 
+@functools.lru_cache(maxsize=1)
 def _rack():
+    """(label, twin of record, station), loaded once per process. WHY once (measured 2026-11-05): record_twin re-executes
+    docs/gates_1029.py from disk on every call, so a peer's commit to bam_ws main landing mid-run mixed two versions of the rack twin
+    in one process (an AttributeError on a field the in-memory Station did not have yet)."""
     from bam_rack_twin import schedule as rack_schedule  # noqa: PLC0415
     from bam_rack_twin.stations import DEFAULT_RECORD_PATH, load_stations  # noqa: PLC0415
 
     label, record = rack_schedule.record_twin(11)
     station = next(s for s in load_stations(DEFAULT_RECORD_PATH) if s.can_id == 11)
     return label, record, station
+
+
+def bam_ws_commit() -> str:
+    import subprocess  # noqa: PLC0415
+
+    try:
+        return subprocess.run(["git", "-C", "/home/bam/bam_ws", "log", "-1", "--format=%h %cI", "--", "src/dev/bam_rack_twin"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 # --- plan ---------------------------------------------------------------------------------------------------------------------
@@ -247,7 +262,12 @@ def identify(description, measurements: dict[str, RunData]) -> Fit:
     start = 0
     for run in measurements.values():
         f = rack_identify.filtered(run.output, WINDOW, (shift,))
-        keep = (np.abs(f.qd) > MOVING_RAD_S) & (np.abs(f.tau) < ceiling)
+        # WHY rows a half window from any stuck row are dropped (the arm's fix, swept here 2026-11-05): inside the smoother's window a
+        # stuck joint's friction (anywhere in [-Fs, Fs]) leaks into the moving rows' smoothed torque, and under CAN 11's limit cycle
+        # the joint sticks and slips all the time
+        stuck = np.abs(f.qd) <= MOVING_RAD_S
+        near_stuck = np.convolve(stuck.astype(float), np.ones(WINDOW), mode="same") > 0
+        keep = ~near_stuck & (np.abs(f.tau) < ceiling)
         if keep.sum() < BLOCK_ROWS:
             continue
         in_contact = gear_in_contact(run, f, shift, levels, gap_hat)
@@ -260,6 +280,11 @@ def identify(description, measurements: dict[str, RunData]) -> Fit:
     # collinear with the bottom (measured 2026-11-05: with the column, bottom came out -0.539 for a true -0.350); the stock gravity
     # fit has none either. A real torque-estimate bias would land in the bottom: the oracle cannot tell them apart over this range.
     base = np.column_stack([qdd, np.sin(q), np.cos(q), sgn, qd])
+
+    def m0(rows):
+        # the servo card's M0: rigid inertia and gravity under the board's PD, no friction term
+        c, *_ = np.linalg.lstsq(base[rows][:, :3], tau[rows], rcond=None)
+        return np.array([c[0], math.hypot(c[1], c[2]), math.atan2(-c[2], c[1])])
 
     def m2(rows):
         c, *_ = np.linalg.lstsq(base[rows], tau[rows], rcond=None)
@@ -289,6 +314,8 @@ def identify(description, measurements: dict[str, RunData]) -> Fit:
 
     rows = np.arange(q.size)
     blocks = [BLOCK_ROWS] * len(groups)
+    est0 = m0(rows)
+    boot0 = rack_identify.block_bootstrap(groups, m0, rows_per_block=blocks, resamples=RESAMPLES)
     est2 = m2(rows)
     boot2 = rack_identify.block_bootstrap(groups, m2, rows_per_block=blocks, resamples=RESAMPLES)
     est3 = m3(rows)
@@ -310,15 +337,20 @@ def identify(description, measurements: dict[str, RunData]) -> Fit:
     names2 = ("armature_kg_m2", "gravity_nm", "gravity_bottom_rad", "frictionloss_nm", "damping_nm_s_rad")
     names3 = names2 + ("friction_stribeck_drop_nm", "friction_stribeck_speed_rad_s")
     ci = lambda boot, i: tuple(float(v) for v in np.percentile(boot[:, i], (2.5, 97.5)))  # noqa: E731
-    values = {"M2": {**dict(zip(names2, map(float, est2))), "friction_stribeck_drop_nm": 0.0, "friction_stribeck_speed_rad_s": None, "backlash_rad": 0.0},
+    names0 = names2[:3]
+    values = {"M0": {**dict(zip(names0, map(float, est0))), "frictionloss_nm": 0.0, "damping_nm_s_rad": 0.0, "friction_stribeck_drop_nm": 0.0,
+                     "friction_stribeck_speed_rad_s": None, "backlash_rad": 0.0},
+              "M2": {**dict(zip(names2, map(float, est2))), "friction_stribeck_drop_nm": 0.0, "friction_stribeck_speed_rad_s": None, "backlash_rad": 0.0},
               "M3": {**dict(zip(names3, map(float, est3))), "backlash_rad": 0.0}}
     values["M4"] = {**dict(zip(names3, map(float, est4))), "backlash_rad": float(gap_hat)}
     refined, evaluations, cost = refine_friction(measurements, values["M4"])
     values["M4"].update(refined)
-    intervals = {"M2": {n: ci(boot2, i) for i, n in enumerate(names2)}, "M3": {n: ci(boot3, i) for i, n in enumerate(names3)},
+    intervals = {"M0": {n: ci(boot0, i) for i, n in enumerate(names0)},
+                 "M2": {n: ci(boot2, i) for i, n in enumerate(names2)}, "M3": {n: ci(boot3, i) for i, n in enumerate(names3)},
                  "M4": {n: ci(boot4, i) for i, n in enumerate(names3)}}
     intervals["M4"]["backlash_rad"] = tuple(float(v) for v in np.percentile(gap_boot, (2.5, 97.5)))
     methods = {
+        "M0": "the same regression without friction terms: tau = J qdd + G sin(q - bottom) (the card's ideal rung, rigid under the board's PD)",
         "M2": f"tau(t {shift * 1e3:+.2f} ms) = J qdd + G sin(q - bottom) + Fc sgn(qd) + b qd over {q.size:,} moving rows of {len(groups)} train runs "
               "(identify.filtered's 5 ms grid, one Savitzky-Golay); block bootstrap",
         "M3": "the same regression + D sgn(qd) exp(-(qd/vs)^2), vs profiled (41-point grid, golden section); Fs = Fc + D",
@@ -467,7 +499,7 @@ def assemble(description, plan: Plan, fit: Fit, scores: dict, *, truth: dict) ->
     held = {r.key: scores["models"][r.key]["ratio"] for r in scored}
     selected = reg.select_rung(tuple(scored), held)
     top = "M4"
-    recovered = {f"can11.{name}": {"value": value, "ci95": fit.ci95[top].get(name), "rung": top, "method": fit.methods[top]}
+    recovered = {f"can11.{name}": {"value": value, "ci95": fit.ci95[top].get(name), "rung": f"fitted with {top}", "method": fit.methods[top]}
                  for name, value in fit.values[top].items()}
     parameters = result.parameter_rows(EXAMPLE, description, truth, recovered)
     nominal = scores["models"]["nominal"]
@@ -480,7 +512,7 @@ def assemble(description, plan: Plan, fit: Fit, scores: dict, *, truth: dict) ->
     ]
     rung_rows = []
     for r in ladder:
-        row = cards.rung_row(r)
+        row = cards.rung_row(r, "servo")
         if r.key in RUNGS:
             row.update({"held_out_ratio": held[r.key], "limit": reg.TWINNED_LIMIT, "link_mrad": scores["models"][r.key]["link_mrad"],
                         "motor_mrad": scores["models"][r.key]["motor_mrad"], "values": fit.values[r.key],
@@ -504,12 +536,13 @@ def assemble(description, plan: Plan, fit: Fit, scores: dict, *, truth: dict) ->
                      "coverage": plan.coverage},
         "parameters": parameters,
         "metrics": metrics,
-        "rungs": rung_rows, "ladder_source": ladder_source,
+        "rungs": rung_rows, "ladder_source": ladder_source, "card_ladders": cards.card_ladders(EXAMPLE, [r["key"] for r in parameters]),
         "selected_rung": selected.key if selected else None,
         "selection_rule": reg.SELECTION_RULE,
         "stock_fit": stock,
         "fit": {"rows": fit.rows, "runs": fit.runs},
-        "provenance": {"bam_rack_twin": "bam_ws main, src/dev/bam_rack_twin (imported in place)", "twin_of_record": _rack()[0]},
+        "provenance": {"bam_rack_twin": f"bam_ws main, src/dev/bam_rack_twin (imported in place) @ {bam_ws_commit()}", "twin_of_record": _rack()[0],
+                       "twin_of_record_digest": _rack()[1].digest()},
         "notes": [
             "The real CAN 11 is bam_rack_twin's own twin at world.json's truth; the floor is the oracle's measurement noise alone (two camera draws of one deterministic run), so real floors are larger.",
             "The truth's friction is BAM's M3 Stribeck curve (static above sliding); the real CAN 11's twin of record has LuGre with its static level BELOW the sliding one, which a Stribeck drop cannot express.",

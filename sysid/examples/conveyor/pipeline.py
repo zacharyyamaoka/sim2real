@@ -237,8 +237,8 @@ def identify(description, runs: list[Run]) -> Fit:
     half = 1.96 * np.sqrt(np.diag(cov))
     values = {"belt.roller_radius_m": radius, **{n: float(v) for n, v in zip(names, fit.x)}}
     ci = {"belt.roller_radius_m": (radius - radius_half, radius + radius_half), **{n: (float(v - h), float(v + h)) for n, v, h in zip(names, fit.x, half)}}
-    methods = {"M1": f"least squares of tracker travel on encoder angle, {len(runs)} train profiles, one zero each",
-               "M2": f"drag from the steady-state droop of {len(rows)} dwells (linear), mass by golden section on the transients, then least squares of "
+    methods = {"radius": f"least squares of tracker travel on encoder angle, {len(runs)} train profiles, one zero each",
+               "dynamics": f"drag from the steady-state droop of {len(rows)} dwells (linear), mass by golden section on the transients, then least squares of "
                      f"the simulated roller angle on the encoder's over the train profiles ({fit.nfev} simulations), radius fixed at M1's"}
     return Fit(values, ci, methods)
 
@@ -253,7 +253,8 @@ def dwells(command: np.ndarray):
 
 def score(description, p: Plan, fit: Fit, measured: Measured, *, workers: int = 6) -> dict:
     nominal = {key: entry.value for key, entry in description.nominal.items()}
-    models = {"M0": nominal, "M1": {**nominal, "belt.roller_radius_m": fit.values["belt.roller_radius_m"]}, "M2": {**nominal, **fit.values}}
+    # model labels, not rung keys: the card's M0 holds the radius and the mass, its M2 the drag
+    models = {"nominal": nominal, "radius": {**nominal, "belt.roller_radius_m": fit.values["belt.roller_radius_m"]}, "fitted": {**nominal, **fit.values}}
     out = {"models": {}}
     for label, values in models.items():
         belt = Belt(description)
@@ -268,16 +269,11 @@ def score(description, p: Plan, fit: Fit, measured: Measured, *, workers: int = 
 
 
 def assemble(description, p: Plan, fit: Fit, scores: dict, *, truth: dict) -> dict:
-    recovered = {k: {"value": v, "ci95": fit.ci95[k], "rung": "M1" if k == "belt.roller_radius_m" else "M2",
-                     "method": fit.methods["M1" if k == "belt.roller_radius_m" else "M2"]} for k, v in fit.values.items()}
+    recovered = {k: {"value": v, "ci95": fit.ci95[k], "rung": "radius" if k == "belt.roller_radius_m" else "dynamics",
+                     "method": fit.methods["radius" if k == "belt.roller_radius_m" else "dynamics"]} for k, v in fit.values.items()}
     m = scores["models"]
-    ladder, source = cards.ladder("conveyor")
-    rungs = []
-    for r in ladder:
-        row = cards.rung_row(r)
-        if r.key in m:
-            row.update(m[r.key])
-        rungs.append(row)
+    models = [{"model": label, "what": {"nominal": "the description as given", "radius": "+ the drum's effective radius (conveyor M0)",
+                                        "fitted": "+ the moving mass (M0) and the drag (M2)"}[label], **row} for label, row in m.items()]
     md = description.manifest["model"]
     return {
         "title": description.manifest["title"], "subtitle": description.manifest.get("subtitle", ""), "summary": description.manifest.get("summary", ""),
@@ -289,9 +285,9 @@ def assemble(description, p: Plan, fit: Fit, scores: dict, *, truth: dict) -> di
                      "levels_m_s": description.schedule["levels_m_s"], "coverage": p.coverage},
         "parameters": result.parameter_rows(EXAMPLE, description, truth, recovered),
         "metrics": [result.metric(EXAMPLE, "held_out_belt_position_mm", "Belt travel, twin (from the command) vs tracker", "mm",
-                                  m["M0"]["belt_mm"], m["M2"]["belt_mm"], after_model="M2",
-                                  note=f"{len(p.held_out)} held-out profiles; max {m['M0']['belt_max_mm']:.1f} -> {m['M2']['belt_max_mm']:.2f} mm")],
-        "rungs": rungs, "ladder_source": source, "selected_rung": None,
-        "notes": ["The conveyor has no type card yet; its ladder and coverage rule are sysid's adapter (cards.py).",
+                                  m["nominal"]["belt_mm"], m["fitted"]["belt_mm"], after_model="fitted",
+                                  note=f"{len(p.held_out)} held-out profiles; max {m['nominal']['belt_max_mm']:.1f} -> {m['fitted']['belt_max_mm']:.2f} mm")],
+        "models": models, "card_ladders": cards.card_ladders(EXAMPLE, fit.values), "selected_rung": None,
+        "notes": ["The coverage rule is sysid's (the conveyor card's axes are belt speed, load and temperature; this plan varies speed and acceleration).",
                   "The VFD's speed loop and torque limit are the description's; the belt's elasticity (a two-mass belt) is not modelled."],
     }

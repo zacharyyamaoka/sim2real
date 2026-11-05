@@ -18,7 +18,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from . import PACKAGE, REPO, RESULTS_DIR
+from . import PACKAGE, REPO, RESULTS_DIR, cards
 
 SCHEMA = "sysid.result/1"
 ACCEPTANCE = json.loads((PACKAGE / "acceptance.json").read_text(encoding="utf-8"))
@@ -50,10 +50,12 @@ def parameter_rows(example: str, description, truth: dict, recovered: dict[str, 
         rule = tolerance(example, key)
         true = truth.get(key)
         component, _, name = key.partition(".")
+        where = cards.place(example, key)
         rows.append({"key": key, "component": component, "name": name, "unit": nominal.unit,
                      "nominal": nominal.value, "nominal_source": nominal.source, "true": true,
                      "recovered": _num(fit["value"]), "ci95": [_num(v) for v in fit["ci95"]] if fit.get("ci95") else None,
-                     "rung": fit.get("rung"), "method": fit.get("method", ""),
+                     "rung": where["rung"], "card": where["card"], "card_parameter": where["parameter"], "on_card": where["on_card"],
+                     "fit_step": fit.get("rung"), "method": fit.get("method", ""),
                      "tolerance": None if rule is None else {"kind": rule[0], "value": rule[1]},
                      "pass": passes(fit["value"], true, rule), "nominal_pass": passes(nominal.value, true, rule)})
     return rows

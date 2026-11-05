@@ -18,6 +18,9 @@ import time
 from . import describe, result, world
 
 EXAMPLES = ("pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell")
+# the last fit per example in this process: drift.run_backlash reuses CAN 11's commissioning instead of re-fitting it (the same
+# deterministic inputs give the same fit; this only saves the minutes)
+LAST_FIT: dict = {}
 
 
 def example_module(example: str):
@@ -35,6 +38,7 @@ def run(example: str, *, workers: int = 6, write: bool = False) -> dict:
     measured = real.measure(plan)
     with world.sealed():
         fit = module.identify(description, measured.train)
+    LAST_FIT[example] = fit
     scores = module.score(description, plan, fit, measured, workers=workers)
     doc = module.assemble(description, plan, fit, scores, truth=real.truth)
     doc["schema"] = result.SCHEMA

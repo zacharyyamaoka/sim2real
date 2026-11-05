@@ -570,7 +570,8 @@ def score_example(description, plan_: ArmPlan, fit: ArmFit, measured: Measured, 
     nominal = {key: entry.value for key, entry in description.nominal.items()}
     tcp_keys = ("tool.tcp_x_m", "tool.tcp_y_m", "tool.tcp_z_m")
     kinematic = {k: v for k, v in fit.values.items() if k.endswith("zero_offset_rad") or k in tcp_keys}
-    labels = {"M0": nominal, "M1": {**nominal, **kinematic}, "M2": {**nominal, **fit.values}}
+    # model labels, not rung keys: the fitted model spans two cards (arm_6dof M1 for the zeros, each joint's servo M2 for its dynamics)
+    labels = {"nominal": nominal, "kinematics": {**nominal, **kinematic}, "fitted": {**nominal, **fit.values}}
     held = measured.held_out
     measured_tool = np.array([row["tcp"] if gripper else row["p"] for row in held.poses])
     out = {"models": {}}
@@ -593,36 +594,22 @@ def assemble_example(example: str, description, plan_: ArmPlan, fit: ArmFit, sco
 
     recovered = {}
     for key, value in fit.values.items():
-        rung = "M1" if key.endswith("zero_offset_rad") or key.startswith("tool.tcp") else "M2"
-        if key.startswith("gripper."):
-            rung = "M1 (gripper)"
-        elif key.startswith("tool."):
-            rung = "M1 (tool)"
-        recovered[key] = {"value": value, "ci95": fit.ci95.get(key), "rung": rung,
-                          "method": fit.methods["kinematics" if rung == "M1" or key.startswith("tool.tcp") else "gripper" if key.startswith("gripper.") else "dynamics"]}
+        step = "kinematics" if key.endswith("zero_offset_rad") or key.startswith("tool.tcp") else "gripper" if key.startswith("gripper.") else "dynamics"
+        recovered[key] = {"value": value, "ci95": fit.ci95.get(key), "rung": step, "method": fit.methods[step]}
     parameters = result.parameter_rows(example, description, truth, recovered)
     m = scores["models"]
     tool_id = "held_out_tcp_position_mm" if gripper else "held_out_tool_position_mm"
     metrics = [result.metric(example, tool_id, "TCP position, twin vs tracker (held-out poses)" if gripper else "Flange position, twin vs tracker (held-out poses)",
-                             "mm", m["M0"]["tool_mm"], m["M2"]["tool_mm"], after_model="M2",
+                             "mm", m["nominal"]["tool_mm"], m["fitted"]["tool_mm"], after_model="fitted",
                              note=f"{len(plan_.poses_held_out)} held-out poses; the twin settles its own servo loop at each command, then FK"),
-               result.metric(example, "held_out_torque_rms_nm", "Joint torque, twin vs real (held-out excitations)", "N·m", m["M0"]["torque_nm"], m["M2"]["torque_nm"],
-                             after_model="M2", note=f"{len(plan_.excitations_held_out)} held-out Fourier excitations, all six joints pooled")]
+               result.metric(example, "held_out_torque_rms_nm", "Joint torque, twin vs real (held-out excitations)", "N·m", m["nominal"]["torque_nm"], m["fitted"]["torque_nm"],
+                             after_model="fitted", note=f"{len(plan_.excitations_held_out)} held-out Fourier excitations, all six joints pooled")]
     if gripper:
         metrics.append(result.metric(example, "held_out_finger_rms_mrad", "Finger drive angle, twin vs real (held-out command)", "mrad",
-                                     m["M0"]["finger_mrad"], m["M2"]["finger_mrad"], after_model="M2 + gripper M1"))
-    ladder, source = cards.ladder("arm_6dof")
-    rungs = []
-    for r in ladder:
-        row = cards.rung_row(r)
-        if r.key in m:
-            row.update({"tool_mm": m[r.key]["tool_mm"], "torque_nm": m[r.key]["torque_nm"]})
-        rungs.append(row)
-    extra = []
-    if gripper:
-        for card_id in ("tool", "gripper"):
-            lad, _ = cards.ladder(card_id)
-            extra.extend({**cards.rung_row(r), "card": card_id} for r in lad)
+                                     m["nominal"]["finger_mrad"], m["fitted"]["finger_mrad"], after_model="fitted"))
+    models = [{"model": label, "what": {"nominal": "the description as given", "kinematics": "+ the joint zeros (arm_6dof M1)",
+                                        "fitted": "+ every joint servo's M2 dynamics" + (", the tool (arm_6dof M3) and the TCP and drive (arm_6dof_gripper M0-M1)" if gripper else "")}[label],
+               **row} for label, row in m.items()]
     m_desc = description.manifest["model"]
     return {
         "title": description.manifest["title"], "subtitle": description.manifest.get("subtitle", ""), "summary": description.manifest.get("summary", ""),
@@ -634,7 +621,7 @@ def assemble_example(example: str, description, plan_: ArmPlan, fit: ArmFit, sco
                      "held_out": {"poses": len(plan_.poses_held_out), "excitations": len(plan_.excitations_held_out), "seconds": round(sum(e.shape[0] for e in plan_.excitations_held_out) * DT, 1)},
                      "gripper": {"train_s": round(plan_.gripper_train.size * DT, 1), "held_out_s": round(plan_.gripper_held_out.size * DT, 1)} if gripper else None,
                      "excitation": description.schedule.get("excitation"), "coverage": plan_.coverage},
-        "parameters": parameters, "metrics": metrics, "rungs": rungs, "ladder_source": source, "other_ladders": extra,
+        "parameters": parameters, "metrics": metrics, "models": models, "card_ladders": cards.card_ladders(example, fit.values),
         "selected_rung": None, "fit": fit.stats,
         "notes": ["The tracker sees the flange through a calibrated external camera: its frame is the arm's base frame (hand-eye is the dual-arm cell's job).",
                   "Contacts are off: no example here calibrates contact (the gripper card's grip force and contact friction stay unidentified)."]

@@ -333,7 +333,7 @@ def score(description, p: Plan, fit: Fit, measured: Measured, *, workers: int = 
     out = {"models": {}}
     held = measured.held_out
     meas = np.vstack([o.pixels for o in held])
-    for label, values in (("M0", nominal), ("M1", after)):
+    for label, values in (("nominal", nominal), ("fitted", after)):
         out["models"][label] = {"reprojection_px": cam.rms(predict(cell, values, held) - meas),
                                 "pick_mm": 1e3 * cam.rms(pick_errors(cell, values, measured.picks))}
     out["picks"] = len(measured.picks)
@@ -342,12 +342,8 @@ def score(description, p: Plan, fit: Fit, measured: Measured, *, workers: int = 
 
 
 def assemble(description, p: Plan, fit: Fit, scores: dict, *, truth: dict) -> dict:
-    recovered = {k: {"value": v, "ci95": fit.ci95[k], "rung": "M1", "method": fit.methods["bundle"]} for k, v in fit.values.items()}
+    recovered = {k: {"value": v, "ci95": fit.ci95[k], "rung": "bundle adjustment", "method": fit.methods["bundle"]} for k, v in fit.values.items()}
     m = scores["models"]
-    rungs = []
-    for card_id in ("mount", "camera_rgb"):
-        ladder, source = cards.ladder(card_id)
-        rungs.extend({**cards.rung_row(r), "card": card_id, "source": source} for r in ladder)
     md = description.manifest["model"]
     return {
         "title": description.manifest["title"], "subtitle": description.manifest.get("subtitle", ""), "summary": description.manifest.get("summary", ""),
@@ -361,10 +357,10 @@ def assemble(description, p: Plan, fit: Fit, scores: dict, *, truth: dict) -> di
                      "coverage": p.coverage},
         "parameters": result.parameter_rows(EXAMPLE, description, truth, recovered),
         "metrics": [result.metric(EXAMPLE, "held_out_reprojection_px", "Tag corners, twin vs detected (held-out views)", "px",
-                                  m["M0"]["reprojection_px"], m["M1"]["reprojection_px"], after_model="M1", note="corner detection noise 0.3 px is the floor"),
+                                  m["nominal"]["reprojection_px"], m["fitted"]["reprojection_px"], after_model="fitted", note="corner detection noise 0.3 px is the floor"),
                     result.metric(EXAMPLE, "held_out_pick_point_mm", "A belt point the camera sees, in each arm's base frame", "mm",
-                                  m["M0"]["pick_mm"], m["M1"]["pick_mm"], after_model="M1", note=f"{scores['picks']} held-out belt points x 2 arms")],
-        "rungs": rungs, "ladder_source": "sysid adapter (mount) and sysid adapter (camera_rgb has no rungs yet)", "selected_rung": None,
+                                  m["nominal"]["pick_mm"], m["fitted"]["pick_mm"], after_model="fitted", note=f"{scores['picks']} held-out belt points x 2 arms")],
+        "models": [{"model": label, **row} for label, row in m.items()], "card_ladders": cards.card_ladders(EXAMPLE, fit.values), "selected_rung": None,
         "fit": {"train_rms_px": fit.rms_px},
         "notes": ["The arms' joint zeros and TCPs are the bench calibration's (the UR5e + 2F-85 example); the belt's travel is the conveyor example's.",
                   "The pixels are tag-corner detections simulated as projections plus 0.3 px noise, not rendered images (no detector in the loop)."],

@@ -98,6 +98,18 @@ def site_files(site):
     yield "types/index.html", s2r.page(site, "Types: sim2real", "/types/", types_pages.list_body(site), "types",
                                        description="One card per part type: metrics, model, coverage, view and the shared procedure.",
                                        trail=breadcrumb([s2r.ROOT_CRUMB, ("Types", "/types/")]))
+    import landing  # noqa: PLC0415
+    oracle = landing.load()
+    if oracle:
+        yield "sysid/index.html", s2r.page(site, "System-ID oracle: sim2real", "/sysid/", landing.index_body(oracle), "sysid",
+                                           description="Six robot descriptions in, a better model out, each against a hidden truth.",
+                                           trail=breadcrumb([s2r.ROOT_CRUMB, ("System-ID oracle", "/sysid/")]))
+        for example in landing.EXAMPLES:
+            if example in oracle:
+                doc = oracle[example]
+                yield f"sysid/{example}/index.html", s2r.page(site, f"{doc['title']}: system-ID oracle", landing.url(example), landing.page_body(doc, oracle), "sysid",
+                                                              description=doc.get("summary", "")[:240],
+                                                              trail=breadcrumb([s2r.ROOT_CRUMB, ("System-ID oracle", "/sysid/"), (doc["title"], landing.url(example))]))
     yield "search/suggest.json", s2r.suggest_index(site)
     yield from views.files(site)
     yield "views/runs.base", pages.runs_base(site)
@@ -133,6 +145,11 @@ def build(data: pathlib.Path, out: pathlib.Path) -> dict:
     (out / MARKER).write_text("sim2real site build folder: site/build.py clears everything here\n")
     rewritten = write_data(data, out / "data")
     schedules = adapter.link_schedules(adapter.SCHEDULES, out / "data")
+    # the system-ID oracle's results (sysid/results, committed; site/landing.py renders them), served beside the app's tables
+    oracle_dir = out / "data" / "sysid"
+    oracle_dir.mkdir()
+    for path in sorted((adapter.REPO / "sysid" / "results").glob("*.json")):
+        shutil.copyfile(path, oracle_dir / path.name)
     import deploy_tree  # noqa: PLC0415
     import overlays  # noqa: PLC0415
     # WHY before the overlays: the roll-up rows (components.json) are the tree's nodes, and runs.json gains each run's place in it

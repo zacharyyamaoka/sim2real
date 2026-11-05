@@ -314,7 +314,7 @@ def score(description, p: Plan, fit: Fit, measured: _Split, *, workers: int = 6)
     held = measured.held_out
     w = bands(description)
     out = {"models": {}}
-    for label, values in (("M0", nominal), ("M1", {**nominal, **fit.values})):
+    for label, values in (("nominal", nominal), ("fitted", {**nominal, **fit.values})):
         g = np.array([values[f"hsi.gain_b{k:02d}"] for k in range(16)])
         d = np.array([values[f"hsi.dark_b{k:02d}"] for k in range(16)])
         angles = [spectral_angle((dn.mean(axis=0) - d) / g, plastic(name, w)) for name, dn in held.materials.items()]
@@ -338,12 +338,8 @@ def assemble(description, p: Plan, fit: Fit, scores: dict, *, truth: dict) -> di
     def method(key):
         return fit.methods["geometry" if key in GEOM else "rgbd" if key.startswith("rgbd.") else "radiometry"]
 
-    recovered = {k: {"value": v, "ci95": fit.ci95[k], "rung": "M1", "method": method(k)} for k, v in fit.values.items()}
+    recovered = {k: {"value": v, "ci95": fit.ci95[k], "rung": method(k).split(" ")[0], "method": method(k)} for k, v in fit.values.items()}
     m = scores["models"]
-    rungs = []
-    for card_id in ("camera_hsi", "camera_rgbd"):
-        ladder, source = cards.ladder(card_id)
-        rungs.extend({**cards.rung_row(r), "card": card_id, "source": source} for r in ladder)
     md = description.manifest["model"]
     c = scores["counts"]
     return {
@@ -358,12 +354,12 @@ def assemble(description, p: Plan, fit: Fit, scores: dict, *, truth: dict) -> di
                      "coverage": p.coverage},
         "parameters": result.parameter_rows(EXAMPLE, description, truth, recovered),
         "metrics": [result.metric(EXAMPLE, "held_out_spectral_angle_mrad", "Plastics' recovered reflectance vs true (spectral angle)", "mrad",
-                                  m["M0"]["spectral_angle_mrad"], m["M1"]["spectral_angle_mrad"], after_model="M1", note=", ".join(c["materials"]) + " (synthetic stand-ins, held out)"),
+                                  m["nominal"]["spectral_angle_mrad"], m["fitted"]["spectral_angle_mrad"], after_model="fitted", note=", ".join(c["materials"]) + " (synthetic stand-ins, held out)"),
                     result.metric(EXAMPLE, "held_out_scan_position_mm", "Where a dot is on the belt, from its line pixel and travel", "mm",
-                                  m["M0"]["scan_position_mm"], m["M1"]["scan_position_mm"], after_model="M1", note=f"{c['held_out_dots']} held-out dot crossings"),
-                    result.metric(EXAMPLE, "held_out_cloud_mm", "D435 point cloud vs the true dots", "mm", m["M0"]["cloud_mm"], m["M1"]["cloud_mm"],
-                                  after_model="M1", note=f"{c['rgbd_points']} held-out points")],
-        "rungs": rungs, "ladder_source": "sysid adapter (camera_hsi and camera_rgbd have no rungs yet)", "selected_rung": None,
+                                  m["nominal"]["scan_position_mm"], m["fitted"]["scan_position_mm"], after_model="fitted", note=f"{c['held_out_dots']} held-out dot crossings"),
+                    result.metric(EXAMPLE, "held_out_cloud_mm", "D435 point cloud vs the true dots", "mm", m["nominal"]["cloud_mm"], m["fitted"]["cloud_mm"],
+                                  after_model="fitted", note=f"{c['rgbd_points']} held-out points")],
+        "models": [{"model": label, **row} for label, row in m.items()], "card_ladders": cards.card_ladders(EXAMPLE, fit.values), "selected_rung": None,
         "notes": ["Band centres and widths are the vendor's: identifying them needs a spectral lamp, not simulated.",
                   "The plastics are synthetic spectra shaped like the polymers' SWIR features, not library data.",
                   "Dot detections are simulated as exact crossings plus noise (no rendered line images, no detector in the loop)."],

@@ -21,6 +21,7 @@ from catalog_workbench.html import breadcrumb, e, plural, results_line
 
 import adapter
 import deploy_tree
+import landing
 import types_pages
 from adapter import Deployment, Site, Station, deployment_url, rewrite_links, run_url, station_key, station_url
 
@@ -526,6 +527,11 @@ def home_body(site: Site) -> str:
     tiles = tuple(tile(st.url, st.device, len(st.deployment.runs_of(st.device)),
                        f'<span class="pic" data-thumb>{strip_svg(st.deployment, st.device)}</span>') for st in site.stations)
     groups.append(Group("stations", "Stations", "/stations/", len(tiles), tiles))
+    # the system-ID oracle (sysid/, site/landing.py): six robot descriptions in, a better model out, each against a hidden truth
+    oracle = landing.load()
+    examples = tuple(tile(*t) for t in landing.tiles(oracle))
+    if examples:
+        groups.append(Group("examples", "Oracle examples", "/sysid/", len(examples), examples))
     frame = tile_home("sim2real: how close each twin is to its real hardware", "Choose", groups)
     # the matrix is data-ui's gate_matrix (CONTRACT §35) once the kit loads; the static one reads first and without JavaScript
     where = "".join(f"""<h2 id="where-h">Where it fails · {e(dep.row["title"])}</h2>
@@ -536,6 +542,7 @@ def home_body(site: Site) -> str:
                  [[e(when(r["started"])), a(run_url(r), r["title"]), a(station_url(r["deployment"], r["device"]), r["device"]), e(r.get("kind") or ""), e(r.get("compare") or "")]
                   for r in newest])
     return f"""{frame}
+{landing.section(oracle)}
 {where}
 <h2>Newest runs</h2>{runs}<p>{a("/runs/", f"Every run ({len(site.runs):,})")}</p>
 <h2>Analysis</h2>
