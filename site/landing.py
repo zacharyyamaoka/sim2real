@@ -17,6 +17,8 @@ from pathlib import Path
 from catalog_workbench.html import e
 
 REPO = Path(__file__).resolve().parents[1]
+# WHY committed results and never a computation here: docs/decision-sysid-oracle-2026-11-05.md (the site stays stdlib, and every
+# number it shows is one the oracle test holds to the code)
 RESULTS = REPO / "sysid" / "results"
 EXAMPLES = ("pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell")
 DRIFT_OF = {"pendulum_can11": "drift_backlash_wear", "dual_arm_cell": "drift_camera_knock"}

@@ -29,3 +29,5 @@ rack twin replays at 30 kHz); the others take seconds.
 Stock parts used in place, never copied: bam_rack_twin (schedule, twin, replayer, smoother, bootstrap, stock identification),
 MuJoCo Menagerie's UR5e and 2F-85, bam_scan_tunnel's `PinholeCamera` (the real pixels), intel_rgbd's D435 constants and stereo-noise
 law, type_cards (typing, ladders, wear laws, drift checks, selection rule, coverage functions).
+
+Why the truth is sealed, the ruler pinned, the results committed and bam_ws imported live: `docs/decision-sysid-oracle-2026-11-05.md`.

@@ -998,7 +998,11 @@ def oracle_data_checks(out: Path) -> None:
               f"the {x} card shows its description in, its typed tree, its coverage and its held-out before -> after (missing {missing[:4]})")
         page_html = (out / "sysid" / x / "index.html").read_text()
         keys = re.findall(r'<tr data-key="([^"]+)"', page_html)
-        printed = [r for r in doc["parameters"] if landing.num(landing.display(r["recovered"], r["unit"])[0]) not in page_html]
+        # each row's own recovered cell (its bold value), not anywhere on the page: a recovered value that rounds like the true one
+        # would otherwise be found in the true column (mutation-tested 2026-11-05: an altered conveyor radius slipped past)
+        row_html = dict(re.findall(r'<tr data-key="([^"]+)">(.*?)</tr>', page_html, re.S))
+        bold = {k: (re.search(r"<b>([^<]*)</b>", v) or [None, ""])[1] for k, v in row_html.items()}
+        printed = [r for r in doc["parameters"] if landing.num(landing.display(r["recovered"], r["unit"])[0]) + " " not in bold.get(r["key"], "") + " "]
         check(keys == [r["key"] for r in doc["parameters"]] and not printed,
               f"/sysid/{x}/ lists every parameter ({len(keys)} of {len(doc['parameters'])}) with its recovered value printed (unprinted {[r['key'] for r in printed][:3]})")
     wear, knock = results.get("drift_backlash_wear"), results.get("drift_camera_knock")
