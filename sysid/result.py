@@ -95,6 +95,19 @@ def code_version(repo: Path = REPO) -> str:
         return "unknown"
 
 
+def checkout_version(repo: Path, roots) -> dict:
+    """A checkout imported in place, as the code under `roots` stands: the branch checked out, the last commit that touched any
+    root (an unrelated commit elsewhere in the repo leaves it alone), and whether a root has uncommitted changes."""
+    paths = [str(Path(r).resolve().relative_to(Path(repo).resolve())) for r in roots]
+    git = lambda *args: subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()  # noqa: E731
+    try:
+        commit, date = (git("log", "-1", "--format=%h %cI", "--", *paths).split(" ", 1) + [""])[:2]
+        return {"branch": git("rev-parse", "--abbrev-ref", "HEAD"), "commit": commit, "date": date,
+                "dirty": bool(git("status", "--porcelain", "--", *paths))}
+    except (OSError, subprocess.CalledProcessError):
+        return {"branch": "unknown", "commit": "unknown", "date": "", "dirty": False}
+
+
 def _num(value):
     if value is None:
         return None
