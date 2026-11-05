@@ -49,6 +49,8 @@ recalibration required"), `DRIFT_THRESHOLD` (1.25), `OUT_OF_COVERAGE` ("out of c
 
 ## Rung keys — a durable decision
 
+The decision record: `docs/decision-rung-keys-2026-11-05.md` (context, alternatives not taken, undo).
+
 A physics rung's key is `M<k>`, **k = the highest layer of terms it holds** (robotparts' naming spec, PEP 0001: "the rung is the
 highest layer captured"). For the actuator types the layers are robotparts' published actuator ladder, so a key means the same
 model here and on robotparts.dev: `M0` ideal, `M2` Coulomb + viscous, `M3` Stribeck / LuGre / load-dependent, `M4` ripple +

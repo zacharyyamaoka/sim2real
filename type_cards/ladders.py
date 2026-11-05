@@ -4,7 +4,8 @@ it; registry.py calls it once, so `reg.CARDS` is the only place a consumer reads
 
 How the ladders are made (CONTRACT.md has the rules):
 - physics rungs are nested and reuse today's Parameter objects, so the current rung IS today's model;
-- actuator keys are robotparts' layers (M0 ideal, M2 Coulomb + viscous, M3 Stribeck / load, M4 ripple + backlash, M5 electrics);
+- actuator keys are robotparts' layers (M0 ideal, M2 Coulomb + viscous, M3 Stribeck / load, M4 ripple + backlash, M5 electrics;
+  WHY: docs/decision-rung-keys-2026-11-05.md);
   the other types count their own from M0, the nominal model a robot description gives;
 - the top physics rung's wear variant (`.wear`) gives the known wear parameters a usage input and a rate;
 - residual (grey box) and learned (black box) rungs sit on top, always M6 and M7 (the same meaning on every card); they need far
