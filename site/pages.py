@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import quote
 
 from catalog_workbench.home import Group, tile, tile_home
 from catalog_workbench.html import breadcrumb, e, plural, results_line
 
 import adapter
+import deploy_tree
 import types_pages
 from adapter import Deployment, Site, Station, deployment_url, rewrite_links, run_url, station_key, station_url
 
@@ -210,9 +212,27 @@ def deployment_header(site: Site, dep: Deployment) -> str:
 <p class="sub">{e(row.get("kind") or "")} · {e(row.get("family") or "")} · {e(row.get("where") or "")}</p>
 <p>{e(row.get("summary") or "")}</p>
 {kpis([("Stations", str(row.get("stations"))), ("Real runs", f'{row.get("runs"):,}'), ("Runs with models", str(row.get("runs_with_models"))),
-       ("Hours of real data", str(row.get("hours"))), ("Days", str(row.get("days"))), ("Last run", e(when(row.get("last_run"))))])}
+       ("Hours of real data", str(row.get("hours"))), ("Days", str(row.get("days"))), ("Last run", e(when(row.get("last_run")))),
+       ("Config snapshots", config_coverage(dep.runs))])}
 {standing_line(dep)}
+{tags_line(dep.runs)}
 <p class="s2r-stations">{" ".join(station_badge(dep, d["device"]) for d in sorted(dep.devices, key=lambda d: d.get("order", 0)))}</p>"""
+
+
+def config_coverage(runs: list[dict]) -> str:
+    """The KPI (Zach, Nov 5 2026: "record the current configuration values ... so ideally we can reproduce"): runs whose board's whole
+    config was recorded at their session's start, of every run (site/deploy_tree.py config_of)."""
+    full = sum(1 for r in runs if r.get("config") == deploy_tree.FULL)
+    return f"{full:,} of {len(runs):,} runs · {100 * full / len(runs):.0f} %" if runs else "no runs"
+
+
+def tags_line(runs: list[dict]) -> str:
+    """How the runs are tagged: by environment (sim, bench, real) and by setting (type_cards SETTINGS), unknown counted apart."""
+    def counts(key: str, words) -> str:
+        n = {w: sum(1 for r in runs if r.get(key) == w) for w in (*words, deploy_tree.UNKNOWN)}
+        return " · ".join(f"{w} {c:,}" for w, c in n.items())
+    return (f'<p class="s2r-tags">Runs by environment: {e(counts("environment", deploy_tree.ENVIRONMENTS))}; by setting: '
+            f'{e(counts("setting", deploy_tree.reg.SETTINGS))}.</p>')
 
 
 def station_badge(dep: Deployment, device: str) -> str:
@@ -268,7 +288,25 @@ def station_header(site: Site, st: Station) -> str:
 {kpis([("Gate cells passing", f"{passing} of {len(cells)}"), ("Real runs", f'{row.get("runs", 0):,}'), ("Gains (record)", e(gains or "—")),
        ("Speed ceiling", f'{num(row.get("qd_max_deg_s"))} °/s' if row.get("qd_max_deg_s") else "—")])}
 {gate_chips(dep, st.device)}
+{tree_line(dep, st.device)}
 {types_pages.station_link(st)}"""
+
+
+def tree_line(dep: Deployment, device: str) -> str:
+    """A station's place in its deployment's tree, each level with its match and a link to the deployment's runs picked there (the
+    Runs tab's rail reads its pick from the URL, data-ui CONTRACT §17)."""
+    chain = [n for n in deploy_tree.tree(dep) if n.get("id")]
+    path = deploy_tree.path_of(chain, device) if chain else []
+    if not path:
+        return ""
+    steps, picks = [], []
+    for n in path:
+        # WHY every level above it too: the rail's tree opens a level only under its parent's pick
+        if n["depth"]:
+            picks.append(f"node_{n['depth']}={quote(n['id'], safe='')}")
+        href = deployment_url(dep.id) + (f"?{'&'.join(picks)}" if picks else "")
+        steps.append(f'{a(href, n["label"])} <small>{n.get("passing", 0)}/{n.get("cells", 0)} pass</small>')
+    return f'<p class="s2r-tree">In the tree: {" › ".join(steps)}</p>'
 
 
 def station_runs(site, st: Station) -> str:
@@ -400,7 +438,18 @@ def run_header(site: Site, row: dict) -> str:
 <h1>{e(run_title(row))}</h1>
 <p class="sub">{e(when(row.get("started")))} · {e(row.get("kind") or "")} · {num(row.get("duration_s"))} s · {e(row.get("gains") or "")} · {e(row.get("compare") or "")}</p>
 <p class="s2r-runline"><span class="s2r-real">real</span> vs target {num(row.get("tracking_mrad"))} mrad · closest model: {best}{(" · twinned? " + chip(verdict)) if verdict else ""}</p>
-<p class="s2r-gline">{a(station_url(dep.id, row["device"]), row["device"])} gates: {gate_chips(dep, row["device"])}</p>"""
+<p class="s2r-gline">{a(station_url(dep.id, row["device"]), row["device"])} gates: {gate_chips(dep, row["device"])}</p>
+{config_line(row)}"""
+
+
+def config_line(row: dict) -> str:
+    """'config not recorded' (or the full snapshot), the run's environment and setting: a run says what it can be reproduced from."""
+    full = row.get("config") == deploy_tree.FULL
+    words = f"full config snapshot ({row.get('config_keys')} keys)" if full else "config not recorded"
+    return (f'<p class="s2r-cfg"><span class="s2r-v s2r-{"pass" if full else "not_run"}" title="{e(row.get("config_detail") or "")}">{e(words)}</span> · '
+            f'environment {e(row.get("environment") or deploy_tree.UNKNOWN)} · setting {e(row.get("setting") or deploy_tree.UNKNOWN)}'
+            f'{" · test type " + e(row["test_type"]) if row.get("test_type") not in (None, deploy_tree.NOT_RECORDED) else ""} · '
+            f'{a("#evidence", "what is recorded")}</p>')
 
 
 def run_playback(site, row: dict) -> str:
@@ -452,7 +501,15 @@ def run_evidence(site, row: dict) -> str:
             "round", "basis", "clock_offset_s")
     fields = table(["Field", "Value"], [[e(k), file_link(row[k]) if k == "npz" else e(", ".join(row[k]) if isinstance(row[k], list) else num(row[k]))]
                                          for k in keep if k in row], caption="This run as runs.json records it")
-    return f"<h2>The recording</h2>{fields}<h2>The tables this page reads</h2><p>{files}</p>"
+    config = table(["Field", "Value"], [[e(k), file_link(row.get(f)) if f == "config_file" else e(num(row.get(f)) if row.get(f) is not None else "—")]
+                                        for k, f in CONFIG_FIELDS], caption="This run's configuration, as its session recorded it (site/deploy_tree.py)")
+    return (f"<h2>Configuration</h2><p>{e(row.get('config_detail') or 'Board config not recorded.')}</p>{config}"
+            f"<h2>The recording</h2>{fields}<h2>The tables this page reads</h2><p>{files}</p>")
+
+
+CONFIG_FIELDS = (("Config snapshot", "config"), ("Environment", "environment"), ("Setting", "setting"), ("Test type", "test_type"),
+                 ("Code", "config_code"), ("Plan sha256", "config_plan"), ("Board config keys", "config_keys"),
+                 ("Board config sha256", "config_sha256"), ("Firmware (snapshot)", "config_firmware"), ("Board config file", "config_file"))
 
 
 # --- the home and the lists -------------------------------------------------------------------------------------------
@@ -530,7 +587,13 @@ data: /data/search.json
 facets:
   - { as: current, label: Your filters }
   - { property: title, as: search, properties: [title, device, kind, session, compare], label: Find, placeholder: "Run, station or kind" }
-  - { property: device, label: Station }
+  - { as: tree, levels: [__LEVELS__], label: Deployment tree, info: "Each deployment's tree (the deployment, its adapters, its stations). A node's n/m: n of the m gate cells under it pass; the number on the right is its runs. A click narrows the runs to it" }
+  - { property: environment, label: Environment }
+  - { property: setting, label: Setting }
+  - { property: test_type, label: Test type }
+  - { property: type, label: Type }
+  - { property: deployment_kind, label: Deployment kind }
+  - { property: config, label: Config snapshot }
   - { property: run_set, label: Run set, limit: 8 }
   - { property: split, label: Split }
   - { property: mode, label: Mode }
@@ -554,21 +617,34 @@ properties:
   run_set: { displayName: Run set }
   split: { displayName: Split }
   mode: { displayName: Mode }
+  environment: { displayName: Environment }
+  setting: { displayName: Setting }
+  test_type: { displayName: Test type }
+  type: { displayName: Type }
+  deployment_kind: { displayName: Deployment kind }
+  config: { displayName: Config }
   url: { displayName: Open }
 views:
   - type: table
     name: Runs
     open: { mode: link, url: url }
-    order: [title, device, started, kind, compare, duration_s, gains, tracking_mrad, best_model, verdict]
+    order: [title, device, started, kind, environment, compare, duration_s, gains, config, tracking_mrad, best_model, verdict]
     sort:
       - { property: started, direction: DESC }
-"""
+""".replace("__LEVELS__", ", ".join(f"node_{k}" for k in range(deploy_tree.depth(site) + 1)))
 
 
 def search_rows(site: Site) -> str:
-    keep = ("title", "device", "started", "kind", "compare", "duration_s", "gains", "tracking_mrad", "best_model", "verdict", "day", "session", "run_set", "split", "mode")
+    levels = tuple(f"node_{k}" for k in range(deploy_tree.depth(site) + 1))
+    keep = ("title", "device", "started", "kind", "compare", "duration_s", "gains", "tracking_mrad", "best_model", "verdict", "day", "session", "run_set", "split", "mode",
+            *levels, "environment", "setting", "test_type", "type", "deployment_kind", "config")
     rows = [{**{k: r.get(k) for k in keep}, "id": r["run"], "url": run_url(r)} for r in sorted(site.runs, key=lambda r: r["started"], reverse=True)]
-    return json.dumps({"id": "runs", "title": "Every run", "titleProperty": "title", "linkProperty": "url", "rows": rows},
+    # WHY declared properties (data-ui's runtime form): the tree facet's levels read their node words from `labels`, which an inferred
+    # column cannot carry; every other column is typed the way data-ui infers it, so the list reads as before
+    labels = deploy_tree.labels(site)
+    numbers = {"duration_s", "tracking_mrad"}
+    properties = {k: {"type": "number" if k in numbers else "text", **({"labels": labels[k]} if k in labels else {})} for k in (*keep, "id", "url")}
+    return json.dumps({"id": "runs", "title": "Every run", "titleProperty": "title", "linkProperty": "url", "properties": properties, "rows": rows},
                       ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n"
 
 

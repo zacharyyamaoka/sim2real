@@ -47,6 +47,20 @@ as they are written. `tools/trajectory.py` computes difference(a, b) and reprodu
 | `reports/` | review reports (`reports/media/` is gitignored) |
 | `docs/` | decisions |
 
+## Deployment tree, run tags, config snapshots
+
+`site/deploy_tree.py` (run by `site/build.py`) gives each deployment a tree in RobotDx's shape: the deployment, each fdcanusb
+adapter its bam_rack_twin record wires its boards to (`adapter_serial`), each station. Every node carries the gate cells under it
+(passing of cells, the worst). Each run gains, in the site's `runs.json` and `/runs/`:
+
+| column | what |
+|---|---|
+| `node_0` … `node_k` | the run's station and its ancestors as path ids (`one-dof-test-rack/fdcanusb-0607623A/can11`); the rail's tree facet reads them, each level labelled with its node's gate cells passing |
+| `environment` | `sim` (no hardware moved), `bench` (a test run on real hardware), `real` (a segment of live deployed data), else `unknown`: the registry's declared tag, only for a run whose basis fits and whose recording lies in the deployment's archive days |
+| `setting` | `type_cards` SETTINGS: `bench` (in the office) or `deployed` (in a customer's facility), else `unknown`, by the same rule |
+| `test_type` | the type_cards `TestType.id` a run recorded; none is recorded today |
+| `config` | `full` when the run's session recorded its board's whole config (bam_rack_twin.hardware session.json `board_configs`, the `.cfg` file's key lines hashing to its sha256), else `not recorded`; `config_detail` says what is recorded |
+
 ## Diagnostics
 
 The stock diagnostics library is `robotdx.diagnostics` in `/home/bam/io-diagnostics` (lifted from `diagnostics_ref` at
