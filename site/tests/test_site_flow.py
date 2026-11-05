@@ -445,11 +445,17 @@ def types_checks(page, base: str, still) -> None:
     want = sched["coverage"]["train"]["pct_reachable"]
     check(pct is not None and float(pct) == want and f"{want} %" in row.inner_text() and row.locator(f"a[href='/{DEP}/can11/#schedule']").count() == 1,
           f"the Servo card's Coverage tab shows CAN 11's planned train coverage, schedule.py's own {want} % ({pct}), linked to its Schedule tab")
-    drawn = page.evaluate("""[...document.querySelectorAll('[data-tab=coverage] svg.s2r-cov rect[data-i]')].map(r => [+r.dataset.i, +r.dataset.j, +r.dataset.samples])""")
+    # WHY per station (2026-11-04, one schedule for every servo): with eight schedules the card drew the first station's map under a
+    # hard-coded "CAN 11" label; every planned station now has its own map, named for itself
+    maps = page.evaluate("""[...document.querySelectorAll('[data-tab=coverage] figure.s2r-covfig')].map(f => [f.dataset.station, f.querySelector('figcaption').textContent])""")
+    rows_planned = page.evaluate("""[...document.querySelectorAll('[data-tab=coverage] tr[data-station]')].map(r => r.dataset.station)""")
+    check(sorted(m[0] for m in maps) == sorted(rows_planned) and len(maps) > 1 and all(cap.startswith(f"CAN {key[3:]} ") for key, cap in maps),
+          f"the Coverage tab draws one q × qd map per planned station, each labelled with its own station ({[m[0] for m in maps]})")
+    drawn = page.evaluate("""[...document.querySelectorAll('[data-tab=coverage] figure.s2r-covfig[data-station=can11] svg.s2r-cov rect[data-i]')].map(r => [+r.dataset.i, +r.dataset.j, +r.dataset.samples])""")
     plane = {(c["i"], c["j"]) for c in sched["coverage"]["planes"]["q_qd"] if c["split"] == "train" and c["samples"] > 0}
     check({(i, j) for i, j, n in drawn if n > 0} == plane and len(drawn) == 12 * 13,
           f"its q × qd map draws schedule.py's visited train cells, cell by cell ({sum(1 for d in drawn if d[2] > 0)} drawn, {len(plane)} in the plane, {len(drawn)} cells)")
-    cov_box = page.locator("[data-tab=coverage] svg.s2r-cov").bounding_box()
+    cov_box = page.locator("[data-tab=coverage] figure.s2r-covfig[data-station=can11] svg.s2r-cov").bounding_box()
     check(cov_box and cov_box["width"] > 200 and cov_box["height"] > 100, f"the map is drawn at a readable size ({cov_box})")
     still("15-types-servo-coverage")
     open_tab(page, "procedure")
@@ -1084,6 +1090,23 @@ def main() -> int:
             row_text = runs_panel.locator("tbody tr").first.inner_text()
             check("not run yet" in row_text, f"every planned run's status reads not run yet ({row_text[:80]!r})")
             still("8b-schedule")
+            # 8b'. every station with a delivered schedule (bam_rack_twin.schedule build-rack, 2026-11-04: one schedule for every servo)
+            # has its own Schedule tab listing its own plans' commands, not only CAN 11
+            served = sorted(p.name for p in (data / "schedule").iterdir() if (p / "summary.json").is_file())
+            shown = {}
+            for key in served:
+                own = json.loads((data / "schedule" / key / "summary.json").read_text())
+                page.goto(f"{base}/{DEP}/{key}/")
+                page.wait_for_load_state("load")
+                tabs_here = page.evaluate("[...document.querySelectorAll('nav.tabs [role=tab]')].map(t => t.textContent.trim())")
+                if "Schedule" not in tabs_here:
+                    shown[key] = "no Schedule tab"
+                    continue
+                open_tab(page, "schedule")
+                pres = page.locator("[role=tabpanel][data-tab=schedule] .s2r-commands pre").all_inner_texts()
+                shown[key] = len(pres) == len(own["commands"]) and all(f"--plan /" in t and f"/{key}/plans/" in t for t in pres)
+            check(len(served) > 1 and all(v is True for v in shown.values()),
+                  f"every station with a delivered schedule has a Schedule tab with its own plans' commands ({len(served)} stations: {shown})")
 
             # 8c. a station's Gates tab (CONTRACT §35): the run checks' evidence in the side peek, whose link lands on the run's
             # playback at its window
