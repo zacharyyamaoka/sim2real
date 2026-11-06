@@ -130,3 +130,25 @@ def test_the_schedule_states_its_duration(example):
     for split in ("train", "held_out"):
         motion = sum(e.shape[0] for e in trajectories(p, split)) * arm.DT
         assert p.coverage[split].get("motion_s") is not None and math.isclose(p.coverage[split]["motion_s"], round(motion, 1), abs_tol=0.05)
+
+
+@pytest.mark.parametrize("example", UR_EXAMPLES)
+def test_the_sweep_stops_at_the_cards_gate_plus_its_margin(example):
+    """The sweep's target is a share of the mount's reachable cells, a stated margin above the card's gate, and the train split
+    stops near it: the schedule is as long as the gate needs, not the old box target's 1,721 cells.
+
+    Written before the code (2026-11-05, sweep-trim lane): the gate moved to 40 % of the 2,560 reachable cells (1,024) while the
+    sweep still ran to 42 % of the 4,096-cell box (1,721 cells, 67 % of reachable), about 15 min of motion for coverage the card
+    no longer asks for."""
+    from type_cards import coverage as cov
+
+    _, p = plan_of(example)
+    card, min_pct, _ = card_need()
+    sweep = p.sweep
+    reachable = len(cov.arm_reachable_cells(p.mount))
+    margin = sweep["target_pct"] - min_pct
+    assert 0 < margin <= 5, f"{example}: the sweep targets {sweep['target_pct']} %, the gate is {min_pct:g} %: the margin must be stated and small"
+    assert sweep["target_of"] == "reachable cells" and sweep["reachable_cells"] == reachable
+    assert sweep["target_cells"] == math.ceil(sweep["target_pct"] / 100.0 * reachable), f"{example}: target {sweep['target_cells']} cells"
+    assert min_pct <= p.coverage["train"]["pct"] < sweep["target_pct"] + 2.0, (
+        f"{example}: train covers {p.coverage['train']['pct']} % of reachable, the sweep targets {sweep['target_pct']} %")
