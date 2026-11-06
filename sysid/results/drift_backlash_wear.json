@@ -485,18 +485,18 @@
  ],
  "detector_alarm_h": 204.0,
  "actual_crossing_h": 197.29366853745597,
- "rate_recovered": 1.8760524978945423e-06,
+ "rate_recovered": 1.879612900089972e-06,
  "rate_ci95": [
-  1.7106793688339917e-06,
-  2.041425626955093e-06
+  1.5501414444386354e-06,
+  2.2090843557413087e-06
  ],
- "b0_recovered_rad": 0.001979120901535382,
+ "b0_recovered_rad": 0.001978871019441938,
  "rate_true": 1.8e-06,
  "b0_true_rad": 0.002,
- "predicted_at_h": 168.0,
- "predicted_crossing_h": 224.9177620825205,
- "remaining_h_at_prediction": 56.91776208252051,
- "plan_by_h": 212.68795998079207,
+ "predicted_at_h": 120.0,
+ "predicted_crossing_h": 201.59828765576933,
+ "remaining_h_at_prediction": 81.59828765576933,
+ "plan_by_h": 179.6034610229744,
  "plan_by_rule": "the hour the wear line's upper 95 % confidence band (slope and intercept, Student's t) reaches the threshold gap: the early edge maintenance plans against",
  "forecast": {
   "checks_h": [
@@ -510,250 +510,289 @@
    84.0,
    96.0,
    108.0,
-   120.0,
-   132.0,
-   144.0,
-   156.0,
-   168.0
+   120.0
   ],
-  "gap_ratio_correlation": 0.04005606526500344,
-  "curve_rule": "ratio^2 = 1 + d^2 + 2 rho d, d = the gap's replayed link error / calibrated; rho least squares on the early checks' (gap, ratio)"
+  "gap_ratio_correlation": 0.15514411846521614,
+  "horizon_h": 96.0,
+  "rolling": [
+   [
+    48.0,
+    244.7998527274589
+   ],
+   [
+    60.0,
+    222.00203657203502
+   ],
+   [
+    72.0,
+    230.6160527811823
+   ],
+   [
+    84.0,
+    232.0079069603189
+   ],
+   [
+    96.0,
+    215.74708153666364
+   ],
+   [
+    108.0,
+    211.72189940115334
+   ],
+   [
+    120.0,
+    201.59828765576933
+   ]
+  ],
+  "curve_fit": {
+   "jitter": 0.22461130296476825,
+   "slope_per_rad": 1557.5830525500874,
+   "knee_rad": 0.001965693953486223,
+   "rms": 0.06374820406353834,
+   "cap": 1.5,
+   "fitted_to_rad": 0.002907082551101996
+  },
+  "issue_rule": "re-made at every check from 5 on; issued at the first whose crossing is within 96 h, hour 168 at the latest",
+  "curve_rule": "ratio^2 = 1 + d^2 + 2 rho d, d = slope x (gap - knee)+, the systematic part of the gap's replayed link error / calibrated (fitted to the replays as jitter in quadrature with it; the jitter is dropped); rho least squares on the checks' (gap, ratio) up to the issue hour"
  },
- "gap_at_threshold_rad": 0.002401078430911145,
+ "gap_at_threshold_rad": 0.002357797761555771,
  "curve": [
   {
-   "backlash_rad": 0.0017791209015353819,
-   "gap_x_calibrated": 0.32502656295084326,
-   "ratio": 1.0638048867440288
+   "backlash_rad": 0.0017570825511019962,
+   "gap_x_calibrated": 0.3601932348908401,
+   "ratio": 1.0
   },
   {
-   "backlash_rad": 0.001829120901535382,
-   "gap_x_calibrated": 0.2743031075801479,
-   "ratio": 1.0474813607827937
+   "backlash_rad": 0.0018070825511019963,
+   "gap_x_calibrated": 0.28856017927504685,
+   "ratio": 1.0
   },
   {
-   "backlash_rad": 0.001879120901535382,
-   "gap_x_calibrated": 0.25717925728035573,
-   "ratio": 1.0424703106583562
+   "backlash_rad": 0.0018570825511019962,
+   "gap_x_calibrated": 0.27728698181009903,
+   "ratio": 1.0
   },
   {
-   "backlash_rad": 0.0019291209015353818,
-   "gap_x_calibrated": 0.23157254414003228,
-   "ratio": 1.0354600972914403
+   "backlash_rad": 0.0019070825511019961,
+   "gap_x_calibrated": 0.1881827451969958,
+   "ratio": 1.0
   },
   {
-   "backlash_rad": 0.001979120901535382,
-   "gap_x_calibrated": 0.29393467482936286,
-   "ratio": 1.053539427883109
+   "backlash_rad": 0.0019570825511019962,
+   "gap_x_calibrated": 0.0,
+   "ratio": 1.0
   },
   {
-   "backlash_rad": 0.002029120901535382,
-   "gap_x_calibrated": 0.2934883189429341,
-   "ratio": 1.0533980101899463
+   "backlash_rad": 0.0020070825511019964,
+   "gap_x_calibrated": 0.2374978854164659,
+   "ratio": 1.0120074035864
   },
   {
-   "backlash_rad": 0.0020791209015353818,
-   "gap_x_calibrated": 0.221851759921622,
-   "ratio": 1.032952671001665
+   "backlash_rad": 0.002057082551101996,
+   "gap_x_calibrated": 0.2426483279119244,
+   "ratio": 1.0317123024153327
   },
   {
-   "backlash_rad": 0.002129120901535382,
-   "gap_x_calibrated": 0.4092753605357627,
-   "ratio": 1.0955794091929782
+   "backlash_rad": 0.002107082551101996,
+   "gap_x_calibrated": 0.35414324653171536,
+   "ratio": 1.0568026730778854
   },
   {
-   "backlash_rad": 0.002179120901535382,
-   "gap_x_calibrated": 0.3902034992613336,
-   "ratio": 1.0878965044993383
+   "backlash_rad": 0.0021570825511019963,
+   "gap_x_calibrated": 0.34777080190102355,
+   "ratio": 1.0869056212578612
   },
   {
-   "backlash_rad": 0.002229120901535382,
-   "gap_x_calibrated": 0.448002339639377,
-   "ratio": 1.1120236140628013
+   "backlash_rad": 0.0022070825511019965,
+   "gap_x_calibrated": 0.4616364810587818,
+   "ratio": 1.1216176238127087
   },
   {
-   "backlash_rad": 0.002279120901535382,
-   "gap_x_calibrated": 0.5829941090785719,
-   "ratio": 1.1775343015747122
+   "backlash_rad": 0.002257082551101996,
+   "gap_x_calibrated": 0.5757808394141227,
+   "ratio": 1.160525175685798
   },
   {
-   "backlash_rad": 0.002329120901535382,
-   "gap_x_calibrated": 0.671745765809731,
-   "ratio": 1.2268077919367935
+   "backlash_rad": 0.0023070825511019963,
+   "gap_x_calibrated": 0.5560329592352351,
+   "ratio": 1.2032213418909232
   },
   {
-   "backlash_rad": 0.002379120901535382,
-   "gap_x_calibrated": 0.6484869823992759,
-   "ratio": 1.2134607699148332
+   "backlash_rad": 0.0023570825511019964,
+   "gap_x_calibrated": 0.6357802591691175,
+   "ratio": 1.2493177484495257
   },
   {
-   "backlash_rad": 0.002429120901535382,
-   "gap_x_calibrated": 0.7908657138080101,
-   "ratio": 1.2995485810747314
+   "backlash_rad": 0.002407082551101996,
+   "gap_x_calibrated": 0.6928770230893471,
+   "ratio": 1.2984523096471992
   },
   {
-   "backlash_rad": 0.002479120901535382,
-   "gap_x_calibrated": 0.7967147371175256,
-   "ratio": 1.3032961625645136
+   "backlash_rad": 0.0024570825511019963,
+   "gap_x_calibrated": 0.7697986484662857,
+   "ratio": 1.3502934085202583
   },
   {
-   "backlash_rad": 0.002529120901535382,
-   "gap_x_calibrated": 0.878358390024279,
-   "ratio": 1.3571590265402929
+   "backlash_rad": 0.0025070825511019964,
+   "gap_x_calibrated": 0.8342736554831699,
+   "ratio": 1.404541385145459
   },
   {
-   "backlash_rad": 0.002579120901535382,
-   "gap_x_calibrated": 0.9418477965859288,
-   "ratio": 1.4009035318512335
+   "backlash_rad": 0.002557082551101996,
+   "gap_x_calibrated": 0.9746212700068866,
+   "ratio": 1.460928143649559
   },
   {
-   "backlash_rad": 0.002629120901535382,
-   "gap_x_calibrated": 1.0181711960898592,
-   "ratio": 1.4554176198981852
+   "backlash_rad": 0.0026070825511019962,
+   "gap_x_calibrated": 1.0334232712897102,
+   "ratio": 1.519215555494455
   },
   {
-   "backlash_rad": 0.002679120901535382,
-   "gap_x_calibrated": 1.1086994810040474,
-   "ratio": 1.5225093814881374
+   "backlash_rad": 0.0026570825511019963,
+   "gap_x_calibrated": 1.0734749250233382,
+   "ratio": 1.5791931775540513
   },
   {
-   "backlash_rad": 0.0027291209015353817,
-   "gap_x_calibrated": 1.2216009039437996,
-   "ratio": 1.609401696155633
+   "backlash_rad": 0.002707082551101996,
+   "gap_x_calibrated": 1.1453901547007095,
+   "ratio": 1.6406756549782022
   },
   {
-   "backlash_rad": 0.002779120901535382,
-   "gap_x_calibrated": 1.277444138874174,
-   "ratio": 1.653542348880808
+   "backlash_rad": 0.002757082551101996,
+   "gap_x_calibrated": 1.2823788828599425,
+   "ratio": 1.7035000564928082
   },
   {
-   "backlash_rad": 0.002829120901535382,
-   "gap_x_calibrated": 1.3020091950819292,
-   "ratio": 1.673181004752793
+   "backlash_rad": 0.0028070825511019963,
+   "gap_x_calibrated": 1.3939844187765122,
+   "ratio": 1.7675232968568777
   },
   {
-   "backlash_rad": 0.0028791209015353817,
-   "gap_x_calibrated": 1.4155406231850278,
-   "ratio": 1.7655472893871131
+   "backlash_rad": 0.002857082551101996,
+   "gap_x_calibrated": 1.3745024520133444,
+   "ratio": 1.832619734756931
   },
   {
-   "backlash_rad": 0.002929120901535382,
-   "gap_x_calibrated": 1.4757972717895063,
-   "ratio": 1.8155458823986736
+   "backlash_rad": 0.002907082551101996,
+   "gap_x_calibrated": 1.4909881299831147,
+   "ratio": 1.8986789892810427
   },
   {
-   "backlash_rad": 0.002979120901535382,
-   "gap_x_calibrated": 1.5650843244785955,
-   "ratio": 1.8907329749125652
+   "backlash_rad": 0.0029570825511019963,
+   "gap_x_calibrated": 1.5518327831321799,
+   "ratio": 1.9656039889260388
   },
   {
-   "backlash_rad": 0.0030291209015353817,
-   "gap_x_calibrated": 1.6409337761934104,
-   "ratio": 1.955536335311075
+   "backlash_rad": 0.003007082551101996,
+   "gap_x_calibrated": 1.6229562771306054,
+   "ratio": 2.0333092492423734
   },
   {
-   "backlash_rad": 0.003079120901535382,
-   "gap_x_calibrated": 1.7110397203957983,
-   "ratio": 2.0161180427233187
+   "backlash_rad": 0.003057082551101996,
+   "gap_x_calibrated": 1.6531828674662765,
+   "ratio": 2.101719365104478
   },
   {
-   "backlash_rad": 0.003129120901535382,
-   "gap_x_calibrated": 1.7748720132370421,
-   "ratio": 2.071801014038417
+   "backlash_rad": 0.0031070825511019962,
+   "gap_x_calibrated": 1.7381065447175876,
+   "ratio": 2.1707676985536044
   },
   {
-   "backlash_rad": 0.0031791209015353816,
-   "gap_x_calibrated": 1.8580208573348422,
-   "ratio": 2.145015504778832
+   "backlash_rad": 0.003157082551101996,
+   "gap_x_calibrated": 1.8497988298717125,
+   "ratio": 2.2403952413224344
   },
   {
-   "backlash_rad": 0.0032291209015353818,
-   "gap_x_calibrated": 1.9120009000439042,
-   "ratio": 2.1929254222263257
+   "backlash_rad": 0.003207082551101996,
+   "gap_x_calibrated": 1.8789537243386154,
+   "ratio": 2.310549631240295
   },
   {
-   "backlash_rad": 0.003279120901535382,
-   "gap_x_calibrated": 1.9785921249712433,
-   "ratio": 2.2524067189518773
+   "backlash_rad": 0.003257082551101996,
+   "gap_x_calibrated": 1.94114434287455,
+   "ratio": 2.381184302891541
   },
   {
-   "backlash_rad": 0.0033291209015353816,
-   "gap_x_calibrated": 2.03278347351098,
-   "ratio": 2.30109957740827
+   "backlash_rad": 0.003307082551101996,
+   "gap_x_calibrated": 2.021978526649301,
+   "ratio": 2.452257754616639
   },
   {
-   "backlash_rad": 0.0033791209015353817,
-   "gap_x_calibrated": 2.1327915337356806,
-   "ratio": 2.3915815269646408
+   "backlash_rad": 0.003357082551101996,
+   "gap_x_calibrated": 2.093947082479402,
+   "ratio": 2.523732915870014
   },
   {
-   "backlash_rad": 0.003429120901535382,
-   "gap_x_calibrated": 2.1882438452591817,
-   "ratio": 2.4420720715977193
+   "backlash_rad": 0.003407082551101996,
+   "gap_x_calibrated": 2.1642478742790896,
+   "ratio": 2.5955766008812073
   },
   {
-   "backlash_rad": 0.0034791209015353815,
-   "gap_x_calibrated": 2.2321630020469554,
-   "ratio": 2.4822117156865393
+   "backlash_rad": 0.003457082551101996,
+   "gap_x_calibrated": 2.24554268234307,
+   "ratio": 2.667759036394831
   },
   {
-   "backlash_rad": 0.0035291209015353817,
-   "gap_x_calibrated": 2.3081766846329703,
-   "ratio": 2.55197816591931
+   "backlash_rad": 0.003507082551101996,
+   "gap_x_calibrated": 2.2789850535474296,
+   "ratio": 2.7402534529343208
   },
   {
-   "backlash_rad": 0.003579120901535382,
-   "gap_x_calibrated": 2.334030406224431,
-   "ratio": 2.575787663171139
+   "backlash_rad": 0.003557082551101996,
+   "gap_x_calibrated": 2.352482808208228,
+   "ratio": 2.8130357305229197
   },
   {
-   "backlash_rad": 0.0036291209015353815,
-   "gap_x_calibrated": 2.439939024619499,
-   "ratio": 2.6737186010286735
+   "backlash_rad": 0.003607082551101996,
+   "gap_x_calibrated": 2.4032776344201903,
+   "ratio": 2.886084091101075
   },
   {
-   "backlash_rad": 0.0036791209015353816,
-   "gap_x_calibrated": 2.4850210015412006,
-   "ratio": 2.715586438496501
+   "backlash_rad": 0.003657082551101996,
+   "gap_x_calibrated": 2.4504554194128705,
+   "ratio": 2.95937883101214
   },
   {
-   "backlash_rad": 0.0037291209015353818,
-   "gap_x_calibrated": 2.5631875445447125,
-   "ratio": 2.788417616435997
+   "backlash_rad": 0.003707082551101996,
+   "gap_x_calibrated": 2.552756321228706,
+   "ratio": 3.0329020879030697
   },
   {
-   "backlash_rad": 0.003779120901535382,
-   "gap_x_calibrated": 2.6203271473501872,
-   "ratio": 2.841836439628468
+   "backlash_rad": 0.003757082551101996,
+   "gap_x_calibrated": 2.5776585382043486,
+   "ratio": 3.106637637221112
   },
   {
-   "backlash_rad": 0.0038291209015353816,
-   "gap_x_calibrated": 2.679690339688727,
-   "ratio": 2.8974844294481077
+   "backlash_rad": 0.003807082551101996,
+   "gap_x_calibrated": 2.6372968919190183,
+   "ratio": 3.1805707141987423
   },
   {
-   "backlash_rad": 0.0038791209015353817,
-   "gap_x_calibrated": 2.763027971556289,
-   "ratio": 2.975848724165568
+   "backlash_rad": 0.003857082551101996,
+   "gap_x_calibrated": 2.701824428920468,
+   "ratio": 3.2546878578239395
   },
   {
-   "backlash_rad": 0.003929120901535382,
-   "gap_x_calibrated": 2.808948777545378,
-   "ratio": 3.0191429422921483
+   "backlash_rad": 0.003907082551101997,
+   "gap_x_calibrated": 2.763364461967586,
+   "ratio": 3.3289767738063945
   },
   {
-   "backlash_rad": 0.003979120901535382,
-   "gap_x_calibrated": 2.8736394853892713,
-   "ratio": 3.0802625332166094
+   "backlash_rad": 0.003957082551101996,
+   "gap_x_calibrated": 2.8606125266162308,
+   "ratio": 3.403426213985875
   }
  ],
- "card_trend_remaining_h": 54.75846815538881,
+ "card_trend_remaining_h": 121.94693477966129,
  "card_trend_unit": "h",
  "recalibrated": {
   "h": 204.0,
-  "backlash_rad": 0.0023624730468334576,
-  "live_x_floor": 1.569425905556443,
-  "ratio": 1.1685808857236268,
+  "backlash_rad": 0.0024374730468334576,
+  "measured_gap_rad": 0.0023624730468334576,
+  "scored_at_h": 216.0,
+  "rule": "the gap searched over the measured gap +-0.1 mrad (0.025 mrad steps) on the alarm check's link error, scored on the next check",
+  "live_x_floor": 1.2539917282061768,
+  "ratio": 0.9337113394453105,
   "status": "ok"
  },
  "wear": {
@@ -765,19 +804,19 @@
   "law": "archard",
   "rate": "backlash_wear_rad_per_nm_rev",
   "duty_nm_rev_per_h": 189.8741249877565,
-  "rate_recovered_per_nm_rev": 9.880506351328884e-09,
+  "rate_recovered_per_nm_rev": 9.899257733043792e-09,
   "rate_true_per_nm_rev": 9.47996468774283e-09,
   "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"
  },
  "provenance": {
-  "code": "7d1accc",
+  "code": "8abc452",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "e47066e1",
-    "date": "2026-11-05T18:24:10-07:00",
+    "commit": "1097f440",
+    "date": "2026-11-05T19:52:21-07:00",
     "dirty": false,
     "paths": 14
    },
@@ -800,8 +839,10 @@
     "paths": 6
    }
   ],
-  "seconds": 411.0,
+  "seconds": 356.6,
   "commissioned_twin": "1ca8ef60",
+  "twin_of_record": "twin of record (followup C)",
+  "twin_of_record_digest": "95198353",
   "identify_sealed": true
  }
 }

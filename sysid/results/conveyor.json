@@ -593,16 +593,16 @@
  },
  "provenance": {
   "identify_sealed": true,
-  "code": "7d1accc",
+  "code": "8abc452",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "e47066e1",
-    "date": "2026-11-05T18:24:10-07:00",
+    "commit": "1097f440",
+    "date": "2026-11-05T19:52:21-07:00",
     "dirty": false,
-    "paths": 11
+    "paths": 10
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -623,6 +623,6 @@
     "paths": 6
    }
   ],
-  "seconds": 7.1
+  "seconds": 7.0
  }
 }
