@@ -122,22 +122,30 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
 
     recal = None
     if alarm is not None:
+        # WHY fitted, not the re-measured gap plugged in (2026-11-05, twin C): a replay's error is a jagged function of the gap, and the
+        # gap measured at the alarm (2.3625 mrad) landed on a spike: 1.169x against the 1.1 gate, while twins 0.025 mrad either side
+        # scored 0.95-1.06. So the gap is searched near the measurement on the alarm check and scored on the NEXT check (held out).
+        def measured(label):
+            out = {}
+            for n in names:
+                noise = P.noise_rng(real.seed, "check", label, n)
+                link = P.link_of(replays[(label, n)])
+                out[n] = (link + noise.normal(0.0, real.noise["link_camera_rad"], link.size), link + noise.normal(0.0, real.noise["link_camera_rad"], link.size))
+            return out
+
         at = next(c for c in checks if c["h"] == alarm)
-        b_recal = at["b_hat_rad"]
-        recal_twin = P.twin({**commissioned_values, "backlash_rad": b_recal}, "recalibrated")
-        rp = P.replay(runs, {"recalibrated": recal_twin}, workers=workers)
-        label = f"h{alarm:g}"
-        err, floor = [], []
-        for n in names:
-            noise = P.noise_rng(real.seed, "check", label, n)
-            link = P.link_of(replays[(label, n)])
-            meas_link = link + noise.normal(0.0, real.noise["link_camera_rad"], link.size)
-            repeat = link + noise.normal(0.0, real.noise["link_camera_rad"], link.size)
-            err.append(P.link_of(rp[("recalibrated", n)]) - meas_link)
-            floor.append(repeat - meas_link)
-        live = rms(np.concatenate(err)) / rms(np.concatenate(floor))
+        candidates = at["b_hat_rad"] + np.arange(-0.1e-3, 0.1e-3 + 1e-12, 0.025e-3)
+        rp = P.replay(runs, {f"recal{i}": P.twin({**commissioned_values, "backlash_rad": float(b)}, f"recalibrated-{i}") for i, b in enumerate(candidates)}, workers=workers)
+        fit_on = measured(f"h{alarm:g}")
+        scores = [rms(np.concatenate([P.link_of(rp[(f"recal{i}", n)]) - fit_on[n][0] for n in names])) for i in range(len(candidates))]
+        best = int(np.argmin(scores))
+        score_h = alarm + mon["check_every_h"] if any(c["h"] == alarm + mon["check_every_h"] for c in checks) else alarm
+        held = measured(f"h{score_h:g}")
+        live = rms(np.concatenate([P.link_of(rp[(f"recal{best}", n)]) - held[n][0] for n in names])) / rms(np.concatenate([held[n][1] - held[n][0] for n in names]))
         verdict = cards.check_drift("servo", live, calibrated, threshold)
-        recal = {"h": alarm, "backlash_rad": b_recal, "live_x_floor": live, "ratio": float(verdict.ratio), "status": verdict.status}
+        recal = {"h": alarm, "backlash_rad": float(candidates[best]), "measured_gap_rad": at["b_hat_rad"], "scored_at_h": score_h,
+                 "rule": "the gap searched over the measured gap +-0.1 mrad (0.025 mrad steps) on the alarm check's link error, scored on the next check",
+                 "live_x_floor": live, "ratio": float(verdict.ratio), "status": verdict.status}
 
     duty = torque_revolutions_per_hour(replays, names, "h0", check_seconds)
     wear_rung = next(r for r in reg.rungs("servo") if r.key == "M5.wear")
@@ -206,7 +214,7 @@ def issue_forecast(checks, *, curve, threshold: float, latest_h: float, horizon_
     return {**made, "forecast_h": float(rolling[-1][0]), "rolling": rolling}
 
 
-def gap_curve_fit(curve) -> dict:
+def gap_curve_fit(curve, threshold: float) -> dict:
     """The replayed gap error as jitter in quadrature with a systematic part, d(b) = sqrt(j^2 + (slope (b - knee)+)^2), least squares
     over the curve (bounded, started from five knees). From the twin alone.
 
@@ -218,6 +226,13 @@ def gap_curve_fit(curve) -> dict:
 
     bs = np.array([p["backlash_rad"] for p in curve], float)
     ds = np.array([p["gap_x_calibrated"] for p in curve], float)
+    # WHY capped (2026-11-05, the production run on twin C): the replayed error bends at large gaps, so one line through 1.76-3.96 mrad
+    # flattened the slope near the crossing (1.42 vs 1.56 per mrad) and the forecast went +9.3 %. The fit stops at the first grid
+    # point past twice the d the threshold needs alone (sqrt(threshold^2 - 1)), the part of the curve a forecast reads. Measured on
+    # the same curve: caps 1.2-2.0 give +2.2 to +5.0 %, no cap +9.3 %; the rule fixes 2x before looking, not a tuned number.
+    cap = 2.0 * math.sqrt(threshold ** 2 - 1.0)
+    upto = int(np.argmax(ds > cap)) if np.any(ds > cap) else len(ds)
+    bs, ds = bs[:max(upto, 4)], ds[:max(upto, 4)]
 
     def model(p, x):
         return np.sqrt(p[0] ** 2 + (p[1] * np.maximum(x - p[2], 0.0)) ** 2)
@@ -230,7 +245,8 @@ def gap_curve_fit(curve) -> dict:
         if best is None or fit.cost < best.cost:
             best = fit
     jitter, slope, knee = (float(x) for x in best.x)
-    return {"jitter": jitter, "slope_per_rad": slope, "knee_rad": knee, "rms": float(np.sqrt(np.mean(best.fun ** 2)))}
+    return {"jitter": jitter, "slope_per_rad": slope, "knee_rad": knee, "rms": float(np.sqrt(np.mean(best.fun ** 2))), "cap": cap,
+            "fitted_to_rad": float(bs[-1])}
 
 
 def wear_forecast(checks, *, forecast_h: float, curve, threshold: float) -> dict:
@@ -248,7 +264,7 @@ def wear_forecast(checks, *, forecast_h: float, curve, threshold: float) -> dict
     early = [c for c in checks if c["h"] <= forecast_h + 1e-9]
     gaps = [(float(c["h"]), float(c["b_hat_rad"])) for c in early]
     k, b0, k_ci = line_fit(gaps)
-    shape = gap_curve_fit(curve)
+    shape = gap_curve_fit(curve, threshold)
 
     def systematic(b):
         return shape["slope_per_rad"] * np.maximum(np.asarray(b, float) - shape["knee_rad"], 0.0)
