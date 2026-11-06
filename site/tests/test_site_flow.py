@@ -914,9 +914,14 @@ def tree_rail_checks(page, base: str, data: Path, layout: dict, still) -> None:
     got = page.evaluate(PANEL_ROWS_JS, ["Runs", "Station"]) or {}
     check(got.get("n") == sum(layout["runs_of"].values()), f"a second click on {name} gives every run back ({got.get('n')})")
     kpi = page.evaluate(KPI_JS, "Config recorded") or [{}]
-    want_pct = f"{100 * layout['full'] / layout['total']:.0f}"
-    check(want_pct in (kpi[0].get("value") or "") and "config" in (kpi[0].get("label") or "").lower(),
-          f"the Runs tab's KPI says how many runs carry a full config snapshot ({kpi[0].get('label')!r}: {kpi[0].get('value')!r} vs {want_pct} %)")
+    # ruler changed 2026-11-05: the KPI shows the share at data-ui's own precision ('0.906%~ derived' once bam_rack_twin's session t2_ff_fb-43c126ce
+    # brought the first 17 runs with a whole board config, of 1,877); the integer-rounded substring ('1') only ever matched a share of 0 %. The
+    # shown number must equal the share rounded to the digits it shows; intent stands: the KPI says how many runs carry a full config snapshot
+    want = 100 * layout["full"] / layout["total"]
+    shown = re.search(r"(\d+(?:\.(\d+))?)\s*%", kpi[0].get("value") or "")
+    digits = len(shown.group(2) or "") if shown else 0
+    check(shown is not None and float(shown.group(1)) == round(want, digits) and "config" in (kpi[0].get("label") or "").lower(),
+          f"the Runs tab's KPI says how many runs carry a full config snapshot ({kpi[0].get('label')!r}: {kpi[0].get('value')!r} vs {want:.3g} %)")
 
 
 def flat_runs_checks(page, base: str, layout: dict, still) -> None:

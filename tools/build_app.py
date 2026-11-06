@@ -771,10 +771,15 @@ def session_t2(res: dict, cited_path: Path, by_slug: dict, dep_id: str, sid: str
               f"({'pass' if a['passes'] else 'fail'}) · pooled floor ({the_floors['pooled']['all']:.2f} mrad, {the_floors['pooled']['pairs']} pairs): "
               f"moves {b['moves_over_floor']:.2f}×, hold {b['hold_offset_over_floor']:.2f}× ({'pass' if b['passes'] else 'fail'})")
     run = Path(a["t2_run"])
+    # WHY each clause read from the numbers (2026-11-05, bam_rack_twin docs/can11_t2_ff_fb_1105.py's session E): the text was written for the frozen
+    # schedule's fb session, whose rest offset passed and whose two floors disagreed; a session whose hold fails, or whose pooled floor is its
+    # own, must not read "passes" or "depends on which floor"
+    rest = "passes" if a["hold_offset_over_floor"] <= 1.5 else f"fails ({a['hold_offset_over_floor']:.2f}× the floor's hold part)"
+    depends = ("so the verdict depends on which floor divides it" if bool(a["passes"]) != bool(b["passes"])
+               else "and both floors give the same verdict")
     body = (f"on the frozen schedule {str(res.get('schedule_digest', ''))[:8]}'s held-out operate runs ({t2['runs']}, H2), the twin's moving error on the worst "
             f"{t2['floor_class']} tape ({run.stem}) is {a['moves_mrad']:.2f} mrad against the floor's moving part; its rest offset {abs(a['rest_offset_mrad']):.2f} mrad "
-            f"passes. This session's floor is {the_floors['session']['all'] / the_floors['il0.5']['all']:.2f}× the 10-29 floor, so the verdict depends on which "
-            f"floor divides it")
+            f"{rest}. This session's floor is {the_floors['session']['all'] / the_floors['il0.5']['all']:.2f}× the 10-29 floor, {depends}")
     link = None
     slug = slug_of(str(run))
     replays = cited_path.parent / "twin_replays.json"
