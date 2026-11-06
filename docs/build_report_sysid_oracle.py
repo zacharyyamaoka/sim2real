@@ -204,7 +204,7 @@ def worst_share(doc: dict) -> tuple[float, str]:
     rows = []
     for p in doc["parameters"]:
         tol = p["tolerance"]["value"] * (1.0 if p["tolerance"]["kind"] == "abs" else abs(p["true"]))
-        rows.append((abs(p["recovered"]["value"] - p["true"]) / tol, p["key"]))
+        rows.append((abs(p["recovered"] - p["true"]) / tol, p["key"]))
     return max(rows)
 
 
