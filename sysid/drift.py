@@ -169,7 +169,7 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
                  "duty_nm_rev_per_h": duty, "rate_recovered_per_nm_rev": k_hat / duty if duty else None, "rate_true_per_nm_rev": hidden_wear["rate_rad_per_h"] / duty if duty else None,
                  "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"},
         "provenance": {**result.provenance(P.EXAMPLE), "seconds": round(time.monotonic() - started, 1), "commissioned_twin": commissioned.digest(),
-                       "identify_sealed": True},
+                       "twin_of_record": P._rack()[0], "twin_of_record_digest": P._rack()[1].digest(), "identify_sealed": True},
     }
     if write:
         result.write(doc, "drift_backlash_wear")
