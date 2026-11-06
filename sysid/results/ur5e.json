@@ -229,244 +229,248 @@
    "floor_clearance_m": 0.05,
    "self_clearance_m": 0.01,
    "target_pct": 42.0,
+   "target_cells": 1721,
+   "reachable_mask": "ur5e_floor",
+   "reachable_cells": 2560,
+   "curve_of": "reachable cells",
    "seed": 51,
    "curve": [
     [
      0.0,
-     0.76
+     1.21
     ],
     [
      15.7,
-     1.86
+     2.97
     ],
     [
      30.8,
-     2.91
+     4.65
     ],
     [
      47.1,
-     3.98
+     6.37
     ],
     [
      62.8,
-     4.79
+     7.66
     ],
     [
      78.7,
-     5.79
+     9.26
     ],
     [
      94.4,
-     6.81
+     10.9
     ],
     [
      110.1,
-     7.69
+     12.3
     ],
     [
      126.5,
-     8.72
+     13.95
     ],
     [
      142.6,
-     9.67
+     15.47
     ],
     [
      159.3,
-     10.52
+     16.84
     ],
     [
      175.5,
-     11.47
+     18.36
     ],
     [
      191.6,
-     12.4
+     19.84
     ],
     [
      206.6,
-     13.33
+     21.33
     ],
     [
      222.3,
-     14.28
+     22.85
     ],
     [
      238.6,
-     15.21
+     24.34
     ],
     [
      254.1,
-     16.02
+     25.62
     ],
     [
      269.6,
-     16.89
+     27.03
     ],
     [
      285.0,
-     17.72
+     28.36
     ],
     [
      300.7,
-     18.51
+     29.61
     ],
     [
      316.6,
-     19.43
+     31.09
     ],
     [
      331.9,
-     20.29
+     32.46
     ],
     [
      347.9,
-     21.22
+     33.95
     ],
     [
      363.5,
-     22.05
+     35.27
     ],
     [
      379.7,
-     22.95
+     36.72
     ],
     [
      394.8,
-     23.75
+     38.01
     ],
     [
      410.6,
-     24.44
+     39.1
     ],
     [
      425.8,
-     25.15
+     40.23
     ],
     [
      441.5,
-     25.93
+     41.48
     ],
     [
      457.1,
-     26.68
+     42.7
     ],
     [
      472.4,
-     27.32
+     43.71
     ],
     [
      487.9,
-     27.93
+     44.69
     ],
     [
      504.4,
-     28.69
+     45.9
     ],
     [
      519.9,
-     29.52
+     47.23
     ],
     [
      535.1,
-     30.22
+     48.36
     ],
     [
      551.7,
-     30.91
+     49.45
     ],
     [
      567.8,
-     31.54
+     50.47
     ],
     [
      583.9,
-     32.13
+     51.41
     ],
     [
      599.9,
-     32.69
+     52.3
     ],
     [
      615.8,
-     33.33
+     53.32
     ],
     [
      632.7,
-     34.06
+     54.49
     ],
     [
      647.9,
-     34.67
+     55.47
     ],
     [
      663.4,
-     35.25
+     56.41
     ],
     [
      679.7,
-     35.89
+     57.42
     ],
     [
      695.2,
-     36.33
+     58.12
     ],
     [
      711.2,
-     36.89
+     59.02
     ],
     [
      727.9,
-     37.45
+     59.92
     ],
     [
      743.0,
-     38.06
+     60.9
     ],
     [
      758.1,
-     38.62
+     61.8
     ],
     [
      774.0,
-     39.11
+     62.58
     ],
     [
      789.0,
-     39.58
+     63.32
     ],
     [
      804.3,
-     40.09
+     64.14
     ],
     [
      819.4,
-     40.58
+     64.92
     ],
     [
      834.9,
-     41.02
+     65.62
     ],
     [
      851.8,
-     41.53
+     66.45
     ],
     [
      867.2,
-     41.99
+     67.19
     ],
     [
      869.4,
-     42.07
+     67.3
     ]
    ],
    "rule": "scrambled Sobol waypoints (one per joint-cube cell, collision-free), toured greedily by new cells per second, straight joint-space minimum-jerk moves, every 10 ms sample clear of the floor and the arm"
   },
   "coverage": {
    "train": {
-    "pct": 42.07,
+    "pct": 67.3,
     "visited": 1723,
-    "reachable": 4096,
+    "reachable": 2560,
     "samples": 18306,
     "axes": {
      "tool pose": null,
@@ -478,7 +482,7 @@
     "motion_s": 913.3,
     "sweep_s": 873.3,
     "settle_s": 60.0,
-    "without_sweep_pct": 0.76,
+    "without_sweep_pct": 1.21,
     "visited_by_joint_bin": [
      [
       412,
@@ -519,9 +523,9 @@
     ]
    },
    "held_out": {
-    "pct": 0.59,
+    "pct": 0.94,
     "visited": 24,
-    "reachable": 4096,
+    "reachable": 2560,
     "samples": 420,
     "axes": {
      "tool pose": null,
@@ -533,7 +537,7 @@
     "motion_s": 20.0,
     "sweep_s": 0.0,
     "settle_s": 30.0,
-    "without_sweep_pct": 0.59,
+    "without_sweep_pct": 0.94,
     "visited_by_joint_bin": [
      [
       0,
@@ -573,8 +577,9 @@
      ]
     ]
    },
-   "function": "type_cards.coverage.arm_coverage (4 cells per joint inside the limits: the 4096-cell joint cube)",
-   "rule": "share of the joint cube's cells the static poses, the excitations and the coverage sweep (every 50 ms) visit; tool voxels need FK (a marginal, not planned here)",
+   "function": "type_cards.coverage.arm_coverage over ur5e_floor's reachable cells (4 cells per joint inside the limits: the 4096-cell joint cube, 2,560 of them reachable)",
+   "reachable_mask": "ur5e_floor",
+   "rule": "share of the joint cube's reachable cells the static poses, the excitations and the coverage sweep (every 50 ms) visit; tool voxels need FK (a marginal, not planned here)",
    "sweep": {
     "waypoints": 521,
     "candidate_cells": 2092,
@@ -591,235 +596,239 @@
     "floor_clearance_m": 0.05,
     "self_clearance_m": 0.01,
     "target_pct": 42.0,
+    "target_cells": 1721,
+    "reachable_mask": "ur5e_floor",
+    "reachable_cells": 2560,
+    "curve_of": "reachable cells",
     "seed": 51,
     "curve": [
      [
       0.0,
-      0.76
+      1.21
      ],
      [
       15.7,
-      1.86
+      2.97
      ],
      [
       30.8,
-      2.91
+      4.65
      ],
      [
       47.1,
-      3.98
+      6.37
      ],
      [
       62.8,
-      4.79
+      7.66
      ],
      [
       78.7,
-      5.79
+      9.26
      ],
      [
       94.4,
-      6.81
+      10.9
      ],
      [
       110.1,
-      7.69
+      12.3
      ],
      [
       126.5,
-      8.72
+      13.95
      ],
      [
       142.6,
-      9.67
+      15.47
      ],
      [
       159.3,
-      10.52
+      16.84
      ],
      [
       175.5,
-      11.47
+      18.36
      ],
      [
       191.6,
-      12.4
+      19.84
      ],
      [
       206.6,
-      13.33
+      21.33
      ],
      [
       222.3,
-      14.28
+      22.85
      ],
      [
       238.6,
-      15.21
+      24.34
      ],
      [
       254.1,
-      16.02
+      25.62
      ],
      [
       269.6,
-      16.89
+      27.03
      ],
      [
       285.0,
-      17.72
+      28.36
      ],
      [
       300.7,
-      18.51
+      29.61
      ],
      [
       316.6,
-      19.43
+      31.09
      ],
      [
       331.9,
-      20.29
+      32.46
      ],
      [
       347.9,
-      21.22
+      33.95
      ],
      [
       363.5,
-      22.05
+      35.27
      ],
      [
       379.7,
-      22.95
+      36.72
      ],
      [
       394.8,
-      23.75
+      38.01
      ],
      [
       410.6,
-      24.44
+      39.1
      ],
      [
       425.8,
-      25.15
+      40.23
      ],
      [
       441.5,
-      25.93
+      41.48
      ],
      [
       457.1,
-      26.68
+      42.7
      ],
      [
       472.4,
-      27.32
+      43.71
      ],
      [
       487.9,
-      27.93
+      44.69
      ],
      [
       504.4,
-      28.69
+      45.9
      ],
      [
       519.9,
-      29.52
+      47.23
      ],
      [
       535.1,
-      30.22
+      48.36
      ],
      [
       551.7,
-      30.91
+      49.45
      ],
      [
       567.8,
-      31.54
+      50.47
      ],
      [
       583.9,
-      32.13
+      51.41
      ],
      [
       599.9,
-      32.69
+      52.3
      ],
      [
       615.8,
-      33.33
+      53.32
      ],
      [
       632.7,
-      34.06
+      54.49
      ],
      [
       647.9,
-      34.67
+      55.47
      ],
      [
       663.4,
-      35.25
+      56.41
      ],
      [
       679.7,
-      35.89
+      57.42
      ],
      [
       695.2,
-      36.33
+      58.12
      ],
      [
       711.2,
-      36.89
+      59.02
      ],
      [
       727.9,
-      37.45
+      59.92
      ],
      [
       743.0,
-      38.06
+      60.9
      ],
      [
       758.1,
-      38.62
+      61.8
      ],
      [
       774.0,
-      39.11
+      62.58
      ],
      [
       789.0,
-      39.58
+      63.32
      ],
      [
       804.3,
-      40.09
+      64.14
      ],
      [
       819.4,
-      40.58
+      64.92
      ],
      [
       834.9,
-      41.02
+      65.62
      ],
      [
       851.8,
-      41.53
+      66.45
      ],
      [
       867.2,
-      41.99
+      67.19
      ],
      [
       869.4,
-      42.07
+      67.3
      ]
     ],
     "rule": "scrambled Sobol waypoints (one per joint-cube cell, collision-free), toured greedily by new cells per second, straight joint-space minimum-jerk moves, every 10 ms sample clear of the floor and the arm"
@@ -2213,7 +2222,7 @@
  },
  "provenance": {
   "identify_sealed": true,
-  "code": "5a57664",
+  "code": "1313044",
   "imports": [
    {
     "repo": "/home/bam/.cache/like_keras/mujoco_menagerie",
@@ -2228,8 +2237,8 @@
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "9f090ab3",
-    "date": "2026-11-05T14:35:14-07:00",
+    "commit": "326a2456",
+    "date": "2026-11-05T16:08:23-07:00",
     "dirty": false,
     "paths": 10
    },
@@ -2252,6 +2261,6 @@
     "paths": 6
    }
   ],
-  "seconds": 315.7
+  "seconds": 546.8
  }
 }
