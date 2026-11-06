@@ -41,6 +41,7 @@ EXAMPLES = landing.EXAMPLES
 ARM_EXAMPLES = ("ur5e", "ur5e_2f85")
 # the commit whose committed results are the arm schedules' "before" (main before the arm-coverage lane): read with git show, never typed
 ARM_BEFORE = "508e927"
+TRIM_BEFORE = "e10ea4d"  # the results whose sweep still ran to 42 % of the 4,096-cell box (1,721 cells), before the sweep-trim lane
 
 
 MIME = {".webp": "image/webp", ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4"}
@@ -193,9 +194,37 @@ def metric_lines(doc: dict) -> str:
                    f"{'' if m['pass'] is None else (', pass' if m['pass'] else ', FAIL')})</li>" for m in doc["metrics"])
 
 
-def before_doc(example: str) -> dict | None:
-    out = subprocess.run(["git", "-C", str(REPO), "show", f"{ARM_BEFORE}:sysid/results/{example}.json"], capture_output=True, text=True)
+def before_doc(example: str, rev: str = ARM_BEFORE) -> dict | None:
+    out = subprocess.run(["git", "-C", str(REPO), "show", f"{rev}:sysid/results/{example}.json"], capture_output=True, text=True)
     return json.loads(out.stdout) if out.returncode == 0 else None
+
+
+def worst_share(doc: dict) -> tuple[float, str]:
+    """The parameter whose |recovered - true| is the largest share of its tolerance (abs, or rel x |true|), and that share."""
+    rows = []
+    for p in doc["parameters"]:
+        tol = p["tolerance"]["value"] * (1.0 if p["tolerance"]["kind"] == "abs" else abs(p["true"]))
+        rows.append((abs(p["recovered"]["value"] - p["true"]) / tol, p["key"]))
+    return max(rows)
+
+
+def trim_rows(arms: list) -> str:
+    """Before (TRIM_BEFORE's results, the 1,721-cell sweep) and after (these results) per UR example, read from both files."""
+    out = []
+    for d in arms:
+        b = before_doc(d["example"], TRIM_BEFORE)
+        if b is None:
+            continue
+        cells = []
+        for doc in (b, d):
+            sw, tr = doc["schedule"]["sweep"], doc["schedule"]["coverage"]["train"]
+            share, key = worst_share(doc)
+            cells.append((f"{sw['target_cells']:,} cells", f"{tr['visited']:,} ({landing.num(tr['pct'], 4)} %)", f"{sw['seconds'] / 60:.1f} min, {sw['waypoints']:,} moves",
+                          f"{doc['schedule']['train']['seconds'] / 60:.1f} min", f"{doc['verdict']['parameters_pass']} / {doc['verdict']['parameters']}",
+                          f"{share:.3f} <span class='mute'>({esc(key)})</span>",
+                          ", ".join(landing.num(m["factor"], 3) + "×" for m in doc["metrics"]), f"{doc['provenance']['seconds'] / 60:.1f} min"))
+        out.append(f"<tr><td><b>{esc(d['title'])}</b></td>" + "".join(f"<td>{x} → {y}</td>" for x, y in zip(*cells)) + "</tr>")
+    return "".join(out)
 
 
 def curve_svg(curves: dict, gate: float) -> str:
@@ -256,6 +285,10 @@ def arm_coverage_section(shots: dict, docs: dict) -> str:
     need = int(-(-gate * r0 // 100))
     old_need = int(-(-gate * 4096 // 100))
     cand = min(d["schedule"]["sweep"].get("candidate_cells", 0) for d in arms)
+    servo_reach = docs["pendulum_can11"]["schedule"]["coverage"]["train"]["reachable"]
+    servo_need = int(-(-reg.CARDS["servo"].coverage.gate_pct * servo_reach // 100))
+    trim = trim_rows(arms)
+    old_sw = (before_doc(arms[0]["example"], TRIM_BEFORE) or {}).get("schedule", {}).get("sweep") or {}
     from type_cards import coverage as cov_mod  # noqa: PLC0415
     mdoc = json.loads((REPO / "type_cards" / "arm_reachable" / f"{cov_mod.DEFAULT_ARM_MOUNT}.json").read_text())
     stills = "".join(f"<figure><figcaption>{esc(d['title'])} · {esc(d.get('subtitle', ''))}: the example page's schedule and coverage on the built site</figcaption>{img('schedule-' + d['example'], d['title'] + ' schedule')}</figure>" for d in arms)
@@ -282,10 +315,14 @@ with the shoulder lift in the span connected to home ({mdoc['lift_span_rad'][0]:
 <li>The shoulder lift's bins 1 ([−π, 0)) and 3 ([π, 2π]) are the same physical posture 2π apart; going from one to the other swings the upper arm through whatever the
 arm is mounted on, so bin 3 (1,024 cells) is out, and bins 0 and 2 count only cells whose sliver past horizontal holds a clear posture (768 each).</li>
 <li>Why the percentage stayed at {gate:g}: it now means what the servo's means (a share of what the device can hold), and {need:,} cells is more than the servo's absolute bar
-(CAN 11: 647 of 1,616). Keeping the old 1,639 would need an arm-only {100 * old_need / r0:.0f} %, whose only reason was the old denominator.</li>
+(CAN 11: {servo_need:,} of {servo_reach:,}). Keeping the old 1,639 would need an arm-only {100 * old_need / r0:.0f} %, whose only reason was the old denominator.</li>
 <li>The sweep's own pool found {cand:,} candidate cells; a probe per cell finds {r0:,} (the sliver cells were under-sampled by the shared pool).</li>
-<li>Left, not done: the sweep still targets {a.get('target_cells', '?'):,} cells (its original 42 % of the box), {landing.num(100 * a.get('target_cells', 0) / r0, 3)} % of reachable; shortening it to the new gate changes the identification data and is a separate, measured step.</li>
-</ul>"""
+</ul>
+<h3>The sweep stops at the gate plus a {a['target_pct'] - gate:g}-point margin: {a['target_pct']:g} % of the reachable cells ({a['target_cells']:,} of {r0:,}), was {old_sw.get('target_pct', '?'):g} % of the box ({old_sw.get('target_cells', 0):,})</h3>
+<p>The target is a share of the mount's reachable cells (<code>sysid.arm.coverage_sweep</code>, <code>target_of: {esc(a.get('target_of', '?'))}</code>), and only cells inside the mask count towards it;
+<code>test_the_sweep_stops_at_the_cards_gate_plus_its_margin</code> holds the margin above the {gate:g} % gate to at most 5 points and the train split to within 2 of the target.
+Shorter sweep, less identification data, so it was measured against the unchanged ruler (<code>sysid/acceptance.json</code>): before is {TRIM_BEFORE}'s results, after is these.</p>
+<div class="scroll"><table><thead><tr><th>example</th><th>sweep target</th><th>train cells (of reachable)</th><th>sweep</th><th>train motion</th><th>parameters in tolerance</th><th>worst error / tolerance</th><th>held-out factors</th><th>example run</th></tr></thead><tbody>{trim}</tbody></table></div>"""
 
 
 def render(shots: dict, tests: dict, shas: dict, docs: dict) -> str:

@@ -233,7 +233,7 @@
       "candidates": 24,
       "chunk_s": 60.0,
       "seed": 51,
-      "note": "the coverage sweep (sysid.arm.coverage_sweep): scrambled Sobol waypoints over the arm_6dof card's joint cube, one per cell where the arm clears a floor at its base plane (5 cm) and itself (1 cm); toured by new cells per second in straight minimum-jerk moves under 2.8 rad/s (UR's limit is 3.14) and 6 rad/s2 (UR states none) until 42 % of the 4096 cells (the card's gate is 40 %). The shoulder lift stays in the span a floor-mounted arm reaches from home: its cube cells 1 and 3 are one posture 2 pi apart."
+      "note": "the coverage sweep (sysid.arm.coverage_sweep): scrambled Sobol waypoints over the arm_6dof card's joint cube, one per cell where the arm clears a floor at its base plane (5 cm) and itself (1 cm); toured by new cells per second in straight minimum-jerk moves under 2.8 rad/s (UR's limit is 3.14) and 6 rad/s2 (UR states none) until 42 % of the mount's 2,560 reachable cells (1,076; the card's gate is 40 % of them, 1,024: a 2-point margin). It ran to 42 % of the 4,096-cell box (1,721) until 2026-11-05. The shoulder lift stays in the span a floor-mounted arm reaches from home: its cube cells 1 and 3 are one posture 2 pi apart."
     }
   }
 }

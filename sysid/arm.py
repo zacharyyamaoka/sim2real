@@ -302,7 +302,7 @@ def cell_of(q: np.ndarray, edges: np.ndarray) -> int:
 
 def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: list, mount: str = "ur5e_floor") -> tuple[list, dict]:
     """A collision-free tour that takes the joint cube's coverage (with what the poses and excitations already visit) to
-    cfg["target_pct"] of its cells.
+    cfg["target_pct"] of the mount's reachable cells (type_cards.coverage.arm_reachable_cells).
 
     1. Waypoints: a scrambled Sobol sequence (scipy.stats.qmc) of 2^m points over the card's joint box, the shoulder lift held to
        the span a floor-mounted arm reaches from its home posture (lift_span_rad), each kept only where the arm clears the floor
@@ -313,7 +313,7 @@ def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: li
 
     WHY a sweep and not wider Fourier excitations (2026-11-05): the card's cube has 4 cells per joint over +-2 pi (the elbow +-pi),
     so a cell is pi rad wide on five joints; an excitation around one centre visits tens of cells (32 of 4096 here), and 40 %
-    needs 1,639 distinct joint combinations. WHY the shoulder lift's span: its cells 1 and 3 are the same physical posture 2 pi
+    needs 1,024 of the mounted arm's 2,560 reachable cells (it was 1,639 of the box before 2026-11-05). WHY the shoulder lift's span: its cells 1 and 3 are the same physical posture 2 pi
     apart, and the move from one to the other swings the upper arm through the floor, so a schedule on a real arm covers one."""
     from scipy.stats import qmc  # noqa: PLC0415
     from type_cards import coverage as cov  # noqa: PLC0415
@@ -332,17 +332,21 @@ def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: li
         if int(c) not in waypoints and clear(q):
             waypoints[int(c)] = q
     visited = {int(c) for c in cell_of(np.array([p["joint space"] for p in already]), edges)} if already else set()
-    target = math.ceil(cfg["target_pct"] / 100.0 * bins ** len(JOINTS))
-    # WHY the curve over the mount's reachable cells but the target over the box (2026-11-05, docs/decision-arm-reachable-coverage-2026-11-05.md):
-    # the curve is read against the card's gate, which is now a share of the reachable cells; the target stays the schedule this sweep
-    # was proved with (1,721 cells), so the commanded trajectories are unchanged
-    reachable = len(cov.arm_reachable_cells(mount))
+    # WHY the target over the mount's reachable cells (2026-11-05, sweep-trim lane; was ceil(42 % of the 4,096-cell box) = 1,721
+    # cells): the card's gate is a share of the reachable cells (docs/decision-arm-reachable-coverage-2026-11-05.md), so the sweep
+    # runs to target_pct of them, a stated margin above the gate, and only cells inside the mask count towards it
+    reach = {sum(i * bins ** j for j, i in enumerate(cell)) for cell in cov.arm_reachable_cells(mount)}
+    reachable = len(reach)
+    target = math.ceil(cfg["target_pct"] / 100.0 * reachable)
     speed, accel, check = cfg["speed_rad_s"], cfg["accel_rad_s2"], 5
     open_cells = [c for c in waypoints if c not in visited]
     q = np.asarray(start_q, float)
     segments, rejected = [], 0
-    elapsed, curve = 0.0, [(0.0, round(100.0 * len(visited) / reachable, 2))]
-    while len(visited) < target and open_cells:
+    def counted() -> int:
+        return len(visited & reach)
+
+    elapsed, curve = 0.0, [(0.0, round(100.0 * counted() / reachable, 2))]
+    while counted() < target and open_cells:
         targets = np.array([waypoints[c] for c in open_cells])
         span = np.abs(targets - q).max(axis=1)
         nearest = np.argsort(span)[: cfg["candidates"]]
@@ -363,11 +367,11 @@ def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: li
         visited |= new
         elapsed += move.shape[0] * DT
         if elapsed - curve[-1][0] >= 15.0:
-            curve.append((round(elapsed, 1), round(100.0 * len(visited) / reachable, 2)))
+            curve.append((round(elapsed, 1), round(100.0 * counted() / reachable, 2)))
         q = move[-1]
         open_cells = [c for c in open_cells if c not in visited]
-    if len(visited) < target:
-        raise RuntimeError(f"the sweep reached {len(visited)} of {target} cells: no reachable waypoint left")
+    if counted() < target:
+        raise RuntimeError(f"the sweep reached {counted()} of {target} reachable cells: no reachable waypoint left")
     home = min_jerk(q, np.asarray(start_q, float), speed, accel)
     if all(clear(x) for x in home[check - 1::check]):
         segments.append(home)
@@ -390,8 +394,8 @@ def coverage_sweep(clear: Clearance, cfg: dict, start_q: np.ndarray, already: li
     info = {"waypoints": len(segments), "candidate_cells": len(waypoints), "sobol_points": int(pool.shape[0]), "rejected_moves": rejected,
             "seconds": round(seconds, 1), "trajectories": len(out), "speed_rad_s": speed, "accel_rad_s2": accel,
             "lift_span_rad": list(cfg["lift_span_rad"]), "floor_clearance_m": clear.floor_m, "self_clearance_m": clear.self_m,
-            "target_pct": cfg["target_pct"], "target_cells": target, "reachable_mask": mount, "reachable_cells": reachable, "curve_of": "reachable cells",
-            "seed": cfg["seed"], "curve": curve + [(round(elapsed, 1), round(100.0 * len(visited) / reachable, 2))],
+            "target_pct": cfg["target_pct"], "target_cells": target, "target_of": "reachable cells", "reachable_mask": mount, "reachable_cells": reachable, "curve_of": "reachable cells",
+            "seed": cfg["seed"], "curve": curve + [(round(elapsed, 1), round(100.0 * counted() / reachable, 2))],
             "rule": "scrambled Sobol waypoints (one per joint-cube cell, collision-free), toured greedily by new cells per second, "
                     "straight joint-space minimum-jerk moves, every 10 ms sample clear of the floor and the arm"}
     return out, info
