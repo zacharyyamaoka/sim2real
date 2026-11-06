@@ -259,3 +259,18 @@ def test_the_committed_drift_result_is_this_code(name):
         x, y = committed[key], fresh[key]
         assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), f"{name} {key}: committed {x}, now {y}"
     assert math.isclose(committed["recalibrated"]["ratio"], fresh["recalibrated"]["ratio"], rel_tol=1e-9)
+
+
+def test_the_committed_can11_results_are_on_bam_ws_current_twin_of_record():
+    """Not pinned, flagged (2026-11-05, the rack lane's twin of record moved A 89b6fde5 -> follow-up C 95198353 and the wear demo's
+    crossing moved 234 -> 197 h). WHY not pin the example to a digest: the rack twin is the thing under test (decision doc, Alternatives
+    not taken), and a pin would have hidden the forecast method's bug, which passed on A by luck of a jagged curve. Instead this fast
+    check names the move the moment bam_ws's twin of record leaves the one the committed results were built on."""
+    from sysid.examples.pendulum_can11 import pipeline as P
+
+    label, record, _ = P._rack()
+    for name in ("pendulum_can11", "drift_backlash_wear"):
+        prov = json.loads((SYSID / "results" / f"{name}.json").read_text())["provenance"]
+        assert prov.get("twin_of_record_digest") == record.digest(), (
+            f"{name} was built on CAN 11's twin of record {prov.get('twin_of_record')!r} {prov.get('twin_of_record_digest')}; bam_ws now has "
+            f"{label!r} {record.digest()}: re-run `python -m sysid all --write` and review the wear demo before committing the results")
