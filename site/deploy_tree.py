@@ -42,6 +42,10 @@ if str(adapter.REPO) not in sys.path:
 
 from type_cards import registry as reg  # noqa: E402  (CONTRACT.md: one import)
 
+if str(adapter.REPO / "tools") not in sys.path:
+    sys.path.append(str(adapter.REPO / "tools"))
+import archive_roots  # noqa: E402  (tools/archive_roots.py: the folders a deployment's runs lie under)
+
 REGISTRY = adapter.REPO / "app" / "registry.json"
 UNKNOWN = "unknown"
 FULL = "full"
@@ -61,7 +65,8 @@ SNAPSHOT_FROM = "bam_rack_twin.hardware session.json board_configs (conf enumera
 # --- the registry and the record --------------------------------------------------------------------------------------
 
 def registry_entries(path: pathlib.Path = REGISTRY) -> dict[str, dict]:
-    return {d["id"]: d for d in json.loads(path.read_text())["deployments"]} if path.is_file() else {}
+    # WHY expanded: a run's own archive is its days and every live station's schedule runs/ (tools/archive_roots.py, the build's rule)
+    return {d["id"]: archive_roots.expanded(d) for d in json.loads(path.read_text())["deployments"]} if path.is_file() else {}
 
 
 def components(entry: dict) -> dict[str, dict]:

@@ -19,8 +19,10 @@
     "/archive/datasets/bam_rig/rack_2026-10-25",
     "/archive/datasets/bam_rig/rack_2026-10-28",
     "/archive/datasets/bam_rig/rack_2026-10-29",
-    "/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/runs"
+    "/archive/datasets/bam_rig/rack_2026-11-05"
    ],
+   "schedule_index": "/archive/datasets/bam_rig/schedules/one-dof-test-rack/index.json",
+   "archive_note": "Every live station's schedule runs/ (the schedule index's stations[].out) are roots too, never a kept build's copies: tools/archive_roots.py.",
    "scored": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_scored.json",
    "earlier_floors": "/archive/datasets/bam_rig/rack_2026-10-24/analysis/floors.json",
    "why_calibration": "/archive/datasets/bam_rig/rack_2026-10-28/analysis/calibration_why.json",

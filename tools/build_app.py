@@ -50,6 +50,7 @@ from robotdx.diagnostics import Limits, evaluate
 from robotdx.diagnostics.data import Trajectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import archive_roots  # noqa: E402  (the folders a deployment's runs lie under: one rule, shared with site/deploy_tree.py)
 import trajectory as traj  # noqa: E402  (sim2real's difference(a, b) and the robotics contract tables; pinned to data-ui's fixture)
 from robotdx.diagnostics.rows import result_row
 from robotdx.diagnostics.stock import BoxConfig, FaultCodesConfig, ModelErrorConfig, RateConfig, TrackingErrorConfig
@@ -237,7 +238,7 @@ def replays_by_path() -> dict[str, dict]:
     # docs/can11_frozen_1105.py) writes the twin of record's replay of every run beside the runs, <session>/analysis/twin_replays.json,
     # in this file's twin_replays shape; found under the registry's archive folders, never copied into this repo
     for entry in json.loads(REGISTRY.read_text())["deployments"]:
-        for root in entry["archive"]:
+        for root in archive_roots.roots(entry):
             for path in sorted(Path(root).glob("*/analysis/twin_replays.json")):
                 document = json.loads(path.read_text())
                 if document.get("schema") != "sim2real.twin_replays/1":
@@ -971,14 +972,20 @@ def failed_cells(entry: dict, dep_id: str, runs: list[dict], sources: dict, t2_r
                 evidence.append(f"not in the triage ({_stamp(triage_stamp)}): it predates this result")
             action = zach.get((sid, gid)) or tri.get("zach_action")
             closes = labelled(triage_path, triage_stamp, None, tri["what_closes_it"], tri_note) if tri.get("what_closes_it") else ""
+            # WHY every branch carries the triage's words (2026-11-05, rack leftovers): a Zach or rack-run cell served only its action or
+            # plan, so the page never showed what the triage says closes it, nor the numbers of record it opens with
+            tail = f". {closes}" if closes else ""
+            detail = str(gate.get("detail") or "")
+            if tail and detail and detail in tail and detail in why_parts:
+                tail = tail.replace(detail, "the acceptance's detail, in Why")  # the triage quotes the detail Why already shows: never twice
             if tri.get("category") == "Zach" and action:
-                nxt = f"blocked on Zach: {action}"
+                nxt = f"blocked on Zach: {action}{tail}"
             elif tri.get("category") == "impossible as defined":
                 nxt = f"impossible as defined: the gate needs redefining for this station (Zach's call). {closes}"
             elif tri.get("plan") and tri.get("status") == status:
-                nxt = f"{tri.get('category')}: run {', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}"
+                nxt = f"{tri.get('category')}: run {', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}{tail}"
             elif tri.get("plan"):
-                nxt = f"the planned run ({', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}) has been run and the cell is now {status}: needs re-triage"
+                nxt = f"the planned run ({', '.join(Path(p).name for p in str(tri['plan']).split(' + '))}) has been run and the cell is now {status}: needs re-triage{tail}"
             elif closes:
                 nxt = f"{tri.get('category')}{' (no rack time)' if tri.get('category') == 'modelling' else ''}: {closes}"
             else:
@@ -1263,7 +1270,7 @@ DEP_PROPS = {"first_run": {"type": "datetime"}, "last_run": {"type": "datetime"}
 def main() -> int:
     registry = json.loads(REGISTRY.read_text())
     replays = replays_by_path()
-    summaries = [build_deployment(entry, replays) for entry in registry["deployments"]]
+    summaries = [build_deployment(archive_roots.expanded(entry), replays) for entry in registry["deployments"]]
     write(DATA / "deployments.json", "Deployments", f"app/registry.json; built {now()}", DEP_PROPS, summaries)
     return 0
 
