@@ -387,7 +387,7 @@ check's duty of {num(d['wear']['duty_nm_rev_per_h'], 3)} N·m·rev per hour that
 <li><b>Actual crossing</b> in the sim: hour <b data-actual="{d['actual_crossing_h']}">{num(d['actual_crossing_h'], 4)}</b></li>
 <li><b>Plain detector</b> (the servo card's drift check, "{e(d['diagnostic']['message'])}"): warned at hour <b data-alarm="{d['detector_alarm_h']}">{num(d['detector_alarm_h'], 4)}</b>, after the fact</li>
 <li>The card's own trend forecast (the drift ratio's history alone, at hour {num(d['predicted_at_h'], 3)}): {num(d['card_trend_remaining_h'], 3) if d.get('card_trend_remaining_h') is not None else 'no crossing in sight'} hours left</li>
-<li><b>Recalibrated</b> at the warning (the gap re-measured): the drift ratio back to {num(rec.get('ratio'), 3)}×</li>
+<li><b>Recalibrated</b> at the warning (the gap fitted within 0.1 mrad of the one measured, scored on the next check): the drift ratio back to {num(rec.get('ratio'), 3)}×</li>
 </ul>
 {wear_svg(d)}
 <p><small>Threshold: {e(d['threshold_rule'])}.</small></p>"""
