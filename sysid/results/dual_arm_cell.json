@@ -1405,7 +1405,7 @@
  },
  "provenance": {
   "identify_sealed": true,
-  "code": "1313044",
+  "code": "7d1accc",
   "imports": [
    {
     "repo": "/home/bam/.cache/like_keras/mujoco_menagerie",
@@ -1420,10 +1420,10 @@
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "326a2456",
-    "date": "2026-11-05T16:08:23-07:00",
+    "commit": "e47066e1",
+    "date": "2026-11-05T18:24:10-07:00",
     "dirty": false,
-    "paths": 11
+    "paths": 12
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -1444,6 +1444,6 @@
     "paths": 6
    }
   ],
-  "seconds": 1.6
+  "seconds": 1.5
  }
 }

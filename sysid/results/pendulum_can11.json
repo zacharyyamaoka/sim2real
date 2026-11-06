@@ -157,8 +157,8 @@
  ],
  "schedule": {
   "source": "bam_rack_twin.schedule.build_schedule(describe_station(11), seed=0)",
-  "digest": "581ffd3e61e5b1fc",
-  "frozen_digest": "581ffd3e61e5b1fc",
+  "digest": "d1f4d78f30c2fbd4",
+  "frozen_digest": "d1f4d78f30c2fbd4",
   "same_as_frozen": true,
   "train": {
    "runs": 46,
@@ -503,17 +503,17 @@
    "nominal": 4.6611971558188605,
    "nominal_source": "bam_rack_twin.schedule.describe_station(11).gravity_nm",
    "true": 5.05,
-   "recovered": 5.0706338276143645,
+   "recovered": 5.066218703821104,
    "ci95": [
-    5.067980514136571,
-    5.08236427388031
+    5.063042470338151,
+    5.076815092995939
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "gravity_nm",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "rel",
     "value": 0.02
@@ -529,17 +529,17 @@
    "nominal": -0.373684718743872,
    "nominal_source": "bam_rack_twin.schedule.describe_station(11).gravity_bottom_rad",
    "true": -0.35,
-   "recovered": -0.35007802361082146,
+   "recovered": -0.35005856747636094,
    "ci95": [
-    -0.35017983216134535,
-    -0.3499855445761087
+    -0.3501562186801004,
+    -0.34997351206369715
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "gravity_nm (its bottom)",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "abs",
     "value": 0.005
@@ -555,17 +555,17 @@
    "nominal": 0.12192564375276548,
    "nominal_source": "bam_rack_twin.schedule.describe_station(11).inertia_kg_m2",
    "true": 0.14,
-   "recovered": 0.13843396125393795,
+   "recovered": 0.13863632402568205,
    "ci95": [
-    0.13830073398230952,
-    0.13871760447583145
+    0.1384903553450937,
+    0.13891143207391682
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "armature_kg_m2",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "rel",
     "value": 0.05
@@ -581,17 +581,17 @@
    "nominal": 0.8331252513929015,
    "nominal_source": "bam_rack_twin.schedule.describe_station(11).coulomb_nm",
    "true": 1.05,
-   "recovered": 1.051523435989359,
+   "recovered": 1.0514325127646313,
    "ci95": [
-    1.0178159305312462,
-    1.0441308425189677
+    1.0144864830091713,
+    1.0429756479883006
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "frictionloss_nm",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -607,17 +607,17 @@
    "nominal": 0.149963,
    "nominal_source": "can11_hinge__89b6fde5__dt2000.xml joint can11_hinge damping",
    "true": 0.3,
-   "recovered": 0.3040567638808796,
+   "recovered": 0.30468094226739806,
    "ci95": [
-    0.30251350998003607,
-    0.30548732480425006
+    0.3031261884880619,
+    0.30599933578671185
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "damping_nm_s_rad",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "rel",
     "value": 0.2
@@ -633,17 +633,17 @@
    "nominal": 0.0,
    "nominal_source": "the description gives no Stribeck curve: M2 at its datasheet values has none",
    "true": 0.35,
-   "recovered": 0.35650994614822984,
+   "recovered": 0.3565868940787148,
    "ci95": [
-    0.3254026509256194,
-    0.35068014627727523
+    0.32254525949848334,
+    0.3505173401597187
    ],
    "rung": "M3",
    "card": "servo",
    "card_parameter": "friction_stribeck_drop_nm",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "rel",
     "value": 0.25
@@ -659,17 +659,17 @@
    "nominal": null,
    "nominal_source": "no Stribeck curve in the description",
    "true": 0.1,
-   "recovered": 0.10350378324869619,
+   "recovered": 0.10413582256883064,
    "ci95": [
-    0.10097964419278467,
-    0.10438557576963348
+    0.10147785236211826,
+    0.10484617325566818
    ],
    "rung": "M3",
    "card": "servo",
    "card_parameter": "friction_stribeck_drop_nm (its speed)",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "rel",
     "value": 0.3
@@ -685,17 +685,17 @@
    "nominal": 0.0,
    "nominal_source": "a rigid twin: the AD60-G10 datasheet bounds backlash (<= 15 arcmin) but states no value",
    "true": 0.002,
-   "recovered": 0.0019574149240806915,
+   "recovered": 0.0019570825511019962,
    "ci95": [
-    0.0019133433922690387,
-    0.0019808992429474594
+    0.001913827216717593,
+    0.001980523214281957
    ],
    "rung": "M4",
    "card": "servo",
    "card_parameter": "backlash_rad",
    "on_card": true,
    "fit_step": "fitted with M4",
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)",
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -710,9 +710,9 @@
    "title": "Link angle, twin vs real (the camera on tags 8-12)",
    "unit": "x floor",
    "split": "held_out",
-   "before": 17.483900305126372,
-   "after": 1.4472902771378042,
-   "factor": 12.080437892323129,
+   "before": 17.466777257647752,
+   "after": 1.3381967216332513,
+   "factor": 13.052473508027866,
    "factor_needed": 4.0,
    "gated": true,
    "pass": true,
@@ -725,9 +725,9 @@
    "title": "Motor encoder, twin vs real",
    "unit": "mrad",
    "split": "held_out",
-   "before": 7.2087948648239735,
-   "after": 0.5336502887660027,
-   "factor": 13.50846240801889,
+   "before": 7.201940590059598,
+   "after": 0.4758796687297693,
+   "factor": 15.133953104748539,
    "factor_needed": null,
    "gated": false,
    "pass": null,
@@ -740,9 +740,9 @@
    "title": "Reported torque, twin vs real",
    "unit": "N\u00b7m",
    "split": "held_out",
-   "before": 0.30886888093357207,
-   "after": 0.03510942041612421,
-   "factor": 8.797322122461532,
+   "before": 0.30845340631709917,
+   "after": 0.03409174279951234,
+   "factor": 9.047745318596954,
    "factor_needed": null,
    "gated": false,
    "pass": null,
@@ -785,14 +785,14 @@
     "kp_nm_rad",
     "kd_nm_s_rad"
    ],
-   "held_out_ratio": 73.27397673108794,
+   "held_out_ratio": 73.218252217592,
    "limit": 1.5,
-   "link_mrad": 31.19969325021819,
-   "motor_mrad": 30.88848700480319,
+   "link_mrad": 31.17596603074474,
+   "motor_mrad": 30.865018500251427,
    "values": {
-    "armature_kg_m2": 0.16991955093803127,
-    "gravity_nm": 6.352566113971208,
-    "gravity_bottom_rad": -0.35337912171995206,
+    "armature_kg_m2": 0.16994345015278745,
+    "gravity_nm": 6.335861893520085,
+    "gravity_bottom_rad": -0.35320198604229586,
     "frictionloss_nm": 0.0,
     "damping_nm_s_rad": 0.0,
     "friction_stribeck_drop_nm": 0.0,
@@ -801,16 +801,16 @@
    },
    "ci95": {
     "armature_kg_m2": [
-     0.16462817358161697,
-     0.1777275148551404
+     0.1653902657779147,
+     0.17686249843016771
     ],
     "gravity_nm": [
-     6.067794422947595,
-     6.8592950850873855
+     6.111116454273243,
+     6.860272834532053
     ],
     "gravity_bottom_rad": [
-     -0.3575851468146434,
-     -0.34068766510845694
+     -0.35688168076453175,
+     -0.3419273118060071
     ]
    },
    "method": "the same regression without friction terms: tau = J qdd + G sin(q - bottom) (the card's ideal rung, rigid under the board's PD)"
@@ -848,43 +848,43 @@
     "frictionloss_nm",
     "damping_nm_s_rad"
    ],
-   "held_out_ratio": 16.492913012185735,
+   "held_out_ratio": 16.4639682254538,
    "limit": 1.5,
-   "link_mrad": 7.022599969852719,
-   "motor_mrad": 6.6453729813211355,
+   "link_mrad": 7.010275424256626,
+   "motor_mrad": 6.631094912177138,
    "values": {
-    "armature_kg_m2": 0.1354889108694238,
-    "gravity_nm": 4.8398295471457216,
-    "gravity_bottom_rad": -0.3497451270359293,
-    "frictionloss_nm": 0.7553700730683965,
-    "damping_nm_s_rad": 0.236821522639002,
+    "armature_kg_m2": 0.1356759676938716,
+    "gravity_nm": 4.832372764044409,
+    "gravity_bottom_rad": -0.34975198868839114,
+    "frictionloss_nm": 0.7553398246474736,
+    "damping_nm_s_rad": 0.2358537283062188,
     "friction_stribeck_drop_nm": 0.0,
     "friction_stribeck_speed_rad_s": null,
     "backlash_rad": 0.0
    },
    "ci95": {
     "armature_kg_m2": [
-     0.13501448941849264,
-     0.13666901384037655
+     0.1352198179019306,
+     0.1367541765811294
     ],
     "gravity_nm": [
-     4.824708284245336,
-     4.8719949347204095
+     4.818049615532834,
+     4.86065018859322
     ],
     "gravity_bottom_rad": [
-     -0.3500114930081665,
-     -0.3493986818921789
+     -0.3500630287013361,
+     -0.3494208139878507
     ],
     "frictionloss_nm": [
-     0.7505665770047588,
-     0.7587404015576615
+     0.750706799368678,
+     0.7582167729054824
     ],
     "damping_nm_s_rad": [
-     0.2336992992153526,
-     0.24347517657986267
+     0.23242383693588717,
+     0.24174888921964696
     ]
    },
-   "method": "tau(t -0.80 ms) = J qdd + G sin(q - bottom) + Fc sgn(qd) + b qd over 31,170 moving rows of 42 train runs (identify.filtered's 5 ms grid, one Savitzky-Golay); block bootstrap"
+   "method": "tau(t -0.80 ms) = J qdd + G sin(q - bottom) + Fc sgn(qd) + b qd over 31,201 moving rows of 42 train runs (identify.filtered's 5 ms grid, one Savitzky-Golay); block bootstrap"
   },
   {
    "key": "M3",
@@ -923,48 +923,48 @@
     "friction_stribeck_drop_nm",
     "friction_capture_nm"
    ],
-   "held_out_ratio": 24.418076565999055,
+   "held_out_ratio": 25.056313886834577,
    "limit": 1.5,
-   "link_mrad": 10.397095020724969,
-   "motor_mrad": 10.379728332760521,
+   "link_mrad": 10.668853283607143,
+   "motor_mrad": 10.665130168847172,
    "values": {
-    "armature_kg_m2": 0.1357514158544523,
-    "gravity_nm": 4.8697463237188865,
-    "gravity_bottom_rad": -0.34968817708535566,
-    "frictionloss_nm": 1.328369914131623,
-    "damping_nm_s_rad": 0.2721811655459342,
-    "friction_stribeck_drop_nm": 0.600363640570777,
-    "friction_stribeck_speed_rad_s": 0.08310536033843603,
+    "armature_kg_m2": 0.13593969001139442,
+    "gravity_nm": 4.863235015407286,
+    "gravity_bottom_rad": -0.3497014728220735,
+    "frictionloss_nm": 1.3449683637325187,
+    "damping_nm_s_rad": 0.271928353835725,
+    "friction_stribeck_drop_nm": 0.6175333836363658,
+    "friction_stribeck_speed_rad_s": 0.08259677817859079,
     "backlash_rad": 0.0
    },
    "ci95": {
     "armature_kg_m2": [
-     0.13529827142082468,
-     0.13695872124142452
+     0.13559983641231993,
+     0.13705421210539012
     ],
     "gravity_nm": [
-     4.85511600195734,
-     4.895676802058257
+     4.846823438686413,
+     4.8863241613148025
     ],
     "gravity_bottom_rad": [
-     -0.3499373819887134,
-     -0.34945890423623555
+     -0.3499669008658807,
+     -0.3495042008498059
     ],
     "frictionloss_nm": [
-     1.2753297409317517,
-     1.4463608989058039
+     1.2976576714851549,
+     1.4882800899471307
     ],
     "damping_nm_s_rad": [
-     0.266906761944358,
-     0.27529310256402545
+     0.2660567167347885,
+     0.27463342022134885
     ],
     "friction_stribeck_drop_nm": [
-     0.5479310262218289,
-     0.715517321920784
+     0.569607471126572,
+     0.7602234874030193
     ],
     "friction_stribeck_speed_rad_s": [
-     0.07653931342663503,
-     0.08821546372368912
+     0.07606483015598535,
+     0.08627539755150684
     ]
    },
    "method": "the same regression + D sgn(qd) exp(-(qd/vs)^2), vs profiled (41-point grid, golden section); Fs = Fc + D"
@@ -1027,55 +1027,55 @@
     "command_delay_s",
     "thermal_r_c"
    ],
-   "held_out_ratio": 1.4472902771378042,
+   "held_out_ratio": 1.3381967216332513,
    "limit": 1.5,
-   "link_mrad": 0.6162489700325607,
-   "motor_mrad": 0.5336502887660027,
+   "link_mrad": 0.5697974790781517,
+   "motor_mrad": 0.4758796687297693,
    "values": {
-    "armature_kg_m2": 0.13843396125393795,
-    "gravity_nm": 5.0706338276143645,
-    "gravity_bottom_rad": -0.35007802361082146,
-    "frictionloss_nm": 1.051523435989359,
-    "damping_nm_s_rad": 0.3040567638808796,
-    "friction_stribeck_drop_nm": 0.35650994614822984,
-    "friction_stribeck_speed_rad_s": 0.10350378324869619,
-    "backlash_rad": 0.0019574149240806915
+    "armature_kg_m2": 0.13863632402568205,
+    "gravity_nm": 5.066218703821104,
+    "gravity_bottom_rad": -0.35005856747636094,
+    "frictionloss_nm": 1.0514325127646313,
+    "damping_nm_s_rad": 0.30468094226739806,
+    "friction_stribeck_drop_nm": 0.3565868940787148,
+    "friction_stribeck_speed_rad_s": 0.10413582256883064,
+    "backlash_rad": 0.0019570825511019962
    },
    "ci95": {
     "armature_kg_m2": [
-     0.13830073398230952,
-     0.13871760447583145
+     0.1384903553450937,
+     0.13891143207391682
     ],
     "gravity_nm": [
-     5.067980514136571,
-     5.08236427388031
+     5.063042470338151,
+     5.076815092995939
     ],
     "gravity_bottom_rad": [
-     -0.35017983216134535,
-     -0.3499855445761087
+     -0.3501562186801004,
+     -0.34997351206369715
     ],
     "frictionloss_nm": [
-     1.0178159305312462,
-     1.0441308425189677
+     1.0144864830091713,
+     1.0429756479883006
     ],
     "damping_nm_s_rad": [
-     0.30251350998003607,
-     0.30548732480425006
+     0.3031261884880619,
+     0.30599933578671185
     ],
     "friction_stribeck_drop_nm": [
-     0.3254026509256194,
-     0.35068014627727523
+     0.32254525949848334,
+     0.3505173401597187
     ],
     "friction_stribeck_speed_rad_s": [
-     0.10097964419278467,
-     0.10438557576963348
+     0.10147785236211826,
+     0.10484617325566818
     ],
     "backlash_rad": [
-     0.0019133433922690387,
-     0.0019808992429474594
+     0.001913827216717593,
+     0.001980523214281957
     ]
    },
-   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,899 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.507 mrad)"
+   "method": "the gap: two clusters of (motor encoder - link camera) over every train row (bootstrap over runs); the M3 regression again on the 23,928 rows where the gear is in contact (the smoothed gap at a contact level, a half window from any traversal); then the static level and the drop polished by output error: Nelder-Mead on the motor encoder's RMS over the train operate runs replayed through the twin (40 replays, 0.466 mrad)"
   },
   {
    "key": "M5",
@@ -1720,51 +1720,51 @@
  "stock_fit": {
   "estimates": {
    "gravity_nm": {
-    "value": 5.753338445022121,
+    "value": 5.758874356170898,
     "ci95": [
-     5.541510052090989,
-     5.941187708159172
+     5.550058403831681,
+     5.945771758020297
     ],
     "refused": "",
     "true": 5.05,
-    "error_pct": 13.927493960834077
+    "error_pct": 14.037115963780158
    },
    "gravity_bottom_rad": {
-    "value": -0.34708497408146993,
+    "value": -0.34719842308605897,
     "ci95": [
-     -0.3510912735430327,
-     -0.3403644384745141
+     -0.35130176349991704,
+     -0.3407262313317737
     ],
     "refused": "",
     "true": -0.35,
-    "error_pct": 0.8328645481514416
+    "error_pct": 0.8004505468402876
    },
    "armature_kg_m2": {
-    "value": 0.15326305472088073,
+    "value": 0.15362034639222774,
     "ci95": [
-     0.1507005807168353,
-     0.15454566469142042
+     0.1515185263894891,
+     0.15478753869679004
     ],
     "refused": "",
     "true": 0.14,
-    "error_pct": 9.473610514914794
+    "error_pct": 9.728818851591233
    },
    "frictionloss_nm": {
-    "value": 0.8619290528560593,
+    "value": 0.8565159697045085,
     "ci95": [
-     0.8116575915902713,
-     0.8921207524723822
+     0.8101736865947019,
+     0.8925624547169847
     ],
     "refused": "",
     "true": 1.05
    },
    "damping_nm_s_rad": {
-    "value": -0.47274303040808274,
+    "value": -0.4471597447016392,
     "ci95": [
-     -0.6307481728627581,
-     -0.2668494701214402
+     -0.621919921390257,
+     -0.2640537200778752
     ],
-    "refused": "negative viscous -0.4727 (CI excludes zero): Stribeck-like, not a damping a twin can run",
+    "refused": "negative viscous -0.4472 (CI excludes zero): Stribeck-like, not a damping a twin can run",
     "true": 0.3
    }
   },
@@ -1772,23 +1772,23 @@
   "what": "bam_rack_twin.identify.identify_without_cad: gravity sweeps, plateaus, chirps"
  },
  "fit": {
-  "rows": 31170,
+  "rows": 31201,
   "runs": 42
  },
  "provenance": {
-  "twin_of_record": "twin of record (followup A)",
-  "twin_of_record_digest": "89b6fde5",
+  "twin_of_record": "twin of record (followup C)",
+  "twin_of_record_digest": "95198353",
   "identify_sealed": true,
-  "code": "1313044",
+  "code": "7d1accc",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "326a2456",
-    "date": "2026-11-05T16:08:23-07:00",
+    "commit": "e47066e1",
+    "date": "2026-11-05T18:24:10-07:00",
     "dirty": false,
-    "paths": 11
+    "paths": 12
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -1809,7 +1809,7 @@
     "paths": 6
    }
   ],
-  "seconds": 1111.8
+  "seconds": 525.1
  },
  "notes": [
   "The real CAN 11 is bam_rack_twin's own twin at world.json's truth; the floor is the oracle's measurement noise alone (two camera draws of one deterministic run), so real floors are larger.",

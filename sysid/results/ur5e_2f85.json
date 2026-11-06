@@ -273,9 +273,9 @@
    "poses": 40,
    "excitations": 4,
    "excitation_s": 40.0,
-   "sweep_trajectories": 16,
-   "sweep_s": 905.8,
-   "seconds": 945.8,
+   "sweep_trajectories": 8,
+   "sweep_s": 465.7,
+   "seconds": 505.7,
    "settle_s": 60.0
   },
   "held_out": {
@@ -293,12 +293,12 @@
   },
   "excitation": "Fourier series per joint (Swevers 1997): 5 harmonics of 0.2 Hz, 10 s, inside the joint and speed limits",
   "sweep": {
-   "waypoints": 534,
+   "waypoints": 295,
    "candidate_cells": 2073,
    "sobol_points": 131072,
-   "rejected_moves": 304,
-   "seconds": 905.8,
-   "trajectories": 16,
+   "rejected_moves": 188,
+   "seconds": 465.7,
+   "trajectories": 8,
    "speed_rad_s": 2.8,
    "accel_rad_s2": 6.0,
    "lift_span_rad": [
@@ -308,7 +308,8 @@
    "floor_clearance_m": 0.05,
    "self_clearance_m": 0.01,
    "target_pct": 42.0,
-   "target_cells": 1721,
+   "target_cells": 1076,
+   "target_of": "reachable cells",
    "reachable_mask": "ur5e_2f85_floor",
    "reachable_cells": 2560,
    "curve_of": "reachable cells",
@@ -435,130 +436,18 @@
      42.11
     ],
     [
-     476.5,
-     43.28
-    ],
-    [
-     492.2,
-     44.18
-    ],
-    [
-     508.2,
-     45.31
-    ],
-    [
-     523.3,
-     46.33
-    ],
-    [
-     538.3,
-     47.27
-    ],
-    [
-     555.1,
-     48.44
-    ],
-    [
-     570.5,
-     49.45
-    ],
-    [
-     585.8,
-     50.43
-    ],
-    [
-     602.1,
-     51.33
-    ],
-    [
-     617.3,
-     52.34
-    ],
-    [
-     633.5,
-     53.2
-    ],
-    [
-     649.4,
-     54.1
-    ],
-    [
-     665.1,
-     54.96
-    ],
-    [
-     680.4,
-     55.74
-    ],
-    [
-     697.7,
-     56.68
-    ],
-    [
-     713.7,
-     57.54
-    ],
-    [
-     729.9,
-     58.4
-    ],
-    [
-     747.0,
-     59.41
-    ],
-    [
-     762.7,
-     60.12
-    ],
-    [
-     778.4,
-     60.9
-    ],
-    [
-     794.1,
-     61.84
-    ],
-    [
-     809.5,
-     62.5
-    ],
-    [
-     826.1,
-     63.48
-    ],
-    [
-     842.5,
-     64.26
-    ],
-    [
-     859.3,
-     65.04
-    ],
-    [
-     874.4,
-     65.7
-    ],
-    [
-     889.9,
-     66.52
-    ],
-    [
-     905.0,
-     67.27
-    ],
-    [
-     905.0,
-     67.27
+     461.5,
+     42.11
     ]
    ],
    "rule": "scrambled Sobol waypoints (one per joint-cube cell, collision-free), toured greedily by new cells per second, straight joint-space minimum-jerk moves, every 10 ms sample clear of the floor and the arm"
   },
   "coverage": {
    "train": {
-    "pct": 67.27,
-    "visited": 1722,
+    "pct": 42.11,
+    "visited": 1078,
     "reachable": 2560,
-    "samples": 18955,
+    "samples": 10153,
     "axes": {
      "tool pose": null,
      "payload": null
@@ -566,46 +455,46 @@
     "unplanned": [
      "payload"
     ],
-    "motion_s": 945.8,
-    "sweep_s": 905.8,
+    "motion_s": 505.7,
+    "sweep_s": 465.7,
     "settle_s": 60.0,
     "without_sweep_pct": 1.37,
     "visited_by_joint_bin": [
      [
-      405,
-      439,
-      457,
-      421
+      259,
+      316,
+      288,
+      215
      ],
      [
-      400,
-      914,
-      408,
+      213,
+      651,
+      214,
       0
      ],
      [
-      402,
-      462,
-      463,
-      395
+      238,
+      317,
+      296,
+      227
      ],
      [
-      387,
-      465,
-      440,
-      430
+      247,
+      313,
+      267,
+      251
      ],
      [
-      395,
-      460,
-      441,
-      426
+      202,
+      291,
+      297,
+      288
      ],
      [
-      407,
-      441,
-      447,
-      427
+      273,
+      303,
+      298,
+      204
      ]
     ]
    },
@@ -668,12 +557,12 @@
    "reachable_mask": "ur5e_2f85_floor",
    "rule": "share of the joint cube's reachable cells the static poses, the excitations and the coverage sweep (every 50 ms) visit; tool voxels need FK (a marginal, not planned here)",
    "sweep": {
-    "waypoints": 534,
+    "waypoints": 295,
     "candidate_cells": 2073,
     "sobol_points": 131072,
-    "rejected_moves": 304,
-    "seconds": 905.8,
-    "trajectories": 16,
+    "rejected_moves": 188,
+    "seconds": 465.7,
+    "trajectories": 8,
     "speed_rad_s": 2.8,
     "accel_rad_s2": 6.0,
     "lift_span_rad": [
@@ -683,7 +572,8 @@
     "floor_clearance_m": 0.05,
     "self_clearance_m": 0.01,
     "target_pct": 42.0,
-    "target_cells": 1721,
+    "target_cells": 1076,
+    "target_of": "reachable cells",
     "reachable_mask": "ur5e_2f85_floor",
     "reachable_cells": 2560,
     "curve_of": "reachable cells",
@@ -810,120 +700,8 @@
       42.11
      ],
      [
-      476.5,
-      43.28
-     ],
-     [
-      492.2,
-      44.18
-     ],
-     [
-      508.2,
-      45.31
-     ],
-     [
-      523.3,
-      46.33
-     ],
-     [
-      538.3,
-      47.27
-     ],
-     [
-      555.1,
-      48.44
-     ],
-     [
-      570.5,
-      49.45
-     ],
-     [
-      585.8,
-      50.43
-     ],
-     [
-      602.1,
-      51.33
-     ],
-     [
-      617.3,
-      52.34
-     ],
-     [
-      633.5,
-      53.2
-     ],
-     [
-      649.4,
-      54.1
-     ],
-     [
-      665.1,
-      54.96
-     ],
-     [
-      680.4,
-      55.74
-     ],
-     [
-      697.7,
-      56.68
-     ],
-     [
-      713.7,
-      57.54
-     ],
-     [
-      729.9,
-      58.4
-     ],
-     [
-      747.0,
-      59.41
-     ],
-     [
-      762.7,
-      60.12
-     ],
-     [
-      778.4,
-      60.9
-     ],
-     [
-      794.1,
-      61.84
-     ],
-     [
-      809.5,
-      62.5
-     ],
-     [
-      826.1,
-      63.48
-     ],
-     [
-      842.5,
-      64.26
-     ],
-     [
-      859.3,
-      65.04
-     ],
-     [
-      874.4,
-      65.7
-     ],
-     [
-      889.9,
-      66.52
-     ],
-     [
-      905.0,
-      67.27
-     ],
-     [
-      905.0,
-      67.27
+      461.5,
+      42.11
      ]
     ],
     "rule": "scrambled Sobol waypoints (one per joint-cube cell, collision-free), toured greedily by new cells per second, straight joint-space minimum-jerk moves, every 10 ms sample clear of the floor and the arm"
@@ -965,17 +743,17 @@
    "nominal": 0.1,
    "nominal_source": "ur5e.xml joint shoulder_pan_joint armature",
    "true": 0.129,
-   "recovered": 0.12861384367243692,
+   "recovered": 0.12878683137110794,
    "ci95": [
-    0.12807189140755687,
-    0.12914487090929913
+    0.1281020234383219,
+    0.1294816942152366
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "armature_kg_m2 (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -991,17 +769,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint shoulder_pan_joint damping",
    "true": 2.4,
-   "recovered": 2.4024029132969935,
+   "recovered": 2.4017843830292978,
    "ci95": [
-    2.400973228147601,
-    2.4038114789741374
+    2.3997618033494286,
+    2.403506408124273
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "damping_nm_s_rad (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.2
@@ -1017,17 +795,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint shoulder_pan_joint frictionloss",
    "true": 4.8,
-   "recovered": 4.800121309778833,
+   "recovered": 4.800748500855042,
    "ci95": [
-    4.7986909248017735,
-    4.801423093671018
+    4.798636121096864,
+    4.802911995494848
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "frictionloss_nm (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1069,17 +847,17 @@
    "nominal": 0.1,
    "nominal_source": "ur5e.xml joint shoulder_lift_joint armature",
    "true": 0.142,
-   "recovered": 0.14183728429205159,
+   "recovered": 0.14161414963225177,
    "ci95": [
-    0.1411422211723897,
-    0.14266267966160176
+    0.14080229451828508,
+    0.14264920878209594
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "armature_kg_m2 (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1095,17 +873,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint shoulder_lift_joint damping",
    "true": 2.7,
-   "recovered": 2.6955858609222227,
+   "recovered": 2.6952752987080917,
    "ci95": [
-    2.6940572803215797,
-    2.6971190557594857
+    2.6931890963154967,
+    2.697593576428717
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "damping_nm_s_rad (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.2
@@ -1121,17 +899,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint shoulder_lift_joint frictionloss",
    "true": 5.4,
-   "recovered": 5.399703731595598,
+   "recovered": 5.399928165922689,
    "ci95": [
-    5.398181469166562,
-    5.4011411403274305
+    5.398026456331785,
+    5.4020648440725525
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "frictionloss_nm (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1173,17 +951,17 @@
    "nominal": 0.1,
    "nominal_source": "ur5e.xml joint elbow_joint armature",
    "true": 0.081,
-   "recovered": 0.08090794083923226,
+   "recovered": 0.08065872273664833,
    "ci95": [
-    0.08040408180661254,
-    0.0813916765404254
+    0.07988064501214136,
+    0.08130019504584063
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "armature_kg_m2 (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1199,17 +977,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint elbow_joint damping",
    "true": 1.5,
-   "recovered": 1.5027846879458513,
+   "recovered": 1.5021502776100761,
    "ci95": [
-    1.5014705092671272,
-    1.504148506270076
+    1.5002762464813426,
+    1.504184489540859
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "damping_nm_s_rad (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.2
@@ -1225,17 +1003,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint elbow_joint frictionloss",
    "true": 3.0,
-   "recovered": 2.9987608051660133,
+   "recovered": 2.9989961251935005,
    "ci95": [
-    2.9973376906454505,
-    3.000256439834028
+    2.996770792226646,
+    3.001107065396578
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "frictionloss_nm (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1277,17 +1055,17 @@
    "nominal": 0.1,
    "nominal_source": "ur5e.xml joint wrist_1_joint armature",
    "true": 0.036,
-   "recovered": 0.036013678993417356,
+   "recovered": 0.0360635460257173,
    "ci95": [
-    0.03592118047086529,
-    0.036103234999278436
+    0.035929870569643786,
+    0.036208444749594795
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "armature_kg_m2 (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1303,17 +1081,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint wrist_1_joint damping",
    "true": 0.52,
-   "recovered": 0.5200025607010942,
+   "recovered": 0.5202284458693558,
    "ci95": [
-    0.5197206021252926,
-    0.5203186640697001
+    0.5199048163550428,
+    0.5205476652830417
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "damping_nm_s_rad (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.2
@@ -1329,17 +1107,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint wrist_1_joint frictionloss",
    "true": 1.25,
-   "recovered": 1.2501408606313615,
+   "recovered": 1.2501503605842728,
    "ci95": [
-    1.249849325158179,
-    1.2504351172575425
+    1.2498003386582066,
+    1.2505745405884197
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "frictionloss_nm (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1381,17 +1159,17 @@
    "nominal": 0.1,
    "nominal_source": "ur5e.xml joint wrist_2_joint armature",
    "true": 0.028,
-   "recovered": 0.027976283264751354,
+   "recovered": 0.028060560811258,
    "ci95": [
-    0.02787709874232022,
-    0.02805693262420274
+    0.02794887896390282,
+    0.02819348624252737
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "armature_kg_m2 (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1407,17 +1185,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint wrist_2_joint damping",
    "true": 0.39,
-   "recovered": 0.3898935142856076,
+   "recovered": 0.39000052635426696,
    "ci95": [
-    0.3896023166085734,
-    0.3901363986787785
+    0.3895821126993094,
+    0.3904381279845819
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "damping_nm_s_rad (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.2
@@ -1433,17 +1211,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint wrist_2_joint frictionloss",
    "true": 0.95,
-   "recovered": 0.9499653218115568,
+   "recovered": 0.9499659831506991,
    "ci95": [
-    0.949671087460422,
-    0.9503230510031734
+    0.9495128033138391,
+    0.9503631496913242
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "frictionloss_nm (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1485,17 +1263,17 @@
    "nominal": 0.1,
    "nominal_source": "ur5e.xml joint wrist_3_joint armature",
    "true": 0.031,
-   "recovered": 0.030994493856477106,
+   "recovered": 0.031028722612725577,
    "ci95": [
-    0.030912157085086416,
-    0.03107720832089215
+    0.03092458971533443,
+    0.031118691302118112
    ],
    "rung": "M0",
    "card": "servo",
    "card_parameter": "armature_kg_m2 (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1511,17 +1289,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint wrist_3_joint damping",
    "true": 0.41,
-   "recovered": 0.41007255610972093,
+   "recovered": 0.4098375101452541,
    "ci95": [
-    0.4098751125427489,
-    0.4102914393138515
+    0.40955190698227273,
+    0.4101431669771627
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "damping_nm_s_rad (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.2
@@ -1537,17 +1315,17 @@
    "nominal": 0.0,
    "nominal_source": "ur5e.xml joint wrist_3_joint frictionloss",
    "true": 1.0,
-   "recovered": 0.9998528576659735,
+   "recovered": 1.0000788988510085,
    "ci95": [
-    0.9995827768077594,
-    1.0001421852116263
+    0.9997251789596889,
+    1.0004640247649956
    ],
    "rung": "M2",
    "card": "servo",
    "card_parameter": "frictionloss_nm (each joint is a servo)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.1
@@ -1563,17 +1341,17 @@
    "nominal": 0.777441,
    "nominal_source": "ur5e.xml body grip_base mass",
    "true": 0.917,
-   "recovered": 0.9169460735103856,
+   "recovered": 0.9169912855228811,
    "ci95": [
-    0.9167724732624379,
-    0.9171066472992206
+    0.9167466277713806,
+    0.9172377618922679
    ],
    "rung": "M3",
    "card": "arm_6dof",
    "card_parameter": "link_inertials (the tool)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "rel",
     "value": 0.05
@@ -1589,17 +1367,17 @@
    "nominal": 0.0354675,
    "nominal_source": "ur5e.xml body grip_base ipos[2]",
    "true": 0.0435,
-   "recovered": 0.043530537503772886,
+   "recovered": 0.04351206902426707,
    "ci95": [
-    0.043492292374815916,
-    0.04356614289821639
+    0.0434605658971185,
+    0.04356890154871643
    ],
    "rung": "M3",
    "card": "arm_6dof",
    "card_parameter": "link_inertials (the tool)",
    "on_card": true,
    "fit_step": "dynamics",
-   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 1,270,966 moving rows of 20 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
+   "method": "weighted least squares of joint torque - mj_inverse(rigid) on qdd, qd, sgn(qd) per joint + the tool mass and centre of mass, 682,940 moving rows of 12 trajectories (the Fourier excitations and the coverage sweep; 95 % from a moving-block bootstrap)",
    "tolerance": {
     "kind": "abs",
     "value": 0.003
@@ -1667,10 +1445,10 @@
    "nominal": 0.3137255,
    "nominal_source": "ur5e.xml actuator grip_fingers_actuator gainprm[0]",
    "true": 0.2745,
-   "recovered": 0.2745011771919342,
+   "recovered": 0.2745011740513638,
    "ci95": [
-    0.2744974436821324,
-    0.27450491070173594
+    0.27449744054106645,
+    0.2745049075616612
    ],
    "rung": "M1",
    "card": "arm_6dof_gripper",
@@ -1693,10 +1471,10 @@
    "nominal": 10.0,
    "nominal_source": "ur5e.xml actuator grip_fingers_actuator biasprm[2]",
    "true": 16.0,
-   "recovered": 15.999810768020481,
+   "recovered": 15.99980961325406,
    "ci95": [
-    15.99897171677966,
-    16.0006498192613
+    15.998970562089559,
+    16.00064866441856
    ],
    "rung": "M1",
    "card": "arm_6dof_gripper",
@@ -1719,8 +1497,8 @@
    "unit": "mm",
    "split": "held_out",
    "before": 8.85295654412217,
-   "after": 0.2205188056395495,
-   "factor": 40.146038876125736,
+   "after": 0.22054223998247444,
+   "factor": 40.14177304459081,
    "factor_needed": 5.0,
    "gated": true,
    "pass": true,
@@ -1734,8 +1512,8 @@
    "unit": "N\u00b7m",
    "split": "held_out",
    "before": 3.8326927048388693,
-   "after": 0.21580360190118572,
-   "factor": 17.760096083075666,
+   "after": 0.21580612723564785,
+   "factor": 17.759888256804636,
    "factor_needed": 3.0,
    "gated": true,
    "pass": true,
@@ -1749,8 +1527,8 @@
    "unit": "mrad",
    "split": "held_out",
    "before": 53.673377890721916,
-   "after": 0.19691830022009782,
-   "factor": 272.56673366939776,
+   "after": 0.1969182550760234,
+   "factor": 272.5667961561028,
    "factor_needed": 3.0,
    "gated": true,
    "pass": true,
@@ -1777,9 +1555,9 @@
   {
    "model": "fitted",
    "what": "+ every joint servo's M2 dynamics, the tool (arm_6dof M3) and the TCP and drive (arm_6dof_gripper M0-M1)",
-   "tool_mm": 0.2205188056395495,
-   "torque_nm": 0.21580360190118572,
-   "finger_mrad": 0.19691830022009782
+   "tool_mm": 0.22054223998247444,
+   "torque_nm": 0.21580612723564785,
+   "finger_mrad": 0.1969182550760234
   }
  ],
  "card_ladders": [
@@ -2659,14 +2437,14 @@
  "selected_rung": null,
  "fit": {
   "kinematic_rms_mm": 0.14662589086748948,
-  "dynamic_rows": 1270966,
+  "dynamic_rows": 682940,
   "torque_residual_nm": [
-   0.09657925276860382,
-   0.11288048650746788,
-   0.08109021630901224,
-   0.015172557376450924,
-   0.014563397556843376,
-   0.01405562045367041
+   0.09620940396461004,
+   0.1136918357790539,
+   0.0812851579120725,
+   0.015083922765249341,
+   0.014560608968595708,
+   0.014065376445872801
   ]
  },
  "notes": [
@@ -2686,7 +2464,7 @@
  },
  "provenance": {
   "identify_sealed": true,
-  "code": "1313044",
+  "code": "7d1accc",
   "imports": [
    {
     "repo": "/home/bam/.cache/like_keras/mujoco_menagerie",
@@ -2701,10 +2479,10 @@
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "326a2456",
-    "date": "2026-11-05T16:08:23-07:00",
+    "commit": "e47066e1",
+    "date": "2026-11-05T18:24:10-07:00",
     "dirty": false,
-    "paths": 10
+    "paths": 11
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -2725,6 +2503,6 @@
     "paths": 6
    }
   ],
-  "seconds": 474.7
+  "seconds": 194.6
  }
 }

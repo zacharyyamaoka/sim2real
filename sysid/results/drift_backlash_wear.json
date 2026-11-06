@@ -22,9 +22,9 @@
   "sweep-s5/fb"
  ],
  "check_seconds": 77.7,
- "calibrated_x_floor": 1.4964105456831507,
+ "calibrated_x_floor": 1.3430186345933586,
  "threshold": 1.25,
- "threshold_rule": "the servo card's drift diagnostic: live fidelity / calibrated <= 1.25 (reg.DRIFT_THRESHOLD; settable); calibrated 1.496 x floor at hour 0",
+ "threshold_rule": "the servo card's drift diagnostic: live fidelity / calibrated <= 1.25 (reg.DRIFT_THRESHOLD; settable); calibrated 1.343 x floor at hour 0",
  "diagnostic": {
   "id": "servo.drift",
   "message": "model drift detected \u2014 recalibration required",
@@ -34,10 +34,10 @@
   {
    "h": 0.0,
    "b_true_rad": 0.001991169895766281,
-   "b_hat_rad": 0.001959119874441362,
-   "live_x_floor": 1.4964105456831507,
+   "b_hat_rad": 0.0019588068610537634,
+   "live_x_floor": 1.3430186345933586,
    "floor_mrad": 0.4279613079798561,
-   "link_mrad": 0.6404058144054114,
+   "link_mrad": 0.5747600115018942,
    "ratio": 1.0,
    "status": "ok",
    "message": ""
@@ -45,458 +45,458 @@
   {
    "h": 12.0,
    "b_true_rad": 0.0020518917725504135,
-   "b_hat_rad": 0.0020330506088526434,
-   "live_x_floor": 1.5245294321604186,
-   "floor_mrad": 0.4215392968154104,
-   "link_mrad": 0.6426490648072999,
-   "ratio": 1.018790890346493,
+   "b_hat_rad": 0.002033885453366302,
+   "live_x_floor": 1.3673244330336216,
+   "floor_mrad": 0.42153929681541047,
+   "link_mrad": 0.5763809800195228,
+   "ratio": 1.0180978862200392,
    "status": "ok",
    "message": ""
   },
   {
    "h": 24.0,
    "b_true_rad": 0.0020471965373511296,
-   "b_hat_rad": 0.0020414378534817645,
-   "live_x_floor": 1.5235769291668007,
+   "b_hat_rad": 0.002041238236079178,
+   "live_x_floor": 1.3685155741018173,
    "floor_mrad": 0.41976875059461044,
-   "link_mrad": 0.6395499839911212,
-   "ratio": 1.018154365165375,
+   "link_mrad": 0.5744600727099859,
+   "ratio": 1.018984799504423,
    "status": "ok",
    "message": ""
   },
   {
    "h": 36.0,
    "b_true_rad": 0.002055274403999688,
-   "b_hat_rad": 0.0020279103669540444,
-   "live_x_floor": 1.5301676624685272,
+   "b_hat_rad": 0.0020276354165681687,
+   "live_x_floor": 1.337175175925184,
    "floor_mrad": 0.42649881850415566,
-   "link_mrad": 0.6526147001560926,
-   "ratio": 1.0225587268699483,
+   "link_mrad": 0.5703036326651775,
+   "ratio": 0.9956490114748527,
    "status": "ok",
    "message": ""
   },
   {
    "h": 48.0,
    "b_true_rad": 0.002093650536656875,
-   "b_hat_rad": 0.002069584987791931,
-   "live_x_floor": 1.529397633858707,
-   "floor_mrad": 0.4225205914898606,
-   "link_mrad": 0.6462019928811741,
-   "ratio": 1.0220441430800642,
+   "b_hat_rad": 0.0020685467876624675,
+   "live_x_floor": 1.3673506779117723,
+   "floor_mrad": 0.4225205914898605,
+   "link_mrad": 0.5777338172053438,
+   "ratio": 1.0181174279281546,
    "status": "ok",
    "message": ""
   },
   {
    "h": 60.0,
    "b_true_rad": 0.0021106779675061403,
-   "b_hat_rad": 0.002093123210255912,
-   "live_x_floor": 1.5641129151517674,
+   "b_hat_rad": 0.0020930207267296497,
+   "live_x_floor": 1.418196934575467,
    "floor_mrad": 0.42573004326734115,
-   "link_mrad": 0.665889859042569,
-   "ratio": 1.0452431785273932,
+   "link_mrad": 0.6037690423184241,
+   "ratio": 1.055977108616122,
    "status": "ok",
    "message": ""
   },
   {
    "h": 72.0,
    "b_true_rad": 0.0021280066685504546,
-   "b_hat_rad": 0.00210266416471383,
-   "live_x_floor": 1.555767407963824,
+   "b_hat_rad": 0.0021034385595739696,
+   "live_x_floor": 1.4071746009565305,
    "floor_mrad": 0.4283006168071977,
-   "link_mrad": 0.666336140439441,
-   "ratio": 1.0396661614367169,
+   "link_mrad": 0.6026937495451044,
+   "ratio": 1.0477699748243605,
    "status": "ok",
    "message": ""
   },
   {
    "h": 84.0,
    "b_true_rad": 0.002153290391557262,
-   "b_hat_rad": 0.0021201372117150563,
-   "live_x_floor": 1.5917049395626608,
-   "floor_mrad": 0.42746285177346327,
-   "link_mrad": 0.6803947326473629,
-   "ratio": 1.0636819849702448,
+   "b_hat_rad": 0.0021193708699814295,
+   "live_x_floor": 1.4386742049159835,
+   "floor_mrad": 0.4274628517734632,
+   "link_mrad": 0.6149797784063061,
+   "ratio": 1.0712243060957882,
    "status": "ok",
    "message": ""
   },
   {
    "h": 96.0,
    "b_true_rad": 0.0021760335047599855,
-   "b_hat_rad": 0.002158644632678147,
-   "live_x_floor": 1.6314871212423512,
+   "b_hat_rad": 0.002158833666845633,
+   "live_x_floor": 1.4813648215195137,
    "floor_mrad": 0.425270677925782,
-   "link_mrad": 0.6938236340779171,
-   "ratio": 1.0902670566903379,
+   "link_mrad": 0.6299810219030085,
+   "ratio": 1.103011368094713,
    "status": "ok",
    "message": ""
   },
   {
    "h": 108.0,
    "b_true_rad": 0.0021991599362898464,
-   "b_hat_rad": 0.0021772335992953917,
-   "live_x_floor": 1.6205166189180822,
-   "floor_mrad": 0.42201337454728083,
-   "link_mrad": 0.6838796868595698,
-   "ratio": 1.0829358451081177,
+   "b_hat_rad": 0.0021772295744852954,
+   "live_x_floor": 1.4835946097803063,
+   "floor_mrad": 0.4220133745472808,
+   "link_mrad": 0.6260967677335433,
+   "ratio": 1.1046716490493906,
    "status": "ok",
    "message": ""
   },
   {
    "h": 120.0,
    "b_true_rad": 0.0022297892022256722,
-   "b_hat_rad": 0.002224823485063143,
-   "live_x_floor": 1.668743377480489,
+   "b_hat_rad": 0.0022261195755748434,
+   "live_x_floor": 1.5206695453584436,
    "floor_mrad": 0.4220481498407427,
-   "link_mrad": 0.7042900550246324,
-   "ratio": 1.1151641388083535,
+   "link_mrad": 0.6417957681376945,
+   "ratio": 1.1322773237758346,
    "status": "ok",
    "message": ""
   },
   {
    "h": 132.0,
    "b_true_rad": 0.0022460923982598304,
-   "b_hat_rad": 0.002229382673799289,
-   "live_x_floor": 1.668557731285274,
-   "floor_mrad": 0.4255402204881015,
-   "link_mrad": 0.7100384248682619,
-   "ratio": 1.115040077804005,
+   "b_hat_rad": 0.002230304035999081,
+   "live_x_floor": 1.5316469105722137,
+   "floor_mrad": 0.4255402204881014,
+   "link_mrad": 0.6517773640348192,
+   "ratio": 1.1404509744840348,
    "status": "ok",
    "message": ""
   },
   {
    "h": 144.0,
    "b_true_rad": 0.002261049842931708,
-   "b_hat_rad": 0.0022507159190041787,
-   "live_x_floor": 1.6857462349230965,
+   "b_hat_rad": 0.002250897102464844,
+   "live_x_floor": 1.5440195661773493,
    "floor_mrad": 0.42887164518915283,
-   "link_mrad": 0.7229687611428884,
-   "ratio": 1.1265265670481552,
+   "link_mrad": 0.6621862115507218,
+   "ratio": 1.1496635462879115,
    "status": "ok",
    "message": ""
   },
   {
    "h": 156.0,
    "b_true_rad": 0.0022879449193326062,
-   "b_hat_rad": 0.002267772882141833,
-   "live_x_floor": 1.7167583288815045,
-   "floor_mrad": 0.4267942889784723,
-   "link_mrad": 0.732702650322852,
-   "ratio": 1.1472508890250832,
+   "b_hat_rad": 0.002266192463624861,
+   "live_x_floor": 1.5764201232043817,
+   "floor_mrad": 0.4267942889784724,
+   "link_mrad": 0.6728071056143698,
+   "ratio": 1.173788719381167,
    "status": "ok",
    "message": ""
   },
   {
    "h": 168.0,
    "b_true_rad": 0.0023116299549813786,
-   "b_hat_rad": 0.0022970842740703823,
-   "live_x_floor": 1.7579224137636604,
-   "floor_mrad": 0.4222800252521139,
-   "link_mrad": 0.7423355212753755,
-   "ratio": 1.1747594394031236,
+   "b_hat_rad": 0.00229512034036837,
+   "live_x_floor": 1.6126714905046082,
+   "floor_mrad": 0.42228002525211383,
+   "link_mrad": 0.68099895773365,
+   "ratio": 1.200781172327438,
    "status": "ok",
    "message": ""
   },
   {
    "h": 180.0,
    "b_true_rad": 0.0023224439454109643,
-   "b_hat_rad": 0.002311395162369889,
-   "live_x_floor": 1.7828178498009863,
+   "b_hat_rad": 0.0023105234811811592,
+   "live_x_floor": 1.6383539090978732,
    "floor_mrad": 0.42457906585655575,
-   "link_mrad": 0.7569471372608961,
-   "ratio": 1.1913962080420137,
+   "link_mrad": 0.6956107722672114,
+   "ratio": 1.2199040779459749,
    "status": "ok",
    "message": ""
   },
   {
    "h": 192.0,
    "b_true_rad": 0.0023552142223030263,
-   "b_hat_rad": 0.0023482113767231277,
-   "live_x_floor": 1.8145622172600764,
+   "b_hat_rad": 0.00234758787706682,
+   "live_x_floor": 1.6741310295540537,
    "floor_mrad": 0.4247750528453157,
-   "link_mrad": 0.7707807617277621,
-   "ratio": 1.2126098833603722,
+   "link_mrad": 0.711129096548806,
+   "ratio": 1.2465434108149585,
    "status": "ok",
    "message": ""
   },
   {
    "h": 204.0,
    "b_true_rad": 0.00237597366613188,
-   "b_hat_rad": 0.0023616351547506714,
-   "live_x_floor": 1.8309524184294597,
+   "b_hat_rad": 0.0023624730468334576,
+   "live_x_floor": 1.6846543866281836,
    "floor_mrad": 0.4278262182704172,
-   "link_mrad": 0.7833294490097503,
-   "ratio": 1.2235628943617087,
-   "status": "ok",
-   "message": ""
+   "link_mrad": 0.7207393153238051,
+   "ratio": 1.2543790110092299,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 216.0,
    "b_true_rad": 0.002389444096544219,
-   "b_hat_rad": 0.002381623950552733,
-   "live_x_floor": 1.853205173481932,
+   "b_hat_rad": 0.0023838089562756987,
+   "live_x_floor": 1.7136097597146671,
    "floor_mrad": 0.41882900005532264,
-   "link_mrad": 0.7761760697067882,
-   "ratio": 1.2384336496612265,
-   "status": "ok",
-   "message": ""
+   "link_mrad": 0.7177094621463357,
+   "ratio": 1.2759389300905097,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 228.0,
    "b_true_rad": 0.0024079153879622197,
-   "b_hat_rad": 0.00239819995066215,
-   "live_x_floor": 1.833558183255349,
+   "b_hat_rad": 0.0024001108392433523,
+   "live_x_floor": 1.7017881260145176,
    "floor_mrad": 0.42657857487316564,
-   "link_mrad": 0.7821566367600975,
-   "ratio": 1.2253042378943417,
-   "status": "ok",
-   "message": ""
+   "link_mrad": 0.7259463535313482,
+   "ratio": 1.2671366444068648,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 240.0,
    "b_true_rad": 0.0024325630978009375,
-   "b_hat_rad": 0.0024196825304596548,
-   "live_x_floor": 1.9042384247607742,
+   "b_hat_rad": 0.0024216407973788046,
+   "live_x_floor": 1.7675639320017347,
    "floor_mrad": 0.4287293839671472,
-   "link_mrad": 0.8164029667742576,
-   "ratio": 1.2725374264797362,
+   "link_mrad": 0.7578065956896523,
+   "ratio": 1.316112737733472,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 252.0,
    "b_true_rad": 0.002456067399850534,
-   "b_hat_rad": 0.0024426474572362897,
-   "live_x_floor": 1.9336579553408377,
-   "floor_mrad": 0.4247056645449624,
-   "link_mrad": 0.8212354869256837,
-   "ratio": 1.292197492806409,
+   "b_hat_rad": 0.0024435086427742614,
+   "live_x_floor": 1.796662935519942,
+   "floor_mrad": 0.4247056645449623,
+   "link_mrad": 0.7630529259932997,
+   "ratio": 1.337779602785585,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 264.0,
    "b_true_rad": 0.002482181972821054,
-   "b_hat_rad": 0.0024673056105823654,
-   "live_x_floor": 1.935283962052144,
+   "b_hat_rad": 0.002467712777316937,
+   "live_x_floor": 1.8102468982721622,
    "floor_mrad": 0.43103777046726083,
-   "link_mrad": 0.8341804842240033,
-   "ratio": 1.2932840974925341,
+   "link_mrad": 0.7802847870265072,
+   "ratio": 1.3478941033608753,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 276.0,
    "b_true_rad": 0.002487798279120472,
-   "b_hat_rad": 0.0024715749190672986,
-   "live_x_floor": 1.9871678729909772,
+   "b_hat_rad": 0.0024714557638637613,
+   "live_x_floor": 1.8647682256911113,
    "floor_mrad": 0.4248835591364421,
-   "link_mrad": 0.8443149584779998,
-   "ratio": 1.3279563410746902,
+   "link_mrad": 0.7923093606961875,
+   "ratio": 1.3884902097845642,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 288.0,
    "b_true_rad": 0.002522809618053562,
-   "b_hat_rad": 0.00249587486194372,
-   "live_x_floor": 2.026382204898015,
+   "b_hat_rad": 0.002496490861987069,
+   "live_x_floor": 1.904281092011262,
    "floor_mrad": 0.4176179023692331,
-   "link_mrad": 0.8462534858078504,
-   "ratio": 1.3541619382085537,
+   "link_mrad": 0.7952618751671358,
+   "ratio": 1.4179111465477494,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 300.0,
    "b_true_rad": 0.002566566985602193,
-   "b_hat_rad": 0.0025553567772495095,
-   "live_x_floor": 2.0822158376564883,
-   "floor_mrad": 0.4221076963155787,
-   "link_mrad": 0.8789193304649934,
-   "ratio": 1.391473645827524,
+   "b_hat_rad": 0.002552638777691796,
+   "live_x_floor": 1.963769340782023,
+   "floor_mrad": 0.42210769631557865,
+   "link_mrad": 0.8289221525326622,
+   "ratio": 1.462205579430859,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 312.0,
    "b_true_rad": 0.002548583414789803,
-   "b_hat_rad": 0.0025300650596695173,
-   "live_x_floor": 2.0240434348069756,
+   "b_hat_rad": 0.002529693068048816,
+   "live_x_floor": 1.8988684356480603,
    "floor_mrad": 0.4266417709209586,
-   "link_mrad": 0.8635414754469879,
-   "ratio": 1.3525990181277068,
+   "link_mrad": 0.8101365921307988,
+   "ratio": 1.413880929673774,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 324.0,
    "b_true_rad": 0.0025769951627272578,
-   "b_hat_rad": 0.002570167082333291,
-   "live_x_floor": 2.045880061171649,
+   "b_hat_rad": 0.0025692431216178396,
+   "live_x_floor": 1.9237024214651364,
    "floor_mrad": 0.4297609602582688,
-   "link_mrad": 0.8792393796623735,
-   "ratio": 1.3671916888541114,
+   "link_mrad": 0.8267321999000139,
+   "ratio": 1.4323720996228755,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 336.0,
    "b_true_rad": 0.002579604489366051,
-   "b_hat_rad": 0.002555243647737515,
-   "live_x_floor": 2.083235448011317,
-   "floor_mrad": 0.4267673368294348,
-   "link_mrad": 0.8890568441364642,
-   "ratio": 1.3921550165634962,
+   "b_hat_rad": 0.002555379956301007,
+   "live_x_floor": 1.961072374627501,
+   "floor_mrad": 0.4267673368294349,
+   "link_mrad": 0.8369216346495544,
+   "ratio": 1.460197441877847,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 348.0,
    "b_true_rad": 0.0026281944086192994,
-   "b_hat_rad": 0.002601917084120664,
-   "live_x_floor": 2.1560276129597464,
+   "b_hat_rad": 0.002602553537672414,
+   "live_x_floor": 2.0309930505210985,
    "floor_mrad": 0.42265043436968847,
-   "link_mrad": 0.9112460071304794,
-   "ratio": 1.4407995313715618,
+   "link_mrad": 0.8584000950045609,
+   "ratio": 1.5122597693039799,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 360.0,
    "b_true_rad": 0.00265740111996987,
-   "b_hat_rad": 0.002640930677497988,
-   "live_x_floor": 2.1831983008829705,
-   "floor_mrad": 0.4223683279278636,
-   "link_mrad": 0.9221138158788932,
-   "ratio": 1.4589567730467197,
+   "b_hat_rad": 0.002640431971805718,
+   "live_x_floor": 2.0641209741791315,
+   "floor_mrad": 0.42236832792786366,
+   "link_mrad": 0.8718193245048729,
+   "ratio": 1.5369265332674327,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 372.0,
    "b_true_rad": 0.002671827368113705,
-   "b_hat_rad": 0.0026537579911893733,
-   "live_x_floor": 2.1760003474727534,
-   "floor_mrad": 0.4266555907397063,
-   "link_mrad": 0.9284027137007939,
-   "ratio": 1.4541466269066903,
+   "b_hat_rad": 0.0026570225594880204,
+   "live_x_floor": 2.0612500516069416,
+   "floor_mrad": 0.42665559073970627,
+   "link_mrad": 0.8794438584306096,
+   "ratio": 1.5347888692780873,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 384.0,
    "b_true_rad": 0.0026861056740558296,
-   "b_hat_rad": 0.00266754137253844,
-   "live_x_floor": 2.2224149478683866,
+   "b_hat_rad": 0.002666580300756352,
+   "live_x_floor": 2.11273440465034,
    "floor_mrad": 0.4256622291253771,
-   "link_mrad": 0.9459981007512162,
-   "ratio": 1.4851639172683027,
+   "link_mrad": 0.8993112362333403,
+   "ratio": 1.5731236709831933,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 396.0,
    "b_true_rad": 0.002711519954089077,
-   "b_hat_rad": 0.0026952751338550907,
-   "live_x_floor": 2.2467749790235048,
-   "floor_mrad": 0.4233984026871468,
-   "link_mrad": 0.9512809373159996,
-   "ratio": 1.5014428931318398,
+   "b_hat_rad": 0.002694288250144422,
+   "live_x_floor": 2.1402642485376617,
+   "floor_mrad": 0.42339840268714685,
+   "link_mrad": 0.9061844641592526,
+   "ratio": 1.5936221534153876,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 408.0,
    "b_true_rad": 0.002748564234187483,
-   "b_hat_rad": 0.0027446035556770165,
-   "live_x_floor": 2.3070352599080572,
+   "b_hat_rad": 0.0027429923783060806,
+   "live_x_floor": 2.202366473498553,
    "floor_mrad": 0.4262961657228175,
-   "link_mrad": 0.9834802854861485,
-   "ratio": 1.5417127783303846,
+   "link_mrad": 0.9388603831689162,
+   "ratio": 1.6398629302454832,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 420.0,
    "b_true_rad": 0.0027497937102762882,
-   "b_hat_rad": 0.0027277789530764374,
-   "live_x_floor": 2.308127645376908,
+   "b_hat_rad": 0.0027272265499027337,
+   "live_x_floor": 2.2051853782058957,
    "floor_mrad": 0.4247945197390493,
-   "link_mrad": 0.9804799746143064,
-   "ratio": 1.542442782186614,
+   "link_mrad": 0.9367506636705473,
+   "ratio": 1.6419618621848724,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 432.0,
    "b_true_rad": 0.0027648555572396746,
-   "b_hat_rad": 0.002742348313171189,
-   "live_x_floor": 2.343017733178842,
+   "b_hat_rad": 0.0027440750785870105,
+   "live_x_floor": 2.2332732916909057,
    "floor_mrad": 0.4246759003926244,
-   "link_mrad": 0.9950231654736106,
-   "ratio": 1.5657586348465575,
+   "link_mrad": 0.9484173459716354,
+   "ratio": 1.6628758783880164,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 444.0,
    "b_true_rad": 0.002786440678495687,
-   "b_hat_rad": 0.0027600691388754706,
-   "live_x_floor": 2.361124195693016,
-   "floor_mrad": 0.42963770383142263,
-   "link_mrad": 1.014427977898362,
-   "ratio": 1.5778585646194445,
+   "b_hat_rad": 0.002762497350340287,
+   "live_x_floor": 2.260195334946213,
+   "floor_mrad": 0.4296377038314226,
+   "link_mrad": 0.9710651339167841,
+   "ratio": 1.6829217977534308,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 456.0,
    "b_true_rad": 0.0028349151084695397,
-   "b_hat_rad": 0.002816135281214674,
-   "live_x_floor": 2.451819855516788,
-   "floor_mrad": 0.4269849840801642,
-   "link_mrad": 1.0468902619752662,
-   "ratio": 1.638467372867563,
+   "b_hat_rad": 0.002815949136817958,
+   "live_x_floor": 2.3511138279822577,
+   "floor_mrad": 0.42698498408016416,
+   "link_mrad": 1.0038903004116582,
+   "ratio": 1.750618917282657,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 468.0,
    "b_true_rad": 0.0028439588026358464,
-   "b_hat_rad": 0.0028349666388840927,
-   "live_x_floor": 2.454140008338283,
+   "b_hat_rad": 0.0028352277770921086,
+   "live_x_floor": 2.3509802563658773,
    "floor_mrad": 0.4233731955206037,
-   "link_mrad": 1.03901709758514,
-   "ratio": 1.6400178516637651,
+   "link_mrad": 0.9953420237434696,
+   "ratio": 1.7505194610182837,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   },
   {
    "h": 480.0,
    "b_true_rad": 0.002873743025595886,
-   "b_hat_rad": 0.0028428322573038622,
-   "live_x_floor": 2.5351400727839284,
+   "b_hat_rad": 0.0028444455306005784,
+   "live_x_floor": 2.43900819690888,
    "floor_mrad": 0.42316664295856055,
-   "link_mrad": 1.0727867140296958,
-   "ratio": 1.6941474250480977,
+   "link_mrad": 1.0321069108343426,
+   "ratio": 1.8160643002897479,
    "status": "warning",
    "message": "model drift detected \u2014 recalibration required"
   }
  ],
- "detector_alarm_h": 240.0,
- "actual_crossing_h": 234.2741719147781,
- "rate_recovered": 1.8798454553536437e-06,
+ "detector_alarm_h": 204.0,
+ "actual_crossing_h": 197.29366853745597,
+ "rate_recovered": 1.8760524978945423e-06,
  "rate_ci95": [
-  1.7185062703276326e-06,
-  2.041184640379655e-06
+  1.7106793688339917e-06,
+  2.041425626955093e-06
  ],
- "b0_recovered_rad": 0.001978938698034221,
+ "b0_recovered_rad": 0.001979120901535382,
  "rate_true": 1.8e-06,
  "b0_true_rad": 0.002,
  "predicted_at_h": 168.0,
- "predicted_crossing_h": 233.08729941486735,
- "remaining_h_at_prediction": 65.08729941486729,
- "plan_by_h": 220.55136638823927,
+ "predicted_crossing_h": 224.9177620825205,
+ "remaining_h_at_prediction": 56.91776208252051,
+ "plan_by_h": 212.68795998079207,
  "plan_by_rule": "the hour the wear line's upper 95 % confidence band (slope and intercept, Student's t) reaches the threshold gap: the early edge maintenance plans against",
  "forecast": {
   "checks_h": [
@@ -516,244 +516,244 @@
    156.0,
    168.0
   ],
-  "gap_ratio_correlation": 0.07468850209123937,
+  "gap_ratio_correlation": 0.04005606526500344,
   "curve_rule": "ratio^2 = 1 + d^2 + 2 rho d, d = the gap's replayed link error / calibrated; rho least squares on the early checks' (gap, ratio)"
  },
- "gap_at_threshold_rad": 0.0024171067985399135,
+ "gap_at_threshold_rad": 0.002401078430911145,
  "curve": [
   {
-   "backlash_rad": 0.001778938698034221,
-   "gap_x_calibrated": 0.31337990818982897,
-   "ratio": 1.0700554745962672
+   "backlash_rad": 0.0017791209015353819,
+   "gap_x_calibrated": 0.32502656295084326,
+   "ratio": 1.0638048867440288
   },
   {
-   "backlash_rad": 0.0018289386980342211,
-   "gap_x_calibrated": 0.25962328125480794,
-   "ratio": 1.05175377163069
+   "backlash_rad": 0.001829120901535382,
+   "gap_x_calibrated": 0.2743031075801479,
+   "ratio": 1.0474813607827937
   },
   {
-   "backlash_rad": 0.001878938698034221,
-   "gap_x_calibrated": 0.24295286287582937,
-   "ratio": 1.046574251734443
+   "backlash_rad": 0.001879120901535382,
+   "gap_x_calibrated": 0.25717925728035573,
+   "ratio": 1.0424703106583562
   },
   {
-   "backlash_rad": 0.001928938698034221,
-   "gap_x_calibrated": 0.18550077296002343,
-   "ratio": 1.0305921048150275
+   "backlash_rad": 0.0019291209015353818,
+   "gap_x_calibrated": 0.23157254414003228,
+   "ratio": 1.0354600972914403
   },
   {
-   "backlash_rad": 0.001978938698034221,
-   "gap_x_calibrated": 0.21275505897206454,
-   "ratio": 1.0378079920930077
+   "backlash_rad": 0.001979120901535382,
+   "gap_x_calibrated": 0.29393467482936286,
+   "ratio": 1.053539427883109
   },
   {
-   "backlash_rad": 0.0020289386980342212,
-   "gap_x_calibrated": 0.2137690058172759,
-   "ratio": 1.0380892839848401
+   "backlash_rad": 0.002029120901535382,
+   "gap_x_calibrated": 0.2934883189429341,
+   "ratio": 1.0533980101899463
   },
   {
-   "backlash_rad": 0.002078938698034221,
-   "gap_x_calibrated": 0.23198034453896638,
-   "ratio": 1.0432964148068695
+   "backlash_rad": 0.0020791209015353818,
+   "gap_x_calibrated": 0.221851759921622,
+   "ratio": 1.032952671001665
   },
   {
-   "backlash_rad": 0.002128938698034221,
-   "gap_x_calibrated": 0.26495086178102295,
-   "ratio": 1.0534593134748593
+   "backlash_rad": 0.002129120901535382,
+   "gap_x_calibrated": 0.4092753605357627,
+   "ratio": 1.0955794091929782
   },
   {
-   "backlash_rad": 0.002178938698034221,
-   "gap_x_calibrated": 0.3379567358230682,
-   "ratio": 1.079211619669063
+   "backlash_rad": 0.002179120901535382,
+   "gap_x_calibrated": 0.3902034992613336,
+   "ratio": 1.0878965044993383
   },
   {
-   "backlash_rad": 0.0022289386980342213,
-   "gap_x_calibrated": 0.4188201885405664,
-   "ratio": 1.1126421057035754
+   "backlash_rad": 0.002229120901535382,
+   "gap_x_calibrated": 0.448002339639377,
+   "ratio": 1.1120236140628013
   },
   {
-   "backlash_rad": 0.002278938698034221,
-   "gap_x_calibrated": 0.5037282264461965,
-   "ratio": 1.1528172186028958
+   "backlash_rad": 0.002279120901535382,
+   "gap_x_calibrated": 0.5829941090785719,
+   "ratio": 1.1775343015747122
   },
   {
-   "backlash_rad": 0.002328938698034221,
-   "gap_x_calibrated": 0.5278439477470653,
-   "ratio": 1.1651038497762833
+   "backlash_rad": 0.002329120901535382,
+   "gap_x_calibrated": 0.671745765809731,
+   "ratio": 1.2268077919367935
   },
   {
-   "backlash_rad": 0.0023789386980342213,
-   "gap_x_calibrated": 0.5866646294033354,
-   "ratio": 1.196582463599165
+   "backlash_rad": 0.002379120901535382,
+   "gap_x_calibrated": 0.6484869823992759,
+   "ratio": 1.2134607699148332
   },
   {
-   "backlash_rad": 0.002428938698034221,
-   "gap_x_calibrated": 0.7076510666898486,
-   "ratio": 1.2674686696466881
+   "backlash_rad": 0.002429120901535382,
+   "gap_x_calibrated": 0.7908657138080101,
+   "ratio": 1.2995485810747314
   },
   {
-   "backlash_rad": 0.002478938698034221,
-   "gap_x_calibrated": 0.7366214911964405,
-   "ratio": 1.2855526176955272
+   "backlash_rad": 0.002479120901535382,
+   "gap_x_calibrated": 0.7967147371175256,
+   "ratio": 1.3032961625645136
   },
   {
-   "backlash_rad": 0.0025289386980342212,
-   "gap_x_calibrated": 0.8370173306037378,
-   "ratio": 1.351158448526822
+   "backlash_rad": 0.002529120901535382,
+   "gap_x_calibrated": 0.878358390024279,
+   "ratio": 1.3571590265402929
   },
   {
-   "backlash_rad": 0.002578938698034221,
-   "gap_x_calibrated": 0.9134092462101373,
-   "ratio": 1.4038371657188797
+   "backlash_rad": 0.002579120901535382,
+   "gap_x_calibrated": 0.9418477965859288,
+   "ratio": 1.4009035318512335
   },
   {
-   "backlash_rad": 0.002628938698034221,
-   "gap_x_calibrated": 0.9263616604578714,
-   "ratio": 1.4129837421552196
+   "backlash_rad": 0.002629120901535382,
+   "gap_x_calibrated": 1.0181711960898592,
+   "ratio": 1.4554176198981852
   },
   {
-   "backlash_rad": 0.002678938698034221,
-   "gap_x_calibrated": 0.9780119798372666,
-   "ratio": 1.4500344590070526
+   "backlash_rad": 0.002679120901535382,
+   "gap_x_calibrated": 1.1086994810040474,
+   "ratio": 1.5225093814881374
   },
   {
-   "backlash_rad": 0.002728938698034221,
-   "gap_x_calibrated": 1.0418079167373984,
-   "ratio": 1.4969922781739857
+   "backlash_rad": 0.0027291209015353817,
+   "gap_x_calibrated": 1.2216009039437996,
+   "ratio": 1.609401696155633
   },
   {
-   "backlash_rad": 0.002778938698034221,
-   "gap_x_calibrated": 1.102410693204749,
-   "ratio": 1.5427197228342646
+   "backlash_rad": 0.002779120901535382,
+   "gap_x_calibrated": 1.277444138874174,
+   "ratio": 1.653542348880808
   },
   {
-   "backlash_rad": 0.002828938698034221,
-   "gap_x_calibrated": 1.2215480052217262,
-   "ratio": 1.6354359389918893
+   "backlash_rad": 0.002829120901535382,
+   "gap_x_calibrated": 1.3020091950819292,
+   "ratio": 1.673181004752793
   },
   {
-   "backlash_rad": 0.002878938698034221,
-   "gap_x_calibrated": 1.2660369541809189,
-   "ratio": 1.6709178246555256
+   "backlash_rad": 0.0028791209015353817,
+   "gap_x_calibrated": 1.4155406231850278,
+   "ratio": 1.7655472893871131
   },
   {
-   "backlash_rad": 0.002928938698034221,
-   "gap_x_calibrated": 1.3563260708765543,
-   "ratio": 1.7441973327870801
+   "backlash_rad": 0.002929120901535382,
+   "gap_x_calibrated": 1.4757972717895063,
+   "ratio": 1.8155458823986736
   },
   {
-   "backlash_rad": 0.002978938698034221,
-   "gap_x_calibrated": 1.3259136122700483,
-   "ratio": 1.7193335657773556
+   "backlash_rad": 0.002979120901535382,
+   "gap_x_calibrated": 1.5650843244785955,
+   "ratio": 1.8907329749125652
   },
   {
-   "backlash_rad": 0.003028938698034221,
-   "gap_x_calibrated": 1.4077708843284635,
-   "ratio": 1.7866469880866922
+   "backlash_rad": 0.0030291209015353817,
+   "gap_x_calibrated": 1.6409337761934104,
+   "ratio": 1.955536335311075
   },
   {
-   "backlash_rad": 0.003078938698034221,
-   "gap_x_calibrated": 1.4935645006163614,
-   "ratio": 1.8584507279335585
+   "backlash_rad": 0.003079120901535382,
+   "gap_x_calibrated": 1.7110397203957983,
+   "ratio": 2.0161180427233187
   },
   {
-   "backlash_rad": 0.003128938698034221,
-   "gap_x_calibrated": 1.6215961315481713,
-   "ratio": 1.9676898093898227
+   "backlash_rad": 0.003129120901535382,
+   "gap_x_calibrated": 1.7748720132370421,
+   "ratio": 2.071801014038417
   },
   {
-   "backlash_rad": 0.0031789386980342208,
-   "gap_x_calibrated": 1.6381297803340409,
-   "ratio": 1.981960669707059
+   "backlash_rad": 0.0031791209015353816,
+   "gap_x_calibrated": 1.8580208573348422,
+   "ratio": 2.145015504778832
   },
   {
-   "backlash_rad": 0.003228938698034221,
-   "gap_x_calibrated": 1.6916215438648896,
-   "ratio": 2.028367029435479
+   "backlash_rad": 0.0032291209015353818,
+   "gap_x_calibrated": 1.9120009000439042,
+   "ratio": 2.1929254222263257
   },
   {
-   "backlash_rad": 0.003278938698034221,
-   "gap_x_calibrated": 1.7875351629169096,
-   "ratio": 2.112415348877145
+   "backlash_rad": 0.003279120901535382,
+   "gap_x_calibrated": 1.9785921249712433,
+   "ratio": 2.2524067189518773
   },
   {
-   "backlash_rad": 0.0033289386980342207,
-   "gap_x_calibrated": 1.8222067417560228,
-   "ratio": 2.14304297525405
+   "backlash_rad": 0.0033291209015353816,
+   "gap_x_calibrated": 2.03278347351098,
+   "ratio": 2.30109957740827
   },
   {
-   "backlash_rad": 0.003378938698034221,
-   "gap_x_calibrated": 1.9296353935924686,
-   "ratio": 2.238690667882475
+   "backlash_rad": 0.0033791209015353817,
+   "gap_x_calibrated": 2.1327915337356806,
+   "ratio": 2.3915815269646408
   },
   {
-   "backlash_rad": 0.003428938698034221,
-   "gap_x_calibrated": 1.962802195192467,
-   "ratio": 2.2684333733158244
+   "backlash_rad": 0.003429120901535382,
+   "gap_x_calibrated": 2.1882438452591817,
+   "ratio": 2.4420720715977193
   },
   {
-   "backlash_rad": 0.0034789386980342207,
-   "gap_x_calibrated": 2.017888644926727,
-   "ratio": 2.3180381239050445
+   "backlash_rad": 0.0034791209015353815,
+   "gap_x_calibrated": 2.2321630020469554,
+   "ratio": 2.4822117156865393
   },
   {
-   "backlash_rad": 0.003528938698034221,
-   "gap_x_calibrated": 2.083387844387398,
-   "ratio": 2.3773336208630775
+   "backlash_rad": 0.0035291209015353817,
+   "gap_x_calibrated": 2.3081766846329703,
+   "ratio": 2.55197816591931
   },
   {
-   "backlash_rad": 0.003578938698034221,
-   "gap_x_calibrated": 2.151116388466003,
-   "ratio": 2.438981147627817
+   "backlash_rad": 0.003579120901535382,
+   "gap_x_calibrated": 2.334030406224431,
+   "ratio": 2.575787663171139
   },
   {
-   "backlash_rad": 0.0036289386980342207,
-   "gap_x_calibrated": 2.1770438100262157,
-   "ratio": 2.4626652296016984
+   "backlash_rad": 0.0036291209015353815,
+   "gap_x_calibrated": 2.439939024619499,
+   "ratio": 2.6737186010286735
   },
   {
-   "backlash_rad": 0.003678938698034221,
-   "gap_x_calibrated": 2.252408229437209,
-   "ratio": 2.53175844533908
+   "backlash_rad": 0.0036791209015353816,
+   "gap_x_calibrated": 2.4850210015412006,
+   "ratio": 2.715586438496501
   },
   {
-   "backlash_rad": 0.003728938698034221,
-   "gap_x_calibrated": 2.311777310135358,
-   "ratio": 2.5864339737526105
+   "backlash_rad": 0.0037291209015353818,
+   "gap_x_calibrated": 2.5631875445447125,
+   "ratio": 2.788417616435997
   },
   {
-   "backlash_rad": 0.003778938698034221,
-   "gap_x_calibrated": 2.353329155653137,
-   "ratio": 2.624822160447038
+   "backlash_rad": 0.003779120901535382,
+   "gap_x_calibrated": 2.6203271473501872,
+   "ratio": 2.841836439628468
   },
   {
-   "backlash_rad": 0.0038289386980342207,
-   "gap_x_calibrated": 2.4111946490318377,
-   "ratio": 2.6784392225124254
+   "backlash_rad": 0.0038291209015353816,
+   "gap_x_calibrated": 2.679690339688727,
+   "ratio": 2.8974844294481077
   },
   {
-   "backlash_rad": 0.003878938698034221,
-   "gap_x_calibrated": 2.4797366505850227,
-   "ratio": 2.742172403092211
+   "backlash_rad": 0.0038791209015353817,
+   "gap_x_calibrated": 2.763027971556289,
+   "ratio": 2.975848724165568
   },
   {
-   "backlash_rad": 0.003928938698034221,
-   "gap_x_calibrated": 2.5362029203595586,
-   "ratio": 2.794848054453501
+   "backlash_rad": 0.003929120901535382,
+   "gap_x_calibrated": 2.808948777545378,
+   "ratio": 3.0191429422921483
   },
   {
-   "backlash_rad": 0.00397893869803422,
-   "gap_x_calibrated": 2.6044646195323375,
-   "ratio": 2.8587205314197335
+   "backlash_rad": 0.003979120901535382,
+   "gap_x_calibrated": 2.8736394853892713,
+   "ratio": 3.0802625332166094
   }
  ],
- "card_trend_remaining_h": 96.48192027470463,
+ "card_trend_remaining_h": 54.75846815538881,
  "card_trend_unit": "h",
  "recalibrated": {
-  "h": 240.0,
-  "backlash_rad": 0.0024196825304596548,
-  "live_x_floor": 1.4431394496401084,
-  "ratio": 0.9644007480455689,
+  "h": 204.0,
+  "backlash_rad": 0.0023624730468334576,
+  "live_x_floor": 1.569425905556443,
+  "ratio": 1.1685808857236268,
   "status": "ok"
  },
  "wear": {
@@ -764,22 +764,22 @@
   "unit": "N\u00b7m\u00b7rev",
   "law": "archard",
   "rate": "backlash_wear_rad_per_nm_rev",
-  "duty_nm_rev_per_h": 189.9436123876341,
-  "rate_recovered_per_nm_rev": 9.896860608912098e-09,
-  "rate_true_per_nm_rev": 9.476496615882964e-09,
+  "duty_nm_rev_per_h": 189.8741249877565,
+  "rate_recovered_per_nm_rev": 9.880506351328884e-09,
+  "rate_true_per_nm_rev": 9.47996468774283e-09,
   "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"
  },
  "provenance": {
-  "code": "1313044",
+  "code": "7d1accc",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "326a2456",
-    "date": "2026-11-05T16:08:23-07:00",
+    "commit": "e47066e1",
+    "date": "2026-11-05T18:24:10-07:00",
     "dirty": false,
-    "paths": 13
+    "paths": 14
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -800,8 +800,8 @@
     "paths": 6
    }
   ],
-  "seconds": 364.7,
-  "commissioned_twin": "19d8c27f",
+  "seconds": 411.0,
+  "commissioned_twin": "1ca8ef60",
   "identify_sealed": true
  }
 }
