@@ -708,17 +708,21 @@ def served_explanation_checks(out: Path) -> None:
             check(not bare and "gravity load" not in text and not re.search(r"gravity[^.;]{0,40}exceeds", text),
                   f"CAN 11 {gate} ({where}) names {amplitude} N.m only as gravity's amplitude, never a load that exceeds the board ({bare[:2]})")
         if gate == "T4":
+            # ruler changed 2026-11-05 (rack leftovers): CAN 11's T4 is graded under ff_fb now (3.13 of 3.6 mrad encoder-side, the
+            # acceptance of record), so its explanation names that grade and what is left (the link's camera view), no longer the
+            # 10-29 plan to run the feed-forward modes with their planned demand. Intent stands: it never says the runner lacks a
+            # feed-forward path, and any demand or gravity figure it does state is the schedule's
             for where, text in texts.items():
                 demand = re.search(r"planned demand[^.;]*?peaks at (\d+\.\d+) N\.m against the runner's (\d+\.\d+) N\.m allowance", text)
                 gmax = re.search(rf"{re.escape(amplitude)} N\.m in amplitude[^.;]*?at most (\d+\.\d+) N\.m", text)
-                check(bool(ff) and all(m in text for m in ff) and "feed-forward" in text and "no feed-forward plan" not in text,
-                      f"CAN 11 T4 ({where}) says the runner's {'/'.join(ff)} feed-forward plans exist, not that FF is missing")
-                check(bool(demand) and float(demand.group(1)) < float(demand.group(2)) and abs(float(demand.group(2)) - allowance) < 0.006,
-                      f"CAN 11 T4 ({where}) states the planned demand against the {allowance:.2f} N.m allowance the schedule declares "
-                      f"({demand.groups() if demand else 'no such sentence'})")
-                check(bool(gmax) and abs(float(gmax.group(1)) - gravity_max) < 0.006,
-                      f"CAN 11 T4 ({where}) gives gravity's maximum over the scheduled range as {gravity_max:.2f} N.m "
-                      f"({gmax.group(1) if gmax else 'not stated'})")
+                check(bool(ff) and "ff_fb" in ff and "ff_fb" in text and "no feed-forward plan" not in text,
+                      f"CAN 11 T4 ({where}) names the runner's ff_fb mode it was graded under, never that FF is missing")
+                check(demand is None or (float(demand.group(1)) < float(demand.group(2)) and abs(float(demand.group(2)) - allowance) < 0.006),
+                      f"CAN 11 T4 ({where}) states any planned demand against the {allowance:.2f} N.m allowance the schedule declares "
+                      f"({demand.groups() if demand else 'none stated'})")
+                check(gmax is None or abs(float(gmax.group(1)) - gravity_max) < 0.006,
+                      f"CAN 11 T4 ({where}) gives any gravity maximum over the scheduled range as {gravity_max:.2f} N.m "
+                      f"({gmax.group(1) if gmax else 'none stated'})")
 
 
 def run_set_checks(data: Path, out: Path) -> None:
@@ -1635,9 +1639,11 @@ def main() -> int:
                 if args.record:
                     art.screenshot(path=str(args.record / f"11-why-can11-{gid}.png"))
             t4, t7 = drawn_rows["T4"], drawn_rows["T7"]
-            check(not NO_RUNNER_PATH.search(t4 + t7) and "ff_fb" in t4 and "against the runner's 2.64 N.m allowance" in t4
-                  and "4.66 N.m in amplitude" in t4 and "4.66 N.m in amplitude" in t7 and "exceeds" not in t4 + t7,
-                  "the browser draws CAN 11 T4 with the runner's ff_fb / ff_weakfb plans and the planned demand against its allowance, and T7 "
+            # ruler changed 2026-11-05 (rack leftovers): T4 is graded under ff_fb (its words name that grade, not the 10-29 plan's
+            # demand against the 2.64 N.m allowance); intent stands: no "no runner path", gravity only as an amplitude, never "exceeds"
+            check(not NO_RUNNER_PATH.search(t4 + t7) and "ff_fb" in t4 and "3.13" in t4
+                  and "4.66 N.m in amplitude" in t7 and "exceeds" not in t4 + t7,
+                  "the browser draws CAN 11 T4 with its ff_fb grade (3.13 mrad) and T7 "
                   "with 4.66 N.m as gravity's amplitude, never a cap it exceeds")
 
             # 8b. a station's Schedule tab (2026-10-29, bam_rack_twin.schedule): the plan before anything runs - targets grey dashed,
