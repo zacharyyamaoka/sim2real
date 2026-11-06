@@ -228,6 +228,12 @@ def test_the_wear_forecast_is_close_not_late_and_reads_only_checks_up_to_its_hou
     clean = drift.wear_forecast(doc["checks"], forecast_h=at, curve=doc["curve"], threshold=doc["threshold"])
     assert drift.wear_forecast(tampered, forecast_h=at, curve=doc["curve"], threshold=doc["threshold"]) == clean
     assert math.isclose(clean["predicted_crossing_h"], predicted, rel_tol=1e-12) and math.isclose(clean["plan_by_h"], plan_by, rel_tol=1e-12)
+    # the hour the forecast is issued is itself decided from the checks so far (a rolling forecast at every check, issued at the first
+    # one whose crossing is within the planning horizon, the monitoring's early_life_h at the latest): no later check may move it
+    kwargs = {"curve": doc["curve"], "threshold": doc["threshold"], "latest_h": doc["early_life_h"]}
+    issued = drift.issue_forecast(doc["checks"], **kwargs)
+    assert drift.issue_forecast(tampered, **kwargs) == issued and issued["forecast_h"] == at <= doc["early_life_h"], issued["forecast_h"]
+    assert math.isclose(issued["predicted_crossing_h"], predicted, rel_tol=1e-12)
 
 
 def test_a_knocked_camera_is_detected_and_recalibrated():
