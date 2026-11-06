@@ -96,6 +96,94 @@ def newest_acceptance() -> tuple[Path, dict]:
     return best
 
 
+BAM_RIG = Path("/archive/datasets/bam_rig")
+
+
+def newest_triage() -> tuple[Path, dict] | None:
+    """The newest bam_rack_twin gate triage in the archive, by its own written_at: read here independently of the producer."""
+    best = None
+    for path in BAM_RIG.glob("rack_2026-*/analysis/gates_triage*.json"):
+        doc = json.loads(path.read_text())
+        if isinstance(doc, dict) and doc.get("written_at") and (best is None or doc["written_at"] > best[1]["written_at"]):
+            best = (path, doc)
+    return best
+
+
+def triage_checks(data: Path, path: Path, doc: dict) -> None:
+    """Rack leftovers, 2026-11-05 (written before gates_triage_7.json reached the site): the Why it fails page served gates_triage_6.json's
+    CAN 11 / CAN 21 lines, written against an older acceptance, each labelled "written for an earlier result". Oracle: the newest triage
+    and the newest acceptance in the archive, read here. Every non-passing cell's served explanation carries the triage's words as the
+    same result, and those words state the displayed acceptance's own number for the cell."""
+    found = newest_triage()
+    check(found is not None, "a gate triage is in the archive")
+    if found is None:
+        return
+    tpath, triage = found
+    check(Path(str(triage.get("acceptance"))).name == path.name,
+          f"the triage the site serves ({tpath.name}) was written against the acceptance it shows ({path.name}; the triage names {Path(str(triage.get('acceptance'))).name})")
+    cells = {(c["station"], c["gate"]): c for c in triage.get("cells", [])}
+    gates = {(f"can{can}", g["id"]): g for can, st in doc["stations"].items() for g in st["gates"]}
+    rows = {(r["station"], r["gate_id"]): r for r in json.loads((data / "why.json").read_text())["rows"]}
+    stale, uncited, missing = [], [], []
+    for key, gate in gates.items():
+        if gate["status"] == "pass":
+            continue
+        row, cell = rows.get(key), cells.get(key)
+        if row is None or cell is None:
+            missing.append(f"{key[0]} {key[1]}")
+            continue
+        served = " ".join(str(row.get(f) or "") for f in ("why", "next", "evidence"))
+        if f"[from {tpath.name}" not in served or "written for an earlier result" in served or "not triaged yet" in served:
+            stale.append(f"{key[0]} {key[1]}")
+        value = gate.get("value")
+        number = f"{value:.2f}" if isinstance(value, float) else (str(value) if value is not None else gate["status"])
+        if number not in str(cell.get("what_closes_it")) or number not in served:
+            uncited.append(f"{key[0]} {key[1]} ({number})")
+    check(not missing, f"every non-passing cell has a served row and a triage entry ({missing[:5]})")
+    check(not stale, f"every non-passing cell's served explanation carries {tpath.name}'s words as the same result, never 'written for an earlier "
+                     f"result' or 'not triaged yet' ({len(stale)}: {stale[:5]})")
+    check(not uncited, f"every non-passing cell's explanation cites {path.name}'s own number for it, in the triage and as served ({uncited[:5]})")
+
+
+def rack_roots(entry: dict) -> tuple[list[Path], list[Path]]:
+    """(every folder whose runs are the rack's, the kept builds' folders) from the registry entry and the schedule index it names, read
+    here: the archive days, and each LIVE station's runs/ (index.json stations' out); a kept build (index.json kept) holds copies of runs
+    its live folder keeps (checked 2026-11-05: all of CAN 12's and CAN 4's), so it is never a root."""
+    index = json.loads(Path(entry["schedule_index"]).read_text())
+    live = [Path(row["out"]) / "runs" for row in sorted(index["stations"], key=lambda row: row["can_id"]) if (Path(row["out"]) / "runs").is_dir()]
+    return [Path(a) for a in entry["archive"]] + live, [Path(k["out"]) for k in index.get("kept", [])]
+
+
+def station_runs_checks(data: Path, entry: dict) -> None:
+    """Rack leftovers, 2026-11-05 (written before the registry indexed them): the run registry listed CAN 11's schedule runs only, so CAN
+    21's sessions C and D (t2_ident_heldout-59aa0a41, t2_record_ff_fb-9f67bfd7), CAN 12's and CAN 4's schedule sessions and the 11-05
+    warm session were missing from the Runs tab. Oracle: the schedule index and the archive days on disk, read here."""
+    rows = json.loads((data / "runs.json").read_text())["rows"]
+    indexed = {Path(r["npz"]) for r in rows if r.get("npz")}
+    roots, kept = rack_roots(entry)
+    want = set()
+    for root in roots:
+        for npz in root.rglob("*.npz"):
+            meta = npz.with_suffix(".json")
+            if meta.is_file() and json.loads(meta.read_text()).get("can_id") is not None:
+                want.add(npz)
+    lost = sorted(str(p) for p in want - indexed)
+    check(not lost, f"every recorded run under the archive days and every live station's runs/ is indexed ({len(want)} recorded, {len(indexed)} indexed; "
+                    f"missing {len(lost)}: {lost[:3]})")
+    per_station = {}
+    for root in roots[len(entry["archive"]):]:
+        sessions = {p.relative_to(root).parts[0] for p in want if p.is_relative_to(root)}
+        per_station[root.parent.name] = (len(sessions), sum(1 for p in indexed if p.is_relative_to(root)))
+    check(len(per_station) >= 4 and all(n for _, n in per_station.values()), f"every live station (CAN 4, 11, 12, 21 have runs/ today)'s schedule sessions are indexed ({per_station})")
+    can21 = {p.relative_to(roots[0].parent).parts[4] for p in indexed if "schedules/one-dof-test-rack/can21/runs/" in str(p)}
+    check({"t2_ident_heldout-59aa0a41", "t2_record_ff_fb-9f67bfd7"} <= can21, f"CAN 21's sessions C and D are indexed ({sorted(can21)})")
+    copies = [str(p) for p in indexed if any(p.is_relative_to(k) for k in kept)]
+    check(not copies, f"no kept build's copy of a run is indexed beside the live one ({len(copies)}: {copies[:2]})")
+    days = sorted(p for p in BAM_RIG.glob("rack_2026-*") if p.is_dir() and p.name >= Path(entry["archive"][0]).name and any(p.rglob("*.npz")))
+    listed = {Path(a) for a in entry["archive"]}
+    check(all(d in listed for d in days), f"every rack day since the first listed one is an archive day ({[d.name for d in days if d not in listed]} not listed)")
+
+
 def acceptance_history() -> list[tuple[Path, str, dict]]:
     """Every acceptance file of all eight stations, oldest first: (path, generated_at, {(device, gate): status})."""
     out = []
@@ -804,7 +892,9 @@ def deploy_tree_checks(data: Path, out: Path, doc: dict) -> dict:
           f"({len(rows)} runs, {len(misplaced)} misplaced; labels {labels_ok})")
 
     # tags: a run is bench (and set at the bench) when it is a real recording in the rack's archive; anything else stays unknown
-    roots_ = [Path(a) for a in entry["archive"]]
+    # ruler changed 2026-11-05 (rack leftovers): the rack's own recordings lie under the archive days AND every live station's schedule
+    # runs/ (rack_roots, read from the schedule index here), not the registry's listed folders alone; intent stands
+    roots_ = rack_roots(entry)[0]
     real = [r for r in rows if r.get("basis") == "real" and r.get("npz") and any(Path(r["npz"]).is_relative_to(a) for a in roots_)]
     want_env = {r["run"]: (entry.get("environment") if r in real else "unknown") for r in rows}
     want_set = {r["run"]: (entry.get("setting") if r in real else "unknown") for r in rows}
@@ -1070,6 +1160,8 @@ def main() -> int:
     check(not differ, f"the gate matrix shown is the newest acceptance, cell by cell: {path.name} ({doc['generated_at']}): "
                       f"{sum(1 for v in want.values() if v == 'pass')}/{len(want)} pass; differing cells {differ[:5]}")
     explanation_checks(data, path, doc, out)
+    triage_checks(data, path, doc)
+    station_runs_checks(data, rack_layout(REPO / "app" / "registry.json")[0])
     portability_checks(out)
     schedule_freshness_checks(out, adapter.SCHEDULES)
     served_explanation_checks(out)
