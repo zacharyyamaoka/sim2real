@@ -378,7 +378,7 @@ def drift_html(d: dict | None, example: str) -> str:
         rec = d.get("recalibrated") or {}
         return f"""<h2 id="drift">Drift: backlash wear, detected vs forecast</h2>
 <p>Every {num(d['check_every_h'], 3)} deployment hours the joint runs its daily motions ({e(d['check'])}) on the wearing joint; the hidden gap grows as
-b(h) = b0 + k h. <b>Wear rate</b> recovered from the early-life checks (to hour {num(d['early_life_h'], 3)}): <b data-rate="{d['rate_recovered']}">{num(d['rate_recovered'] * 1e3, 4)} mrad/h</b>
+b(h) = b0 + k h. <b>Wear rate</b> recovered from the checks up to the forecast's issue hour ({num(d['predicted_at_h'], 3)}): <b data-rate="{d['rate_recovered']}">{num(d['rate_recovered'] * 1e3, 4)} mrad/h</b>
 (true {num(d['rate_true'] * 1e3, 4)}; 95 % {num(d['rate_ci95'][0] * 1e3, 3)} to {num(d['rate_ci95'][1] * 1e3, 3)}). The servo card's M5.wear law is Archard's: at this
 check's duty of {num(d['wear']['duty_nm_rev_per_h'], 3)} N·m·rev per hour that is {num(d['wear']['rate_recovered_per_nm_rev'] * 1e6, 3)} µrad per N·m·rev.</p>
 <ul class="s2r-ex-wear">
@@ -419,7 +419,7 @@ def wear_svg(d: dict) -> str:
     pts = " ".join(f"{sx(c['h']):.1f},{sy(c['ratio']):.1f}" for c in checks)
     dots = "".join(f'<circle cx="{sx(c["h"]):.1f}" cy="{sy(c["ratio"]):.1f}" r="2.6" class="{"s2r-svg-warn" if c["status"] == "warning" else "s2r-svg-real"}"/>' for c in checks)
     thr = sy(d["threshold"])
-    pred, act, alarm, early = d["predicted_crossing_h"], d["actual_crossing_h"], d["detector_alarm_h"], d["early_life_h"]
+    pred, act, alarm, early = d["predicted_crossing_h"], d["actual_crossing_h"], d["detector_alarm_h"], d["predicted_at_h"]
     ticks = "".join(f'<text x="{sx(t):.1f}" y="{h - 10}" class="s2r-svg-tick" text-anchor="middle">{t:g}</text>' for t in range(0, int(xmax) + 1, 96))
     yt = "".join(f'<text x="{left - 6}" y="{sy(t) + 4:.1f}" class="s2r-svg-tick" text-anchor="end">{t:g}×</text>' for t in (1, 2, 3, 4, 5, 6) if t < ymax)
     marks = ""
@@ -432,11 +432,11 @@ def wear_svg(d: dict) -> str:
         marks += f'<text x="{sx(alarm) + 4:.1f}" y="{thr + 16:.1f}" class="s2r-svg-lab s2r-svg-warntext">detector {alarm:.0f} h</text>'
     return f"""<figure class="s2r-ex-fig"><svg viewBox="0 0 {w} {h}" role="img" aria-label="drift ratio against deployment hours">
 <rect x="{sx(0):.1f}" y="{top}" width="{sx(early) - sx(0):.1f}" height="{h - top - bottom}" class="s2r-svg-early"/>
-<text x="{sx(early / 2):.1f}" y="{h - bottom - 6}" class="s2r-svg-lab" text-anchor="middle">early life (rate fitted)</text>
+<text x="{sx(early / 2):.1f}" y="{h - bottom - 6}" class="s2r-svg-lab" text-anchor="middle">checks to the forecast</text>
 <line x1="{left}" x2="{w - right}" y1="{thr:.1f}" y2="{thr:.1f}" class="s2r-svg-thr"/><text x="{w - right}" y="{thr - 4:.1f}" class="s2r-svg-lab" text-anchor="end">threshold {d['threshold']:.2f}×</text>
 <polyline points="{pts}" class="s2r-svg-line"/>{dots}{marks}{ticks}{yt}
 <text x="{(left + w - right) / 2:.0f}" y="{h - 1}" class="s2r-svg-tick" text-anchor="middle">deployment hours</text></svg>
-<figcaption>Drift ratio (live fidelity ÷ calibrated) at every check: dots past the threshold are the detector's warnings. The forecast line was drawn at hour {early:g} from the gap's early-life trend.</figcaption></figure>"""
+<figcaption>Drift ratio (live fidelity ÷ calibrated) at every check: dots past the threshold are the detector's warnings. The forecast was issued at hour {early:g}, the first check whose forecast put the crossing within {num((d.get('forecast') or {}).get('horizon_h', 0), 3)} h, from the gap's trend up to it.</figcaption></figure>"""
 
 
 def knock_svg(d: dict) -> str:

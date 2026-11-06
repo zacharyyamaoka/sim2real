@@ -97,27 +97,28 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
     alarm = next((c["h"] for c in checks if c["status"] == "warning"), None)
     actual = crossing_hour([(c["h"], c["ratio"]) for c in checks], threshold)
 
-    # the wear-aware forecast, made once at the end of early life, from the checks at or before that hour only (wear_forecast filters)
-    forecast_h = float(mon["early_life_h"])
-    early = [(c["h"], c["b_hat_rad"]) for c in checks if c["h"] <= forecast_h + 1e-9]
-    b0_early = line_fit(early)[1]
-    # WHY 0.05 mrad steps from 0.2 below (2026-11-05): the 0.2 mrad grid's linear interpolation moved the crossing by ~8 h on its own
-    # (262 h on it vs 270 h on a fine one, same formula), and the early checks' gaps start below the fitted intercept
-    grid = b0_early + np.arange(-0.2e-3, 2.0e-3 + 1e-9, 0.05e-3)
+    # the gap -> drift-ratio curve: the commissioned twin replayed with gaps around its own, from the twin alone (no check is read)
+    # WHY anchored on the commissioned gap, not the early checks (2026-11-05, twin C): the forecast is now issued at a check decided
+    # while the checks come in, so the curve may not depend on any of them
+    grid = float(commissioned_values["backlash_rad"]) + np.arange(-0.2e-3, 2.0e-3 + 1e-9, 0.05e-3)
     curve_twins = {f"b{i}": P.twin({**commissioned_values, "backlash_rad": float(b)}, f"wear-curve-{i}") for i, b in enumerate(grid)}
     curve_replays = P.replay(runs, curve_twins, workers=workers)
     floor_mrad = checks[0]["floor_mrad"]
     curve = [{"backlash_rad": float(b),
               "gap_x_calibrated": 1e3 * rms(np.concatenate([P.link_of(curve_replays[(f"b{i}", n)]) - twin_link[n] for n in names])) / floor_mrad / calibrated}
              for i, b in enumerate(grid)]
-    forecast = wear_forecast(checks, forecast_h=forecast_h, curve=curve, threshold=threshold)
+    # the wear-aware forecast: re-made at every check from the checks so far, issued at the first whose crossing is within the
+    # planning horizon (the monitoring's early_life_h at the latest); each one reads only the checks at or before its hour
+    forecast = issue_forecast(checks, curve=curve, threshold=threshold, latest_h=float(mon["early_life_h"]))
+    forecast_h = forecast["forecast_h"]
+    early = [(c["h"], c["b_hat_rad"]) for c in checks if c["h"] <= forecast_h + 1e-9]
     for point, ratio in zip(curve, forecast["curve_ratio"]):
         point["ratio"] = ratio
     k_hat, b0_hat, k_ci = forecast["rate"], forecast["b0_rad"], tuple(forecast["rate_ci95"])
     b_star, predicted, remaining = forecast["gap_at_threshold_rad"], forecast["predicted_crossing_h"], forecast["remaining_h"]
-    # the card's own forecast beside it: the drift ratio's history alone, fitted on hours (the servo card's Forecast)
+    # the card's own forecast beside it, at the same hour: the drift ratio's history alone, fitted on hours (the servo card's Forecast)
     trend = cards.check_drift("servo", checks[len(early) - 1]["live_x_floor"], calibrated, threshold,
-                              history=[(c["h"], c["ratio"]) for c in checks if c["h"] <= mon["early_life_h"] + 1e-9])
+                              history=[(c["h"], c["ratio"]) for c in checks if c["h"] <= forecast_h + 1e-9])
 
     recal = None
     if alarm is not None:
@@ -154,11 +155,13 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
         "checks": checks,
         "detector_alarm_h": alarm, "actual_crossing_h": actual,
         "rate_recovered": k_hat, "rate_ci95": list(k_ci), "b0_recovered_rad": b0_hat, "rate_true": hidden_wear["rate_rad_per_h"], "b0_true_rad": hidden_wear["b0_rad"],
-        "predicted_at_h": float(mon["early_life_h"]), "predicted_crossing_h": predicted, "remaining_h_at_prediction": remaining,
+        "predicted_at_h": forecast_h, "predicted_crossing_h": predicted, "remaining_h_at_prediction": remaining,
         "plan_by_h": forecast["plan_by_h"],
         "plan_by_rule": "the hour the wear line's upper 95 % confidence band (slope and intercept, Student's t) reaches the threshold gap: the early edge maintenance plans against",
-        "forecast": {"checks_h": forecast["checks_h"], "gap_ratio_correlation": forecast["rho"],
-                     "curve_rule": "ratio^2 = 1 + d^2 + 2 rho d, d = the gap's replayed link error / calibrated; rho least squares on the early checks' (gap, ratio)"},
+        "forecast": {"checks_h": forecast["checks_h"], "gap_ratio_correlation": forecast["rho"], "horizon_h": FORECAST_HORIZON_H,
+                     "rolling": forecast["rolling"], "curve_fit": forecast["curve_fit"],
+                     "issue_rule": f"re-made at every check from {MIN_CHECKS} on; issued at the first whose crossing is within {FORECAST_HORIZON_H:g} h, hour {mon['early_life_h']:g} at the latest",
+                     "curve_rule": "ratio^2 = 1 + d^2 + 2 rho d, d = slope x (gap - knee)+, the systematic part of the gap's replayed link error / calibrated (fitted to the replays as jitter in quadrature with it; the jitter is dropped); rho least squares on the checks' (gap, ratio) up to the issue hour"},
         "gap_at_threshold_rad": b_star, "curve": curve,
         "card_trend_remaining_h": trend.remaining, "card_trend_unit": trend.unit,
         "recalibrated": recal,
@@ -181,37 +184,94 @@ def crossing_hour(series, threshold: float) -> float | None:
     return None
 
 
+# WHY 96 h (2026-11-05, twin C): twice the 48 h lead the maintenance gate asks for (acceptance.json drift.backlash_wear.lead_h_min),
+# so a forecast issued when it says 96 h are left keeps the 48 h even if it is that late; a fixed hour (168) cannot lead a crossing
+# that comes sooner (twin C crosses at 197 h: 29 h of lead).
+FORECAST_HORIZON_H = 96.0
+MIN_CHECKS = 5  # a wear line through fewer checks (48 h) is noise
+
+
+def issue_forecast(checks, *, curve, threshold: float, latest_h: float, horizon_h: float = FORECAST_HORIZON_H) -> dict:
+    """The rolling forecast: wear_forecast at every check from the MIN_CHECKS-th on, each from the checks at or before it; issued at
+    the first whose predicted crossing is within `horizon_h` of it, or at `latest_h` at the latest. Returns that forecast with
+    forecast_h (the issue hour) and rolling ([hour, predicted] for every forecast made up to it)."""
+    ordered = sorted(checks, key=lambda c: c["h"])
+    rolling, made = [], None
+    for c in ordered[MIN_CHECKS - 1:]:
+        h = float(c["h"])
+        made = wear_forecast(ordered, forecast_h=h, curve=curve, threshold=threshold)
+        rolling.append([h, made["predicted_crossing_h"]])
+        if (made["predicted_crossing_h"] is not None and made["predicted_crossing_h"] - h <= horizon_h) or h >= latest_h - 1e-9:
+            break
+    return {**made, "forecast_h": float(rolling[-1][0]), "rolling": rolling}
+
+
+def gap_curve_fit(curve) -> dict:
+    """The replayed gap error as jitter in quadrature with a systematic part, d(b) = sqrt(j^2 + (slope (b - knee)+)^2), least squares
+    over the curve (bounded, started from five knees). From the twin alone.
+
+    WHY (2026-11-05, twin C): the replayed d(b) is jagged (backlash contact makes each replay's error a chaotic function of the gap:
+    a ~0.2-0.3 floor even at the commissioned gap, plateaus like 0.672 / 0.648 at 2.33 / 2.38 mrad), and the threshold falling on a
+    plateau sent the crossing late: on twin C the same rho method forecast +14 % on a 0.05 mrad grid and +6.5 % on 0.025. The fit's
+    knee lands on the commissioned gap (A 1.920 vs 1.957 mrad, C 1.967 vs 1.957), residual rms 0.03."""
+    from scipy.optimize import least_squares  # noqa: PLC0415
+
+    bs = np.array([p["backlash_rad"] for p in curve], float)
+    ds = np.array([p["gap_x_calibrated"] for p in curve], float)
+
+    def model(p, x):
+        return np.sqrt(p[0] ** 2 + (p[1] * np.maximum(x - p[2], 0.0)) ** 2)
+
+    slope0 = max(float(ds.max() - ds.min()) / float(bs[-1] - bs[0]), 1e-9)
+    best = None
+    for knee in np.quantile(bs, [0.0, 0.1, 0.2, 0.3, 0.5]):
+        fit = least_squares(lambda p: model(p, bs) - ds, [float(ds.min()), slope0, float(knee)],
+                            bounds=([0.0, 0.0, float(bs[0])], [np.inf, np.inf, float(bs[-1])]))
+        if best is None or fit.cost < best.cost:
+            best = fit
+    jitter, slope, knee = (float(x) for x in best.x)
+    return {"jitter": jitter, "slope_per_rad": slope, "knee_rad": knee, "rms": float(np.sqrt(np.mean(best.fun ** 2)))}
+
+
 def wear_forecast(checks, *, forecast_h: float, curve, threshold: float) -> dict:
     """The wear-aware forecast from the checks at or before `forecast_h` only (later ones are never read): the gap's history fitted on
-    hours gives the wear line; the gap -> drift-ratio curve is the replayed gap error d (curve: backlash_rad, gap_x_calibrated, from the
-    twin alone) combined with the commissioned error as ratio^2 = 1 + d^2 + 2 rho d, rho fitted to the early checks' (gap, ratio).
+    hours gives the wear line; the gap -> drift-ratio curve is the systematic part of the replayed gap error, d = slope (b - knee)+
+    (gap_curve_fit, from the twin alone), combined with the commissioned error as ratio^2 = 1 + d^2 + 2 rho d, rho fitted to the
+    checks' (gap, ratio).
 
     WHY rho (2026-11-05): adding the two in quadrature (rho = 0) assumed the commissioned error and the gap's error independent; the
     live checks say they are not (gap 2.38 mrad: live 1.224, quadrature 1.159) and the quadrature forecast was 28 h late (262 vs 234 h).
     Chosen over a scaled quadrature, a linear sum, a vector sum (gain fitted or 1) and a line in the gap by fitting each on the checks
-    to hour 120 and scoring hours 132-168 (data available at the forecast hour): rho's held-out rms 0.009, the others 0.017-0.085."""
+    to hour 120 and scoring hours 132-168 (data available at the forecast hour): rho's held-out rms 0.009, the others 0.017-0.085.
+    WHY the systematic part (twin C, same day): see gap_curve_fit; over forecast hours 120-168 it stays +0.8 to +3.2 % on both twins
+    A and C, where the raw curve went +2.9 to +17.7 % on C, and a quadratic in the gap fitted to the checks alone swung -18 to +0.7 %."""
     early = [c for c in checks if c["h"] <= forecast_h + 1e-9]
     gaps = [(float(c["h"]), float(c["b_hat_rad"])) for c in early]
     k, b0, k_ci = line_fit(gaps)
-    bs = np.array([p["backlash_rad"] for p in curve], float)
-    ds = np.array([p["gap_x_calibrated"] for p in curve], float)
-    d = np.interp([g for _, g in gaps], bs, ds)
-    r = np.array([float(c["ratio"]) for c in early])
-    rho = float(np.sum(d * (r ** 2 - 1.0 - d ** 2)) / (2.0 * np.sum(d * d)))
+    shape = gap_curve_fit(curve)
 
-    def ratio_of(dv):
+    def systematic(b):
+        return shape["slope_per_rad"] * np.maximum(np.asarray(b, float) - shape["knee_rad"], 0.0)
+
+    d = systematic([g for _, g in gaps])
+    r = np.array([float(c["ratio"]) for c in early])
+    rho = float(np.sum(d * (r ** 2 - 1.0 - d ** 2)) / (2.0 * np.sum(d * d))) if np.any(d > 0) else 0.0
+
+    def ratio_of(b):
+        dv = systematic(b)
         return np.sqrt(np.maximum(1.0 + dv ** 2 + 2.0 * rho * dv, 0.0))
 
-    fine = np.linspace(bs[0], bs[-1], 4001)
-    b_star = crossing_hour(list(zip(fine.tolist(), ratio_of(np.interp(fine, bs, ds)).tolist())), threshold)
+    bs = np.array([p["backlash_rad"] for p in curve], float)
+    fine = np.linspace(min(float(bs[0]), min(g for _, g in gaps)), float(bs[-1]), 8001)
+    b_star = crossing_hour(list(zip(fine.tolist(), ratio_of(fine).tolist())), threshold)
     from type_cards import registry as reg  # noqa: PLC0415
 
     predicted = reg.wear_usage_at(b0, k, b_star, "linear") if b_star is not None else None
     remaining = reg.usage_remaining(gaps, b_star, "linear") if b_star is not None else None
-    return {"checks_h": [h for h, _ in gaps], "rate": k, "rate_ci95": list(k_ci), "b0_rad": b0, "rho": rho,
+    return {"checks_h": [h for h, _ in gaps], "rate": k, "rate_ci95": list(k_ci), "b0_rad": b0, "rho": rho, "curve_fit": shape,
             "gap_at_threshold_rad": b_star, "predicted_crossing_h": predicted, "remaining_h": remaining,
             "plan_by_h": band_hour(gaps, b_star, after=forecast_h) if b_star is not None else None,
-            "curve_ratio": [float(x) for x in ratio_of(ds)]}
+            "curve_ratio": [float(x) for x in ratio_of(bs)]}
 
 
 def band_hour(points, level: float, *, after: float, horizon: float = 1e4) -> float | None:
