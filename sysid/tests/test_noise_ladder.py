@@ -214,6 +214,9 @@ def test_the_1x_rows_are_the_committed_oracle_results():
         if check["id"] == "pendulum_can11:servo.gap_check_forecast":
             wear = json.loads((SYSID / "results" / "drift_backlash_wear.json").read_text())
             assert math.isclose(row["parameters"][0]["recovered"], wear["rate_recovered"], rel_tol=1e-9)
+            for key in ("detector_alarm_h", "actual_crossing_h", "predicted_crossing_h", "ratio_alarm_h"):
+                x, y = row["held_out"][key], wear[key]
+                assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), (key, x, y)
         if check["id"] == "dual_arm_cell:camera.pose_recal_belt_tags":
             knock = json.loads((SYSID / "results" / "drift_camera_knock.json").read_text())
             for p in row["parameters"]:
@@ -227,6 +230,24 @@ def test_backlash_is_hidden_and_graded_on_every_geared_joint():
         assert set(keys) <= set(world(example)["truth"]), example
         graded = {p["key"] for c in by_check.values() if example_of(c["id"]) == example for r in c["rows"] for p in r["parameters"]}
         assert set(keys) <= graded, (example, sorted(set(keys) - graded))
+
+
+def test_the_gap_check_warns_inside_the_horizon_where_the_fidelity_ratio_went_deaf():
+    """The finding that moved the servo's drift alarm into the gap's own units (decision-calibration-routines-2026-11-07, its addendum):
+    at 3x the camera's noise the fidelity ratio (live / the camera's floor / its hour-0 value) never warns inside the 480 h horizon; the gap
+    check on the same checks does, as it does at 1x. Its row needs no twin: at 10x, where the regression raises and commissions none, the
+    gap check still runs on the reversals routine's commissioning gap and says so."""
+    check = next(c for c in committed()["checks"] if c["id"] == "pendulum_can11:servo.gap_check_forecast")
+    by_level = {r["level"]: r for r in check["rows"] if r["variant"] is None}
+    horizon = json.loads((SYSID / "examples" / "pendulum_can11" / "description.json").read_text())["monitoring"]["horizon_h"]
+    for level in ("1x", "3x"):
+        held = by_level[level]["held_out"]
+        assert held["detector_alarm_h"] is not None and held["detector_alarm_h"] <= horizon, (level, held)
+        assert held["actual_crossing_h"] is not None and held["allowance_mrad"] > 0, (level, held)
+    assert by_level["1x"]["held_out"]["ratio_alarm_h"] is not None and by_level["3x"]["held_out"]["ratio_alarm_h"] is None, "the finding"
+    ten = by_level["10x"]
+    assert ten["parameters"][0]["recovered"] is not None and ten["held_out"]["ratio_alarm_h"] is None, ten["notes"]
+    assert any("no twin" in note for note in ten["notes"]), ten["notes"]
 
 
 def test_the_ur_backlash_fit_never_reads_the_world():
