@@ -183,10 +183,12 @@
 .s2r-ex-plane { max-width: 520px; }
 .s2r-svg-line { fill: none; stroke: var(--data-series-1); stroke-width: 1.5; }
 .s2r-svg-real { fill: var(--data-series-1); }
+.s2r-svg-ratio { fill: none; stroke: var(--ink3); stroke-width: 1.2; stroke-dasharray: 3 2; }
 .s2r-svg-warn { fill: var(--s2r-fail); }
 .s2r-svg-recal { fill: var(--s2r-pass); }
 .s2r-svg-thr { stroke: var(--s2r-warn); stroke-dasharray: 5 4; stroke-width: 1.5; }
 .s2r-svg-pred { stroke: var(--data-series-2); stroke-width: 2; stroke-dasharray: 2 3; }
+.s2r-svg-alarm { stroke: var(--s2r-fail); stroke-width: 1; stroke-dasharray: 1 3; }
 .s2r-svg-act { stroke: var(--ink); stroke-width: 1.2; }
 .s2r-svg-early { fill: var(--accent-bg); }
 .s2r-svg-cell { fill: var(--data-series-1); }
