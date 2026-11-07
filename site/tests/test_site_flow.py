@@ -2295,7 +2295,8 @@ def deployments_data_checks(out: Path, data: Path) -> dict:
     rows = json.loads(cards_path.read_text())["rows"] if cards_path.is_file() else []
     want = [(n["id"], n["title"], n["kind"], list(n["tags"]), node_url(n["id"]), "/media/" + scenes[n["id"]]["src"] if n["id"] in scenes else None) for n in roots]
     got = [(r.get("id"), r.get("title"), r.get("kind"), list(r.get("tags") or []), r.get("url"), r.get("image")) for r in rows]
-    check(got == want and len(roots) == 7 and {n["kind"] for n in roots} == {"virtual", "physical"},
+    # WHY 8 (2026-11-07, the v3 audit's finding 5): the six oracle examples, the noise ladder's scenario (ur5e_backlash) and the rack
+    check(got == want and len(roots) == 8 and {n["kind"] for n in roots} == {"virtual", "physical"},
           f"the index's cards are the contract's deployments (parent null) in its order, each with its kind, tags, page and render "
           f"({len(rows)} of {len(roots)}; differ {[g for g, w in zip(got, want) if g != w][:2] or (got[len(want):] if len(got) > len(want) else want[len(got):])[:2]})")
     fallback = [a.get("data-deployment") for a in start_tags(html, "li", "data-deployment")]
@@ -2436,6 +2437,35 @@ def deployments_data_checks(out: Path, data: Path) -> dict:
                     and q.get("glb") == [models_of.get((n["root"], key))]):
                 wrong.append(f"{n['id']}: {mounts[0].get('data-src', '')[:120] if mounts else 'no mount'} vs {want_run['run'] if want_run else None}")
         check(not wrong, f"every station's page shows its link in 3D, the media lane's joint-3d component on its newest replayed run ({wrong[:2]})")
+    # the v3 audit (2026-11-07, finding 5): the noise ladder's scenario is a virtual deployment of its own: tagged so, with no oracle example
+    # page (sysid keeps it off the landing page), every page of its tree linking its values on Parameters and its routine on Routines
+    scen = [n for n in roots if "noise-ladder scenario" in n["tags"]]
+    swrong = []
+    for s in scen:
+        for x in (y for y in nodes if y["root"] == s["id"]):
+            page_path = out / "deployments" / x["id"] / "index.html"
+            text = page_path.read_text() if page_path.is_file() else ""
+            hrefs = set(re.findall(r'href="([^"]+)"', text))
+            if not text or f"/parameters/?deployment={s['id']}" not in {h.replace("&amp;", "&") for h in hrefs} or "/routines/" not in hrefs \
+                    or any(h.startswith(f"/sysid/{s['id']}") for h in hrefs) or "noise-ladder scenario" not in html_text(text):
+                swrong.append(x["id"])
+    check([s["id"] for s in scen] == ["ur5e_backlash"] and all(s["kind"] == "virtual" and "oracle example" not in s["tags"] for s in scen) and not swrong,
+          f"the noise ladder's scenario is a virtual deployment: every page of its tree says so and links its values on Parameters and its routine on "
+          f"Routines, never an oracle example page ({[s['id'] for s in scen]}; wrong {swrong[:3]})")
+    # and no page of the site links a page the site did not build (an internal href, its query and fragment aside)
+    from urllib.parse import unquote as _unquote  # noqa: PLC0415
+
+    dead, n_links, n_pages = {}, 0, 0
+    for page_path in out.rglob("index.html"):
+        if "media" in page_path.relative_to(out).parts:
+            continue
+        n_pages += 1
+        for h in re.findall(r'href="(/[^"#?]*)', page_path.read_text()):
+            n_links += 1
+            f = out / _unquote(h).lstrip("/")
+            if not ((f / "index.html").is_file() if h.endswith("/") else (f.is_file() or (f / "index.html").is_file())):
+                dead.setdefault(h, str(page_path.relative_to(out)))
+    check(n_pages > 100 and not dead, f"no page links a page the site did not build ({n_links:,} internal links on {n_pages:,} pages; dead {list(dead.items())[:3]})")
     rack = (out / DEP / "index.html").read_text()
     oracle_pages = [x for x in ORACLE_EXAMPLES if f'href="{node_url(x)}"' not in (out / "sysid" / x / "index.html").read_text()]
     check(f'href="{node_url(DEP)}"' in rack and not oracle_pages,
@@ -2511,7 +2541,7 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     virtual = sorted(n["id"] for n in roots if n["kind"] == "virtual")
     pick("virtual")
     got = shown(len(virtual))
-    check(got == virtual and len(virtual) == 6, f"Kind · virtual keeps the {len(virtual)} oracle examples ({got})")
+    check(got == virtual and len(virtual) == 7, f"Kind · virtual keeps the {len(virtual)} virtual deployments, the six oracle examples and the noise ladder's scenario ({got})")
     camera = sorted(n["id"] for n in roots if n["kind"] == "virtual" and "uses camera" in n["tags"])
     pick("uses camera")
     got = shown(len(camera))
@@ -2764,6 +2794,34 @@ def models_data_checks(out: Path, data: Path) -> dict:
             wrong.append(f"{r.id}: {sorted(k for k in want if got[k] != want[k])}")
     check(len(rdoc["rows"]) == len(reg.ROUTINES) and not wrong, f"each routine row says where it runs, its time, its cost and equipment, what it identifies, "
                                                                 f"its recovery at 1x and 3x and its status, as the registry and the noise ladder do ({len(wrong)} wrong: {wrong[:3]})")
+    # the v3 audit (2026-11-07, finding 5): every level the ladder runs with its failed and missing states, never 1x and 3x alone (0x is a
+    # routine's bias with no noise, 10x where it breaks; a level a check skips says why, a parameter not recovered is counted)
+    from collections import Counter  # noqa: PLC0415
+
+    levels = table["levels"]
+    lv_wrong, states = [], Counter()
+    for r, row in zip(reg.ROUTINES, rdoc["rows"]):
+        rec = joined.get(r.id, {}).get("recovery") or {}
+        for lv in levels:
+            c = rec.get(lv) or {}
+            state = None if not rec else ("not run" if not c.get("checks") else ("pass" if c.get("pass") else "fail"))
+            rcell, scell = row.get(f"recovery_{lv}"), row.get(f"state_{lv}")
+            said = " ".join(str(x.get(k) or "") for x in (rcell, scell) if isinstance(x, dict) for k in ("text", "note"))
+            states[state] += 1
+            if cell(rcell) != c.get("worst_error_over_tolerance") or cell(scell) != state or cell(row.get(f"pass_{lv}")) != c.get("pass"):
+                lv_wrong.append(f"{r.id} {lv}: {cell(rcell)} / {cell(scell)} / {cell(row.get(f'pass_{lv}'))} vs {c.get('worst_error_over_tolerance')} / {state} / {c.get('pass')}")
+            elif c.get("missing") and f"{c['missing']} of {c['parameters']} not recovered" not in said:
+                lv_wrong.append(f"{r.id} {lv}: its missing parameters are not said ({said[:90]!r})")
+            elif state == "not run" and not all(why in said for why in c["not_run"].values()):
+                lv_wrong.append(f"{r.id} {lv}: why it did not run is not said ({said[:90]!r})")
+    state_props = [(rdoc.get("properties") or {}).get(f"state_{lv}") or {} for lv in levels]
+    check(levels == ["0x", "1x", "3x", "10x"] and not lv_wrong and states["fail"] and states["not run"] and all(p.get("display") == "status" for p in state_props),
+          f"each routine row has its recovery and its verdict at every level the ladder runs ({', '.join(levels)}): a level that fails says fail, a parameter "
+          f"not recovered is counted, a level not run says why, the verdict a status ({dict(states)}; {len(lv_wrong)} wrong: {lv_wrong[:3]})")
+    rbase = data_ui_base.loads((out / "views" / "routines.base").read_text()) if (out / "views" / "routines.base").is_file() else {}
+    rorder = ((rbase.get("views") or [{}])[0]).get("order") or []
+    check(all(f"recovery_{lv}" in rorder and f"state_{lv}" in rorder for lv in levels),
+          f"Routine -> parameters shows every level's recovery and verdict ({[c for c in rorder if c.startswith(('recovery_', 'state_'))]})")
     back = dm.parameter_routines()
     prdoc = json.loads((out / "data" / "parameter-routines.json").read_text()) if (out / "data" / "parameter-routines.json").is_file() else {"rows": []}
     want_rows = [(t, p, ids) for t, per in back.items() for p, ids in per.items()]
@@ -2856,6 +2914,34 @@ def models_data_checks(out: Path, data: Path) -> dict:
     check(not agree, f"the cell data-ui marks best in each row is the contract's best column (its least error over tolerance) ({len(agree)} differ: {agree[:2]})")
     check(all((views.get(name) or {}).get("emptyGroups") == "hide" for name in ("With results", "Errors only")),
           "With results and Errors only leave out a model's group while the rows shown hold no value of it (data-ui emptyGroups)")
+    # the v3 audit (2026-11-07, finding 8): each preset shows the column groups the contract's exported preset metadata says it does
+    # (Zach: "each model ... its own Recovered error toerlance colum ... filter what model results we are showing"): every (routine, model)
+    # group in all, winning model and with results, the example's own fit first in all and winning, the errors alone in errors only
+    declared = params.get("presets") or {}
+    preset_of = dict(zip(PARAM_PRESETS, ("all", "winning model", "with results", "errors only")))
+    fit_label = next((label for label in (views.get("All parameters") or {}).get("columnGroups") or {} if label.startswith("Oracle fit")), None)
+    pwrong = []
+    for vname, key in preset_of.items():
+        v, said = views.get(vname) or {}, (declared.get(key) or {}).get("columns", "")
+        cg, order = v.get("columnGroups") or {}, v.get("order") or []
+        if "every column group" in said:
+            want = set(groups) | ({fit_label} if said.startswith("the example's own fit") else set())
+            if None in want or set(cg) != want or any(not set(cg[g]) <= set(order) for g in want) or v.get("emptyGroups") != "hide":
+                pwrong.append(f"{vname}: {sorted(set(cg) ^ want)[:3]} differ, emptyGroups {v.get('emptyGroups')}")
+        elif said.startswith("error_over_tolerance@*"):
+            if set(cg) != set(groups) or any(len(ids) != 1 or not ids[0].startswith("err__") for ids in cg.values()):
+                pwrong.append(f"{vname}: {len(cg)} groups, not one error column per model")
+        else:
+            pwrong.append(f"{vname}: the contract says {said!r}")
+    check(set(declared) == set(preset_of.values()) and not pwrong and (declared.get("all") or {}).get("columns", "").startswith("the example's own fit"),
+          f"each preset shows the column groups the contract's preset metadata declares (all and winning model: the example's own fit then every "
+          f"model's group; with results: every model's group; errors only: each model's error), a group no shown row holds a value of left out "
+          f"({len(pwrong)} wrong: {pwrong[:2]})")
+    # the v3 audit (2026-11-07, finding 5): every value the noise ladder grades is a row, the scenarios' too (ur5e_backlash's joint gaps)
+    ladder_keys = {f"{p['example']}/{p['key']}" for p in table["parameters"]}
+    lost_rows = sorted(ladder_keys - {r["id"] for r in rows})
+    check(not lost_rows and any(k.startswith("ur5e_backlash/") for k in ladder_keys),
+          f"every value the noise ladder grades is a row of the parameters table, the scenarios' too ({len(ladder_keys)} values; missing {lost_rows[:3]})")
 
     # 5. the nav: Models, Routines and Parameters in the search menu's Go to and the Account menu's Site column
     home = (out / "index.html").read_text()
@@ -2936,6 +3022,18 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
           f"Routine -> parameters: every routine a row, the routine first, then where, time, cost, equipment, what it identifies, recovery at 1x and 3x, "
           f"status ({r1 and (r1['matched'], r1['first'], sorted(need - set(r1['cols'])))})")
     still("62-routines-by-routine")
+    # the v3 audit (2026-11-07, finding 5): the table draws every level's recovery and verdict, a failed level and a level not run as such
+    lv = page.evaluate("""() => { const v = document.getElementById('routines-by-routine'); if (!v) return null;
+        const cols = [...v.querySelectorAll('thead th[data-col]')].map((t) => t.dataset.col);
+        const states = {}; for (const td of v.querySelectorAll('tbody td[data-col^="state_"]')) { const s = td.querySelector('.dv-state');
+          (states[td.dataset.col] = states[td.dataset.col] || []).push(s ? s.dataset.state : null); }
+        return { cols, states }; }""")
+    want_cols = {f"{p}_{x}" for x in ("0x", "1x", "3x", "10x") for p in ("recovery", "state")}
+    drawn_states = {w for ws in ((lv or {}).get("states") or {}).values() for w in ws if w}
+    check(bool(lv) and want_cols <= set(lv["cols"]) and {"pass", "fail", "not run"} <= drawn_states and "not run" in (lv["states"].get("state_0x") or [])
+          and "fail" in (lv["states"].get("state_10x") or []),
+          f"Routine -> parameters draws every level's recovery and verdict, 0x to 10x, a failed level and a level not run as status badges "
+          f"({sorted(want_cols - set((lv or {}).get('cols') or []))} missing; verdicts drawn {sorted(drawn_states)})")
     page.locator("a[role=tab][href='#by-parameter']").first.click()
     ok = soft_wait(page, "() => { const v = document.getElementById('routines-by-parameter'); return !!v && !!v.model && v.getClientRects().length > 0 && v.querySelectorAll('tbody tr[data-i]').length > 0; }")
     r2 = page.evaluate("""() => { const v = document.getElementById('routines-by-parameter'); const a = document.getElementById('routines-by-routine');
@@ -3006,6 +3104,24 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
           f"With results on pendulum_can11 (rail): its {len(mine)} rows and exactly the {len(want_groups)} models that graded them, each model's header over its "
           f"own columns (measured) (drawn {len(drawn)}, matched {shown.get('matched')}, spans {spans})")
     still("66b-parameters-with-results-pendulum")
+    # the v3 audit (2026-11-07, finding 8): All parameters and Winning model draw every model's group too, the rail narrowing them alike
+    for name in ("All parameters", "Winning model"):
+        page.evaluate("(n) => document.getElementById('parameters-views').selectView(n)", name)
+        soft_wait(page, f"(n) => {{ const s = ({PARAMS_JS})(); return !!s && s.view === n && s.cols.length > 0; }}", arg=name)
+        page.wait_for_timeout(600)
+        shown = page.evaluate(PARAMS_JS) or {}
+        kept = [r for r in layout["view_rows"] if r.get("deployment") == "pendulum_can11" and (name == "All parameters" or r.get("winning"))]
+        want_g = sorted(label for label, ids in layout["groups"].items() if any(isinstance(r.get(i), dict) and r[i].get("value") is not None or
+                                                                                (not isinstance(r.get(i), dict) and r.get(i) not in (None, "")) for r in kept for i in ids))
+        got_g = sorted(label for label, ids in layout["groups"].items() if any(i in shown.get("cols", []) for i in ids))
+        check(shown.get("matched") == len(kept) and got_g == want_g and want_g and all(c in shown.get("cols", []) for c in ("fit_rec", "fit_err")),
+              f"{name} on pendulum_can11 (rail): its {len(kept)} rows, the example's own fit and exactly the {len(want_g)} models that graded them "
+              f"(drawn {len(got_g)}, matched {shown.get('matched')})")
+    still("66c-parameters-all-pendulum")
+    # WHY back to With results: the Properties check below hides and shows a group that view drew
+    page.evaluate("(n) => document.getElementById('parameters-views').selectView(n)", "With results")
+    soft_wait(page, f"() => {{ const s = ({PARAMS_JS})(); return !!s && s.view === 'With results' && s.matched > 0; }}")
+    page.wait_for_timeout(600)
     # Properties: a model's group hidden and shown again
     label = drawn[0] if drawn else ""
     page.locator("#parameters-views .dv-bar [data-bar=menu][data-name=properties]").first.click()
@@ -3359,6 +3475,46 @@ def reports_data_checks(out: Path) -> dict:
               and cells == want and levels == want_lv and cov == want_cov and models == set(snap["report"]["models"]) and params == list(snap["report"]["parameters"]),
               f"/reports/{rid}/ shows its snapshot: {len(rows)} rows, {len(cells)} metric values, {len(levels)} diagnostic levels, coverage {cov}, "
               f"{len(models)} models, {len(params)} parameter rows; digest {art.get('data-digest', '')[:12]} verified")
+    # the v3 audit (2026-11-07, finding 7): what a report's page names beside its numbers (its parts' titles, the ladder model each label is)
+    # is its snapshot's; a snapshot frozen before it kept them (the first three) says on its page what is read from today's records, and
+    # its claim to stay as it is names only what it froze
+    awrong = []
+    for rid, snap in snaps.items():
+        html = (out / "reports" / rid / "index.html").read_text() if (out / "reports" / rid / "index.html").is_file() else ""
+        art = next(iter(start_tags(html, "article", "data-report")), {})
+        has_ann, has_rows = "annotations" in snap, (snap.get("inputs") or {}).get("rows") is not None
+        want_today = (set() if has_ann else {"titles", "model_labels"}) | (set() if has_rows else {"rows"})
+        labels_as = {a.get("data-as") for a in start_tags(html, "span", "data-label")}
+        claim = html_text((re.search(r'<p class="s2r-frozen"[^>]*>(.*?)</p>', html, re.S) or [None, ""])[1])
+        if set((art.get("data-today") or "").split()) != want_today or labels_as - {"frozen" if has_ann else "today"} or "stays as it is" in claim \
+                or "stay as they are" not in claim or (want_today and "today" not in claim):
+            awrong.append(f"{rid}: today {art.get('data-today')!r} vs {sorted(want_today)}, labels {sorted(labels_as, key=str)}, claim {claim[-160:]!r}")
+    check(not awrong, f"each report's page claims to stay as it is only for what its snapshot froze, and says what it reads from today's records "
+                      f"({len(awrong)} wrong: {awrong[:2]})")
+    # a snapshot that froze them is drawn with its own: a station renamed and a label remapped since change nothing on its page
+    import copy  # noqa: PLC0415
+    import deployments_pages as dpages  # noqa: PLC0415
+    import reports_pages  # noqa: PLC0415
+
+    nodes = json.loads((out / "data" / "domain" / "deployments.json").read_text())["rows"]
+    runs = json.loads((out / "data" / DEP / "runs.json").read_text())["rows"]
+    base_snap = sorted(snaps.values(), key=lambda s: s["frozen_at"])[-1]
+    station = next(n["node"] for n in base_snap["results"]["selection"]["nodes"] if n["entity_type"] == "integrated_servo")
+    label = next(x["model"] for n in base_snap["results"]["selection"]["nodes"] for x in n["metrics"] + n["diagnostics"] if x.get("model"))
+    frozen = copy.deepcopy(base_snap)
+    frozen["annotations"] = {"titles": {**{n["id"]: n["title"] for n in nodes if n["root"] == DEP}, station: "the station as it was titled at freeze"},
+                             "model_labels": {label: {"type": "integrated_servo", "model": "M3.dynamics.stribeck", "model_title": "Stribeck"}}}
+    frozen["digest"] = rep.digest(frozen)
+    d = dpages.Domain(nodes=nodes, results={}, runs={DEP: runs}, tables={}, parameters=[])
+    body = reports_pages.report_body(d, frozen)
+    today_title = next(n["title"] for n in nodes if n["id"] == station)
+    h3 = html_text((re.search(rf'<section class="s2r-rnode" data-rnode="{re.escape(station)}"><h3>(.*?)</h3>', body, re.S) or [None, ""])[1])
+    said = [a for a in start_tags(body, "span", "data-label") if a.get("data-label") == label]
+    art = next(iter(start_tags(body, "article", "data-report")), {})
+    check(rep.verify(frozen) and "the station as it was titled at freeze" in h3 and today_title not in h3 and said
+          and all(a.get("data-ladder") == "M3.dynamics.stribeck" and a.get("data-as") == "frozen" for a in said) and (art.get("data-today") or "") == "",
+          f"a report whose snapshot froze its titles and label map is drawn with them, not today's (title {h3[:60]!r}; {label!r} -> "
+          f"{sorted({a.get('data-ladder') for a in said})}; today {art.get('data-today')!r})")
     return {"snaps": snaps}
 
 
