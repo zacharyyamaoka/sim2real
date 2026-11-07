@@ -39,6 +39,8 @@ RESULT_PATH = RESULTS_DIR / "noise_ladder.json"
 LEVELS = {level["id"]: float(level["scale"]) for level in RULER["levels"]}
 EXACT_FRACTION = float(RULER["exact_fraction"])
 ROUND4_DOCS = Path("/home/bam/bam_ws/src/dev/bam_rack_twin/docs")
+# WHY outside the repo: processes merging rows take this lock; a file in sysid/results would sit untracked beside the results
+LOCK = Path.home() / ".cache" / "sim2real" / "sysid" / f"noise_ladder-{hashlib.sha256(str(RESULT_PATH).encode()).hexdigest()[:12]}.lock"
 
 
 def ruler_sha256() -> str:
@@ -193,9 +195,10 @@ STOCK_KEYS = {"gravity_nm": "can11.gravity_nm", "gravity_bottom_rad": "can11.gra
               "damping_nm_s_rad": "can11.damping_nm_s_rad", "frictionloss_nm": "can11.coulomb_sliding_nm"}
 
 
-def _stock(fit) -> dict:
+def _stock(stock: dict | None) -> dict:
+    """bam_rack_twin.identify_without_cad's estimates (pipeline.stock_fit), by the ladder's keys; a refusal is noted beside its value."""
     out, notes = {}, []
-    stock = fit.stock or {}
+    stock = stock or {}
     if "error" in stock:
         notes.append(f"the stock fit raised: {stock['error']}")
     for name, key in STOCK_KEYS.items():
@@ -207,22 +210,48 @@ def _stock(fit) -> dict:
     return out
 
 
+def _guarded(compute):
+    """(value, None), or (None, "raised <type>: <message>") when the procedure raises: a procedure that breaks down is a failed row
+    with its own words, never a crashed ladder (2026-11-07: CAN 11's regression raised at 10x, its friction polish refusing the twin its
+    Stribeck fit asked for)."""
+    try:
+        return compute(), None
+    except Exception as error:  # noqa: BLE001 - recorded in the row, never hidden
+        return None, f"raised {type(error).__name__}: {error}"
+
+
+def _failed(why: str) -> dict:
+    return {"recovered": {"_notes": [why]}, "held_out": {}}
+
+
 def _pendulum(level: str, plan, description, workers: int, wear: bool) -> dict:
+    """CAN 11's four procedures, each graded on its own: the sysid regression (its M4 rung), the gap from the camera (the same
+    backlash_from_gaps identify() calls), the stock quasi-static fits (the same stock_fit identify() calls) and T10's routine."""
     from . import drift  # noqa: PLC0415
     from .examples.pendulum_can11 import pipeline as P  # noqa: PLC0415
 
     real = P.RealWorld(description, workers=workers)
     measured = real.measure(plan)
     with hidden.sealed():
-        fit = P.identify(description, measured.train)
-        t10 = _t10(plan, measured)
+        gap, gap_error = _guarded(lambda: P.backlash_from_gaps([run.output.q - run.q_link for run in measured.train.values()]))
+        stock, stock_error = _guarded(lambda: P.stock_fit(measured.train))
+        t10, t10_error = _guarded(lambda: _t10(plan, measured))
+        fit, fit_error = _guarded(lambda: P.identify(description, measured.train))
+    out = {"pendulum_can11:servo.backlash_reversals_camera": _failed(gap_error) if gap_error else
+           {"recovered": {"can11.backlash_rad": float(gap)}, "held_out": {}},
+           "pendulum_can11:servo.stock_quasistatic": _failed(stock_error) if stock_error else
+           {"recovered": _stock(stock), "held_out": {}},
+           "pendulum_can11:servo.live_reid_t10": _failed(t10_error) if t10_error else {"recovered": t10, "held_out": {}}}
+    if fit_error:
+        out["pendulum_can11:servo.dynamics_regression"] = _failed(fit_error)
+        if wear:
+            out["pendulum_can11:servo.gap_check_forecast"] = _failed(f"not run: its commissioning (the regression's M4 fit) {fit_error}")
+        return out
     scores = P.score(description, plan, fit, measured, workers=workers)
     m4 = {f"can11.{k}": v for k, v in fit.values["M4"].items()}
     held = {"link_mrad": scores["models"]["M4"]["link_mrad"], "link_x_floor": scores["models"]["M4"]["ratio"]}
-    out = {"pendulum_can11:servo.dynamics_regression": {"recovered": m4, "held_out": held},
-           "pendulum_can11:servo.backlash_reversals_camera": {"recovered": m4, "held_out": {"link_mrad": held["link_mrad"]}},
-           "pendulum_can11:servo.stock_quasistatic": {"recovered": _stock(fit), "held_out": {}},
-           "pendulum_can11:servo.live_reid_t10": {"recovered": t10, "held_out": {}}}
+    out["pendulum_can11:servo.dynamics_regression"] = {"recovered": m4, "held_out": held}
+    out["pendulum_can11:servo.backlash_reversals_camera"]["held_out"] = {"link_mrad": held["link_mrad"]}
     if wear:
         doc = drift.run_backlash(workers=workers, commissioned_values=fit.values["M4"])
         actual, predicted = doc["actual_crossing_h"], doc["predicted_crossing_h"]
@@ -403,7 +432,8 @@ def check_doc(check_id: str, rows: list[dict]) -> dict:
 @contextlib.contextmanager
 def _locked():
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(RESULTS_DIR / ".noise_ladder.lock", "w") as lock:
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOCK, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
             yield
