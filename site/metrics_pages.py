@@ -37,6 +37,7 @@ import pages
 import ui_shared
 import views
 from type_cards import domain as dm  # noqa: E402
+from type_cards import instances as inst  # noqa: E402
 from type_cards import selection as sel  # noqa: E402
 
 URL = "/metrics/"
@@ -170,6 +171,27 @@ def sides(d: dpages.Domain, dep: str) -> dict[str, str]:
     return {m: next(iter(v)) for m, v in seen.items() if len(v) == 1}
 
 
+def labels(d: dpages.Domain, dep: str) -> dict[str, dict]:
+    """{producer label: {type, model, url}} for every model the deployment's runs were replayed by, where type_cards maps the label to a ladder
+    model (inst.label_model, exact words; a label nobody mapped is left out: unknown stays unknown)."""
+    out = {}
+    for row in d.tables[dep].run_diagnostics:
+        if row.get("diagnostic") != "stock.model_error":
+            continue
+        label = sel.model_label(row.get("title", ""))
+        m = inst.label_model(dep, label)
+        if m and label not in out:
+            out[label] = {"type": m.type, "model": m.model, "url": f"/models/{m.type}/#{m.model}"}
+    return out
+
+
+def model_words(label: str, mapped: dict) -> str:
+    """A producer's label and, where it maps to one, the ladder model it is, linked (the models lane's rows: /models/<type>/#<model>)."""
+    m = mapped.get(label)
+    to = (f' <span class="mut">→</span> <a data-model-link="{e(m["model"])}" href="{e(m["url"])}"><code>{e(m["model"])}</code></a>' if m else "")
+    return f'<span data-label="{e(label)}" data-ladder="{e(m["model"] if m else "")}">{e(label)}{to}</span>'
+
+
 def spec(d: dpages.Domain, dep: str, presets: dict) -> dict:
     nodes = [n for n in d.tree(dep) if n.get("device") and n.get("entity_type")]
     side = sides(d, dep)
@@ -190,7 +212,7 @@ def spec(d: dpages.Domain, dep: str, presets: dict) -> dict:
     return {"deployment": dep, "title": d.by_id[dep]["title"], "level_rank": dm.LEVEL_RANK,
             "nodes": [{"id": n["id"], "title": n["title"], "device": n["device"], "entity_type": n["entity_type"], "structural": n.get("structural"),
                        "parent": n.get("parent"), "station": station.get(n["device"]), "limits": n.get("limits") or []} for n in nodes],
-            "types": types, "presets": presets,
+            "types": types, "presets": presets, "labels": labels(d, dep),
             "data": {"values": f"/data/domain/metric_values/{dep}.json", "cells": f"/data/domain/coverage_cells/{dep}.json",
                      "runs": "/" + runs_data_path(dep), "reports": "/data/domain/reports/"}}
 
@@ -237,7 +259,7 @@ def headline_model(result_node: dict, metric: str) -> dict | None:
     return min(rows, key=lambda m: (-m["n"], m.get("model") or "")) if rows else None
 
 
-def other_models(sn: dict, m, headline: str, dx: dict, diag) -> str:
+def other_models(sn: dict, m, headline: str, dx: dict, diag, mapped: dict | None = None) -> str:
     """Beside a fidelity metric's headline model, every other model that replayed the runs, each with its value and level (most runs first)."""
     if not m.model_dependent:
         return ""
@@ -248,7 +270,7 @@ def other_models(sn: dict, m, headline: str, dx: dict, diag) -> str:
     items = []
     for x in rows:
         lv = dx.get((diag.id, x.get("model")), {}).get("level") if diag else None
-        items.append(f'<li>{e(x.get("model") or "")} <span data-node="{e(sn["node"])}" data-metric="{e(m.id)}" data-model="{e(x.get("model") or "")}" '
+        items.append(f'<li>{model_words(x.get("model") or "", mapped or {})} <span data-node="{e(sn["node"])}" data-metric="{e(m.id)}" data-model="{e(x.get("model") or "")}" '
                      f'data-value="{raw(x["value"])}">{e(fmt(x["value"], m.unit))}</span>{" " + level_chip(lv) if lv else ""} <small>{plural(x["n"], "run")}</small></li>')
     return f'<ul class="s2r-mothers" aria-label="Other models">{"".join(items)}</ul>'
 
@@ -256,6 +278,7 @@ def other_models(sn: dict, m, headline: str, dx: dict, diag) -> str:
 def station_card(d: dpages.Domain, dep: str, result: dict, station: dict) -> str:
     """The static (no-script) answer for one station: its pinned metrics with their levels and its coverage, from a computed selection
     (sel.compute's shape); static/metrics.js draws the same markup live."""
+    mapped = labels(d, dep)
     by = {n["node"]: n for n in result["nodes"]}
     sn = by.get(station["id"])
     if sn is None:
@@ -274,9 +297,9 @@ def station_card(d: dpages.Domain, dep: str, result: dict, station: dict) -> str
         lv = dx.get((diag.id, entry.get("model") if entry else None), {}).get("level") if diag else None
         note = (f"median of {plural(entry['n'], 'run')}" + (f" · {entry['side']} side" if entry.get("side") else "") if value is not None
                 else ((entry or {}).get("why") or m.why_not or "no value"))
-        model_tag = f" <small>{e(model)}</small>" if model else ""
+        model_tag = f" <small>{model_words(model, mapped)}</small>" if model else ""
         chip = " " + level_chip(lv) if lv else ""
-        others = other_models(sn, m, model, dx, diag)
+        others = other_models(sn, m, model, dx, diag, mapped)
         tiles.append(f'<div class="s2r-mtile{" s2r-mtile-wide" if others else ""}"><dt>{e(m.title)}{model_tag}</dt>'
                      f'<dd><span data-node="{e(station["id"])}" data-metric="{e(m.id)}" data-model="{e(model)}" data-value="{raw(value)}">{e(fmt(value, m.unit))}</span>'
                      f'{chip}</dd><small>{e(note)}</small>{others}</div>')

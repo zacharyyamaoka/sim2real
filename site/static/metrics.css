@@ -35,10 +35,11 @@ body[data-page="metrics"] .mpane, body[data-page="reports"] .mpane { position: r
 .s2r-mnode h3 .s2r-mlink { margin-left: auto; font-size: 12px; font-weight: 450; }
 .s2r-mtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; margin: 0 0 6px; }
 .s2r-mtile { min-width: 0; }
-.s2r-mtile dt { font-size: 11.5px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* WHY the title wraps (never an ellipsis): it carries the model's label and the ladder model it is, which a narrow card must still show whole */
+.s2r-mtile dt { font-size: 11.5px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; overflow-wrap: anywhere; }
 .s2r-mtile dt small { text-transform: none; letter-spacing: 0; }
 .s2r-mtile dd { margin: 0; font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.s2r-mtile > small { display: block; color: var(--ink3); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s2r-mtile > small { display: block; color: var(--ink3); font-size: 11.5px; overflow-wrap: anywhere; }
 .s2r-mcov { font-size: 13px; margin: 4px 0; }
 .s2r-mbar { position: relative; display: block; height: 8px; max-width: 420px; border-radius: 4px; background: var(--bg2); box-shadow: inset 0 0 0 1px var(--rule2, var(--rule)); margin: 5px 0 2px; }
 .s2r-mbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--data-series-1); opacity: .75; }
@@ -48,7 +49,7 @@ body[data-page="metrics"] .mpane, body[data-page="reports"] .mpane { position: r
 .s2r-mval { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
 .s2r-mtile-wide { grid-column: 1 / -1; }
 .s2r-mothers { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; color: var(--ink2); display: flex; flex-wrap: wrap; gap: 2px 14px; }
-.s2r-mothers li { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.s2r-mothers li { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-width: 0; max-width: 100%; }
 .s2r-mothers small { color: var(--ink3); }
 
 /* a level, with its word: ok green, warning amber, error red, unknown muted */

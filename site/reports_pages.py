@@ -28,6 +28,7 @@ import metrics_pages
 import pages
 import ui_shared
 from type_cards import domain as dm  # noqa: E402
+from type_cards import instances as inst  # noqa: E402
 from type_cards import report as rep  # noqa: E402
 
 URL = "/reports/"
@@ -87,7 +88,15 @@ def _limits(d: dict) -> str:
     return " · ".join(parts) or "set per unit (no value then)"
 
 
-def node_block(node: dict, title: str) -> str:
+def label_words(dep: str, label: str) -> str:
+    """A model label as the snapshot froze it and, where type_cards maps it today (inst.label_model), the ladder model it is, linked."""
+    if not label:
+        return "—"
+    m = inst.label_model(dep, label)
+    return metrics_pages.model_words(label, {label: {"model": m.model, "url": f"/models/{m.type}/#{m.model}"}} if m else {})
+
+
+def node_block(node: dict, title: str, dep: str = "") -> str:
     tid = node["entity_type"]
     t = dm.TYPES.get(tid)
     order = {m.id: i for i, m in enumerate(t.metrics)} if t else {}
@@ -102,10 +111,10 @@ def node_block(node: dict, title: str) -> str:
             cell = (f'<span data-node="{e(node["node"])}" data-metric="{e(m["metric"])}" data-model="{e(model)}" data-value="{raw(m["value"])}">'
                     f'{e(fmt(m["value"], m["unit"]))}</span> <small class="mut">{e(fmt(m["low"], ""))}–{e(fmt(m["high"], m["unit"]))}, {plural(m["n"], "run")}{e(side)}</small>')
         pin = ' <span class="s2r-pin">pinned</span>' if m["pinned"] else ""
-        mrows.append(f'<tr><th scope="row">{e(m["title"])}{pin}</th><td>{e(model or "—")}</td><td>{cell}</td></tr>')
+        mrows.append(f'<tr><th scope="row">{e(m["title"])}{pin}</th><td>{label_words(dep, model)}</td><td>{cell}</td></tr>')
     drows = "".join(
         f'<tr data-node="{e(node["node"])}" data-diagnostic="{e(d["diagnostic"])}" data-model="{e(d.get("model") or "")}" data-level="{e(d["level"])}">'
-        f'<td>{metrics_pages.level_chip(d["level"])}</td><th scope="row">{e(d["title"])}</th><td>{e(d.get("model") or "—")}</td>'
+        f'<td>{metrics_pages.level_chip(d["level"])}</td><th scope="row">{e(d["title"])}</th><td>{label_words(dep, d.get("model") or "")}</td>'
         f'<td>{e(fmt(d["value"], d.get("unit") or ""))}</td><td>{e(_limits(d))}</td></tr>' for d in node["diagnostics"])
     gates = " · ".join(f'<span data-gate="{e(g["gate"])}">{e(g.get("acceptance") or g["gate"])}{f" ({e(g.get("model"))})" if g.get("model") else ""} '
                        f'{pages.chip(g["verdict"])}</span>' for g in node["gates"])
@@ -199,11 +208,11 @@ def report_body(d: dpages.Domain, snap: dict) -> str:
     stations = [n for n in nodes if n["entity_type"] == "integrated_servo"]
     blocks = []
     for st in stations:
-        blocks.append(node_block(st, titles.get(st["node"], st["node"])))
+        blocks.append(node_block(st, titles.get(st["node"], st["node"]), dep))
         for p in nodes:
             if p is not st and p.get("device") == st.get("device"):
-                blocks.append(node_block(p, titles.get(p["node"], p["node"])))
-    blocks += [node_block(n, titles.get(n["node"], n["node"])) for n in nodes if n.get("device") is None]
+                blocks.append(node_block(p, titles.get(p["node"], p["node"]), dep))
+    blocks += [node_block(n, titles.get(n["node"], n["node"]), dep) for n in nodes if n.get("device") is None]
     current = d.runs.get(dep, [])
     live = (f' · <a href="{e(metrics_pages.page_url(dep))}?report={e(r["id"])}">its runs on the metrics page, live</a>' if dep in d.runs else "")
     sel = snap["results"]["selection"]

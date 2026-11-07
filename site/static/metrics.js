@@ -172,6 +172,13 @@ async function start() {
   };
   const raw = (v) => (v === null || v === undefined ? "" : String(v));
   const chip = (lv) => `<span class="s2r-lv s2r-lv-${esc(lv)}" data-level="${esc(lv)}">${esc(lv)}</span>`;
+  // a producer's label and, where type_cards maps it (inst.label_model), the ladder model it is, linked to its row on /models/<type>/
+  const modelWords = (label) => {
+    const m = (spec.labels || {})[label];
+    const to = m ? ` <span class="mut">→</span> <a data-model-link="${esc(m.model)}" href="${esc(m.url)}"><code>${esc(m.model)}</code></a>` : "";
+    return `<span data-label="${esc(label)}" data-ladder="${esc(m ? m.model : "")}">${esc(label)}${to}</span>`;
+  };
+  const modelText = (label) => { const m = (spec.labels || {})[label]; return label ? (m ? `${label} → ${m.model}` : label) : ""; };
   const dot = (lv, why) => `<span class="s2r-dot s2r-dot-${esc(lv)}" role="img" aria-label="${esc(lv)}" title="${esc(lv + (why ? ": " + why : ""))}"></span>`;
   const plural = (n, w) => `${n.toLocaleString("en-US")} ${w}${n === 1 ? "" : "s"}`;
   const worst = (levels) => levels.reduce((a, b) => (RANK[b] > RANK[a] ? b : a), levels.length ? levels[0] : "unknown");
@@ -204,11 +211,11 @@ async function start() {
           .sort((a, b) => b.n - a.n || String(a.model || "").localeCompare(String(b.model || "")));
         if (rest.length) others = `<ul class="s2r-mothers" aria-label="Other models">` + rest.map((x) => {
           const xd = d ? sn.diagnostics.find((y) => y.diagnostic === d.id && (y.model ?? null) === (x.model ?? null)) : null;
-          return `<li>${esc(x.model || "")} <span data-node="${esc(station.id)}" data-metric="${esc(m.id)}" data-model="${esc(x.model || "")}" data-value="${raw(x.value)}">`
+          return `<li>${modelWords(x.model || "")} <span data-node="${esc(station.id)}" data-metric="${esc(m.id)}" data-model="${esc(x.model || "")}" data-value="${raw(x.value)}">`
             + `${esc(fmt(x.value, m.unit))}</span>${xd ? " " + chip(xd.level) : ""} <small>${plural(x.n, "run")}</small></li>`;
         }).join("") + "</ul>";
       }
-      return `<div class="s2r-mtile${others ? " s2r-mtile-wide" : ""}"><dt>${esc(m.title)}${model ? ` <small>${esc(model)}</small>` : ""}</dt>`
+      return `<div class="s2r-mtile${others ? " s2r-mtile-wide" : ""}"><dt>${esc(m.title)}${model ? ` <small>${modelWords(model)}</small>` : ""}</dt>`
         + `<dd><span data-node="${esc(station.id)}" data-metric="${esc(m.id)}" data-model="${esc(model)}" data-value="${raw(value)}">${esc(fmt(value, m.unit))}</span>`
         + `${dx ? " " + chip(dx.level) : ""}</dd><small title="${esc(note)}">${esc(note)}</small>${others}</div>`;
     }).join("");
@@ -330,10 +337,10 @@ async function start() {
     for (const node of result.nodes) {
       const station = (spec.nodes.find((x) => x.id === node.node) || {}).device;
       for (const d of node.diagnostics) dxRows.push({ id: `${node.node}|${d.diagnostic}|${d.model ?? ""}`, level: d.level, rank: d.rank, station, entity: title(node.node),
-        diagnostic: d.title, model: d.model || "", value: d.value === null ? null : { value: d.value, unit: d.unit === "1" ? "" : d.unit }, limits: limitsText(d),
+        diagnostic: d.title, model: modelText(d.model || ""), value: d.value === null ? null : { value: d.value, unit: d.unit === "1" ? "" : d.unit }, limits: limitsText(d),
         runs: d.runs, message: d.message || (d.value === null ? "no value from these runs" : d.level === "unknown" ? "its limit has no value for this unit" : "within its limits") });
       for (const m of node.metrics) allRows.push({ id: `${node.node}|${m.metric}|${m.model ?? ""}`, order: order++, station, entity: title(node.node), metric: m.title,
-        pinned: m.pinned, model: m.model || "", value: m.value === null ? { value: null, why: m.why } : { value: m.value, low: m.low, high: m.high, n: m.n, unit: m.unit },
+        pinned: m.pinned, model: modelText(m.model || ""), value: m.value === null ? { value: null, why: m.why } : { value: m.value, low: m.low, high: m.high, n: m.n, unit: m.unit },
         runs: m.n, why: m.value === null ? m.why : "" });
     }
     dxEl.data = dxRows;
