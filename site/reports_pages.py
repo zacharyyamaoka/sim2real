@@ -75,8 +75,10 @@ def index_body(snaps: dict) -> str:
                      f'{e((s.get("frozen_at") or "")[:16].replace("T", " "))} UTC from code {e(s.get("code") or "?")}</small></li>')
     return f"""<h1>Reports <span class="n">({len(snaps)})</span></h1>
 <p class="lede">A report is a named, frozen set of runs with everything computed over them when it was frozen: each entity's metrics,
-diagnostics with their levels, coverage, the models it names and its parameter rows. It never changes as runs are added; freezing it again is a
-new decision. Make one from any selection on a <a href="{e(metrics_pages.URL)}">metrics page</a>, which writes the command, or from the repo:
+diagnostics with their levels, coverage, the models it names and its parameter rows. Those never change as runs are added; freezing it again is a
+new decision. Each report's page says what its snapshot froze and what it reads from today's records (the reports frozen before snapshots kept
+their parts' titles and label map read those today). Make one from any selection on a <a href="{e(metrics_pages.URL)}">metrics page</a>, which
+writes the command, or from the repo:
 <code>python3 -m type_cards.report freeze --id &lt;id&gt; --title "…" --question "…" --deployment one-dof-test-rack --select device="CAN 11"</code>.</p>
 <ul class="s2r-reports">{"".join(items)}</ul>"""
 
