@@ -46,7 +46,7 @@ SYSID = Path(__file__).resolve().parents[1]
 REPO = SYSID.parent
 RULER_PATH = SYSID / "noise_ladder.json"
 # WHY pinned: the bounds are data the ladder reads; a digest here makes any edit to them an edit of this file, reviewed as a ruler change
-RULER_SHA256 = "4ab3e070da52364abc9e0d9c7a9c23ae777be14667a4c7bc658d2ef3bd9b6771"
+RULER_SHA256 = "26c5a78b2b71b8fe85ad1fd26828382220bb783eef78abedabc92e8cc6799fe9"
 RULER = json.loads(RULER_PATH.read_text())
 ACCEPTANCE = json.loads((SYSID / "acceptance.json").read_text())
 RESULTS = SYSID / "results" / "noise_ladder.json"
@@ -214,7 +214,7 @@ def test_the_1x_rows_are_the_committed_oracle_results():
         if check["id"] == "pendulum_can11:servo.gap_check_forecast":
             wear = json.loads((SYSID / "results" / "drift_backlash_wear.json").read_text())
             assert math.isclose(row["parameters"][0]["recovered"], wear["rate_recovered"], rel_tol=1e-9)
-            for key in ("detector_alarm_h", "actual_crossing_h", "predicted_crossing_h", "ratio_alarm_h"):
+            for key in ("detector_alarm_h", "gap_alarm_h", "actual_crossing_h", "predicted_crossing_h", "ratio_alarm_h"):
                 x, y = row["held_out"][key], wear[key]
                 assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), (key, x, y)
         if check["id"] == "dual_arm_cell:camera.pose_recal_belt_tags":
@@ -248,6 +248,18 @@ def test_the_gap_check_warns_inside_the_horizon_where_the_fidelity_ratio_went_de
     ten = by_level["10x"]
     assert ten["parameters"][0]["recovered"] is not None and ten["held_out"]["ratio_alarm_h"] is None, ten["notes"]
     assert any("no twin" in note for note in ten["notes"]), ten["notes"]
+
+
+def test_the_servo_alarm_is_the_earlier_of_the_gap_check_and_the_ratio_at_every_level():
+    """The alarm warns on either check (the addendum's last line): at 1x the ratio is first, at 3x only the gap check warns inside the
+    horizon, at 10x (no twin, so no ratio) the gap check alone; at every level the alarm hour is the earlier of the two that came."""
+    check = next(c for c in committed()["checks"] if c["id"] == "pendulum_can11:servo.gap_check_forecast")
+    by_level = {r["level"]: r["held_out"] for r in check["rows"] if r["variant"] is None}
+    for level, held in by_level.items():
+        came = [h for h in (held["gap_alarm_h"], held["ratio_alarm_h"]) if h is not None]
+        assert held["detector_alarm_h"] == (min(came) if came else None), (level, held)
+    assert by_level["1x"]["detector_alarm_h"] == by_level["1x"]["ratio_alarm_h"] < by_level["1x"]["gap_alarm_h"], "1x: the ratio is first"
+    assert by_level["3x"]["detector_alarm_h"] == by_level["3x"]["gap_alarm_h"], "3x: the ratio never warned, the gap check did"
 
 
 def test_the_ur_backlash_fit_never_reads_the_world():

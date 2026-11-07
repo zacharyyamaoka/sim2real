@@ -17,8 +17,8 @@ b(h) = b0 + k h; its rate k is recovered from the early-life checks, the hour th
 happens and compared with the hour it does, and the plain gap check fires after it; recalibration restores the fit. Since 2026-11-07
 the servo's alarm is in the gap's own units (type_cards servo.gap_drift: the gap a check measures less the commissioned gap, against
 the station's allowance, T5's 2 arcmin on CAN 11), because the fidelity ratio's alarm went deaf as the camera's noise grew; the ratio
-is still computed on the same checks, beside it. A camera knocked out of pose: the drift diagnostic fires on the next check and never
-before, and recalibration restores it.
+is still computed on the same checks, and the alarm warns on either one (the gap check or the ratio, whichever comes first). A camera
+knocked out of pose: the drift diagnostic fires on the next check and never before, and recalibration restores it.
 
 The tolerances and factors are sysid/acceptance.json, pinned below by digest: loosening the ruler is a visible diff of this file.
 
@@ -203,7 +203,7 @@ def test_backlash_wear_is_recovered_and_the_gap_check_warns_on_time():
     for check in doc["checks"]:
         growth = check["b_hat_rad"] - commissioned
         assert math.isclose(check["gap_growth_rad"], growth, rel_tol=1e-12, abs_tol=1e-15), check["h"]
-        assert check["status"] == ("warning" if growth > allowance else "ok"), check
+        assert check["gap_status"] == ("warning" if growth > allowance else "ok"), check
     # the truth's crossing: the first hour the hidden gap has grown the allowance past the gap the twin was commissioned with
     actual = doc["actual_crossing_h"]
     want = drift.crossing_hour([(c["h"], c["b_true_rad"] - commissioned) for c in doc["checks"]], allowance)
@@ -211,18 +211,38 @@ def test_backlash_wear_is_recovered_and_the_gap_check_warns_on_time():
     predicted = doc["predicted_crossing_h"]
     assert predicted is not None and abs(predicted - actual) <= gate["crossing_hour_rel"] * actual, f"predicted {predicted} h, crossed at {actual:.1f} h"
     assert actual - doc["predicted_at_h"] >= gate["lead_h_min"], "the prediction was not made ahead of the crossing"
+    # the gap check's own timing, kept as it was when it was the whole alarm (2026-11-07): it warns within a check of the hidden crossing
+    gap_alarm = doc["gap_alarm_h"]
+    assert gap_alarm is not None and actual <= gap_alarm <= actual + gate["detector_within_checks"] * doc["check_every_h"], (
+        f"the gap check warned at {gap_alarm} h; the hidden gap crossed at {actual:.1f} h")
+    assert gap_alarm == next(c["h"] for c in doc["checks"] if c["gap_status"] == "warning")
     alarm = doc["detector_alarm_h"]
-    assert alarm is not None and actual <= alarm <= actual + gate["detector_within_checks"] * doc["check_every_h"], (
-        f"the gap check warned at {alarm} h; the hidden gap crossed at {actual:.1f} h")
-    assert alarm == next(c["h"] for c in doc["checks"] if c["status"] == "warning")
     rec = doc["recalibrated"]
     assert rec["h"] == alarm and rec["ratio"] <= gate["recalibrated_ratio_max"], f"after recalibration the ratio is {rec['ratio']:.3f}"
     assert rec["status"] == "ok", f"the next check reads the recalibrated gap's growth at {rec['gap_growth_rad']} rad"
+    assert rec["ratio_status"] == "ok", f"the next check reads the recalibrated twin's ratio at {rec['ratio']}"
+
+
+def test_the_servo_alarm_warns_on_either_check():
+    """The servo's drift alarm is whichever of the two checks warns first (2026-11-07, decision-calibration-routines, its addendum): the
+    gap check (the gap's growth against the station's allowance) or the fidelity ratio (against the card's 1.25). Beside the gap check's own
+    timing test above, never in place of it: a check warns when either does, the alarm hour is the earlier of the two, and the alarm
+    names which one fired it."""
+    doc = drift_result("backlash_wear")
+    for check in doc["checks"]:
+        assert check["status"] == ("warning" if "warning" in (check["gap_status"], check["ratio_status"]) else "ok"), check
+        assert check["warned_by"] == [name for name, key in (("gap", "gap_status"), ("ratio", "ratio_status")) if check[key] == "warning"], check
+    gap, ratio, alarm = doc["gap_alarm_h"], doc["ratio_alarm_h"], doc["detector_alarm_h"]
+    assert gap is not None and ratio is not None, "the two alarms both come inside the horizon at 1x"
+    assert alarm == min(gap, ratio) and alarm == next(c["h"] for c in doc["checks"] if c["status"] == "warning")
+    assert alarm <= gap, "an either-alarm is never later than the gap check's"
+    assert doc["alarm_by"] == next(c["warned_by"] for c in doc["checks"] if c["h"] == alarm) and doc["alarm_by"], doc["alarm_by"]
+    assert ("ratio" in doc["alarm_by"]) == (ratio == alarm) and ("gap" in doc["alarm_by"]) == (gap == alarm)
 
 
 def test_the_fidelity_ratio_is_kept_beside_the_gap_check():
     """The old alarm, live fidelity / the camera's floor / its hour-0 value against the servo card's 1.25 (servo.drift), is computed on
-    the same checks so every run carries the comparison the decision rests on; it is never the alarm."""
+    the same checks so every run carries the comparison the decision rests on; it is one of the alarm's two checks (test_the_servo_alarm_warns_on_either_check)."""
     from type_cards import registry as reg
 
     from sysid import drift
@@ -299,7 +319,7 @@ def test_the_committed_drift_result_is_this_code(name):
     committed = json.loads((SYSID / "results" / f"drift_{name}.json").read_text())
     fresh = drift_result(name)
     keys = (("rate_recovered", "predicted_crossing_h", "plan_by_h", "actual_crossing_h", "detector_alarm_h", "commissioned_gap_rad", "allowance_rad",
-             "ratio_alarm_h", "ratio_crossing_h") if name == "backlash_wear" else ("alarm_h",))
+             "gap_alarm_h", "ratio_alarm_h", "ratio_crossing_h") if name == "backlash_wear" else ("alarm_h",))
     for key in keys:
         x, y = committed[key], fresh[key]
         assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), f"{name} {key}: committed {x}, now {y}"

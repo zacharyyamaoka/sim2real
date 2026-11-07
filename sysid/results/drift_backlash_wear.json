@@ -34,7 +34,7 @@
  },
  "commissioned_gap_rad": 0.0019570825511019962,
  "commissioned_from": "the commissioning fit's M4 gap: backlash_from_gaps over the train runs, the routine every check runs",
- "threshold_rule": "the servo's gap drift (type_cards servo.gap_drift, dm.parameter_drift): a check's gap less the commissioned gap (1.957 mrad) <= 0.582 mrad, the station's allowance (T5, 2 arcmin); the camera's floor is not in it",
+ "threshold_rule": "the servo's gap drift (type_cards servo.gap_drift, dm.parameter_drift): a check's gap less the commissioned gap (1.957 mrad) <= 0.582 mrad, the station's allowance (T5, 2 arcmin); the camera's floor is not in it. The alarm warns on this or the fidelity ratio below, whichever comes first",
  "diagnostic": {
   "id": "servo.gap_drift",
   "units": "parameter",
@@ -48,537 +48,687 @@
    "b_true_rad": 0.001991169895766281,
    "b_hat_rad": 0.0019588068610537634,
    "gap_growth_rad": 1.7243099517672e-06,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4279613079798561,
    "live_x_floor": 1.3430186345933586,
    "link_mrad": 0.5747600115018942,
    "ratio": 1.0,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 12.0,
    "b_true_rad": 0.0020518917725504135,
    "b_hat_rad": 0.002033885453366302,
    "gap_growth_rad": 7.680290226430575e-05,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.42153929681541047,
    "live_x_floor": 1.3673244330336216,
    "link_mrad": 0.5763809800195228,
    "ratio": 1.0180978862200392,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 24.0,
    "b_true_rad": 0.0020471965373511296,
    "b_hat_rad": 0.002041238236079178,
    "gap_growth_rad": 8.415568497718157e-05,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.41976875059461044,
    "live_x_floor": 1.3685155741018173,
    "link_mrad": 0.5744600727099859,
    "ratio": 1.018984799504423,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 36.0,
    "b_true_rad": 0.002055274403999688,
    "b_hat_rad": 0.0020276354165681687,
    "gap_growth_rad": 7.055286546617245e-05,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.42649881850415566,
    "live_x_floor": 1.337175175925184,
    "link_mrad": 0.5703036326651775,
    "ratio": 0.9956490114748527,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 48.0,
    "b_true_rad": 0.002093650536656875,
    "b_hat_rad": 0.0020685467876624675,
    "gap_growth_rad": 0.00011146423656047122,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4225205914898605,
    "live_x_floor": 1.3673506779117723,
    "link_mrad": 0.5777338172053438,
    "ratio": 1.0181174279281546,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 60.0,
    "b_true_rad": 0.0021106779675061403,
    "b_hat_rad": 0.0020930207267296497,
    "gap_growth_rad": 0.00013593817562765342,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.42573004326734115,
    "live_x_floor": 1.418196934575467,
    "link_mrad": 0.6037690423184241,
    "ratio": 1.055977108616122,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 72.0,
    "b_true_rad": 0.0021280066685504546,
    "b_hat_rad": 0.0021034385595739696,
    "gap_growth_rad": 0.0001463560084719734,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4283006168071977,
    "live_x_floor": 1.4071746009565305,
    "link_mrad": 0.6026937495451044,
    "ratio": 1.0477699748243605,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 84.0,
    "b_true_rad": 0.002153290391557262,
    "b_hat_rad": 0.0021193708699814295,
    "gap_growth_rad": 0.0001622883188794333,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4274628517734632,
    "live_x_floor": 1.4386742049159835,
    "link_mrad": 0.6149797784063061,
    "ratio": 1.0712243060957882,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 96.0,
    "b_true_rad": 0.0021760335047599855,
    "b_hat_rad": 0.002158833666845633,
    "gap_growth_rad": 0.0002017511157436369,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.425270677925782,
    "live_x_floor": 1.4813648215195137,
    "link_mrad": 0.6299810219030085,
    "ratio": 1.103011368094713,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 108.0,
    "b_true_rad": 0.0021991599362898464,
    "b_hat_rad": 0.0021772295744852954,
    "gap_growth_rad": 0.00022014702338329917,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4220133745472808,
    "live_x_floor": 1.4835946097803063,
    "link_mrad": 0.6260967677335433,
    "ratio": 1.1046716490493906,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 120.0,
    "b_true_rad": 0.0022297892022256722,
    "b_hat_rad": 0.0022261195755748434,
    "gap_growth_rad": 0.0002690370244728471,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4220481498407427,
    "live_x_floor": 1.5206695453584436,
    "link_mrad": 0.6417957681376945,
    "ratio": 1.1322773237758346,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 132.0,
    "b_true_rad": 0.0022460923982598304,
    "b_hat_rad": 0.002230304035999081,
    "gap_growth_rad": 0.00027322148489708487,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4255402204881014,
    "live_x_floor": 1.5316469105722137,
    "link_mrad": 0.6517773640348192,
    "ratio": 1.1404509744840348,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 144.0,
    "b_true_rad": 0.002261049842931708,
    "b_hat_rad": 0.002250897102464844,
    "gap_growth_rad": 0.0002938145513628476,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.42887164518915283,
    "live_x_floor": 1.5440195661773493,
    "link_mrad": 0.6621862115507218,
    "ratio": 1.1496635462879115,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 156.0,
    "b_true_rad": 0.0022879449193326062,
    "b_hat_rad": 0.002266192463624861,
    "gap_growth_rad": 0.0003091099125228647,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4267942889784724,
    "live_x_floor": 1.5764201232043817,
    "link_mrad": 0.6728071056143698,
    "ratio": 1.173788719381167,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 168.0,
    "b_true_rad": 0.0023116299549813786,
    "b_hat_rad": 0.00229512034036837,
    "gap_growth_rad": 0.00033803778926637384,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.42228002525211383,
    "live_x_floor": 1.6126714905046082,
    "link_mrad": 0.68099895773365,
    "ratio": 1.200781172327438,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 180.0,
    "b_true_rad": 0.0023224439454109643,
    "b_hat_rad": 0.0023105234811811592,
    "gap_growth_rad": 0.000353440930079163,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.42457906585655575,
    "live_x_floor": 1.6383539090978732,
    "link_mrad": 0.6956107722672114,
    "ratio": 1.2199040779459749,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 192.0,
    "b_true_rad": 0.0023552142223030263,
    "b_hat_rad": 0.00234758787706682,
    "gap_growth_rad": 0.0003905053259648239,
-   "status": "ok",
+   "gap_status": "ok",
    "message": "",
    "floor_mrad": 0.4247750528453157,
    "live_x_floor": 1.6741310295540537,
    "link_mrad": 0.711129096548806,
    "ratio": 1.2465434108149585,
-   "ratio_status": "ok"
+   "ratio_status": "ok",
+   "status": "ok",
+   "warned_by": []
   },
   {
    "h": 204.0,
    "b_true_rad": 0.00237597366613188,
    "b_hat_rad": 0.0023624730468334576,
    "gap_growth_rad": 0.00040539049573146135,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4278262182704172,
    "live_x_floor": 1.6846543866281836,
    "link_mrad": 0.7207393153238051,
    "ratio": 1.2543790110092299,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 216.0,
    "b_true_rad": 0.002389444096544219,
    "b_hat_rad": 0.0023838089562756987,
    "gap_growth_rad": 0.0004267264051737024,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.41882900005532264,
    "live_x_floor": 1.7136097597146671,
    "link_mrad": 0.7177094621463357,
    "ratio": 1.2759389300905097,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 228.0,
    "b_true_rad": 0.0024079153879622197,
    "b_hat_rad": 0.0024001108392433523,
    "gap_growth_rad": 0.0004430282881413561,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42657857487316564,
    "live_x_floor": 1.7017881260145176,
    "link_mrad": 0.7259463535313482,
    "ratio": 1.2671366444068648,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 240.0,
    "b_true_rad": 0.0024325630978009375,
    "b_hat_rad": 0.0024216407973788046,
    "gap_growth_rad": 0.0004645582462768083,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4287293839671472,
    "live_x_floor": 1.7675639320017347,
    "link_mrad": 0.7578065956896523,
    "ratio": 1.316112737733472,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 252.0,
    "b_true_rad": 0.002456067399850534,
    "b_hat_rad": 0.0024435086427742614,
    "gap_growth_rad": 0.00048642609167226514,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4247056645449623,
    "live_x_floor": 1.796662935519942,
    "link_mrad": 0.7630529259932997,
    "ratio": 1.337779602785585,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 264.0,
    "b_true_rad": 0.002482181972821054,
    "b_hat_rad": 0.002467712777316937,
    "gap_growth_rad": 0.0005106302262149406,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.43103777046726083,
    "live_x_floor": 1.8102468982721622,
    "link_mrad": 0.7802847870265072,
    "ratio": 1.3478941033608753,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 276.0,
    "b_true_rad": 0.002487798279120472,
    "b_hat_rad": 0.0024714557638637613,
    "gap_growth_rad": 0.0005143732127617651,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4248835591364421,
    "live_x_floor": 1.8647682256911113,
    "link_mrad": 0.7923093606961875,
    "ratio": 1.3884902097845642,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 288.0,
    "b_true_rad": 0.002522809618053562,
    "b_hat_rad": 0.002496490861987069,
    "gap_growth_rad": 0.0005394083108850728,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4176179023692331,
    "live_x_floor": 1.904281092011262,
    "link_mrad": 0.7952618751671358,
    "ratio": 1.4179111465477494,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 300.0,
    "b_true_rad": 0.002566566985602193,
    "b_hat_rad": 0.002552638777691796,
    "gap_growth_rad": 0.0005955562265897996,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42210769631557865,
    "live_x_floor": 1.963769340782023,
    "link_mrad": 0.8289221525326622,
    "ratio": 1.462205579430859,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 312.0,
    "b_true_rad": 0.002548583414789803,
    "b_hat_rad": 0.002529693068048816,
    "gap_growth_rad": 0.0005726105169468199,
-   "status": "ok",
-   "message": "",
+   "gap_status": "ok",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4266417709209586,
    "live_x_floor": 1.8988684356480603,
    "link_mrad": 0.8101365921307988,
    "ratio": 1.413880929673774,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "ratio"
+   ]
   },
   {
    "h": 324.0,
    "b_true_rad": 0.0025769951627272578,
    "b_hat_rad": 0.0025692431216178396,
    "gap_growth_rad": 0.0006121605705158434,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4297609602582688,
    "live_x_floor": 1.9237024214651364,
    "link_mrad": 0.8267321999000139,
    "ratio": 1.4323720996228755,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 336.0,
    "b_true_rad": 0.002579604489366051,
    "b_hat_rad": 0.002555379956301007,
    "gap_growth_rad": 0.0005982974051990109,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4267673368294349,
    "live_x_floor": 1.961072374627501,
    "link_mrad": 0.8369216346495544,
    "ratio": 1.460197441877847,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 348.0,
    "b_true_rad": 0.0026281944086192994,
    "b_hat_rad": 0.002602553537672414,
    "gap_growth_rad": 0.0006454709865704178,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42265043436968847,
    "live_x_floor": 2.0309930505210985,
    "link_mrad": 0.8584000950045609,
    "ratio": 1.5122597693039799,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 360.0,
    "b_true_rad": 0.00265740111996987,
    "b_hat_rad": 0.002640431971805718,
    "gap_growth_rad": 0.0006833494207037216,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42236832792786366,
    "live_x_floor": 2.0641209741791315,
    "link_mrad": 0.8718193245048729,
    "ratio": 1.5369265332674327,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 372.0,
    "b_true_rad": 0.002671827368113705,
    "b_hat_rad": 0.0026570225594880204,
    "gap_growth_rad": 0.0006999400083860241,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42665559073970627,
    "live_x_floor": 2.0612500516069416,
    "link_mrad": 0.8794438584306096,
    "ratio": 1.5347888692780873,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 384.0,
    "b_true_rad": 0.0026861056740558296,
    "b_hat_rad": 0.002666580300756352,
    "gap_growth_rad": 0.0007094977496543559,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4256622291253771,
    "live_x_floor": 2.11273440465034,
    "link_mrad": 0.8993112362333403,
    "ratio": 1.5731236709831933,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 396.0,
    "b_true_rad": 0.002711519954089077,
    "b_hat_rad": 0.002694288250144422,
    "gap_growth_rad": 0.0007372056990424258,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42339840268714685,
    "live_x_floor": 2.1402642485376617,
    "link_mrad": 0.9061844641592526,
    "ratio": 1.5936221534153876,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 408.0,
    "b_true_rad": 0.002748564234187483,
    "b_hat_rad": 0.0027429923783060806,
    "gap_growth_rad": 0.0007859098272040843,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4262961657228175,
    "live_x_floor": 2.202366473498553,
    "link_mrad": 0.9388603831689162,
    "ratio": 1.6398629302454832,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 420.0,
    "b_true_rad": 0.0027497937102762882,
    "b_hat_rad": 0.0027272265499027337,
    "gap_growth_rad": 0.0007701439988007375,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4247945197390493,
    "live_x_floor": 2.2051853782058957,
    "link_mrad": 0.9367506636705473,
    "ratio": 1.6419618621848724,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 432.0,
    "b_true_rad": 0.0027648555572396746,
    "b_hat_rad": 0.0027440750785870105,
    "gap_growth_rad": 0.0007869925274850142,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4246759003926244,
    "live_x_floor": 2.2332732916909057,
    "link_mrad": 0.9484173459716354,
    "ratio": 1.6628758783880164,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 444.0,
    "b_true_rad": 0.002786440678495687,
    "b_hat_rad": 0.002762497350340287,
    "gap_growth_rad": 0.000805414799238291,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4296377038314226,
    "live_x_floor": 2.260195334946213,
    "link_mrad": 0.9710651339167841,
    "ratio": 1.6829217977534308,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 456.0,
    "b_true_rad": 0.0028349151084695397,
    "b_hat_rad": 0.002815949136817958,
    "gap_growth_rad": 0.0008588665857159616,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42698498408016416,
    "live_x_floor": 2.3511138279822577,
    "link_mrad": 1.0038903004116582,
    "ratio": 1.750618917282657,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 468.0,
    "b_true_rad": 0.0028439588026358464,
    "b_hat_rad": 0.0028352277770921086,
    "gap_growth_rad": 0.0008781452259901124,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4233731955206037,
    "live_x_floor": 2.3509802563658773,
    "link_mrad": 0.9953420237434696,
    "ratio": 1.7505194610182837,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   },
   {
    "h": 480.0,
    "b_true_rad": 0.002873743025595886,
    "b_hat_rad": 0.0028444455306005784,
    "gap_growth_rad": 0.0008873629794985821,
-   "status": "warning",
+   "gap_status": "warning",
    "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42316664295856055,
    "live_x_floor": 2.43900819690888,
    "link_mrad": 1.0321069108343426,
    "ratio": 1.8160643002897479,
-   "ratio_status": "warning"
+   "ratio_status": "warning",
+   "status": "warning",
+   "warned_by": [
+    "gap",
+    "ratio"
+   ]
   }
  ],
- "detector_alarm_h": 300.0,
+ "detector_alarm_h": 204.0,
+ "gap_alarm_h": 300.0,
+ "alarm_by": [
+  "ratio"
+ ],
  "actual_crossing_h": 292.4013663377827,
+ "alarm_rule": "the servo's drift alarm warns on either check, the gap check or the fidelity ratio, whichever comes first (servo_verdict); detector_alarm_h is that hour, gap_alarm_h and ratio_alarm_h each check's own, alarm_by who fired it",
  "actual_rule": "the first hour the hidden gap (world.json's wear line and its process noise) is the allowance past the commissioned gap, interpolated between checks",
  "rate_recovered": 1.8760524978945423e-06,
  "rate_ci95": [
@@ -666,19 +816,19 @@
  "calibrated_x_floor": 1.3430186345933586,
  "ratio_alarm_h": 204.0,
  "ratio_crossing_h": 197.29366853745597,
- "ratio_rule": "kept beside the gap check, never the alarm: live fidelity (twin vs camera) / the camera's floor, / its hour-0 value, against the servo card's drift diagnostic (servo.drift, 1.25); its sensitivity is the camera's",
+ "ratio_rule": "the alarm's second check, beside the gap check (either warns): live fidelity (twin vs camera) / the camera's floor, / its hour-0 value, against the servo card's drift diagnostic (servo.drift, 1.25); its sensitivity is the camera's",
  "card_trend_remaining_h": 54.75846815538881,
  "card_trend_unit": "h",
  "recalibrated": {
-  "h": 300.0,
-  "backlash_rad": 0.002452638777691796,
-  "measured_gap_rad": 0.002552638777691796,
-  "scored_at_h": 312.0,
+  "h": 204.0,
+  "backlash_rad": 0.0024374730468334576,
+  "measured_gap_rad": 0.0023624730468334576,
+  "scored_at_h": 216.0,
   "rule": "the gap searched over the measured gap +-0.1 mrad (0.025 mrad steps) on the alarm check's link error, scored on the next check",
-  "live_x_floor": 1.3031037874908666,
-  "ratio": 0.9702797518408391,
+  "live_x_floor": 1.2539917282061768,
+  "ratio": 0.9337113394453105,
   "ratio_status": "ok",
-  "gap_growth_rad": 7.705429035702012e-05,
+  "gap_growth_rad": -5.3664090557758917e-05,
   "status": "ok"
  },
  "wear": {
@@ -695,7 +845,7 @@
   "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"
  },
  "provenance": {
-  "code": "19a3ac5",
+  "code": "c79d37e+dirty",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
@@ -704,7 +854,7 @@
     "commit": "fa7201ff",
     "date": "2026-11-06T23:06:31-07:00",
     "dirty": false,
-    "paths": 12
+    "paths": 11
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -725,7 +875,7 @@
     "paths": 6
    }
   ],
-  "seconds": 1298.7,
+  "seconds": 562.8,
   "commissioned_twin": "1ca8ef60",
   "twin_of_record": "twin of record (followup C)",
   "twin_of_record_digest": "95198353",

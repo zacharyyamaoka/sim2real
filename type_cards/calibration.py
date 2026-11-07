@@ -384,14 +384,15 @@ ROUTINES = (
          Q(0, "s", "the check runs on the joint's daily motions; no person"), ("camera_tags",),
          "the joint's daily motions (H2 operate: pickplace, cycle, jog, sweep)", "the motions the joint makes all day", 1,
          "each check measures the gap as commissioning does (motor encoder - link camera) and warns when it has grown past the station's "
-         "allowance over the commissioned gap (servo.gap_drift, in rad; CAN 11's is T5's 2 arcmin); a line on hours gives the wear rate, and "
+         "allowance over the commissioned gap (servo.gap_drift, in rad; CAN 11's is T5's 2 arcmin) or when the twin's fidelity ratio passes "
+         "the servo card's drift threshold (servo.drift), whichever comes first; a line on hours gives the wear rate, and "
          "the forecast solves it for the hour the gap reaches the commissioned gap plus the allowance",
          tests=("servo.wear_regression",),
          code=(CodeHome(SIM2REAL, "sysid/drift.py", note="run_backlash"),), status="implemented",
          oracle=("pendulum_can11:servo.gap_check_forecast",),
          note="WHY in the gap's own units (2026-11-07, docs/decision-calibration-routines-2026-11-07.md, addendum): the old alarm, live fidelity "
               "over the camera's floor, went deaf as the camera's noise grew (never inside 480 h at 3x); the gap's alarm does not read the "
-              "camera's floor. The ratio is still computed on the same checks, beside it"),
+              "camera's floor. The ratio is still computed on the same checks and the alarm warns on either one (the addendum's last line)"),
     routine("servo.camera_dwell_stop_ruler", "The rack's camera dwell stop ruler: T4 at a geared joint's output", "servo_dynamic.actuator",
          (), "bench",
          Q(600, "s", ESTIMATE, "the light check and a stop tape with 3 s dwells"), Q(300, "s", ESTIMATE, "lighting and tag checks"), ("camera_tags",),

@@ -273,7 +273,7 @@ def drift_lines(docs: dict) -> str:
         out.append(f'<li data-drift="backlash_wear"><a href="{url("pendulum_can11")}#drift">Backlash wear on CAN 11</a>: the wear rate recovered '
                    f'{num(w["rate_recovered"] * 1e3, 3)} mrad/h (true {num(w["rate_true"] * 1e3, 3)}); at hour {num(w["predicted_at_h"], 3)} the wear-aware twin '
                    f'forecast the drift threshold at hour <b>{num(w["predicted_crossing_h"], 3)}</b>; it crossed at hour <b>{num(w["actual_crossing_h"], 3)}</b>, '
-                   f'and the plain detector warned at hour {num(w["detector_alarm_h"], 3)}.</li>')
+                   f'and the servo alarm (the gap check or the fidelity ratio, whichever warns first) warned at hour {num(w["detector_alarm_h"], 3)}.</li>')
     k = docs.get("drift_camera_knock")
     if k:
         out.append(f'<li data-drift="camera_knock"><a href="{url("dual_arm_cell")}#drift">The head camera knocked at hour {num(k["knock_h"], 3)}</a>: '
@@ -419,7 +419,7 @@ check's duty of {num(d['wear']['duty_nm_rev_per_h'], 3)} N·m·rev per hour that
 <li><b>Forecast</b> (the wear-aware twin, at hour {num(d['predicted_at_h'], 3)}): the threshold at hour <b data-predicted="{d['predicted_crossing_h']}">{num(d['predicted_crossing_h'], 4)}</b>, {num(d['remaining_h_at_prediction'], 3)} hours ahead (a gap of {num(d['gap_at_threshold_rad'] * 1e3, 3)} mrad)</li>
 {f'<li><b>Plan by</b> hour <b data-plan-by="{d["plan_by_h"]}">{num(d["plan_by_h"], 4)}</b>: the same forecast at the wear line&#39;s upper 95 % band, the early edge maintenance schedules against</li>' if d.get('plan_by_h') is not None else ''}
 <li><b>Actual crossing</b> in the sim: hour <b data-actual="{d['actual_crossing_h']}">{num(d['actual_crossing_h'], 4)}</b></li>
-<li><b>Plain detector</b> (the servo card's drift check, "{e(d['diagnostic']['message'])}"): warned at hour <b data-alarm="{d['detector_alarm_h']}">{num(d['detector_alarm_h'], 4)}</b>, after the fact</li>
+<li><b>Plain detector</b> (the servo's drift alarm, "{e(d['diagnostic']['message'])}": the gap check or the fidelity ratio, whichever warns first): warned at hour <b data-alarm="{d['detector_alarm_h']}">{num(d['detector_alarm_h'], 4)}</b> ({e(' + '.join(d['alarm_by']))}), after the fact; the gap check alone at {num(d['gap_alarm_h'], 4) if d['gap_alarm_h'] is not None else 'no hour'}, the ratio alone at {num(d['ratio_alarm_h'], 4) if d['ratio_alarm_h'] is not None else 'no hour'}</li>
 <li>The card's own trend forecast (the drift ratio's history alone, at hour {num(d['predicted_at_h'], 3)}): {num(d['card_trend_remaining_h'], 3) if d.get('card_trend_remaining_h') is not None else 'no crossing in sight'} hours left</li>
 <li><b>Recalibrated</b> at the warning (the gap fitted within 0.1 mrad of the one measured, scored on the next check): the drift ratio back to {num(rec.get('ratio'), 3)}×</li>
 </ul>
@@ -446,31 +446,54 @@ def _axes(x0, x1, y0, y1, w=640, h=230, pad=(44, 14, 24, 30)):
 
 
 def wear_svg(d: dict) -> str:
+    """The wear chart: each check's gap growth (the gap measured less the commissioned gap, mrad) against the station's allowance, the
+    fidelity ratio beside it as the secondary series (right axis, drawn so its threshold sits on the allowance line), every dot carrying the
+    servo's alarm status (sysid.drift.servo_verdict: the gap check or the ratio, whichever warns) and which check fired it."""
     checks = d["checks"]
     xmax = d["horizon_h"]
-    ymax = max(max(c["ratio"] for c in checks), d["threshold"]) * 1.1
-    sx, sy, w, h, left, right, top, bottom = _axes(0, xmax, 0, ymax)
-    pts = " ".join(f"{sx(c['h']):.1f},{sy(c['ratio']):.1f}" for c in checks)
-    dots = "".join(f'<circle cx="{sx(c["h"]):.1f}" cy="{sy(c["ratio"]):.1f}" r="2.6" class="{"s2r-svg-warn" if c["status"] == "warning" else "s2r-svg-real"}"/>' for c in checks)
-    thr = sy(d["threshold"])
+    allowance = 1e3 * d["allowance_rad"]
+    has_ratio = all("ratio" in c for c in checks)
+    # the ratio on the gap's axis: 1x at zero growth, its threshold on the allowance line
+    per_ratio = allowance / (d["threshold"] - 1.0)
+    eq = lambda r: (r - 1.0) * per_ratio  # noqa: E731
+    gap = [1e3 * c["gap_growth_rad"] for c in checks]
+    values = gap + ([eq(c["ratio"]) for c in checks] if has_ratio else []) + [allowance]
+    ymax, ymin = max(values) * 1.1, min(0.0, min(values) * 1.1)
+    sx, sy, w, h, left, right, top, bottom = _axes(0, xmax, ymin, ymax, pad=(44, 44 if has_ratio else 14, 24, 30))
+    pts = " ".join(f"{sx(c['h']):.1f},{sy(g):.1f}" for c, g in zip(checks, gap))
+    dots = "".join(f'<circle cx="{sx(c["h"]):.1f}" cy="{sy(g):.1f}" r="2.6" data-h="{c["h"]:g}" data-gap-mrad="{g:.4f}" '
+                   f'class="{"s2r-svg-warn" if c["status"] == "warning" else "s2r-svg-real"}" data-warned-by="{"+".join(c["warned_by"])}"/>'
+                   for c, g in zip(checks, gap))
+    thr = sy(allowance)
     pred, act, alarm, early = d["predicted_crossing_h"], d["actual_crossing_h"], d["detector_alarm_h"], d["predicted_at_h"]
     ticks = "".join(f'<text x="{sx(t):.1f}" y="{h - 10}" class="s2r-svg-tick" text-anchor="middle">{t:g}</text>' for t in range(0, int(xmax) + 1, 96))
-    yt = "".join(f'<text x="{left - 6}" y="{sy(t) + 4:.1f}" class="s2r-svg-tick" text-anchor="end">{t:g}×</text>' for t in (1, 2, 3, 4, 5, 6) if t < ymax)
+    step = next(t for t in (0.1, 0.2, 0.25, 0.5, 1.0, 2.0) if (ymax - ymin) / t <= 6)
+    yt = "".join(f'<text x="{left - 6}" y="{sy(t) + 4:.1f}" class="s2r-svg-tick" text-anchor="end">{t:g}</text>'
+                 for t in (step * k for k in range(int(math.floor(ymin / step)), int(math.floor(ymax / step)) + 1)) if ymin <= t <= ymax)
+    secondary = ""
+    if has_ratio:
+        ratio_pts = " ".join(f"{sx(c['h']):.1f},{sy(eq(c['ratio'])):.1f}" for c in checks)
+        rt = "".join(f'<text x="{w - right + 6}" y="{sy(eq(r)) + 4:.1f}" class="s2r-svg-tick">{r:g}×</text>'
+                     for r in (1.0, d["threshold"], 1.5, 2.0, 3.0) if eq(r) <= ymax)
+        secondary = f'<polyline points="{ratio_pts}" class="s2r-svg-ratio"/>{rt}'
     marks = ""
     if pred is not None:
         marks += f'<line x1="{sx(pred):.1f}" x2="{sx(pred):.1f}" y1="{top}" y2="{h - bottom}" class="s2r-svg-pred"/><text x="{sx(pred) - 4:.1f}" y="{top + 10}" class="s2r-svg-lab" text-anchor="end">forecast {pred:.0f} h</text>'
     if act is not None:
         marks += f'<line x1="{sx(act):.1f}" x2="{sx(act):.1f}" y1="{top + 14}" y2="{h - bottom}" class="s2r-svg-act"/><text x="{sx(act) + 4:.1f}" y="{top + 24}" class="s2r-svg-lab">crossed {act:.0f} h</text>'
     if alarm is not None:
-        # below the threshold line, clear of the forecast and crossing labels at the top
-        marks += f'<text x="{sx(alarm) + 4:.1f}" y="{thr + 16:.1f}" class="s2r-svg-lab s2r-svg-warntext">detector {alarm:.0f} h</text>'
-    return f"""<figure class="s2r-ex-fig"><svg viewBox="0 0 {w} {h}" role="img" aria-label="drift ratio against deployment hours">
+        # a line at the alarm hour, its label left of it on its own row at the top, clear of the curves and of the forecast and crossing labels
+        by = " + ".join(d.get("alarm_by") or [])
+        marks += (f'<line x1="{sx(alarm):.1f}" x2="{sx(alarm):.1f}" y1="{top + 14}" y2="{h - bottom}" class="s2r-svg-alarm"/>'
+                  f'<text x="{sx(alarm) - 4:.1f}" y="{top + 24}" class="s2r-svg-lab s2r-svg-warntext" text-anchor="end">alarm {alarm:.0f} h{f" ({by})" if by else ""}</text>')
+    return f"""<figure class="s2r-ex-fig"><svg viewBox="0 0 {w} {h}" role="img" aria-label="backlash gap growth against deployment hours, with the fidelity ratio beside it" data-chart="wear">
 <rect x="{sx(0):.1f}" y="{top}" width="{sx(early) - sx(0):.1f}" height="{h - top - bottom}" class="s2r-svg-early"/>
-<text x="{sx(early / 2):.1f}" y="{h - bottom - 6}" class="s2r-svg-lab" text-anchor="middle">checks to the forecast</text>
-<line x1="{left}" x2="{w - right}" y1="{thr:.1f}" y2="{thr:.1f}" class="s2r-svg-thr"/><text x="{w - right}" y="{thr - 4:.1f}" class="s2r-svg-lab" text-anchor="end">threshold {d['threshold']:.2f}×</text>
-<polyline points="{pts}" class="s2r-svg-line"/>{dots}{marks}{ticks}{yt}
-<text x="{(left + w - right) / 2:.0f}" y="{h - 1}" class="s2r-svg-tick" text-anchor="middle">deployment hours</text></svg>
-<figcaption>Drift ratio (live fidelity ÷ calibrated) at every check: dots past the threshold are the detector's warnings. The forecast was issued at hour {early:g}, the first check whose forecast put the crossing within {num((d.get('forecast') or {}).get('horizon_h', 0), 3)} h, from the gap's trend up to it.</figcaption></figure>"""
+<text x="{sx(early / 2):.1f}" y="{top + 10}" class="s2r-svg-lab" text-anchor="middle">checks to the forecast</text>
+<line x1="{left}" x2="{w - right}" y1="{thr:.1f}" y2="{thr:.1f}" class="s2r-svg-thr" data-allowance-mrad="{allowance:.4f}"/><text x="{left + 4}" y="{thr - 4:.1f}" class="s2r-svg-lab">allowance {allowance:.2f} mrad</text>
+<polyline points="{pts}" class="s2r-svg-line"/>{secondary}{dots}{marks}{ticks}{yt}
+<text x="{(left + w - right) / 2:.0f}" y="{h - 1}" class="s2r-svg-tick" text-anchor="middle">deployment hours</text>
+<text x="10" y="{(top + h - bottom) / 2:.0f}" class="s2r-svg-tick" text-anchor="middle" transform="rotate(-90 10 {(top + h - bottom) / 2:.0f})">gap growth, mrad</text></svg>
+<figcaption>Gap growth (the gap a check measures less the commissioned gap, mrad) against the station's allowance{f", with the fidelity ratio (live fidelity ÷ calibrated, right axis, its {d['threshold']:.2f}× threshold on the same line) as the secondary series" if has_ratio else ""}. Red dots are the servo's alarm: it warns on either check, whichever comes first. The forecast was issued at hour {early:g}, the first check whose forecast put the crossing within {num((d.get('forecast') or {}).get('horizon_h', 0), 3)} h, from the gap's trend up to it.</figcaption></figure>"""
 
 
 def knock_svg(d: dict) -> str:

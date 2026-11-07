@@ -2,7 +2,7 @@
  "schema": "sysid.noise_ladder_result/1",
  "ruler": {
   "path": "sysid/noise_ladder.json",
-  "sha256": "4ab3e070da52364abc9e0d9c7a9c23ae777be14667a4c7bc658d2ef3bd9b6771"
+  "sha256": "26c5a78b2b71b8fe85ad1fd26828382220bb783eef78abedabc92e8cc6799fe9"
  },
  "levels": [
   {
@@ -677,14 +677,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -707,7 +707,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1742.1,
+      "seconds": 477.1,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -1288,7 +1288,7 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -1318,7 +1318,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1486.0,
+      "seconds": 665.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -1899,7 +1899,7 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -1908,7 +1908,7 @@
         "commit": "fa7201ff",
         "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -1929,7 +1929,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1468.3,
+      "seconds": 660.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -2098,7 +2098,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -2128,7 +2128,7 @@
         "paths": 6
        }
       ],
-      "seconds": 605.7,
+      "seconds": 222.9,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -2709,14 +2709,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -2739,7 +2739,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1743.0,
+      "seconds": 474.8,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3320,16 +3320,16 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -3350,7 +3350,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1666.0,
+      "seconds": 473.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3359,8 +3359,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
-     "19a3ac5",
-     "8be20f5"
+     "c79d37e+dirty"
     ]
    }
   },
@@ -3438,14 +3437,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -3468,7 +3467,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1742.1,
+      "seconds": 477.1,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3534,7 +3533,7 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -3564,7 +3563,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1486.0,
+      "seconds": 665.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3630,7 +3629,7 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -3639,7 +3638,7 @@
         "commit": "fa7201ff",
         "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -3660,7 +3659,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1468.3,
+      "seconds": 660.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3718,7 +3717,7 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -3748,7 +3747,7 @@
         "paths": 6
        }
       ],
-      "seconds": 605.7,
+      "seconds": 222.9,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3814,14 +3813,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -3844,7 +3843,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1743.0,
+      "seconds": 474.8,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3910,16 +3909,16 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -3940,7 +3939,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1666.0,
+      "seconds": 473.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3949,8 +3948,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
-     "19a3ac5",
-     "8be20f5"
+     "c79d37e+dirty"
     ]
    }
   },
@@ -4200,14 +4198,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -4230,7 +4228,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1742.1,
+      "seconds": 477.1,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -4464,7 +4462,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -4494,7 +4492,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1486.0,
+      "seconds": 665.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -4728,7 +4726,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -4737,7 +4735,7 @@
         "commit": "fa7201ff",
         "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -4758,7 +4756,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1468.3,
+      "seconds": 660.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -4992,7 +4990,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -5022,7 +5020,7 @@
         "paths": 6
        }
       ],
-      "seconds": 605.7,
+      "seconds": 222.9,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -5256,14 +5254,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -5286,7 +5284,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1743.0,
+      "seconds": 474.8,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -5520,16 +5518,16 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -5550,7 +5548,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1666.0,
+      "seconds": 473.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -5559,8 +5557,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
-     "19a3ac5",
-     "8be20f5"
+     "c79d37e+dirty"
     ]
    }
   },
@@ -5780,14 +5777,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -5810,7 +5807,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1742.1,
+      "seconds": 477.1,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6014,7 +6011,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -6044,7 +6041,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1486.0,
+      "seconds": 665.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6248,7 +6245,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -6257,7 +6254,7 @@
         "commit": "fa7201ff",
         "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -6278,7 +6275,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1468.3,
+      "seconds": 660.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6482,7 +6479,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -6512,7 +6509,7 @@
         "paths": 6
        }
       ],
-      "seconds": 605.7,
+      "seconds": 222.9,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6716,14 +6713,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -6746,7 +6743,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1743.0,
+      "seconds": 474.8,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6950,16 +6947,16 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -6980,7 +6977,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1666.0,
+      "seconds": 473.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6989,8 +6986,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
-     "19a3ac5",
-     "8be20f5"
+     "c79d37e+dirty"
     ]
    }
   },
@@ -7005,7 +7001,7 @@
    ],
    "unclaimed": {},
    "not_at": {
-    "0x": "not applicable: the drift ratio and its forecast are ratios to the floor (two camera draws of one run), which is zero without noise"
+    "0x": "not run: the servo's drift alarm warns on either check, the gap check or the fidelity ratio, and the ratio's denominator is the camera's floor (two draws of one run), which is zero without noise, so the alarm as deployed is undefined here; the gap check alone would run"
    },
    "realism": "",
    "rows": [
@@ -7064,10 +7060,11 @@
       "forecast_error_pct": 2.0376525448537115,
       "lead_h": 124.40136633778269,
       "gap_rms_mrad": 0.018842738328380508,
-      "recalibrated_ratio": 0.9702797518408391,
+      "recalibrated_ratio": 0.9337113394453105,
       "predicted_crossing_h": 298.35949022015154,
       "actual_crossing_h": 292.4013663377827,
-      "detector_alarm_h": 300.0,
+      "detector_alarm_h": 204.0,
+      "gap_alarm_h": 300.0,
       "ratio_alarm_h": 204.0,
       "ratio_crossing_h": 197.29366853745597,
       "commissioned_gap_mrad": 1.9570825511019962,
@@ -7080,7 +7077,7 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -7110,7 +7107,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1486.0,
+      "seconds": 665.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -7174,6 +7171,7 @@
       "predicted_crossing_h": 360.27059424600276,
       "actual_crossing_h": 359.15413556536384,
       "detector_alarm_h": 360.0,
+      "gap_alarm_h": 360.0,
       "ratio_alarm_h": null,
       "ratio_crossing_h": null,
       "commissioned_gap_mrad": 2.0735659594397493,
@@ -7186,7 +7184,7 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -7195,7 +7193,7 @@
         "commit": "fa7201ff",
         "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
-        "paths": 12
+        "paths": 11
        },
        {
         "repo": "/home/bam/io-diagnostics",
@@ -7216,7 +7214,7 @@
         "paths": 6
        }
       ],
-      "seconds": 1468.3,
+      "seconds": 660.4,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -7280,6 +7278,7 @@
       "predicted_crossing_h": 878.0613028618552,
       "actual_crossing_h": null,
       "detector_alarm_h": null,
+      "gap_alarm_h": null,
       "ratio_alarm_h": null,
       "ratio_crossing_h": null,
       "commissioned_gap_mrad": 4.6804810465865545,
@@ -7294,7 +7293,7 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "19a3ac5",
+      "code": "c79d37e+dirty",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
@@ -7324,7 +7323,7 @@
         "paths": 6
        }
       ],
-      "seconds": 605.7,
+      "seconds": 222.9,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -7333,7 +7332,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
-     "19a3ac5"
+     "c79d37e+dirty"
     ]
    }
   },

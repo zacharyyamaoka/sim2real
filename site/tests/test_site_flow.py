@@ -1129,6 +1129,28 @@ def oracle_data_checks(out: Path) -> None:
         want_w = {"predicted": wear["predicted_crossing_h"], "actual": wear["actual_crossing_h"], "alarm": wear["detector_alarm_h"], "rate": wear["rate_recovered"]}
         check(all(got[k] and float(got[k].group(1)) == float(v) for k, v in want_w.items()),
               f"CAN 11's page carries the wear demo's forecast, crossing, alarm and rate as committed ({ {k: g.group(1) if g else None for k, g in got.items()} })")
+        # the wear chart (2026-11-07): the gap's growth against the station's allowance, the fidelity ratio beside it as the secondary series,
+        # each dot carrying the servo's alarm status (the gap check or the ratio, whichever warns: sysid.drift.servo_verdict)
+        figure = re.search(r'<svg[^>]*data-chart="wear"[^>]*>(.*?)</svg>', html, re.S)
+        body = figure.group(1) if figure else ""
+        attrs = lambda tag: dict(re.findall(r'([\w-]+)="([^"]*)"', tag))  # noqa: E731
+        dots = [attrs(t) for t in re.findall(r"<circle[^>]*data-h=[^>]*>", body)]
+        thr = next((attrs(t) for t in re.findall(r"<line[^>]*data-allowance-mrad=[^>]*>", body)), {})
+        series = [attrs(t) for t in re.findall(r"<polyline[^>]*>", body)]
+        want = wear["checks"]
+        check(bool(figure) and len(dots) == len(want) and all(
+                  abs(float(d["data-h"]) - c["h"]) < 1e-9 and abs(float(d["data-gap-mrad"]) - 1e3 * c["gap_growth_rad"]) < 5e-4
+                  and d["class"] == ("s2r-svg-warn" if c["status"] == "warning" else "s2r-svg-real") and d["data-warned-by"] == "+".join(c["warned_by"])
+                  for d, c in zip(dots, want)),
+              f"the wear chart plots every check's gap growth in mrad, its dot warning when the servo's alarm does and naming the check "
+              f"({len(dots)} dots of {len(want)}; {sum(d['class'] == 's2r-svg-warn' for d in dots)} warning)")
+        gap_warned = [d for d, c in zip(dots, want) if c["gap_status"] == "warning"]
+        check(bool(thr) and abs(float(thr["data-allowance-mrad"]) - 1e3 * wear["allowance_rad"]) < 5e-4 and gap_warned
+              and all(float(d["cy"]) < float(thr["y1"]) for d in gap_warned)
+              and all(float(d["cy"]) >= float(thr["y1"]) for d, c in zip(dots, want) if c["gap_growth_rad"] <= wear["allowance_rad"] and c["ratio_status"] == "ok"),
+              f"the wear chart draws the allowance ({thr.get('data-allowance-mrad')} mrad) as the line the gap-warned dots sit above ({len(gap_warned)} of them)")
+        check(sorted(x["class"] for x in series) == ["s2r-svg-line", "s2r-svg-ratio"] and all(len(x["points"].split()) == len(want) for x in series),
+              f"the wear chart draws the gap growth and, as the secondary series, the fidelity ratio, one point per check ({[(x['class'], len(x['points'].split())) for x in series]})")
     if knock:
         html = (out / "sysid" / "dual_arm_cell" / "index.html").read_text()
         m = re.search(r'data-alarm="([^"]+)"', html)

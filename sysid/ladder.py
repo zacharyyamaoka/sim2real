@@ -340,9 +340,9 @@ def _pendulum(level: str, plan, description, workers: int, wear: bool) -> dict:
 
 
 def _gap_check(doc: dict, notes=()) -> dict:
-    """The deployed gap check's row from its drift demo (sysid.drift.run_backlash): the wear rate graded; held out, the gap check's alarm
-    and the hour the hidden gap crossed its allowance, the forecast, and the fidelity ratio's own alarm on the same checks (the old
-    detector, kept for the comparison)."""
+    """The deployed gap check's row from its drift demo (sysid.drift.run_backlash): the wear rate graded; held out, the servo's alarm (the
+    gap check or the fidelity ratio, whichever warns first), each one's own alarm hour on the same checks, the hour the hidden gap crossed
+    its allowance, and the forecast."""
     actual, predicted = doc["actual_crossing_h"], doc["predicted_crossing_h"]
     gaps = [c["b_hat_rad"] - c["b_true_rad"] for c in doc["checks"]]
     return produced(
@@ -351,7 +351,7 @@ def _gap_check(doc: dict, notes=()) -> dict:
         {"forecast_error_pct": None if not (actual and predicted) else 100.0 * (predicted - actual) / actual,
          "lead_h": None if actual is None else actual - doc["predicted_at_h"], "gap_rms_mrad": 1e3 * _rms(gaps),
          "recalibrated_ratio": (doc.get("recalibrated") or {}).get("ratio"), "predicted_crossing_h": predicted, "actual_crossing_h": actual,
-         "detector_alarm_h": doc["detector_alarm_h"], "ratio_alarm_h": doc["ratio_alarm_h"], "ratio_crossing_h": doc["ratio_crossing_h"],
+         "detector_alarm_h": doc["detector_alarm_h"], "gap_alarm_h": doc["gap_alarm_h"], "ratio_alarm_h": doc["ratio_alarm_h"], "ratio_crossing_h": doc["ratio_crossing_h"],
          "commissioned_gap_mrad": 1e3 * doc["commissioned_gap_rad"], "allowance_mrad": 1e3 * doc["allowance_rad"]},
         notes)
 
