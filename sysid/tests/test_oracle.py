@@ -13,9 +13,12 @@ world. It must
 2. improve every held-out fidelity metric by its stated factor (before / after).
 
 Drift (the coordinator's brief and Zach's wear addition, 2026-11-05): the servo's backlash grows with deployment hours,
-b(h) = b0 + k h; its rate k is recovered from the early-life checks, the hour the drift ratio crosses the threshold is predicted
-before it happens and compared with the hour it does, and the plain drift detector fires after it; recalibration restores the
-fit. A camera knocked out of pose: the drift diagnostic fires on the next check and never before, and recalibration restores it.
+b(h) = b0 + k h; its rate k is recovered from the early-life checks, the hour the gap grows past its allowance is predicted before it
+happens and compared with the hour it does, and the plain gap check fires after it; recalibration restores the fit. Since 2026-11-07
+the servo's alarm is in the gap's own units (type_cards servo.gap_drift: the gap a check measures less the commissioned gap, against
+the station's allowance, T5's 2 arcmin on CAN 11), because the fidelity ratio's alarm went deaf as the camera's noise grew; the ratio
+is still computed on the same checks, beside it. A camera knocked out of pose: the drift diagnostic fires on the next check and never
+before, and recalibration restores it.
 
 The tolerances and factors are sysid/acceptance.json, pinned below by digest: loosening the ruler is a visible diff of this file.
 
@@ -183,28 +186,65 @@ def test_the_committed_result_is_this_code(example):
 
 # --- drift ------------------------------------------------------------------------------------------------------------------
 
-def test_backlash_wear_is_recovered_and_its_crossing_predicted():
+def test_backlash_wear_is_recovered_and_the_gap_check_warns_on_time():
+    from sysid import drift
+
     gate = ACCEPTANCE["drift"]["backlash_wear"]
     hidden = world(gate["example"])["drift"]["backlash_wear"]
     doc = drift_result("backlash_wear")
     rate = doc["rate_recovered"]
     assert within(rate, hidden["rate_rad_per_h"], "rel", gate["rate_rel"]), f"wear rate {rate} vs true {hidden['rate_rad_per_h']}"
-    predicted, actual = doc["predicted_crossing_h"], doc["actual_crossing_h"]
-    assert actual is not None and predicted is not None, "the drift ratio never crossed its threshold inside the horizon"
-    assert abs(predicted - actual) <= gate["crossing_hour_rel"] * actual, f"predicted {predicted:.1f} h, crossed at {actual:.1f} h"
+    # the gap the checks ran on is the world's wear line (its process noise inside 5 sigma): the test's own read of the truth
+    for check in doc["checks"]:
+        line = hidden["b0_rad"] + hidden["rate_rad_per_h"] * check["h"]
+        assert abs(check["b_true_rad"] - line) <= 5 * hidden["process_noise_rad"], check["h"]
+    allowance, commissioned = doc["allowance_rad"], doc["commissioned_gap_rad"]
+    # every check is type_cards' servo.gap_drift: the gap it measures less the commissioned gap, against the station's allowance
+    for check in doc["checks"]:
+        growth = check["b_hat_rad"] - commissioned
+        assert math.isclose(check["gap_growth_rad"], growth, rel_tol=1e-12, abs_tol=1e-15), check["h"]
+        assert check["status"] == ("warning" if growth > allowance else "ok"), check
+    # the truth's crossing: the first hour the hidden gap has grown the allowance past the gap the twin was commissioned with
+    actual = doc["actual_crossing_h"]
+    want = drift.crossing_hour([(c["h"], c["b_true_rad"] - commissioned) for c in doc["checks"]], allowance)
+    assert actual is not None and math.isclose(actual, want, rel_tol=1e-12), "the hidden gap never grew past its allowance inside the horizon"
+    predicted = doc["predicted_crossing_h"]
+    assert predicted is not None and abs(predicted - actual) <= gate["crossing_hour_rel"] * actual, f"predicted {predicted} h, crossed at {actual:.1f} h"
     assert actual - doc["predicted_at_h"] >= gate["lead_h_min"], "the prediction was not made ahead of the crossing"
     alarm = doc["detector_alarm_h"]
     assert alarm is not None and actual <= alarm <= actual + gate["detector_within_checks"] * doc["check_every_h"], (
-        f"plain detector alarmed at {alarm} h; the ratio crossed at {actual:.1f} h")
+        f"the gap check warned at {alarm} h; the hidden gap crossed at {actual:.1f} h")
+    assert alarm == next(c["h"] for c in doc["checks"] if c["status"] == "warning")
+    rec = doc["recalibrated"]
+    assert rec["h"] == alarm and rec["ratio"] <= gate["recalibrated_ratio_max"], f"after recalibration the ratio is {rec['ratio']:.3f}"
+    assert rec["status"] == "ok", f"the next check reads the recalibrated gap's growth at {rec['gap_growth_rad']} rad"
+
+
+def test_the_fidelity_ratio_is_kept_beside_the_gap_check():
+    """The old alarm, live fidelity / the camera's floor / its hour-0 value against the servo card's 1.25 (servo.drift), is computed on
+    the same checks so every run carries the comparison the decision rests on; it is never the alarm."""
+    from type_cards import registry as reg
+
+    from sysid import drift
+
+    doc = drift_result("backlash_wear")
+    threshold = doc["threshold"]
+    assert threshold == reg.drift_diagnostic("servo").threshold.value == reg.DRIFT_THRESHOLD, "the servo card's own fidelity drift threshold"
+    assert math.isclose(doc["calibrated_x_floor"], doc["checks"][0]["live_x_floor"], rel_tol=1e-12)
     for check in doc["checks"]:
-        assert check["status"] == ("warning" if check["ratio"] > doc["threshold"] else "ok"), check
-    assert doc["recalibrated"]["ratio"] <= gate["recalibrated_ratio_max"], f"after recalibration the ratio is {doc['recalibrated']['ratio']:.3f}"
+        assert math.isclose(check["ratio"], check["live_x_floor"] / doc["calibrated_x_floor"], rel_tol=1e-12), check["h"]
+        assert check["ratio_status"] == ("warning" if check["ratio"] > threshold else "ok"), check
+    assert doc["ratio_alarm_h"] == next((c["h"] for c in doc["checks"] if c["ratio_status"] == "warning"), None)
+    want = drift.crossing_hour([(c["h"], c["ratio"]) for c in doc["checks"]], threshold)
+    assert (doc["ratio_crossing_h"] is None and want is None) or math.isclose(doc["ratio_crossing_h"], want, rel_tol=1e-12)
 
 
 # WHY 5 % (2026-11-05): 5 % of the ~234 h crossing is ~11.7 h, under one 12 h check interval, so a point forecast inside it is off by
 # less than the spacing of the checks it replaces; the 15 % gate (~35 h, three checks) let a forecast 28 h late pass. A late forecast
 # is the unsafe side for maintenance, so the plan-by hour (the same forecast at the wear rate's upper 95 % limit) must not be late
 # at all. Not in acceptance.json: that file is pinned and may only tighten; this is an extra, tighter assertion beside its gate.
+# WHY one check interval beside it (2026-11-07): the gap's own allowance is reached later (~290 h at 1x), where 5 % is ~14.6 h, more than
+# one check; the interval the 5 % was chosen to stay under is asserted too, so moving the crossing never loosens the forecast's bound.
 FORECAST_ERROR_REL = 0.05
 
 
@@ -217,20 +257,24 @@ def test_the_wear_forecast_is_close_not_late_and_reads_only_checks_up_to_its_hou
     error = (predicted - actual) / actual
     assert abs(error) <= gate["crossing_hour_rel"], f"predicted {predicted:.1f} h, crossed at {actual:.1f} h ({100 * error:+.1f} %)"
     assert abs(error) <= FORECAST_ERROR_REL, f"predicted {predicted:.1f} h, crossed at {actual:.1f} h ({100 * error:+.1f} %, limit 5 %)"
+    assert abs(predicted - actual) <= doc["check_every_h"], f"predicted {predicted:.1f} h, crossed at {actual:.1f} h: more than one check apart"
     plan_by = doc["plan_by_h"]
     assert plan_by is not None and at < plan_by <= actual, f"plan-by hour {plan_by} is late (crossed at {actual:.1f} h) or not ahead of hour {at}"
+    level = doc["gap_at_threshold_rad"]
+    assert math.isclose(level, doc["commissioned_gap_rad"] + doc["allowance_rad"], rel_tol=1e-12), "the forecast's target is the gap check's"
 
     # no peeking: the forecast reads only checks at or before its hour; corrupting every later check must not move it
     used = doc["forecast"]["checks_h"]
     assert used == [c["h"] for c in doc["checks"] if c["h"] <= at] and max(used) <= at, used
-    tampered = [c if c["h"] <= at else {**c, "b_hat_rad": 10 * c["b_hat_rad"], "ratio": 10 * c["ratio"], "live_x_floor": 10 * c["live_x_floor"]}
+    tampered = [c if c["h"] <= at else {**c, "b_hat_rad": 10 * c["b_hat_rad"], "gap_growth_rad": 10 * c["gap_growth_rad"], "ratio": 10 * c["ratio"],
+                                        "live_x_floor": 10 * c["live_x_floor"]}
                 for c in doc["checks"]]
-    clean = drift.wear_forecast(doc["checks"], forecast_h=at, curve=doc["curve"], threshold=doc["threshold"])
-    assert drift.wear_forecast(tampered, forecast_h=at, curve=doc["curve"], threshold=doc["threshold"]) == clean
+    clean = drift.wear_forecast(doc["checks"], forecast_h=at, level=level)
+    assert drift.wear_forecast(tampered, forecast_h=at, level=level) == clean
     assert math.isclose(clean["predicted_crossing_h"], predicted, rel_tol=1e-12) and math.isclose(clean["plan_by_h"], plan_by, rel_tol=1e-12)
     # the hour the forecast is issued is itself decided from the checks so far (a rolling forecast at every check, issued at the first
     # one whose crossing is within the planning horizon, the monitoring's early_life_h at the latest): no later check may move it
-    kwargs = {"curve": doc["curve"], "threshold": doc["threshold"], "latest_h": doc["early_life_h"]}
+    kwargs = {"level": level, "latest_h": doc["early_life_h"]}
     issued = drift.issue_forecast(doc["checks"], **kwargs)
     assert drift.issue_forecast(tampered, **kwargs) == issued and issued["forecast_h"] == at <= doc["early_life_h"], issued["forecast_h"]
     assert math.isclose(issued["predicted_crossing_h"], predicted, rel_tol=1e-12)
@@ -254,7 +298,8 @@ def test_a_knocked_camera_is_detected_and_recalibrated():
 def test_the_committed_drift_result_is_this_code(name):
     committed = json.loads((SYSID / "results" / f"drift_{name}.json").read_text())
     fresh = drift_result(name)
-    keys = ("rate_recovered", "predicted_crossing_h", "plan_by_h", "actual_crossing_h", "detector_alarm_h") if name == "backlash_wear" else ("alarm_h",)
+    keys = (("rate_recovered", "predicted_crossing_h", "plan_by_h", "actual_crossing_h", "detector_alarm_h", "commissioned_gap_rad", "allowance_rad",
+             "ratio_alarm_h", "ratio_crossing_h") if name == "backlash_wear" else ("alarm_h",))
     for key in keys:
         x, y = committed[key], fresh[key]
         assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), f"{name} {key}: committed {x}, now {y}"

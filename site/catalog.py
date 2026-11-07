@@ -36,6 +36,10 @@ AREAS = (
     Area("sources", "Stations", "/stations/", "Every station's gates T1-T11 in one matrix"),
     Area("guides", "Deployments", "/deployments/", "Every deployment, virtual and physical, and each of its parts"),
     Area("programs", "Types", "/types/", "One card per part type: metrics, model, coverage, view and procedure"),
+    # the models by generic type, the calibration routines both ways, every parameter (site/models_pages.py, w2c 2026-11-07)
+    Area("programs", "Models", "/models/", "Each generic type's model ladder, by family, and where each model is used"),
+    Area("guides", "Routines", "/routines/", "Every calibration routine and what it identifies, and every parameter's routines"),
+    Area("data", "Parameters", "/parameters/", "Every parameter: true, nominal and recovered per model, with presets"),
     # the metrics lane (2026-11-07): metrics, diagnostics and coverage over any selection of runs, and the frozen reports
     Area("analysis", "Metrics", "/metrics/", "Metrics, diagnostics and coverage over the runs you pick, live"),
     Area("guides", "Reports", "/reports/", "Named, frozen sets of runs with their results as they were"),

@@ -27,6 +27,10 @@ filter bar (kind, tags) over data-ui cards of the contract's deployments, each w
 its page (its tree on the left, its sub-deployments, its runs, the models per entity type, its pinned metrics and coverage over all of its
 runs, sel.compute's), measured in the browser and against the contract's own functions.
 
+Since 2026-11-07 also the models by entity type (a page per generic type: its ladder by family, rung, model, parameters, adds, identified here,
+used on), the calibration routines both ways (two tabs of data-ui tables) and the parameters view (data-ui: four presets, a column group per
+model, the best of each row marked), written before site/models_pages.py; and the deployment pages' models linked to their ladder rows.
+
 Since 2026-10-29 also a station's Schedule tab (bam_rack_twin.schedule's plan, before anything runs), its checks written before
 the tab. A port of app/tests/test_app_flow.py's 25 checks onto the migrated site (every one keeps its meaning; where a step moved,
 the check says where to), plus the checks that the shell IS the workbench's: the same bar (wordmark, one centred search,
@@ -2451,6 +2455,10 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     page.wait_for_load_state("load")
     soft_wait(page, "() => { const v = document.getElementById('deployments-views'); return !!v && !!v.model && v.querySelectorAll('article.dv-cards-card').length > 0; }")
     soft_wait(page, "() => [...document.querySelectorAll('#deployments-views article.dv-cards-card img')].every((i) => i.complete && i.naturalWidth > 0)", timeout=15000)
+    # WHY a wait (w2c, 2026-11-07): on a cold first load the rail draws its facet headings after the cards (measured: none when the cards drew,
+    # Kind and Tags 1.5 s later), and the check below measures them; it failed 2 of 5 full runs on that race. Its assertion is unchanged.
+    soft_wait(page, "() => { const f = document.querySelector('aside#filter data-facets'); return !!f && [...f.querySelectorAll('h3, h4, legend, summary, .df-h')]"
+                    ".some((h) => h.textContent.trim().startsWith('Tags')); }", timeout=15000)
     c0 = page.evaluate(CARDS_JS) or {}
     want_src = {n["id"]: "/media/" + scenes[n["id"]]["src"] for n in roots if n["id"] in scenes}
     cards = c0.get("cards") or []
@@ -2589,6 +2597,431 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     # a phone: no sideways scroll on the index and on a physical, a station's and a virtual page
     page.set_viewport_size({"width": 390, "height": 844})
     for url in ("/deployments/", node_url(DEP), node_url(can11), node_url("pendulum_can11")):
+        page.goto(base + url)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(1200)
+        ok, detail = no_sideways_scroll(page)
+        check(ok, f"at 390 px {url} has no sideways scroll ({detail})")
+    page.set_viewport_size({"width": 1280, "height": 900})
+
+
+# ---- the models by entity type, the calibration routines both ways, the parameters view (w2c, 2026-11-07) -------------------------------
+# Zach (PROJECT - Sim2Real, 2026-11-06): "We organize all of the models related to a particular part type into a ladder. of icnreasing
+# paramters" (his table: rung, model, parameters, adds, identified here) "... MO.kinematics.X MO.dynamics.X"; "a table of calibration
+# routines in the first column and then the parameters that they identify. Another way to see it is with the parameters in the first column
+# and all the ROUTINES that can idneity it"; "in the parameter view. lets use DATA-UI ... all of the paramteres ... the Winning model(s) ...
+# at least some model run and rpocuded datata ... each model if you display mutliple at the same time should get its own Recovered error
+# toerlance colum ... under a subheader of the model ... just so the error so its easy to compare. And you can color the models by row based
+# on what has the lowest error ... filter what model results we are showing". Written before site/models_pages.py. The oracle is the
+# contract's own data (type_cards, data/domain/*.json, sysid/results/calibration_routines.json, run_gates.json), read here on its own.
+
+PARAM_PRESETS = ("All parameters", "Winning model", "With results", "Errors only")
+# a display unit and its factor from the stored SI unit: the parameters view shows small angles in mrad, small lengths in mm (Zach's own
+# table, 2026-11-06: "4.200 mrad"); the test converts back with this table, never with the page's code
+DISPLAY_FACTOR = {("rad", "mrad"): 1e3, ("m", "mm"): 1e3, ("rad/h", "mrad/h"): 1e3}
+
+
+def model_url(type_id: str, model_id: str | None = None) -> str:
+    return f"/models/{type_id}/" + (f"#{model_id}" if model_id else "")
+
+
+def replayed_by(data: Path) -> dict[tuple[str, str], int]:
+    """{(device, the producer's label): runs it replayed}, from RobotDx's stock.model_error rows (title "<label> vs real")."""
+    out: dict = {}
+    for r in json.loads((data / "run_gates.json").read_text())["rows"]:
+        if r.get("diagnostic") == "stock.model_error":
+            title = r.get("title") or ""
+            label = title[:-len(" vs real")] if title.endswith(" vs real") else title
+            out[(r["device"], label)] = out.get((r["device"], label), 0) + 1
+    return out
+
+
+def used_on_oracle(out: Path, data: Path) -> dict[tuple[str, str], set]:
+    """{(type, model id): {(node id, how, runs)}}: the oracle examples whose fit holds the model (its typed nodes, else the example; how is
+    "selected" or "fitted"), and the rack's stations a producer's model replayed (how is its label, runs how many), by the label map."""
+    nodes = json.loads((out / "data" / "domain" / "deployments.json").read_text())["rows"]
+    labels = {(r["deployment"], r["label"]): r for r in json.loads((out / "data" / "domain" / "model_labels.json").read_text())["rows"]}
+    want: dict = {}
+    for ex, doc in oracle_results().items():
+        if ex not in ORACLE_EXAMPLES:
+            continue
+        for tid, (ids, basis) in fitted_models(doc).items():
+            typed = [n["id"] for n in nodes if n["root"] == ex and n["entity_type"] == tid] or [ex]
+            for mid in ids:
+                want.setdefault((tid, mid), set()).update((nid, basis, "") for nid in typed)
+    stations = {n["device"]: n["id"] for n in nodes if n["root"] == DEP and n.get("structural") == "station"}
+    for (device, label), n in replayed_by(data).items():
+        m = labels.get((DEP, label))
+        if m and device in stations:
+            want.setdefault((m["type"], m["model"]), set()).add((stations[device], label, str(n)))
+    return want
+
+
+def models_data_checks(out: Path, data: Path) -> dict:
+    """No browser: /models/ and one page per generic type (its ladder by family: rung, model, parameters, adds, identified here, used on),
+    /routines/ (both directions, each routine's setting, time, cost, equipment, recovery at 1x and 3x, status), /parameters/ (data-ui:
+    four presets, a column group per model, the best of each row), the nav, and the deployment pages' models linked to their ladder rows."""
+    if str(REPO) not in sys.path:
+        sys.path.append(str(REPO))
+    sys.path.insert(0, str(REPO / "vendor" / "data-ui" / "dist" / "python"))
+    import data_ui_base  # noqa: PLC0415
+    from type_cards import domain as dm  # noqa: PLC0415
+    from type_cards import registry as reg  # noqa: PLC0415
+
+    domain = out / "data" / "domain"
+    params = json.loads((domain / "parameters.json").read_text())
+    rows = params["rows"]
+    # 1. /models/: one row per generic type, in the contract's order, each opening its page
+    index = (out / "models" / "index.html").read_text() if (out / "models" / "index.html").is_file() else ""
+    listed = [(a.get("data-type"), a.get("href")) for a in start_tags(index, "a", "data-type")]
+    check(listed == [(t, model_url(t)) for t in dm.TYPE_ORDER], f"/models/ lists the {len(dm.TYPE_ORDER)} generic types in order, each opening its page ({listed[:3]})")
+    # 2. a page per type: its ladder by family, each model a row with its anchor
+    used_want = used_on_oracle(out, data)
+    bad: dict[str, list] = {k: [] for k in ("page", "ladder", "row", "identified", "used")}
+    for tid in dm.TYPE_ORDER:
+        path = out / "models" / tid / "index.html"
+        text = path.read_text() if path.is_file() else ""
+        art = start_tags(text, "article", "data-type")
+        if not art or art[0]["data-type"] != tid or dm.TYPES[tid].title not in html_text((re.search(r"<h1[^>]*>(.*?)</h1>", text, re.S) or [None, ""])[1]):
+            for key in bad:  # WHY every check: a page that is not there passes none of them (never vacuously)
+                bad[key].append(f"{tid}: no page")
+            continue
+        for fam in dm.TYPES[tid].families:
+            sec = re.search(rf'<section\b[^>]*\bdata-family="{fam}"[^>]*>.*?</section>', text, re.S)
+            got = [a["data-model"] for a in start_tags(sec.group(0), "tr", "data-model")] if sec else []
+            if got != [m.id for m in dm.models(tid) if m.family == fam]:
+                bad["ladder"].append(f"{tid} {fam}: {got}")
+        trs = {a["data-model"]: a for a in start_tags(text, "tr", "data-model")}
+        for m in dm.models(tid):
+            a = trs.get(m.id)
+            if a is None or a.get("id") != m.id or a.get("data-n") != str(m.n_parameters) or a.get("data-current") != str(m.current).lower() \
+                    or a.get("data-adds", "").split() != list(m.adds) or a.get("data-k") != str(m.k) or a.get("data-family") != m.family:
+                bad["row"].append(f"{tid} {m.id}: {a}")
+                continue
+            row_html = re.search(rf'<tr\b[^>]*\bdata-model="{re.escape(m.id)}"[^>]*>.*?</tr>', text, re.S).group(0)
+            ident = sorted(x["data-key"] for x in start_tags(row_html, "span", "data-key"))
+            want = sorted(r["id"] for r in rows if r["entity_type"] == tid and r["introduced_in"] == m.id and r["has_results"])
+            if ident != want:
+                bad["identified"].append(f"{tid} {m.id}: {ident[:3]} vs {want[:3]} ({len(ident)} vs {len(want)})")
+            used = {(x["data-node"], x.get("data-how", ""), x.get("data-runs", "")) for x in start_tags(row_html, "a", "data-node")}
+            if used != used_want.get((tid, m.id), set()):
+                bad["used"].append(f"{tid} {m.id}: {sorted(used)[:2]} vs {sorted(used_want.get((tid, m.id), set()))[:2]}")
+    words = {"page": "a page with its title", "ladder": "its ladder by family, each family's models in ladder order",
+             "row": "each model's row anchored by its id, with its rung, parameter count, adds and today's mark",
+             "identified": "per model the parameters identified here (every graded value of a parameter it adds)",
+             "used": "per model where it is used (the oracle's fits and selections; the rack's stations by the producer's labels)"}
+    for key, what in words.items():
+        check(not bad[key], f"every generic type ({len(dm.TYPE_ORDER)}) has {what} ({len(bad[key])} wrong: {bad[key][:3]})")
+    servo_used = used_want.get(("integrated_servo", "M4.dynamics.twin"), set())
+    check(any(how == "twin of record" for _n, how, _r in servo_used) and any(how == "selected" for _n, how, _r in servo_used),
+          f"the servo's M4.dynamics.twin is used on the rack's stations (their twin of record) and on the pendulum (its selection) ({sorted(servo_used)[:3]})")
+
+    # 3. /routines/: both directions, one data-ui table each, in two tabs
+    rt = (out / "routines" / "index.html").read_text() if (out / "routines" / "index.html").is_file() else ""
+    tabs = [a.get("href") for a in start_tags(rt, "a", "role") if a.get("role") == "tab"]
+    check(tabs == ["#by-routine", "#by-parameter"] and '<data-views id="routines-by-routine" src="/views/routines.base"' in rt
+          and '<data-views id="routines-by-parameter" src="/views/parameter-routines.base"' in rt,
+          f"/routines/ is two tabs, routine -> parameters and parameter -> routines, each a data-ui view ({tabs})")
+    table = json.loads((REPO / "sysid" / "results" / "calibration_routines.json").read_text())
+    joined = {r["routine"]: r for r in table["rows"]}
+    rdoc = json.loads((out / "data" / "routines.json").read_text()) if (out / "data" / "routines.json").is_file() else {"rows": []}
+    got_ids = [r.get("id") for r in rdoc["rows"]]
+    check(got_ids == [r.id for r in reg.ROUTINES], f"/data/routines.json has one row per routine, in the registry's order ({len(got_ids)} of {len(reg.ROUTINES)})")
+    wrong = []
+    for r, row in zip(reg.ROUTINES, rdoc["rows"]):
+        cost = reg.equipment_cost(r)
+        rec = joined.get(r.id, {}).get("recovery") or {}
+        want = {"setting": r.setting, "status": r.status, "kind": r.kind, "wall_time_s": r.wall_time.value, "operator_time_s": r.operator_time.value,
+                "cost_usd": cost.value, "equipment": [reg.EQUIPMENT[e].title for e in r.equipment],
+                "identifies": [f"{t} · {p}" for t, _m, p in dm.routine_parameters(r.id)],
+                "recovery_1x": (rec.get("1x") or {}).get("worst_error_over_tolerance"), "recovery_3x": (rec.get("3x") or {}).get("worst_error_over_tolerance"),
+                "pass_1x": (rec.get("1x") or {}).get("pass"), "pass_3x": (rec.get("3x") or {}).get("pass")}
+        cell = lambda v: v.get("value") if isinstance(v, dict) and "value" in v else v  # noqa: E731
+        got = {k: cell(row.get(k)) for k in want}
+        if got != want:
+            wrong.append(f"{r.id}: {sorted(k for k in want if got[k] != want[k])}")
+    check(len(rdoc["rows"]) == len(reg.ROUTINES) and not wrong, f"each routine row says where it runs, its time, its cost and equipment, what it identifies, "
+                                                                f"its recovery at 1x and 3x and its status, as the registry and the noise ladder do ({len(wrong)} wrong: {wrong[:3]})")
+    back = dm.parameter_routines()
+    prdoc = json.loads((out / "data" / "parameter-routines.json").read_text()) if (out / "data" / "parameter-routines.json").is_file() else {"rows": []}
+    want_rows = [(t, p, ids) for t, per in back.items() for p, ids in per.items()]
+    got_rows = [(r.get("type"), r.get("parameter"), r.get("routine_ids")) for r in prdoc["rows"]]
+    check(got_rows == want_rows, f"/data/parameter-routines.json has one row per parameter of every type, each with every routine that can identify it "
+                                 f"({len(got_rows)} of {len(want_rows)}; first differing {[g for g, w in zip(got_rows, want_rows) if g != w][:1]})")
+    inverse = all(f"{t} · {p}" in row.get("identifies", []) for t, p, ids in want_rows for rid in ids for row in rdoc["rows"] if row.get("id") == rid)
+    check(inverse and sum(len(ids) for _t, _p, ids in want_rows) == sum(len(r.get("identifies", [])) for r in rdoc["rows"]),
+          "the two directions are each other's inverse (every routine -> parameter pair is a parameter -> routine pair, and the counts match)")
+    fall_r = len(start_tags(rt, "tr", "data-routine"))
+    fall_p = len(start_tags(rt, "tr", "data-parameter"))
+    check(fall_r == len(reg.ROUTINES) and fall_p == len(want_rows), f"without JavaScript both tables are drawn by the server ({fall_r} routines, {fall_p} parameters)")
+
+    # 4. /parameters/: the data-ui table, its rail, its presets, a column group per model
+    pt = (out / "parameters" / "index.html").read_text() if (out / "parameters" / "index.html").is_file() else ""
+    aside = re.search(r'<aside class="fcol" id="filter"[^>]*>(.*?)</aside>', pt, re.S)
+    check(bool(aside) and '<data-facets for="parameters-views"' in aside.group(1) and '<data-views id="parameters-views" src="/views/parameters.base"' in pt,
+          "/parameters/ is two panes: data-ui's rail on the left, the parameters a data-ui table beside it")
+    base = data_ui_base.loads((out / "views" / "parameters.base").read_text()) if (out / "views" / "parameters.base").is_file() else {}
+    views = {v.get("name"): v for v in base.get("views") or []}
+    check(list(views) == list(PARAM_PRESETS), f"its presets are {list(PARAM_PRESETS)} ({list(views)})")
+    filt = {name: v.get("filters") for name, v in views.items()}
+    check(filt.get("All parameters") in (None, "") and filt.get("Winning model") == "winning == true" and filt.get("With results") == "has_results == true"
+          and filt.get("Errors only") == "has_results == true", f"each preset keeps the contract's rows: every row, the winning model's, those with a result ({filt})")
+    pdoc = json.loads((out / "data" / "parameters-view.json").read_text()) if (out / "data" / "parameters-view.json").is_file() else {"rows": [], "properties": {}}
+    check([r.get("id") for r in pdoc["rows"]] == [r["id"] for r in rows], f"the view's rows are the contract's parameters table, row for row ({len(pdoc['rows'])} of {len(rows)})")
+    cols = params["result_columns"]
+    groups = (views.get("With results") or {}).get("columnGroups") or {}
+    group_of = {}
+    for label, ids in groups.items():
+        for i in ids:
+            group_of[i] = label
+    by_col = {}
+    for c in cols:
+        ids = [k for k, p in pdoc["properties"].items() if p.get("column") == c["id"]]
+        parts = sorted(pdoc["properties"][k].get("part") for k in ids)
+        by_col[c["id"]] = {pdoc["properties"][k].get("part"): k for k in ids}
+        if parts != ["error", "ok", "recovered", "tolerance"] or len({group_of.get(k) for k in ids}) != 1 or None in {group_of.get(k) for k in ids}:
+            by_col[c["id"]] = None
+    lost = [c for c, v in by_col.items() if v is None]
+    check(not lost and len(groups) == len(cols), f"With results: one column group per (routine, model), each its recovered [95 %], error, tolerance and ✓ "
+                                                 f"({len(groups)} groups for {len(cols)} result columns; malformed {lost[:3]})")
+    labels_ok = all(c["model"] in label and reg.routine(c["routine"]).title in label for c in cols for label in [group_of.get((by_col.get(c["id"]) or {}).get("error"), "")])
+    check(labels_ok, "each group's sub-header names its model and the routine that fitted it")
+    # every value is the contract's, in the unit it is shown in
+    mism = []
+    raw = {r["id"]: r for r in rows}
+    for r in pdoc["rows"]:
+        src = raw.get(r.get("id"))
+        if src is None:
+            continue
+        for c in cols:
+            ids = by_col.get(c["id"]) or {}
+            cid = c["id"]
+            for part, key, lo, hi in (("recovered", f"recovered@{cid}", f"ci95_lo@{cid}", f"ci95_hi@{cid}"), ("error", f"error@{cid}", None, None)):
+                cell = r.get(ids.get(part)) if ids.get(part) else None
+                v = src.get(key)
+                if v is None:
+                    if cell not in (None, {}) and (not isinstance(cell, dict) or cell.get("value") is not None):
+                        mism.append(f"{r['id']} {part}@{cid}: {cell} for none")
+                    continue
+                f = 1.0 if cell and cell.get("unit") == src["unit"] else DISPLAY_FACTOR.get((src["unit"], (cell or {}).get("unit")))
+                if not isinstance(cell, dict) or f is None or abs(cell["value"] - v * f) > 1e-9 * max(1.0, abs(v * f)) \
+                        or (lo and src.get(lo) is not None and (abs(cell.get("low", float("nan")) - src[lo] * f) > 1e-9 * max(1.0, abs(src[lo] * f))
+                                                                 or abs(cell.get("high", float("nan")) - src[hi] * f) > 1e-9 * max(1.0, abs(src[hi] * f)))):
+                    mism.append(f"{r['id']} {part}@{cid}: {cell} vs {v} {src['unit']}")
+            ok = r.get(ids.get("ok")) if ids.get("ok") else None
+            within = src.get(f"within@{cid}")
+            if (within is None and ok not in (None, "")) or (within is not None and ok != ("pass" if within else "fail")):
+                mism.append(f"{r['id']} ok@{cid}: {ok} vs {within}")
+    check(bool(pdoc["rows"]) and not lost and not mism, f"every recovered [95 %] and error is the contract's value in the unit shown, every ✓ its within-tolerance "
+                                                       f"({len(mism)} wrong: {mism[:2]})")
+    # errors only: the error of every model side by side, each row's best marked (data-ui best: the least magnitude among them)
+    eo = views.get("Errors only") or {}
+    errs = [ids["error"] for ids in (v for v in by_col.values() if v)]
+    best = eo.get("best") or {}
+    check(sorted(best.get("among") or []) == sorted(errs) and best.get("by") == "absmin" and all(e in (eo.get("order") or []) for e in errs),
+          f"Errors only shows every model's error and marks each row's least ({best.get('by')} among {len(best.get('among') or [])} of {len(errs)})")
+    agree = [] if pdoc["rows"] and not lost else ["no rows or no column groups to compare"]
+    for r in (pdoc["rows"] if not lost else []):
+        src = raw[r["id"]]
+        if not src.get("best"):
+            continue
+        vals = {c["id"]: abs(r[by_col[c["id"]]["error"]]["value"]) for c in cols if by_col.get(c["id"]) and isinstance(r.get(by_col[c["id"]]["error"]), dict)
+                and r[by_col[c["id"]]["error"]].get("value") is not None}
+        least = min(vals.values()) if len(vals) >= 2 else None
+        winners = {c for c, v in vals.items() if v == least} if least is not None else {src["best"]}
+        if src["best"] not in winners:
+            agree.append(f"{r['id']}: {src['best']} not in {sorted(winners)}")
+    check(not agree, f"the cell data-ui marks best in each row is the contract's best column (its least error over tolerance) ({len(agree)} differ: {agree[:2]})")
+    check(all((views.get(name) or {}).get("emptyGroups") == "hide" for name in ("With results", "Errors only")),
+          "With results and Errors only leave out a model's group while the rows shown hold no value of it (data-ui emptyGroups)")
+
+    # 5. the nav: Models, Routines and Parameters in the search menu's Go to and the Account menu's Site column
+    home = (out / "index.html").read_text()
+    menu = re.search(r'<div class="sm-idle">(.*?)</div>\s*<p class="sm-foot">', home, re.S)
+    site_col = re.search(r'<ul class="am-links">(.*?)</ul>', home, re.S)
+    hrefs = ("/models/", "/routines/", "/parameters/")
+    check(bool(menu and site_col) and all(f'href="{h}"' in menu.group(1) and f'href="{h}"' in site_col.group(1) for h in hrefs),
+          "the nav links Models, Routines and Parameters (the search menu's Go to and Account's Site)")
+
+    # 6. every deployment page's models link to their ladder rows; the rack's labels name their ladder model
+    nodes = json.loads((domain / "deployments.json").read_text())["rows"]
+    labels = {(r["deployment"], r["label"]): r for r in json.loads((domain / "model_labels.json").read_text())["rows"]}
+    bad_links, bad_labels = [], []
+    for n in nodes:
+        page_path = out / "deployments" / n["id"] / "index.html"
+        sec = section_of(page_path.read_text(), "models") if page_path.is_file() else ""
+        for tr in start_tags(sec, "tr", "data-type"):
+            tid = tr["data-type"]
+            row_html = re.search(rf'<tr\b[^>]*\bdata-type="{re.escape(tid)}"[^>]*>.*?</tr>', sec, re.S).group(0)
+            links = [a for a in start_tags(row_html, "a", "data-model-link")]
+            named = set(tr.get("data-current", "").split()) | set(tr.get("data-used", "").split())
+            if {a["data-model-link"] for a in links} < named or any(a.get("href") != model_url(tid, a["data-model-link"]) or a["data-model-link"] not in {m.id for m in dm.models(tid)} for a in links):
+                bad_links.append(f"{n['id']} {tid}: {[a.get('href') for a in links][:3]}")
+            for lab in [x for x in tr.get("data-replayed", "").split("|") if x]:
+                said = [x for x in start_tags(row_html, "span", "data-label") if x["data-label"] == lab]
+                want = labels.get((n["root"], lab))
+                if not said or said[0].get("data-ladder", "") != (want["model"] if want else ""):
+                    bad_labels.append(f"{n['id']} {lab}: {said[:1]} vs {want and want['model']}")
+    check(not bad_links, f"on every deployment page each model it names links to its row on its type's ladder ({len(bad_links)} wrong: {bad_links[:2]})")
+    check(not bad_labels, f"on every physical deployment page each producer's label names its ladder model ({len(bad_labels)} wrong: {bad_labels[:2]})")
+    with_results = sum(1 for r in rows if r["has_results"])
+    return {"rows": rows, "cols": cols, "by_col": by_col, "groups": groups, "view_rows": pdoc["rows"], "with_results": with_results,
+            "winning": sum(1 for r in rows if r["winning"]), "routines": len(reg.ROUTINES), "parameters": len(want_rows),
+            "servo_used": sorted(servo_used), "can11": next((n["id"] for n in nodes if n["root"] == DEP and n.get("structural") == "station" and n.get("device") == "CAN 11"), None)}
+
+
+PARAMS_JS = """() => { const v = document.getElementById('parameters-views'); if (!v || !v.model) return null;
+  return { view: v.view && v.view.name, matched: v.model.matched ?? (v.model.rows ? v.model.rows.length : null),
+           cols: [...v.querySelectorAll('thead th[data-col]')].map((t) => t.dataset.col) }; }"""
+
+
+def models_browser_checks(page, base: str, layout: dict, still) -> None:
+    """In the browser at 1280 then 390 px: a type's ladder by family with a row in view at its anchor; the routines' two directions as two
+    tabs of data-ui tables; the parameters view's four presets (their rows counted, a group per model measured over its columns, the best
+    of each row marked and tinted, a model's group hidden and shown from Properties, a rail pick keeping only the models that graded those
+    rows); a deployment page's model link landing on its ladder row."""
+    page.set_viewport_size({"width": 1280, "height": 900})
+    # a type's page: the servo's ladder, M4 the twin of record's, its row at its anchor
+    page.goto(f"{base}{model_url('integrated_servo', 'M4.dynamics.twin')}")
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(600)
+    # WHY below the bar and not merely in the viewport: the site's bar is sticky, so a row scrolled to the very top sits under it, unread
+    row = page.evaluate("""() => { const tr = document.getElementById('M4.dynamics.twin'); if (!tr) return null; const r = tr.getBoundingClientRect();
+        const bar = document.querySelector('header.top'); const b = bar ? bar.getBoundingClientRect().bottom : 0;
+        const used = [...tr.querySelectorAll('td[data-col=used] a[data-node]')].map((a) => [a.dataset.node, a.dataset.how]);
+        return { top: r.top, bottom: r.bottom, bar: b, vh: innerHeight, used, head: [...tr.closest('table').querySelectorAll('thead th')].map((t) => t.textContent.trim().toLowerCase()) }; }""")
+    check(bool(row) and row["bar"] - 1 <= row["top"] < row["vh"] and ["rung", "model", "parameters", "adds", "identified here", "used on"] == row["head"][:6]
+          and any(h == "twin of record" for _n, h in row["used"]),
+          f"/models/integrated_servo/#M4.dynamics.twin opens with that row in view below the bar, under rung · model · parameters · adds · identified here · "
+          f"used on, used on the rack's twins of record ({row and (round(row['top']), round(row['bar']), row['head'][:6], sorted({h for _n, h in row['used']})[:4])})")
+    still("60-models-servo")
+    page.goto(f"{base}{model_url('rigid_body_chain')}")
+    page.wait_for_load_state("load")
+    fams = page.evaluate("""() => [...document.querySelectorAll('section[data-family]')].map((s) => [s.dataset.family, s.getBoundingClientRect().top, s.querySelectorAll('tr[data-model]').length])""")
+    check([f for f, _t, _n in fams] == ["kinematics", "dynamics"] and fams[0][1] < fams[1][1] and all(n > 0 for _f, _t, n in fams),
+          f"the rigid body chain's ladder is two families, kinematics above dynamics, each with its models ({fams})")
+    still("61-models-chain")
+
+    # the routines, both directions
+    page.goto(f"{base}/routines/")
+    page.wait_for_load_state("load")
+    ok = soft_wait(page, "() => { const v = document.getElementById('routines-by-routine'); return !!v && !!v.model && v.querySelectorAll('tbody tr[data-i]').length > 0; }")
+    r1 = page.evaluate("""() => { const v = document.getElementById('routines-by-routine'); if (!v || !v.model) return null;
+        return { matched: v.model.matched ?? v.model.rows.length, first: (v.querySelector('thead th[data-col]') || {}).dataset?.col,
+                 shown: v.getClientRects().length > 0, cols: [...v.querySelectorAll('thead th[data-col]')].map((t) => t.dataset.col) }; }""")
+    need = {"title", "setting", "wall_time_s", "cost_usd", "equipment", "identifies", "recovery_1x", "recovery_3x", "status"}
+    check(ok and bool(r1) and r1["matched"] == layout["routines"] and r1["first"] == "title" and r1["shown"] and need <= set(r1["cols"]),
+          f"Routine -> parameters: every routine a row, the routine first, then where, time, cost, equipment, what it identifies, recovery at 1x and 3x, "
+          f"status ({r1 and (r1['matched'], r1['first'], sorted(need - set(r1['cols'])))})")
+    still("62-routines-by-routine")
+    page.locator("a[role=tab][href='#by-parameter']").first.click()
+    ok = soft_wait(page, "() => { const v = document.getElementById('routines-by-parameter'); return !!v && !!v.model && v.getClientRects().length > 0 && v.querySelectorAll('tbody tr[data-i]').length > 0; }")
+    r2 = page.evaluate("""() => { const v = document.getElementById('routines-by-parameter'); const a = document.getElementById('routines-by-routine');
+        if (!v || !v.model) return null; return { matched: v.model.matched ?? v.model.rows.length, first: (v.querySelector('thead th[data-col]') || {}).dataset?.col,
+        other: a ? a.getClientRects().length > 0 : null, hash: location.hash }; }""")
+    check(ok and bool(r2) and r2["matched"] == layout["parameters"] and r2["first"] == "parameter" and r2["other"] is False and r2["hash"] == "#by-parameter",
+          f"Parameter -> routines: its tab shows every parameter a row, the parameter first, the other direction hidden ({r2})")
+    still("63-routines-by-parameter")
+
+    # the parameters view: four presets
+    page.goto(f"{base}/parameters/")
+    page.wait_for_load_state("load")
+    soft_wait(page, f"() => {{ const s = ({PARAMS_JS})(); return !!s && s.matched !== null && s.cols.length > 0; }}")
+    want_n = {"All parameters": len(layout["rows"]), "Winning model": layout["winning"], "With results": layout["with_results"], "Errors only": layout["with_results"]}
+    got_n = {}
+    for i, name in enumerate(PARAM_PRESETS):
+        page.evaluate("(n) => document.getElementById('parameters-views').selectView(n)", name)
+        soft_wait(page, f"(n) => {{ const s = ({PARAMS_JS})(); return !!s && s.view === n && s.cols.length > 0; }}", arg=name)
+        page.wait_for_timeout(500)
+        got_n[name] = (page.evaluate(PARAMS_JS) or {}).get("matched")
+        still(f"6{4 + i}-parameters-{name.lower().replace(' ', '-')}")
+    check(got_n == want_n, f"each preset holds the contract's rows: all, the winning model's, those with a result ({got_n} vs {want_n})")
+    # errors only: every drawn row's marked cells are its least |error|, and they are tinted
+    page.evaluate("(n) => document.getElementById('parameters-views').selectView(n)", "Errors only")
+    page.wait_for_timeout(600)
+    marks = page.evaluate("""() => [...document.querySelectorAll('#parameters-views tbody tr[data-i]')].map((tr) => ({
+        id: tr.dataset.id || null, name: ((tr.querySelector('td[data-col="name"]') || {}).textContent || '').trim(),
+        best: [...tr.querySelectorAll('td[data-best]')].map((td) => td.dataset.col),
+        tint: [...tr.querySelectorAll('td[data-best]')].map((td) => getComputedStyle(td).backgroundColor) }))""")
+    view_rows = {r["id"]: r for r in layout["view_rows"]}
+    by_name: dict = {}
+    for r in layout["view_rows"]:
+        by_name.setdefault(r.get("name"), []).append(r)
+    errs = [v["error"] for v in layout["by_col"].values() if v]
+    wrong = []
+    for m in marks:
+        named = by_name.get(m["name"]) or []
+        r = view_rows.get(m["id"]) if m["id"] else (named[0] if len(named) == 1 else None)
+        if r is None:
+            wrong.append(f"no row id {m['id']}")
+            continue
+        vals = {e: abs(r[e]["value"]) for e in errs if isinstance(r.get(e), dict) and r[e].get("value") is not None}
+        least = min(vals.values()) if len(vals) >= 2 else None
+        want = sorted(e for e, v in vals.items() if v == least) if least is not None else []
+        if sorted(m["best"]) != want or any(t in ("rgba(0, 0, 0, 0)", "transparent") for t in m["tint"]):
+            wrong.append(f"{m['id']}: {m['best']} vs {want}")
+    check(marks and not wrong and any(m["best"] for m in marks), f"Errors only: in every drawn row the least error is marked and tinted, ties both "
+                                                                f"({len(marks)} rows drawn; {len(wrong)} wrong: {wrong[:2]})")
+    still("67b-parameters-errors-best")
+    # with results, the rail on one deployment: exactly the models that graded its rows, each group's header over its columns
+    page.goto(f"{base}/parameters/?deployment=pendulum_can11")
+    page.wait_for_load_state("load")
+    soft_wait(page, f"() => {{ const s = ({PARAMS_JS})(); return !!s && s.matched !== null && s.cols.length > 0; }}")
+    page.evaluate("(n) => document.getElementById('parameters-views').selectView(n)", "With results")
+    soft_wait(page, f"() => {{ const s = ({PARAMS_JS})(); return !!s && s.view === 'With results' && s.matched > 0; }}")
+    page.wait_for_timeout(600)
+    shown = page.evaluate(PARAMS_JS) or {}
+    mine = [r for r in layout["view_rows"] if r.get("deployment") == "pendulum_can11" and r.get("has_results")]
+    want_groups = sorted(label for label, ids in layout["groups"].items() if any(isinstance(r.get(i), dict) and r[i].get("value") is not None or
+                                                                                   (not isinstance(r.get(i), dict) and r.get(i) not in (None, "")) for r in mine for i in ids))
+    drawn = sorted(label for label, ids in layout["groups"].items() if any(i in shown.get("cols", []) for i in ids))
+    spans = page.evaluate("""(groups) => Object.entries(groups).map(([label, ids]) => { const th = [...document.querySelectorAll('#parameters-views thead th')].find((t) => t.textContent.trim() === label);
+        const cs = ids.map((i) => document.querySelector(`#parameters-views thead th[data-col="${i}"]`)).filter(Boolean); if (!th || !cs.length) return null;
+        const a = th.getBoundingClientRect(), f = cs[0].getBoundingClientRect(), l = cs[cs.length - 1].getBoundingClientRect();
+        return Math.abs(a.left - f.left) <= 1 && Math.abs(a.right - l.right) <= 1; }).filter((x) => x !== null)""",
+                          {k: v for k, v in layout["groups"].items() if k in drawn})
+    check(shown.get("matched") == len(mine) and drawn == want_groups and spans and all(spans),
+          f"With results on pendulum_can11 (rail): its {len(mine)} rows and exactly the {len(want_groups)} models that graded them, each model's header over its "
+          f"own columns (measured) (drawn {len(drawn)}, matched {shown.get('matched')}, spans {spans})")
+    still("66b-parameters-with-results-pendulum")
+    # Properties: a model's group hidden and shown again
+    label = drawn[0] if drawn else ""
+    page.locator("#parameters-views .dv-bar [data-bar=menu][data-name=properties]").first.click()
+    soft_wait(page, "() => !!document.querySelector('.dv-prop-group')", timeout=8000)
+    # WHY by index: a label holds "·", which json.dumps escapes as \u00b7, an escape CSS does not read
+    at = page.evaluate("(g) => [...document.querySelectorAll('.dv-prop-group')].findIndex((li) => li.dataset.group === g)", label)
+    page.locator(".dv-prop-group input").nth(max(at, 0)).uncheck()
+    page.wait_for_timeout(400)
+    gone = page.evaluate(PARAMS_JS) or {}
+    page.locator(".dv-prop-group input").nth(max(at, 0)).check()
+    page.wait_for_timeout(400)
+    back = page.evaluate(PARAMS_JS) or {}
+    page.keyboard.press("Escape")
+    ids = layout["groups"].get(label, [])
+    check(bool(label) and at >= 0 and not any(i in gone.get("cols", []) for i in ids) and all(i in back.get("cols", []) for i in ids),
+          f"Properties hides a model's whole group and shows it again ({label!r}: {sum(i in gone.get('cols', []) for i in ids)} then {sum(i in back.get('cols', []) for i in ids)} of {len(ids)} columns)")
+
+    # a deployment page's model link lands on its ladder row
+    if layout.get("can11"):
+        page.goto(f"{base}{node_url(layout['can11'])}")
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(600)
+        link = page.locator("#models a[data-model-link='M4.dynamics.twin']").first
+        link.scroll_into_view_if_needed()
+        link.click()
+        try:
+            page.wait_for_url(re.compile(re.escape(model_url("integrated_servo")) + "#M4\\.dynamics\\.twin$"), timeout=15000)
+        except Exception:  # noqa: BLE001  (the check says where it went)
+            pass
+        page.wait_for_timeout(500)
+        top = page.evaluate("() => { const tr = document.getElementById('M4.dynamics.twin'); const bar = document.querySelector('header.top'); "
+                            "return tr ? [tr.getBoundingClientRect().top, bar ? bar.getBoundingClientRect().bottom : 0] : null; }")
+        check(page.url.endswith(model_url("integrated_servo", "M4.dynamics.twin")) and top is not None and top[1] - 1 <= top[0] < 900,
+              f"CAN 11's deployment page links its twin's model to that model's ladder row, in view below the bar ({page.url.split('/', 3)[-1]}, row at {top})")
+
+    # a phone: no sideways scroll
+    page.set_viewport_size({"width": 390, "height": 844})
+    for url in ("/models/", model_url("integrated_servo"), "/routines/", "/parameters/"):
         page.goto(base + url)
         page.wait_for_load_state("load")
         page.wait_for_timeout(1200)
@@ -2995,6 +3428,10 @@ def main() -> int:
     deployments: dict = {}
     with guard("the deployments pages' data"):
         deployments = deployments_data_checks(out, data)
+    # the models by entity type, the calibration routines both ways, the parameters view (w2c, 2026-11-07)
+    models: dict = {}
+    with guard("the models, routines and parameters pages' data"):
+        models = models_data_checks(out, data)
     # metrics, diagnostics and coverage over selected runs, and the reports (2026-11-07, the metrics lane)
     metrics: dict = {}
     with guard("the metrics page's data"):
@@ -3646,7 +4083,10 @@ def main() -> int:
             # 16. the deployments index and every deployment's page (Domain model v3, 2026-11-07)
             with guard("the deployments index and pages"):
                 deployments_browser_checks(page, base, deployments, still)
-            # 17. metrics over selected runs, and the reports (2026-11-07, the metrics lane)
+            # 17. the models by entity type, the routines both ways, the parameters view (w2c, 2026-11-07)
+            with guard("the models, routines and parameters pages"):
+                models_browser_checks(page, base, models, still)
+            # 18. metrics over selected runs, and the reports (2026-11-07, the metrics lane)
             with guard("the metrics page in the browser"):
                 metrics_browser_checks(page, base, metrics, still)
             with guard("the reports in the browser"):

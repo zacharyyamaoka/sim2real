@@ -145,3 +145,65 @@ Read a routine's 3x and 10x rows before trusting it on that sensor.
 
 `git revert` the merge commit. The records, the ruler, the runner, the scenario and the results are additive; the pipelines' hooks are
 no-ops outside the ladder.
+
+## Addendum (2026-11-07): the servo's drift alarm in the gap's own units
+
+**Status:** landed on sim2real main (branch `claude/drift-gap-units`). This adopts in sysid the domain-v3 decision
+(docs/decision-domain-model-v3-2026-11-07.md, "The drift threshold") and closes this record's last finding ("goes deaf as the noise
+grows ... Not changed here"). It goes through the contract slot that landed for it, `servo.gap_drift` / `dm.parameter_drift`, which is
+unchanged.
+
+**What changed.**
+- `sysid/drift.py` warns when a check's gap, less the commissioned gap, passes the station's allowance (`description.json`
+  `monitoring.gap_allowance`). The commissioned gap is M4's, measured by the routine every check runs.
+- The forecast is the wear line solved for the commissioned gap plus the allowance. The gap-to-ratio curve (45 twin replays) is gone.
+- The fidelity ratio is still computed on every check (`ratio`, `ratio_alarm_h`) but is never the alarm.
+- The check needs no twin. At 10x, where the regression raises, the ladder now runs it on the reversals routine's gap.
+- The `servo.gap_check_forecast` routine record says how it warns now.
+
+**The allowance: T5's 2 arcmin (0.582 mrad) on a geared station, none on a direct drive.**
+
+| criterion (weight) | **T5, 2 arcmin (chosen)** | the oracle's 10 % (0.20 mrad) | twin-derived (domain-v3's suggestion) |
+|---|---|---|---|
+| does not move with the camera (must) | yes | yes | no: it scales the commissioned twin's own error (held-out link error 0.57 mrad at 1x, 1.51 at 3x) |
+| an acceptance the gap already has (must) | yes: bam_rack_twin `GAP_CI_HALF_ARCMIN`, the UR gaps' ladder tolerance | yes: acceptance.json | no: a new computed number |
+| the drift gates still met at 1x (should) | yes, below | no: it crosses at 86 h, and the 48 h forecast misses by 13.7 % (bound 5 %) | yes |
+
+T5 is the rack's unit gate on a geared joint's gap: the gap's 95 % half-width must be at most 2 arcmin. type_cards puts it on the gearbox
+card, not the servo card. The twin carries the commissioned gap. Once wear moves the true gap 2 arcmin past that value, the twin's gap is
+off by more than the unit was accepted with. `drift.t5_gap_allowance_rad(station)` is the rule. test_drift_gap.py holds the
+description's value to the rule, against the live station record and the live constant.
+
+**Measured.** Before is the fidelity ratio's alarm, after is the gap check's, both on the same checks (`ladder pendulum_can11 --levels
+1x|3x|10x`, `drift backlash_wear`):
+
+| noise | before: alarm | after: alarm | hidden gap crossed | forecast at 168 h | wear rate (true 1.8e-6 rad/h) |
+|---|---|---|---|---|---|
+| 1x | 204 h (ratio crossed 197.3) | **300 h** | 292.4 h | 298.4 h (+2.0 %, +6.0 h), plan by 280.4 h | 1.876e-6 (+4.2 %) |
+| 3x | never inside 480 h (forecast 605 h) | **360 h** | 359.2 h | 360.3 h (+0.3 %) | 1.516e-6 (−15.8 %), unchanged |
+| 10x | not run (the regression raised) | never inside 480 h | never | 878 h | 7.0e-7: 6.1 tolerances, a pass only by the ladder's cap |
+
+- **The forecast check is kept and passes.** At 1x it is +2.0 % against bounds of 5 % and 15 %, and 6.0 h against the one-check
+  interval the 5 % was chosen for (now asserted beside it). Lead time is 124 h (gate 48 h).
+- **The alarm fires on time at both levels.** At 1x it fires 7.6 h after the hidden crossing, at 3x 0.8 h after (gate: within one
+  check). At the alarm the true gap is 0.610 and 0.584 mrad past the commissioned gap, against 0.582. Recalibrated ratio: 0.970 at 1x,
+  0.973 at 3x.
+- **The expected outcome, "at 3x within about 33 h of the 1x alarm": FAIL.** The 3x alarm is **60 h** after the 1x one (300 h to
+  360 h). The check is not the cause. The commissioned gap it counts from is: the reversals routine reads the same 2.000 mrad gap as
+  1.957 at 1x (−0.043) and 2.074 at 3x (+0.074). That 0.117 mrad difference is 64.7 h of wear. The 33 h estimate counted only the
+  checks' scatter (0.059 mrad rms), not commissioning's error.
+- **10x is deaf because its routine is.** The reversals routine reads 4.68 mrad on a 2.0 mrad gap, and the checks follow only 39 % of
+  the true growth.
+- **At 1x the alarm comes 96 h later than the ratio's did.** The ratio fired at a 0.40 mrad growth (1.4 arcmin), tighter than T5. By
+  then the twin is 1.46x its hour-0 fidelity, against the ratio's 1.25.
+
+**Not changed:** acceptance.json's drift gates; the ladder's ruler (its 0x `not_at` reason still names the ratio, though the gap check
+could now run at 0x); the site's wear chart. `site/landing.py` `wear_svg` still draws the ratio against 1.25x while its dots take the gap
+check's status. A site lane can redraw it as `checks[].gap_growth_rad` against `allowance_rad`.
+
+**What would change this:**
+- To make the alarm hour independent of the camera too, count wear from the first deployed check rather than from the twin's gap. That
+  alarms on "the gear has worn 2 arcmin", not "the twin's gap is 2 arcmin off".
+- To keep the 1x warning at 204 h, warn on either check. The ratio is already computed every check.
+
+**Undo:** `git revert -m 1` the merge commit. That restores the ratio alarm, the curve forecast and the earlier results together.
