@@ -90,6 +90,17 @@ adapter its bam_rack_twin record wires its boards to (`adapter_serial`), each st
 | `setting` | `type_cards` SETTINGS: `bench` (in the office) or `deployed` (in a customer's facility), else `unknown`, by the same rule |
 | `test_type` | the type_cards `TestType.id` a run recorded; none is recorded today |
 | `config` | `full` when the run's session recorded its board's whole config (bam_rack_twin.hardware session.json `board_configs`, the `.cfg` file's key lines hashing to its sha256), else `not recorded`; `config_detail` says what is recorded |
+| `excitation`, `closed_loop`, `offline_scope` | the v3 run tags (type_cards `domain.run_tags`, from the run's kind as bam_rack_twin.hardware's code says, cited per kind): `driven`, `free response`, `mixed` (a swing released to coast; a heating run, then its cool-down) or `unknown`; whether the board's feedback acted; and which configs a model may be judged on the run under (`its own config` for a closed-loop run, `any config` for a free response) |
+
+## Domain model v3
+
+`type_cards/CONTRACT.md`, "Domain model v3" (decision: `docs/decision-domain-model-v3-2026-11-07.md`) is the contract the pages build
+against: deployments (`virtual`: the six oracle examples; `physical`: the rack), every node of their trees a deployment of its own, eleven
+generic entity types with one model ladder each in families (`M2.kinematics.geometric`, `M4.dynamics.twin`), pinned metrics, diagnostics,
+coverage over any selection of runs (`type_cards/selection.py`), the parameters table with a column group per routine and model, and
+frozen reports (`type_cards/frozen_reports/`). The type level is committed (`type_cards/domain_v3.json`, `python3 -m type_cards.domain
+--write`); the site build writes the rest to `OUT/data/domain/` (`deployments.json`, `parameters.json`, `selections/<dep>.json`,
+`coverage_cells/<dep>.json`, `reports/<id>.json`). No page reads them yet.
 
 ## Diagnostics
 

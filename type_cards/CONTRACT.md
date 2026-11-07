@@ -255,3 +255,229 @@ recovered and forecast (`usage_remaining`).
 
 Type a tree node with `card_for`; tag a run with its `setting` and test type `id`; on deployed runs, `check_drift(card, live,
 calibrated)` gives the warning in Zach's words, and with a usage history the usage remaining.
+
+## Domain model v3 — `sim2real.domain/3` (2026-11-07)
+
+Zach's feedback of 2026-11-06 (`PROJECT - Sim2Real`, "Feedback on how it is right now") as one contract: **deployments** (virtual or
+physical, tagged, a tree whose every node is a deployment of its own), **runs** (raw data, tagged with their config, driven or free
+response, closed loop), generic **entity types**, one **model** ladder per type in **families**, **parameters** (true / nominal /
+recovered), **routines** both ways, **metrics** (some pinned), **diagnostics** (a metric plus warning / error limits), **coverage**, and
+frozen **reports**. Decision record: `docs/decision-domain-model-v3-2026-11-07.md`. Held by `tests/test_domain_v3.py` (types, models,
+migration, diagnostics, run tags, the committed projection), `tests/test_instances.py` (deployments, trees, the parameters table, run tags in
+runs.json), `tests/test_selection.py` (metrics, diagnostics, coverage over runs; the browser's rule) and `tests/test_reports.py`.
+
+### Rules of the road (v3)
+
+- **Imports.** `from type_cards import domain as dm` (the type level and every record class), `instances as inst` (deployments, trees,
+  the parameters table, the site's projections), `selection as sel` (any runs), `report as rep`. Stdlib only. v2 (`reg`) is unchanged and
+  stays the API sysid and the type pages read; v3 is built from it.
+- **Records are frozen, keyword-only dataclasses** (Zach's Python ground truth); every JSON file below is a generated projection, never
+  edited. Hand-authored instances are Python, one per file: a physical deployment's v3 part in `type_cards/deployments/<id>.py`, a report
+  in `type_cards/frozen_reports/<id>.py`.
+- **Never parse an id.** A model's `k`, `family` and `name` are fields; order by the type's `models`. A model's global key is
+  `"<type>/<model id>"` (`Model.key`): ids repeat across types (`M2.dynamics.coulomb_viscous` is the servo's and the conveyor's).
+- **Additive only**, as v2: a field is never renamed or removed; new ones get defaults. A breaking change bumps `dm.SCHEMA`.
+- **Unknown stays unknown**: a value nothing establishes is `null` with a `why`, never a guess (a per-unit limit with no unit value gives
+  level `unknown`; a run kind nobody wrote gives excitation `unknown`).
+
+### Vocabularies (`dm.*`, and in `domain_v3.json`)
+
+```
+DEPLOYMENT_KINDS  virtual | physical
+FAMILIES          kinematics | dynamics | measurement          (a family is usable without the others: a chain with no dynamics model)
+EXCITATIONS       driven | free response | mixed | unknown
+OFFLINE_SCOPES    any config | any feedback gains | its own config | split | unknown
+LEVELS            ok | warning | error | unknown                LEVEL_RANK ok 0 < warning 1 < unknown 2 < error 4 (RobotDx, data-ui §35)
+AGGREGATES        median | mean | min | max | sum | count        (data-ui's own summaries: the browser computes the same)
+TAGS              oracle example (declared) | uses camera | uses arm | uses gripper | uses conveyor | uses servo (derived: TAG_OF_TYPE)
+STRUCTURAL        deployment | adapter | station | assembly | mount | tool: the levels that are not a type, each with its Dashboard
+ESTIMATE_FORMS    single (in scope) | configuration_dependent | network (reserved: Estimate(form=...) raises)
+RUN_KINDS         bam_rack_twin.hardware kind -> (excitation, closed_loop, why): swing and thermal are mixed; thermal is open loop
+```
+
+### Entity types, models, parameters (`type_cards/domain_v3.json`, committed; `python3 -m type_cards.domain --write`, `--check`)
+
+`dm.TYPES` (`TYPE_ORDER`): `rigid_body_chain`, `integrated_servo`, `bldc_motor`, `gearbox`, `foc_controller`, `encoder`, `gripper`,
+`conveyor`, `camera`, `depth_camera`, `hyperspectral_camera`. Generic, never an instance.
+
+```
+EntityType      id title zach group covers families models parameters metrics diagnostics gates(v2 Gate) coverage dashboard members(Part)
+                legacy_cards robotdx_part note
+Model           id ("M<k>.<family>.<name>") type k family name title kind(physics|residual|learned) parameters (cumulative in its family)
+                adds base wear current n_parameters equation references architecture needs robotparts implemented legacy[(card, key)] note
+                .key = "<type>/<id>"
+ParameterSpec   type name unit family introduced_in models nominal source identified_by observable role wear legacy[(card, name)] note
+MetricSpec      id type family(performance|fidelity) title unit defined_on pinned model_dependent aggregate per_run(RunSource|None) why_not
+                robotdx normalised acceptance today legacy
+RunSource       table(runs|run_diagnostics) column diagnostic per_model divide_by("floor"|"") note
+DiagnosticSpec  id type metric title warn(Limit|None) error(Limit|None) kind(threshold|drift) units(metric|ratio|parameter) parameter
+                message baseline robotdx note legacy
+CoverageSpec    type dimensions[Dimension(name unit headline bin_size binning)] rule gate_pct reachable from_runs why_not
+Dashboard       template panels components proposed          Part  type count role
+```
+
+`domain_v3.json`: `{schema, note, deployment_kinds, families, excitations, offline_scopes, levels, level_rank, aggregates, tags, tag_of_type,
+estimate_forms, structural{word: Dashboard}, run_kinds{kind: {excitation closed_loop offline_scope why}}, entity_types[EntityType with models,
+parameters, metrics, diagnostics, pinned, current as id lists], models[Model + key], parameters[ParameterSpec + key, routines[]],
+metrics[MetricSpec], diagnostics[DiagnosticSpec], coverage[CoverageSpec], routines[{id title package kind setting status
+identifies[{type model parameter}] legacy_identifies}], parameter_routines{type: {parameter: [routine ids]}}, migration{...below}}`.
+
+- **Models by type**: `dm.models(type)` (ladder order: each family in turn, layers rising), `dm.model(type, id)`, `dm.current_models(type)`
+  (today's model, one per family), `dm.parameter(type, name)`, `dm.entity_type(type id | v2 card id)`.
+- **Families.** Single-family types keep v2's layer numbers (robotparts' actuator layers: the servo is M0, M2, M3, M4 twin, M5, M5 wear,
+  M6 residual, M7 network). `rigid_body_chain`, `conveyor` and `gripper` split: the chain's kinematics M0 nominal, M1 zero offsets, M2
+  geometric (+ M2 wear: zeros drifting) and dynamics M0 rigid links, M1 compliance (+ M1 wear), M6 residual, M7 network. M6 is always the
+  residual and M7 the network.
+- **A composite's dynamics are its members'**: a chain's joints are integrated servos with their own ladder (`EntityType.members`).
+
+### Routines both ways
+
+`dm.routine_parameters(routine id)` -> `((type, model, parameter), ...)` (routine -> parameters; the model is the lowest of the
+parameter's family holding every parameter the routine claims there); `dm.routines_identifying(type, parameter)` -> v2 `CalibrationRoutine`s
+(parameter -> routines); `dm.parameter_routines()` -> `{type: {parameter: [routine ids]}}` over every parameter, `[]` where none;
+`dm.fitted_model(routine, type, family)` -> the one model a routine's single fit is. The routines themselves stay v2 records (`reg.ROUTINES`,
+`sysid/results/calibration_routines.json`); in JSON: `domain_v3.json` `routines` and `parameter_routines`.
+
+### Metrics, diagnostics, pinned
+
+- `dm.pinned(type)`; `EntityType.metrics` lists the pinned first: the type's headline performance metric(s) and its twin-fidelity metric.
+- A metric's per-run value comes from `per_run` (three today: `servo.tracking_rms` = runs.json `tracking_mrad`; `servo.twin_fidelity` =
+  run_gates.json `stock.model_error` per model ÷ the station's T1 floor (gates.json); `driver.loop_rate` = runs.json `rate_hz`); every other
+  metric has `why_not`. Performance metrics need no model; fidelity metrics are per model (`model` = the producer's label, e.g. "twin of record").
+- `dm.level(diagnostic, value, limits=None)` -> ok | warning | error | unknown (error checked first; `limits={"warn": v, "error": v}` sets a
+  per-unit value). `dm.diagnostic_row(diagnostic, value, subject=...)` -> PEP 0010 §10's row (`subject diagnostic title level rank value unit
+  warn_lo warn_hi error_lo error_hi kind message` + extras), which data-ui's gate and threshold views read.
+- Drift: v2's ratio checks are `units: "ratio"`. `servo.gap_drift` is `units: "parameter"` on `backlash_rad`: `dm.parameter_drift(d,
+  commissioned=, measured=, allowance=)`, the gap's growth in rad against an allowance set per station (decision record, "The drift threshold").
+
+### Deployments and their trees (`<site>/data/domain/deployments.json`, written at site build by `inst.write`)
+
+A dataset of every node of every deployment, in the house table shape (runs.json's): `{name, title, contract, source, schema{fields[{name
+type}]}, tree{parent: "parent"}, index, rows}` (types are the robotics contract's words: string, number, integer, boolean, array).
+
+```
+row  id root parent depth title kind(virtual|physical) tags[] structural entity_type entity_title card(v2) device sysid_id sees[] runs
+     children page source machine where summary dashboard dashboard_panels[] components[] current_models[]
+```
+
+- **Index filtered by kind and tags**: rows with `parent == null` (seven today: the six oracle examples, virtual, and the One Dof Test
+  Rack, physical); facets on `kind` (values) and `tags` (values on a list). A node's tags: its deployment's declared ones and those derived
+  from the types in its own subtree, so a sub-deployment filters the same way.
+- **A deployment page, with its sub-deployments**: `inst.subtree(nodes, id)` (the node first) and `inst.sub_deployments(nodes, id)` (its
+  children). Every node id is a deployment address (path ids: `one-dof-test-rack/fdcanusb-0607623A/can11`, `ur5e/ur5e/shoulder_pan`).
+- **Physical** (`inst.physical_nodes(data)`): app/registry.json's deployments; deployment -> fdcanusb adapter -> station (site/deploy_tree.py's
+  ids) -> its parts (the integrated servo's members: motor, driver, gearbox, encoder, labelled from the bam_rack_twin record; a gearbox the
+  record calls "none" is absent) and the cameras `type_cards/deployments/<id>.py` declares (each `sees` the stations its tags are on). Parts
+  carry their station's `device`. `runs`: the runs whose device is under the node (a camera's: null, it is not known which it filmed).
+- **Virtual** (`inst.virtual_nodes(results)`): each oracle example's sysid typed tree, node for node; a v2-typed node gets its v3 type; an
+  "arm + gripper" is `structural: assembly` (a chain and a gripper composed); `runs` 0 (sysid does not persist its simulated runs).
+
+### The run page: entity tree and the standard dashboard per level
+
+- **Tree**: the run's deployment's nodes (`root == run.deployment`), the run's own at `device == run.device` (its station and the station's
+  parts), plus every ancestor; cameras whose `sees` holds the run's station are the run's camera level.
+- **Dashboard per level**: a typed node's `dashboard` (data-ui gallery template), `dashboard_panels` and `components` (site/components.py:
+  `joint-3d`, `joint-render` for an integrated servo; `camera-clip` for a camera); a structural node's from `domain_v3.json structural[word]`.
+- **What it shows by default is model-independent** (Zach: "in these dashboards we are seeing like the metrics and diagnostics that are
+  independent of the models"): the level's performance metrics and their diagnostics, from the run's selection of one (below); fidelity
+  metrics appear per model.
+
+### Runs (tags added to runs.json by site/deploy_tree.py; one row per run, data-ui's robotics contract)
+
+```
+v3 columns   excitation(EXCITATIONS) closed_loop(true|false|null) offline_scope(OFFLINE_SCOPES)    (dm.run_tags(kind), per RUN_KINDS)
+config ref   config ("full" | "not recorded"), config_sha256 (the board config's key-lines sha256 where full), config_detail, config_code,
+             config_plan, kp ki kd ilimit (the gains as run)                                        (already there since 2026-11-05)
+```
+
+`offline_scope` is Zach's caveat as data: a model may be judged on a closed-loop run only by replaying it with that run's own config; a free
+response under any config. Virtual deployments have no run rows yet.
+
+### The parameters table (`<site>/data/domain/parameters.json`, `inst.parameter_table(nodes, results, routines)`)
+
+```
+{name, title, contract, level ("1x": the oracle's own noise), schema{fields}, source,
+ result_columns[{id ("<routine>:<model id>"), routine, routine_title, model, entity_type, family, fit, label, properties[]}],
+ column_groups{label: [properties]}                        (data-ui §16 columnGroups: "each model ... its own Recovered error tolerance")
+ presets{all | winning model | with results | errors only: {filter, columns, what, color_by?}},
+ rows[ id deployment node entity_type parameter family introduced_in unit winning winning_basis(selected|current) key element true nominal
+       nominal_source tolerance_kind tolerance recovered ci95_lo ci95_hi pass method best has_results
+       + per result column C: recovered@C ci95_lo@C ci95_hi@C interval@C error@C tolerance@C error_over_tolerance@C within@C ]}
+```
+
+- Rows: every value the oracle graded (`<example>/<key>`: the example's own fit in `recovered`, `ci95_*`, `pass`), the 8 only the noise
+  ladder grades, and one row per parameter of every typed node no graded value binds (`<node id>#<parameter>`, values null; `nominal`
+  null too, the type card's value apart in `type_nominal`: a v2 card's nominal is the instance it was written around, the servo's CAN 11's).
+- **Presets**: all = every row; winning model = `winning == true` (the parameters of the selection rule's pick where the example ran one,
+  else the type's current model: `winning_basis`); with results = `has_results == true`; errors only = with results, `error_over_tolerance@*`
+  columns, each row coloured by `best` (the column with the least |error over tolerance|).
+- `recovered` is a single value with its 95 % interval (`dm.Estimate`); other forms are reserved. Tolerance is per column (today the
+  parameter's, the same in every column). Physical deployments' recovered values arrive when a producer writes them (the same columns).
+
+### Metrics, diagnostics and coverage over selected runs (`sel.compute`; presets in `<site>/data/domain/selections/<dep>.json`)
+
+`sel.compute(run_ids, tables, name="")`, pure (sorted, deduplicated ids; one run is a selection of one), over `sel.Tables(nodes, runs,
+run_diagnostics, coverage_points, floors, descriptions)` (`sel.load_tables(data, deployment)` reads them):
+
+```
+{schema "sim2real.domain/3#selection", name, runs, run_ids, run_ids_sha256, unknown_runs[],
+ nodes[{node, device, entity_type, runs,
+        metrics[{metric title unit pinned family aggregate model value low high n source why}],      (one per model for fidelity)
+        diagnostics[PEP 0010 rows + metric model runs device hint],                                    (units "metric" only: a drift check
+        gates[{gate diagnostic metric model verdict(pass|fail|not_run|unknown) value target acceptance statistic why}],  needs its baseline)
+        coverage{pct visited reachable samples outside marginals unplanned gate_pct verdict rule why}}]}
+```
+
+- A node is in the result when a selected run's device is its own. A gate's verdict here is its target on the selection's aggregate,
+  **not** bam_rack_twin's acceptance statistic (gates.json keeps those).
+- Coverage is the type card's own function (`cov.actuator_coverage`) over the selected runs' coverage.json points (q made relative to the
+  station's origin, degrees to rad) with the station's joint description (its live schedule's): the coverage table is ~4 Hz, so a cell
+  crossed between two rows is not counted. Types other than the integrated servo: `why`.
+- Presets (`sel.presets(runs)`): all, each split, each station, each day; the file drops `run_ids` (named by `run_ids_sha256` and the rule).
+
+**The browser, live (data-ui), the same numbers:**
+1. Per run: the metric's `per_run` column (runs.json) or row (run_gates.json, ÷ the station's T1 floor from gates.json).
+2. Across the selected runs: the metric's `aggregate`, a data-ui summary (§16 `rollup` / `summaries`, median by default) over those values.
+3. Level: the diagnostic's limits from `domain_v3.json` on that value, `dm.level`'s rule: error limit first, then warn; no value or no limit
+   value is unknown. data-ui draws but does not compute a verdict (§35), so the page's host runs this one comparison.
+4. Coverage: `<site>/data/domain/coverage_cells/<dep>.json` `{rule, reachable_cells{device: n}, rows[{run device cell reachable n}]}`: the
+   distinct `cell` values of rows whose `run` is selected and `reachable` is true, per device, ÷ `reachable_cells[device]`, as a % to 2
+   decimals (`sel.coverage_from_cells`, tested equal to `compute`'s).
+
+### Reports (`type_cards/frozen_reports/<id>.py` + `<id>.json`; copied to `<site>/data/domain/reports/`)
+
+```
+Report    id title question runs[run ids] models["<type>/<model>"] parameters[parameters-table row ids] deployment note
+snapshot  {schema "sim2real.domain/3#report", report{...}, frozen_at, code, inputs{runs_sha256 runs},
+           results{selection (sel.compute), models[Model], parameters[rows as the table held them]}, digest}
+```
+
+`rep.freeze(report, tables, parameter_rows=, frozen_at=, code=)` is pure; `python3 -m type_cards.report freeze <id>` writes the snapshot
+once, `rep.verify(snapshot)` checks its digest (over everything but the digest). A page reads the snapshot and never recomputes it, so a
+report does not change as data grows; re-freezing is a new decision and a new commit. The first: `can11-frozen-schedule-2f32ddbc`.
+
+### Migration from v2 (`dm.CARD_TYPE`, `RUNG_MODELS`, `PARAMETER_MAP`, `METRIC_MAP`, `DIAGNOSTIC_MAP`; `domain_v3.json migration`)
+
+| v2 card | v3 type | rung keys | notes |
+|---|---|---|---|
+| `servo` | `integrated_servo` | M0 ideal, M2 coulomb_viscous, M3 stribeck, M4 twin, M5 electrics, M5.wear -> M5.dynamics.wear, M6, M7 | `M<k>` -> `M<k>.dynamics.<name>` |
+| `motor` | `bldc_motor` | M0 ideal, M4 cogging, M5 electrics, M5.wear, M6, M7 | dynamics |
+| `gearbox` | `gearbox` | M0 ideal, M3 load_friction, M4 backlash, M4.wear, M6, M7 | dynamics |
+| `driver` | `foc_controller` | M0 ideal, M1 delay_loop, M2 ceiling_heat, M2.wear, M6, M7 | dynamics |
+| `encoder` | `encoder` | M0 quantiser, M1 noise_latency, M2 eccentricity, M2.wear | measurement |
+| `camera_rgb` | `camera` | M0 pinhole, M1 distortion, M2 exposure_latency, M3 rolling_shutter, M3.wear, M6 | measurement |
+| `camera_rgbd` | `depth_camera` | M0 stereo, M1 disparity_noise, M2 depth_bias, M2.wear, M6 | measurement |
+| `camera_hsi` | `hyperspectral_camera` | M0 bands, M1 band_widths, M2 smile_keystone, M3 pushbroom, M3.wear | measurement |
+| `arm_6dof` | `rigid_body_chain` | M0 -> M0.kinematics.nominal; M1 -> M1.kinematics.zero_offsets; M2 -> M2.kinematics.geometric; M3 -> M2.kinematics.geometric + M1.dynamics.compliance; M3.wear -> + M1.dynamics.wear; M6 -> + M6.dynamics.residual; M7 -> M7.dynamics.network | split in two families |
+| `arm_subassembly` | `rigid_body_chain` | M0 -> M0.kinematics.nominal; M1 -> M1.kinematics.zero_offsets; M2 -> + M0.dynamics.rigid; M2.wear -> M2.kinematics.wear + M0.dynamics.rigid; M6, M7 | folded in: link_lengths -> link_geometry, joint_offsets -> joint_zero_offsets, joint_offset_drift_rad_per_sqrt_h -> joint_zero_drift_rad_per_sqrt_h; sub.* metrics and diagnostics -> arm.* |
+| `arm_6dof_gripper` | `gripper` | M0 -> M0.kinematics.tcp; M1 -> + M0.dynamics.width_drive; M2 -> + M1.dynamics.contact; M2.wear -> + M1.dynamics.wear; M6; M7 | an "arm + gripper" node is an assembly |
+| `conveyor` | `conveyor` | M0 -> M0.kinematics.belt + M0.dynamics.rigid_mass; M2..M4 -> M0.kinematics.belt + M<k>.dynamics.*; M4.wear; M6; M7 | split in two families |
+
+`dm.legacy_models(card, key)` (a v2 rung is a combination, one model per family), `dm.legacy_parameter(card, name)` -> `(type, name)`,
+`dm.legacy_metric`, `dm.legacy_diagnostic`, `dm.declared_extra(card, key)` (what a combination holds beyond the v2 rung, and why: the
+chain's `link_geometry` and `closure_tolerance` are v3's own, ADDED_IN_V3). Metric ids, diagnostic ids and v2 routine ids are unchanged.
+
+### Write set of the page lanes
+
+Read everything above; write pages (`site/`), never `type_cards/` (ask through the coordinator: this is the barrier). A field a page needs
+that is missing is an additive change here, with its test first.
