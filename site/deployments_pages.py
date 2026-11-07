@@ -287,7 +287,7 @@ def answer(d: Domain, node: dict) -> str:
         mine = next((x for x in entries if x["node"] == node["id"]), None)
         valued = [m for m in (mine or {}).get("metrics", []) if m["pinned"] and m["value"] is not None]
         said = ("; ".join(f"{m['title']} {with_unit(m['value'], m['unit'])}" for m in valued) + ".") if valued else \
-            f"None of a {level_word(node)}'s pinned metrics has a value yet: no producer writes them per run."
+            f"None of its pinned metrics ({level_word(node)}) has a value yet: no producer writes them per run."
         return f"Part of {station['title'] if station else root['title']}, over its {n_runs}. {said}"
     if len(servos) == 1:
         x = servos[0]
@@ -548,7 +548,7 @@ def metrics_section(d: Domain, node: dict) -> str:
         doc = d.results.get(node["root"]) or {}
         oracle = (f'<p>The oracle\'s own held-out errors, before → after its fit:</p>{landing.metric_rows(doc)}' if node["parent"] is None and doc else "")
         tid = node.get("entity_type")
-        pinned = (f'<p class="mut">What a {e(dm.TYPES[tid].title)} pins: {e(", ".join(m.title for m in dm.pinned(tid)))}.</p>' if tid else "")
+        pinned = (f'<p class="mut">Pinned for its type ({e(dm.TYPES[tid].title)}): {e(", ".join(m.title for m in dm.pinned(tid)))}.</p>' if tid else "")
         return f'{head}</h2><p class="mut">None is computed over runs: a virtual deployment keeps no runs.</p>{oracle}{pinned}</section>'
     if rows is None:
         return f'{head}</h2><p class="mut">Not computed: its runs are not known.</p></section>'
