@@ -89,6 +89,9 @@ an alarm on the gap's growth fires at the same gap whatever the camera.
 - **Estimate, from committed numbers (not run):** the ladder's gap RMS error is 0.019 mrad at 1x and 0.059 mrad at 3x
   (`noise_ladder.json`, `held_out.gap_rms_mrad`), against 0.37 mrad of growth from the commissioned gap to the threshold gap (1.991 to
   2.358 mrad, `drift_backlash_wear.json`) at 1.8 µrad/h; so at 3x a gap alarm would fall within about 33 h (three checks) of the 1x one.
+- **Landed since (2026-11-07):** sysid's drift demo and the ladder's gap check now alarm on it, with T5's 2 arcmin as CAN 11's
+  allowance rather than the twin-derived one above, and the estimate measured: `docs/decision-calibration-routines-2026-11-07.md`,
+  "Addendum".
 
 ## Consequences
 
