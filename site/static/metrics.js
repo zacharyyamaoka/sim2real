@@ -337,7 +337,7 @@ async function start() {
     dxEl.data = dxRows;
     allEl.data = allRows;
     const heat = heatRows(result);
-    if (!heatEl) { heatEl = views("s2r-metrics-coverage", heatBase(), { toolbar: "none" }); }
+    if (!heatEl) { heatEl = views("s2r-metrics-coverage", heatBase(), { toolbar: "none", status: "off", controls: "off" }); }
     heatEl.data = heat.length ? heat : [];
     if (freezeCode) {
       const ids = result.run_ids;

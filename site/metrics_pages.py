@@ -322,6 +322,10 @@ Every number is computed here from each run's own value, the way <code>selection
 <section class="s2r-mcoverage" aria-labelledby="mcov-h"><h2 id="mcov-h">Coverage of the runs in play</h2>
 <p class="s2r-trust">{e(TRUST)}</p>
 <div id="s2r-metrics-coverage" class="s2r-mheat"><p class="mut">The heatmap needs JavaScript (data-ui's chart).</p></div>
+<p class="mut s2r-mkey">Each station on its own grid: q across in 12 equal cells over its range, qd up as a share of its top speed (a dead band
+around 0). Blue: the share of the cell's acceleration bands these runs visited; pale: reachable and not visited; blank: the joint cannot reach it
+(it could not hold the cell's centre within its torque limit, or brake before its range ends). The numbers: <code>type_cards.coverage</code>, the
+servo card's own cells.</p>
 </section>
 <details class="s2r-mdetail" open><summary><h2>Every diagnostic, with its level</h2></summary><div id="s2r-metrics-dx"></div></details>
 <details class="s2r-mdetail"><summary><h2>Every metric</h2></summary><div id="s2r-metrics-all"></div></details>
