@@ -1,0 +1,63 @@
+/* The run page's levels (site/run_pages.py): the run's tags and caveat, then one section per level of its entity tree, the picked one shown
+   (static/ui-shared.js). After robotparts' site.css, sim2real.css and ui-shared.css; tokens only, so it reads in both themes. */
+
+/* the run's tags, every level's: excitation, closed loop, offline scope, the config snapshot */
+.s2r-runtags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 4px; }
+.s2r-rtag { display: inline-block; padding: 1px 9px; border-radius: 11px; font-size: 12.5px; font-weight: 600; line-height: 20px; white-space: nowrap;
+  color: var(--ink2); box-shadow: inset 0 0 0 1px var(--rule); }
+.s2r-rtag-config[data-value="not recorded"] { color: var(--s2r-none); }
+.s2r-rtag-config:not([data-value="not recorded"]) { color: var(--s2r-pass); background: var(--s2r-pass-bg); box-shadow: none; }
+.s2r-rtag-more { color: var(--ink3); font-size: 12.5px; }
+.s2r-caveat { margin: 6px 0 12px; padding: 6px 10px; border-left: 3px solid var(--rule); background: var(--bg2); font-size: 13px; color: var(--ink2);
+  max-width: 82ch; }
+.s2r-caveat b { color: var(--ink); }
+
+/* a level: its heading (dot, icon, name, type), its place in the tree, then its dashboard */
+.s2r-level { margin: 6px 0 4px; }
+.s2r-level-h { display: flex; align-items: center; gap: 8px; margin: 14px 0 2px; font-size: 20px; }
+.s2r-level-h small { font-size: 13px; font-weight: 500; color: var(--ink3); }
+.s2r-level-h .s2r-dot { width: 10px; height: 10px; }
+.s2r-level-ic { display: inline-flex; color: var(--ink3); }
+.s2r-level-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.s2r-level-path { margin: 0 0 6px; font-size: 12.5px; color: var(--ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s2r-level h3 { margin: 14px 0 4px; font-size: 14px; }
+.s2r-level-page { margin: -2px 0 6px; font-size: 12.5px; color: var(--ink3); }
+.s2r-level h3 small { font-weight: 400; color: var(--ink3); font-size: 12px; margin-left: 4px; }
+.s2r-level-kpis .s2r-none dd { color: var(--ink3); font-weight: 500; }
+.s2r-pin { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 8px; font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+  color: var(--ink2); background: var(--accent-bg); vertical-align: 1px; }
+.s2r-whynot { margin: 0 0 6px; font-size: 12px; color: var(--ink3); max-width: 90ch; }
+.s2r-level-models .s2r-sim-dot { margin-right: 6px; vertical-align: -1px; }
+.s2r-level-note { color: var(--ink2); font-size: 13px; margin: 10px 0 4px; }
+.s2r-here { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px; font-size: 11px; font-weight: 650; color: var(--ink2);
+  background: var(--accent-bg); }
+.s2r-rdx { margin: 6px 0; font-size: 13px; }
+.s2r-rdx > summary { cursor: pointer; color: var(--ink2); }
+.s2r-rule { font-size: 12.5px; color: var(--ink3); }
+.s2r-rule > summary { cursor: pointer; }
+
+/* coverage for this run: the share of reachable cells as a bar, the type's gate as a tick */
+.s2r-cov p { margin: 4px 0; }
+.s2r-bar { position: relative; height: 8px; max-width: 420px; border-radius: 4px; background: var(--bg2); box-shadow: inset 0 0 0 1px var(--rule2); margin: 6px 0; }
+.s2r-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--ink2); }
+.s2r-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink); }
+
+/* the models, apart from the numbers above (Zach, 2026-11-06): a model's colour is orange, so its section is marked in it */
+.s2r-models-run { margin: 16px 0 8px; padding: 2px 0 2px 12px; border-left: 3px solid var(--data-series-2); }
+.s2r-models-run h3 { margin-top: 6px; }
+.s2r-models-run > p { max-width: 90ch; font-size: 13px; color: var(--ink2); }
+
+/* the deployment's level: its render beside its words */
+.s2r-level-shot { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 14px; align-items: start; margin: 6px 0; }
+.s2r-level-shot .s2r-shot { margin: 0; }
+.s2r-level-shot .s2r-shot img { width: 100%; height: auto; }
+@media (max-width: 700px) { .s2r-level-shot { grid-template-columns: minmax(0, 1fr); } }
+
+/* WHY the right pane is a containing block: data-ui's resize primitive places a dashboard rail's splitter absolutely in its offsetParent's
+   coordinates; in the run's right pane, which scrolls on its own, the splitter must scroll and clip with the pane, or a rail scrolled out of
+   view leaves its line over the trail (seen on a filmed run's Playback, 2026-11-07) */
+body[data-page="part"] .mpane { position: relative; }
+
+/* the station's Playback tabs are its own level's: any other level shows alone */
+body[data-entity-kind]:not([data-entity-kind="station"]) .mpane > nav.tabs,
+body[data-entity-kind]:not([data-entity-kind="station"]) .mpane > .panels { display: none; }

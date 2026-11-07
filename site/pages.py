@@ -443,33 +443,7 @@ def run_title(row: dict) -> str:
     return f"{row['device']} · {row['title']}"
 
 
-def run_header(site: Site, row: dict) -> str:
-    dep = site.deployment(row["deployment"])
-    best = (f'{e(row["best_model"])} {num(row.get("best_model_mrad"))} mrad from real' if row.get("best_model") else "no model replayed this run")
-    verdict = row.get("verdict")
-    media = media_of(site)
-    # WHY the station's link model and the clip's camera in the record: the joint-3d and camera-clip components read them as {glb} and
-    # {camera} (static/sim2real.js fills them from here; a component mounted alone reads them from its .base URL's query)
-    glb = (media.glb_url(row["deployment"], station_key(row["device"])) if media else None) or ""
-    camera = next((x.id for x in components.entities_of(row, media) if x.kind == "camera"), "")
-    return f"""{record_json(deployment=row["deployment"], run=row["run"], station=station_key(row["device"]), device=row["device"], glb=glb, camera=camera,
-                        **limits(dep, row["device"]))}
-<h1>{e(run_title(row))}</h1>
-{components.what_html(components.what_joint(row, media), components.what_camera(row, media))}
-<p class="sub">{e(when(row.get("started")))} · {e(row.get("kind") or "")} · {num(row.get("duration_s"))} s · {e(row.get("gains") or "")} · {e(row.get("compare") or "")}</p>
-<p class="s2r-runline"><span class="s2r-real">real</span> vs target {num(row.get("tracking_mrad"))} mrad · closest model: {best}{(" · twinned? " + chip(verdict)) if verdict else ""}</p>
-<p class="s2r-gline">{a(station_url(dep.id, row["device"]), row["device"])} gates: {gate_chips(dep, row["device"])}</p>
-{config_line(row)}"""
-
-
-def config_line(row: dict) -> str:
-    """'config not recorded' (or the full snapshot), the run's environment and setting: a run says what it can be reproduced from."""
-    full = row.get("config") == deploy_tree.FULL
-    words = f"full config snapshot ({row.get('config_keys')} keys)" if full else "config not recorded"
-    return (f'<p class="s2r-cfg"><span class="s2r-v s2r-{"pass" if full else "not_run"}" title="{e(row.get("config_detail") or "")}">{e(words)}</span> · '
-            f'environment {e(row.get("environment") or deploy_tree.UNKNOWN)} · setting {e(row.get("setting") or deploy_tree.UNKNOWN)}'
-            f'{" · test type " + e(row["test_type"]) if row.get("test_type") not in (None, deploy_tree.NOT_RECORDED) else ""} · '
-            f'{a("#evidence", "what is recorded")}</p>')
+# a run's header, its tags and its levels: site/run_pages.py (the run page's entity tree and its levels, 2026-11-07)
 
 
 def run_playback(site, row: dict) -> str:

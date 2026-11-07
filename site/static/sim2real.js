@@ -123,7 +123,9 @@
     });
   }
   function scan() { slots.forEach(function (slot) { if (!slot.hasAttribute("data-mounted") && visible(slot)) mount(slot); }); }
-  new MutationObserver(scan).observe(document.querySelector(".panels") || document.body, { attributes: true, attributeFilter: ["hidden"], subtree: true });
+  // WHY the whole body and data-entity-kind (the run page, 2026-11-07): a level's section shows by its hidden attribute anywhere in the
+  // page, and the station's tabs come back by the body's data-entity-kind (static/ui-shared.js), not by a tab's hidden
+  new MutationObserver(scan).observe(document.body, { attributes: true, attributeFilter: ["hidden", "data-entity-kind"], subtree: true });
   scan();
   addEventListener("load", scan);
   // the colours are resolved per theme: a theme change redraws every dashboard
