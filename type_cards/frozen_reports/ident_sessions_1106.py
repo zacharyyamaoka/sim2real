@@ -1,4 +1,4 @@
-"""The rack's identification sessions of 2026-11-06 (UTC morning; PST 05:15-05:46): for CAN 11 (ff_fb), CAN 12 (fb) and CAN 21 (ff_fb), each station's training session and its held-out session recorded right after it (bam_rack_twin.schedule, its runs.json round), and the servo's twin of record (M4.dynamics.twin, the ladder model w2c's map names).
+"""The rack's identification sessions of 2026-11-06 (UTC morning; PST 05:15-05:46): for CAN 11 (ff_fb), CAN 12 (fb) and CAN 21 (ff_fb), each station's training session and its held-out session recorded right after it (bam_rack_twin.schedule, its runs.json round), and the servo's twin of record (M4.dynamics.twin, the ladder model type_cards/deployments/one_dof_test_rack.py maps it to).
 
 Written by `python3 -m type_cards.report freeze --id ident-sessions-1106 ...` (type_cards/report.py) from a selection of 113 runs; its snapshot is ident-sessions-1106.json beside it.
 """
