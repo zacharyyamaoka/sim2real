@@ -38,3 +38,60 @@
 .s2r-chip-real { color: var(--data-series-1); background: color-mix(in srgb, var(--data-series-1) 13%, transparent); }
 .s2r-chip-sim { color: var(--data-series-2); background: color-mix(in srgb, var(--data-series-2) 13%, transparent); }
 .s2r-chip-tag { color: var(--ink2, var(--ink)); background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+
+/* the status tree (ui_shared.status_tree, static/ui-shared.js): RobotDx's device tree as Zach showed it (2026-11-06), a run's entities with
+   a dot per level. Its root is .s2r-tree, apart from the entity tree's .s2r-etree. Tokens only, so it reads in both themes. */
+.s2r-tree { font-size: 13.5px; margin: 4px 0 18px; }
+.s2r-tree-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 2px 6px; border-bottom: 1px solid var(--rule2); }
+.s2r-tree-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; }
+.s2r-tree svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.s2r-tree-tools { display: inline-flex; gap: 2px; }
+.s2r-tree-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 26px; border: 0; border-radius: 4px; background: none;
+  color: var(--ink2); cursor: pointer; }
+.s2r-tree-btn:hover { background: var(--hover); color: var(--ink); }
+.s2r-tree-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.s2r-tree-find { display: flex; align-items: center; gap: 6px; margin: 8px 0 6px; padding: 0 8px; height: 32px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--bg); color: var(--ink3); }
+.s2r-tree-find:focus-within { border-color: var(--ink2); }
+.s2r-tree-find input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+.s2r-tree-sec { display: flex; justify-content: space-between; gap: 8px; margin: 10px 2px 4px; font-size: 11.5px; color: var(--ink3); }
+.s2r-tree-sec > span:first-child { text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.s2r-tree ul { list-style: none; margin: 0; padding: 0; }
+.s2r-tree ul[role=group] { padding-left: 16px; }
+.s2r-tree [role=treeitem][aria-expanded="false"] > [role=group] { display: none; }
+.s2r-tree.s2r-tree-finding [role=treeitem] > [role=group] { display: block; }
+.s2r-etree-row { display: flex; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 6px 0 2px; border-radius: 5px; cursor: default; }
+.s2r-etree-row:hover { background: var(--hover); }
+.s2r-tree [aria-selected="true"] > .s2r-etree-row { background: var(--accent-bg); }
+.s2r-tree [aria-selected="true"] > .s2r-etree-row .s2r-tree-name { font-weight: 650; }
+.s2r-tree-tw { flex: none; display: inline-flex; width: 16px; height: 16px; color: var(--ink3); cursor: pointer; }
+.s2r-tree-tw svg { transition: transform .12s; transform: rotate(90deg); }
+.s2r-tree [aria-expanded="false"] > .s2r-etree-row .s2r-tree-tw svg { transform: none; }
+.s2r-tree.s2r-tree-finding .s2r-tree-tw svg { transform: rotate(90deg); }
+.s2r-tree-ic { flex: none; display: inline-flex; color: var(--ink3); }
+.s2r-tree-name { flex: 0 1 auto; min-width: 2.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); text-decoration: none; }
+.s2r-tree-name:hover { text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.s2r-tree-name:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; border-radius: 2px; }
+.s2r-etree-line { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink3); font-size: 12.5px; }
+.s2r-tree-meta { flex: none; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink3); font-size: 12px;
+  font-variant-numeric: tabular-nums; }
+.s2r-tree-none { margin: 8px 4px; color: var(--ink3); font-size: 12.5px; }
+.s2r-tree-more { margin: 10px 4px 0; padding-top: 8px; border-top: 1px solid var(--rule2); color: var(--ink3); font-size: 12.5px; }
+/* the dot: filled in its tone when known, a hollow ring when unknown (RobotDx's "not heard"); always with its word (aria-label, title) */
+.s2r-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; border: 1.5px solid transparent; }
+.s2r-dot-ok { background: var(--s2r-pass, #1d7a3a); }
+.s2r-dot-warning { background: var(--s2r-warn, #a15c07); }
+.s2r-dot-error { background: var(--s2r-fail, #b42318); }
+.s2r-dot-unknown { background: transparent; border-color: var(--s2r-none, #8b9099); }
+.s2r-tree-phone { display: none; }
+@media (max-width: 767px) {
+  .s2r-tree-phone { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 650; padding: 6px 2px; list-style: none; }
+  .s2r-tree-phone::-webkit-details-marker { display: none; }
+  .s2r-tree-phone small { font-weight: 400; color: var(--ink3); }
+  .s2r-tree-phone::after { content: "▸"; font-size: 10px; color: var(--ink3); margin-left: auto; }
+  .s2r-tree-box[open] > .s2r-tree-phone::after { content: "▾"; }
+}
+/* the left column it sits in (ui_shared.record_page): a little wider than a filter rail, its own width remembered */
+@media (min-width: 768px) {
+  .fcol.s2r-aside { width: var(--data-panel-width, 23rem); padding: 4px 10px 24px; }
+}
