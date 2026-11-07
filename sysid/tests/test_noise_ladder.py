@@ -287,6 +287,60 @@ def same(a: dict, b: dict, check_id: str) -> None:
             assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-12), (check_id, key, k, x, y)
 
 
+def test_the_fresh_result_comparator_sees_every_substantive_field():
+    """The v3 audit (2026-11-07, finding 6): same() compared the recovered scalars only, so a fresh ladder result whose intervals, alarms
+    or held-out scores had moved still matched the committed one. Every edit below leaves every recovered value as committed and must turn
+    the comparison red; one that touches only where and when it ran (the declared volatile provenance) must not, and identification having
+    run sealed is compared like any other result."""
+    import copy  # noqa: PLC0415
+
+    checks = {c["id"]: c for c in committed()["checks"]}
+    regression = checks["pendulum_can11:servo.dynamics_regression"]
+    gap = checks["pendulum_can11:servo.gap_check_forecast"]
+    sweep = checks["ur5e_backlash:arm.backlash_gravity_sweep"]
+
+    def row(check: dict, level: str = "1x") -> dict:
+        return next(r for r in check["rows"] if r["level"] == level and r["variant"] is None)
+
+    def recovered(check: dict) -> list:
+        return [(r["level"], r["variant"], p["key"], p["recovered"], [m["recovered"]["mean"] for m in p["models"]])
+                for r in check["rows"] for p in r["parameters"]]
+
+    def scaled(cell: dict, key: str, factor: float) -> None:
+        cell[key] = cell[key] * factor
+
+    edits = {
+        "a parameter's 95 % interval": (regression, lambda c: row(c)["parameters"][0]["ci95"].__setitem__(1, row(c)["parameters"][0]["ci95"][1] * 1.01)),
+        "a model's 95 % interval": (regression, lambda c: row(c)["parameters"][0]["models"][0]["recovered"]["ci95"].__setitem__(0, 0.0)),
+        "the words of a model's interval": (regression, lambda c: row(c)["parameters"][0]["models"][0]["recovered"].__setitem__("interval", "another bootstrap")),
+        "the alarm hour": (gap, lambda c: scaled(row(c)["held_out"], "detector_alarm_h", 1.5)),
+        "the gap check's own alarm": (gap, lambda c: row(c)["held_out"].__setitem__("gap_alarm_h", None)),
+        "a held-out score (the link's error)": (regression, lambda c: scaled(row(c)["held_out"], "link_mrad", 1.5)),
+        "a held-out score (the forecast's error)": (gap, lambda c: scaled(row(c)["held_out"], "forecast_error_pct", 2.0)),
+        "a level's verdict": (regression, lambda c: row(c).__setitem__("pass", not row(c)["pass"])),
+        "a parameter's within-tolerance": (regression, lambda c: row(c)["parameters"][0].__setitem__("within_tolerance", not row(c)["parameters"][0]["within_tolerance"])),
+        "a parameter's bound": (regression, lambda c: scaled(row(c)["parameters"][0], "bound", 2.0)),
+        "the graded model": (regression, lambda c: row(c).__setitem__("graded_model", "M3")),
+        "a note": (sweep, lambda c: row(c)["notes"].append("a note the code does not write")),
+        "the claimed parameters": (sweep, lambda c: c["parameters"].append("wrist_3.backlash_rad")),
+        "identification having run sealed": (regression, lambda c: row(c)["provenance"].__setitem__("identify_sealed", False)),
+    }
+    same(regression, copy.deepcopy(regression), regression["id"])
+    for what, (check, edit) in edits.items():
+        bad = copy.deepcopy(check)
+        edit(bad)
+        assert bad != check and recovered(bad) == recovered(check), f"{what}: the edit must leave every recovered value as committed"
+        with pytest.raises(AssertionError):
+            same(check, bad, check["id"])
+            pytest.fail(f"same() did not see {what}")
+    # where and when it ran is not a result: the commit, the imported checkouts, the seconds, the twin record's bytes
+    moved = copy.deepcopy(regression)
+    moved["provenance"]["code"] = ["0000000"]
+    for r in moved["rows"]:
+        r["provenance"].update(code="0000000", imports=[], seconds=0.1, twin_of_record_digest="0" * 64)
+    same(regression, moved, regression["id"])
+
+
 @pytest.mark.parametrize("example", FAST_EXAMPLES)
 def test_the_fast_checks_are_this_code(example):
     from sysid import ladder
