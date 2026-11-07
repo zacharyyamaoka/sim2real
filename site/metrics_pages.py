@@ -381,9 +381,11 @@ def index_body(d: dpages.Domain) -> str:
             items.append(f'<li><a href="{e(page_url(n["id"]))}"><b>{e(n["title"])}</b></a> {ui_shared.chip(n["kind"], dpages.KIND_TONE.get(n["kind"], ""))} '
                          f'<small>{plural(len(runs), "run")} over {plural(len({r["device"] for r in runs}), "station")}</small></li>')
     virtual = [n for n in d.roots() if n["kind"] == "virtual"]
+    # WHY a scenario links its deployment page: it has no oracle example page (sysid keeps the noise ladder's scenarios off the landing page)
+    linked = ", ".join(pages.a(dpages.node_url(v["id"]) if dpages.is_scenario(d, v) else dpages.landing.url(v["id"]), v["title"]) for v in virtual)
     return f"""<h1>Metrics over a selection</h1>
 <p class="lede">Each physical deployment's runs, with the metrics, diagnostics and coverage of whichever of them you pick. A virtual deployment
-keeps no runs (sysid simulates them and keeps their results: {", ".join(pages.a(dpages.landing.url(v["id"]), v["title"]) for v in virtual)}).</p>
+keeps no runs (sysid simulates them and keeps their results: {linked}).</p>
 <ul class="s2r-mindex">{"".join(items)}</ul>"""
 
 
