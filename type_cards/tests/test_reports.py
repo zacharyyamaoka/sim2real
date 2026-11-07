@@ -127,6 +127,33 @@ def test_a_new_report_refuses_a_run_id_the_data_does_not_hold(tmp_path, monkeypa
         assert sorted(p.name for p in out.iterdir()) == [], f"--runs {runs}: nothing is written"
 
 
+def test_a_snapshot_freezes_the_titles_and_the_model_each_label_names():
+    """The v3 audit (2026-11-07, finding 7): a report's page named its parts by today's node titles and its models by today's label map,
+    so renaming a station or remapping a producer's label changed what a verified report said. The snapshot keeps both as they were when
+    it froze, under its digest: the title of its deployment and of every node it computed, and for every model label in its results the
+    ladder model that label named (none when nobody mapped it), read from the deployment's record unless given."""
+    titled = [{**n, "title": f"title of {n['id']}"} for n in NODES]
+    t = sel.Tables(nodes=titled, runs=RUNS, run_diagnostics=DIAGNOSTICS, coverage_points=COVERAGE, floors={"A": 2.0, "B": 1.0}, descriptions={"A": DESC_A})
+    report = rep.Report(id="fixture-b", title="A and B", question="How do A and B do?", runs=("r1", "r2", "r4"), deployment="rig")
+    named = {"twin of record": {"type": "integrated_servo", "model": "M4.dynamics.twin", "model_title": "Rack twin"}}
+    snap = rep.freeze(report, t, parameter_rows=[], frozen_at="2026-11-07T00:00:00Z", code="abc1234", labels=named)
+    ann = snap["annotations"]
+    computed = {n["node"] for n in snap["results"]["selection"]["nodes"]}
+    assert set(ann["titles"]) == computed | {"rig"} and all(ann["titles"][k] == f"title of {k}" for k in ann["titles"])
+    used = {x["model"] for n in snap["results"]["selection"]["nodes"] for x in n["metrics"] + n["diagnostics"] + n["gates"] if x.get("model")}
+    assert used == {"twin of record", "refit R1"} and ann["model_labels"] == {"twin of record": named["twin of record"], "refit R1": None}
+    assert rep.verify(snap)
+    for edit in (lambda s: s["annotations"]["titles"].__setitem__("rig/a", "renamed"),
+                 lambda s: s["annotations"]["model_labels"].__setitem__("refit R1", named["twin of record"])):
+        edited = copy.deepcopy(snap)
+        edit(edited)
+        assert not rep.verify(edited), "the digest covers what the page names"
+    # unless given, a label is mapped by the deployment's record at freeze time (inst.label_model); the rack's twin of record is M4
+    rack = rep.freeze(rep.Report(id="x", title="x", question="x", runs=("r1",), deployment="one-dof-test-rack"), t, parameter_rows=[],
+                      frozen_at="2026-11-07T00:00:00Z", code="abc1234")
+    assert rack["annotations"]["model_labels"]["twin of record"]["model"] == "M4.dynamics.twin"
+
+
 def test_a_definition_is_written_as_python_and_reads_back():
     text = rep.definition_text(DEFINITION, doc="Station A over its three runs.")
     space: dict = {}
