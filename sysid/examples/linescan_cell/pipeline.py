@@ -179,6 +179,12 @@ class Measured:
     rgbd: list                      # (world points (n, 3), pixels (n, 2), depth (n,))
 
 
+def whole_pixels(px: np.ndarray) -> np.ndarray:
+    """Detections rounded to the noise ladder's pixel quantum while its pixel_integer variant runs (sysid/noise_ladder.json); else as given."""
+    quantum = hidden.perturbation("pixel_integer")
+    return px if quantum is None else np.round(px / quantum) * quantum
+
+
 class RealWorld:
     def __init__(self, description, *, workers: int = 6):
         self.description = description
@@ -204,6 +210,7 @@ class RealWorld:
                 obs = np.array([stock_line_observation(self.truth, dot) for dot in dots])
                 ok = (obs[:, 0] > 0) & (obs[:, 0] < LINE_PIXELS)
                 obs = obs + np.column_stack([rng.normal(0, self.noise["hsi_pixel_px"], len(obs)), rng.normal(0, self.noise["hsi_line_m"], len(obs))])
+                obs[:, 0] = whole_pixels(obs[:, 0])
                 line.append((dots[ok], obs[ok]))
             pin = rgbd_pinhole(self.description, self.truth)
             stock = pin.stock()
@@ -216,7 +223,8 @@ class RealWorld:
                 ok = pin.visible(px, z)
                 reported = self.truth["rgbd.depth_scale"] * z + self.truth["rgbd.depth_offset_m"]
                 sigma = stereo_sigma_m(z, pin.fx, self.noise["rgbd_subpixel_px"])
-                frames.append((world[ok], px[ok] + rng.normal(0, self.noise["rgbd_pixel_px"], px[ok].shape), reported[ok] + rng.normal(0, 1.0, int(ok.sum())) * sigma[ok]))
+                frames.append((world[ok], whole_pixels(px[ok] + rng.normal(0, self.noise["rgbd_pixel_px"], px[ok].shape)),
+                               reported[ok] + rng.normal(0, 1.0, int(ok.sum())) * sigma[ok]))
             references = {level: self.dn(np.full(16, value), rng_for(self.seed, split, "ref", level), REFERENCE_PIXELS) for level, value in refs.items()}
             materials = {}
             if split == "held_out":

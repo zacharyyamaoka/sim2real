@@ -1,0 +1,149 @@
+{
+  "schema": "sysid.description/1",
+  "id": "ur5e_backlash",
+  "title": "UR5e joint backlash",
+  "subtitle": "gear_backlash's UR plant on QDD drivetrains",
+  "summary": "Menagerie's UR5e on QDD-style drivetrains (gear_backlash's UR study plant): each joint a motor hinge with its rotor as armature, a gear gap and a tuned mesh stop, then the link. The description takes each gap at a QDD planetary's datasheet value; the arm's gaps are larger. The routine is gear_backlash's own gravity-crossing sweep: from the motor encoders and motor torques only, it finds each gravity-loadable joint's two flanks and so its gap.",
+  "model": {
+    "format": "mjcf",
+    "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",
+    "source": "MuJoCo Menagerie universal_robots_ur5e, as gear_backlash ur/scene.py builds it (MENAGERIE_UR5E, build_ur_spec: QDD armature, friction, mesh stiffness, position servos with velocity and gravity feed-forward)"
+  },
+  "components": [
+    {
+      "id": "cell",
+      "type": "deployment",
+      "title": "bench cell",
+      "parent": null
+    },
+    {
+      "id": "ur5e",
+      "type": "ur5e",
+      "title": "UR5e arm on QDD drivetrains",
+      "parent": "cell",
+      "binds": {
+        "base_body": "base",
+        "flange_site": "attachment_site"
+      }
+    },
+    {
+      "id": "shoulder_pan",
+      "type": "integrated servo",
+      "title": "shoulder pan joint (QDD servo with a gear gap)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "shoulder_pan_joint",
+        "actuator": "shoulder_pan"
+      }
+    },
+    {
+      "id": "shoulder_lift",
+      "type": "integrated servo",
+      "title": "shoulder lift joint (QDD servo with a gear gap)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "shoulder_lift_joint",
+        "actuator": "shoulder_lift"
+      }
+    },
+    {
+      "id": "elbow",
+      "type": "integrated servo",
+      "title": "elbow joint (QDD servo with a gear gap)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "elbow_joint",
+        "actuator": "elbow"
+      }
+    },
+    {
+      "id": "wrist_1",
+      "type": "integrated servo",
+      "title": "wrist 1 joint (QDD servo with a gear gap)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "wrist_1_joint",
+        "actuator": "wrist_1"
+      }
+    },
+    {
+      "id": "wrist_2",
+      "type": "integrated servo",
+      "title": "wrist 2 joint (QDD servo with a gear gap)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "wrist_2_joint",
+        "actuator": "wrist_2"
+      }
+    },
+    {
+      "id": "wrist_3",
+      "type": "integrated servo",
+      "title": "wrist 3 joint (QDD servo with a gear gap)",
+      "parent": "ur5e",
+      "binds": {
+        "joint": "wrist_3_joint",
+        "actuator": "wrist_3"
+      }
+    }
+  ],
+  "parameters": {
+    "shoulder_pan.backlash_rad": {
+      "unit": "rad",
+      "value": 0.0008726646259971647,
+      "source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)"
+    },
+    "shoulder_lift.backlash_rad": {
+      "unit": "rad",
+      "value": 0.0008726646259971647,
+      "source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)"
+    },
+    "elbow.backlash_rad": {
+      "unit": "rad",
+      "value": 0.0008726646259971647,
+      "source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)"
+    },
+    "wrist_1.backlash_rad": {
+      "unit": "rad",
+      "value": 0.0008726646259971647,
+      "source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)"
+    },
+    "wrist_2.backlash_rad": {
+      "unit": "rad",
+      "value": 0.0008726646259971647,
+      "source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)"
+    },
+    "wrist_3.backlash_rad": {
+      "unit": "rad",
+      "value": 0.0008726646259971647,
+      "source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)"
+    }
+  },
+  "known": {
+    "note": "what the description states and identification does not touch: gear_backlash's UR plant (scene.DEFAULT_PLANT) and its datasheet mesh stiffness",
+    "plant": "gear_backlash ur/scene.py DEFAULT_PLANT: armature 0.04 / 0.005 kg.m^2, joint friction 1.0 / 0.3 N.m, mesh stiffness 10 / 3 N.m/arcmin (QDD_MESH_STIFFNESS_NM_PER_ARCMIN), servos kp 2000 / 500, a 0.925 kg tool at 0.06 m",
+    "zero": "the encoder zero sits mid-gap (SituationConfig zero='center')"
+  },
+  "sensors": [
+    {
+      "id": "motor_encoders",
+      "kind": "joint_state",
+      "on": "the six motor hinges",
+      "measures": "motor-side angle at the output (before the gear's gap)"
+    },
+    {
+      "id": "motor_torque",
+      "kind": "joint_effort",
+      "on": "the six motor hinges",
+      "measures": "the drive's torque (servo + velocity + gravity feed-forward actuators)"
+    }
+  ],
+  "schedule": {
+    "source": "gear_backlash ur/calibration.py: SweepConfig and identify_arm",
+    "amplitude_deg": 25.0,
+    "speed_deg_s": 3.0,
+    "engaged_fraction": 0.25,
+    "passes": 3,
+    "use": "one sweep per gravity-loadable joint at its calibration_pose (gravity beats friction 2.5x at both ends, every other loaded joint on one flank); the fit runs base to tip in three passes"
+  }
+}

@@ -34,6 +34,8 @@ BAM_WS = Path("/home/bam/bam_ws")
 STOCK_SOURCES = (
     BAM_WS / "src/core/mdp/agent/world_model/bam_scan_tunnel/src",
     BAM_WS / "src/core/mdp/agent/sensors/intel_rgbd/src",
+    # gear_backlash's UR study (the ur5e_backlash scenario) imports bam_arm's closed-form UR5e kinematics (2026-11-07)
+    BAM_WS / "src/core/mdp/env/sim/bam_arm",
 )
 for _path in (REPO, *STOCK_SOURCES):
     if _path.is_dir() and str(_path) not in sys.path:

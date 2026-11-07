@@ -182,11 +182,23 @@ def noise_rng(seed: int, *names) -> np.random.Generator:
 
 def measured_run(name: str, family: str, kind: str, synthetic, rp, noise: dict, rng) -> RunData:
     n = rp.t.size
-    link = rp.q_link if rp.q_link is not None else rp.q
-    output = dataclasses.replace(synthetic, t=rp.t, q=rp.q + rng.normal(0.0, noise["encoder_rad"], n),
-                                 qd=rp.qd + rng.normal(0.0, noise["speed_rad_s"], n), tau=rp.tau + rng.normal(0.0, noise["torque_nm"], n),
-                                 mode=rp.mode)
+    link = camera_view(rp.t, rp.q_link if rp.q_link is not None else rp.q)
+    q = rp.q + rng.normal(0.0, noise["encoder_rad"], n)
+    quantum = hidden.perturbation("encoder_quantised")  # the noise ladder's encoder variant (sysid/noise_ladder.json); None outside it
+    if quantum is not None:
+        q = np.round(q / quantum) * quantum
+    output = dataclasses.replace(synthetic, t=rp.t, q=q, qd=rp.qd + rng.normal(0.0, noise["speed_rad_s"], n),
+                                 tau=rp.tau + rng.normal(0.0, noise["torque_nm"], n), mode=rp.mode)
     return RunData(name, family, kind, output, link + rng.normal(0.0, noise["link_camera_rad"], n))
+
+
+def camera_view(t: np.ndarray, link: np.ndarray) -> np.ndarray:
+    """The link angle as the camera reports it: itself, or, while the noise ladder's camera_late variant runs, held a delay behind."""
+    late = hidden.perturbation("camera_late")
+    if late is None:
+        return link
+    lag = int(round(late / float(np.median(np.diff(t)))))
+    return np.concatenate([np.repeat(link[:1], lag), link[:-lag]]) if lag else link
 
 
 class RealWorld:
@@ -220,7 +232,7 @@ class RealWorld:
             data = measured_run(name, run["family"], by_id[run["trajectory"]]["runner_kind"] or "", runs[name], rp, self.noise, rng)
             (train if run["split"] == "train" else held)[name] = data
             if run["split"] == "held_out":
-                link = rp.q_link if rp.q_link is not None else rp.q
+                link = camera_view(rp.t, rp.q_link if rp.q_link is not None else rp.q)
                 repeat[name] = link + noise_rng(self.seed, "repeat", name).normal(0.0, self.noise["link_camera_rad"], rp.t.size)
         return Measured(train, held, repeat)
 
@@ -473,7 +485,9 @@ def score(description, plan: Plan, fit: Fit, measured: Measured, *, workers: int
         motor = np.concatenate([replays[(label, n)].q - measured.held_out[n].output.q for n in sorted(runs)])
         torque = np.concatenate([replays[(label, n)].tau - measured.held_out[n].output.tau for n in sorted(runs)])
         rms = lambda x: float(np.sqrt(np.mean(x ** 2)))  # noqa: E731
-        out["models"][label] = {"link_mrad": rms(link) * 1e3, "ratio": rms(link) / floor_rms, "motor_mrad": rms(motor) * 1e3, "torque_nm": rms(torque)}
+        # WHY None without noise (the noise ladder's 0x level): the floor is two camera draws of one run, zero when the camera is exact
+        out["models"][label] = {"link_mrad": rms(link) * 1e3, "ratio": rms(link) / floor_rms if floor_rms > 0 else None, "motor_mrad": rms(motor) * 1e3,
+                                "torque_nm": rms(torque)}
     out["runs"] = len(runs)
     out["seconds"] = round(sum(float(r.output.t[-1] - r.output.t[0]) for r in measured.held_out.values()), 1)
     return out

@@ -34,6 +34,7 @@ def used() -> list:
     for card in reg.CARDS.values():
         out += [ref for r in card.rungs for ref in r.references]
     out += [ref for p in reg.CALIBRATION_PACKAGES for ref in p.references]
+    out += [ref for r in reg.ROUTINES for ref in r.references]
     out += [ref for law in reg.WEAR_LAW_REFERENCES.values() for ref in law]
     seen, unique = set(), []
     for ref in out:

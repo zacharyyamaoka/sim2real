@@ -18,14 +18,17 @@ import time
 from . import describe, result, world
 
 EXAMPLES = ("pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell")
+# Noise-ladder scenarios (sysid/noise_ladder.json): the same five-function pipelines and sealed worlds, graded only by the ladder, never
+# on the landing page. ur5e_backlash hides a gear gap on the UR's joints (gear_backlash's plant and sweep).
+SCENARIOS = ("ur5e_backlash",)
 # the last fit per example in this process: drift.run_backlash reuses CAN 11's commissioning instead of re-fitting it (the same
 # deterministic inputs give the same fit; this only saves the minutes)
 LAST_FIT: dict = {}
 
 
 def example_module(example: str):
-    if example not in EXAMPLES:
-        raise KeyError(f"no sysid example {example!r} (examples: {', '.join(EXAMPLES)})")
+    if example not in EXAMPLES + SCENARIOS:
+        raise KeyError(f"no sysid example {example!r} (examples: {', '.join(EXAMPLES + SCENARIOS)})")
     return importlib.import_module(f"sysid.examples.{example}.pipeline")
 
 

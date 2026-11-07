@@ -26,6 +26,24 @@ shows), held to the code by the same test.
 The CAN 11 example and its drift demo take several minutes each (the
 rack twin replays at 30 kHz); the others take seconds.
 
+## The noise ladder (2026-11-07)
+
+Every Calibration Routine the oracle can run (type_cards' `ROUTINES` with an `oracle` check) is graded on the same hidden truth at
+0, 1x, 3x and 10x its world's sensor noise (one draw, the same seeds, scaled) and at 1x plus a delay or a quantisation where one matters.
+The ruler is `noise_ladder.json` (bounds per level, committed before any run, pinned in `tests/test_noise_ladder.py`); `ladder.py` runs
+the examples' pipelines unchanged under `world.noise_scale` / `world.perturbed`; `ur5e_backlash` is a ladder-only scenario (a hidden gear
+gap on the UR's joints, gear_backlash's own plant and sweep). Results: `results/noise_ladder.json` (per parameter: true, nominal,
+tolerance and, per model, the recovered mean, its 95 % interval and the error), and `results/calibration_routines.json`, both ways round:
+routine -> parameters and parameter -> routines (its shape: type_cards/CONTRACT.md, "Calibration routines").
+
+    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid ladder --write
+    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid ladder pendulum_can11 --levels 3x --write
+    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid routines --write
+    env -u VIRTUAL_ENV SYSID_LADDER_SLOW=1 /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -p no:cacheprovider /home/bam/sim2real/sysid/tests/test_noise_ladder.py
+
+The CAN 11 levels take about 10 minutes each (rows merge, so levels can run in separate processes); without SYSID_LADDER_SLOW the test
+re-runs only the fast checks. Why: `docs/decision-calibration-routines-2026-11-07.md`.
+
 Stock parts used in place, never copied: bam_rack_twin (schedule, twin, replayer, smoother, bootstrap, stock identification),
 MuJoCo Menagerie's UR5e and 2F-85, bam_scan_tunnel's `PinholeCamera` (the real pixels), intel_rgbd's D435 constants and stereo-noise
 law, type_cards (typing, ladders, wear laws, drift checks, selection rule, coverage functions).

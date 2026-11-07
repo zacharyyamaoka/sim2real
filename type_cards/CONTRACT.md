@@ -42,11 +42,18 @@ CodeHome                   repo path ref note
 Axis (coverage)            v1: name unit binning   v2: bin_size (constant cell width, else None)  marginal
 Coverage                   v1: axes rule measure robotdx plan_source   v2: gate_pct (the coverage gate, % of reachable cells)
                            v3: reachable_mask (the committed mask the measure counts over by default, or None)
+CalibrationRoutine         id title package identifies setting wall_time operator_time equipment excitation coverage repeats how
+                           kind(identify|measure|use) tests code status(implemented|partial|not implemented) oracle oracle_note
+                           alternatives references note   .identifies_parameter(card, name)   (2026-11-07; "Calibration routines")
+Identifies                 card rung parameters              (each a parameter of that card's rung, by name)
+Quantity                   value unit source note            .estimated   (source: a citation, or ESTIMATE = "estimate")
+Equipment                  id title cost(Quantity, USD) note
 ```
 
 Constants: `SCHEMA`, `KINDS`, `SETTINGS` (`bench`, `deployed`), `ROLES`, `WEAR_LAWS`, `DRIFT_MESSAGE` ("model drift detected —
 recalibration required"), `DRIFT_THRESHOLD` (1.25), `OUT_OF_COVERAGE` ("out of coverage"), `TWINNED_LIMIT` (1.5), `SELECTION_RULE`,
-`CALIBRATION_PACKAGES`, `WEAR_LAW_REFERENCES`, `STEPS`, `CARDS`, `ORDER`.
+`CALIBRATION_PACKAGES`, `WEAR_LAW_REFERENCES`, `STEPS`, `CARDS`, `ORDER`; since 2026-11-07 `ROUTINES`, `EQUIPMENT`, `ROUTINE_SETTINGS`
+(`bench`, `deployed`, `both`), `ROUTINE_KINDS`, `ROUTINE_STATUS`, `ESTIMATE`.
 
 ## Rung keys — a durable decision
 
@@ -150,6 +157,78 @@ what a floor-mounted arm can reach). Decision record: `docs/decision-arm-reachab
 `reg.CALIBRATION_PACKAGES` (filled by `type_cards/calibration.py`) / `reg.packages_for(card)`: Zach's packages (hand-eye, kinematic
 length, servo dynamic at arm and actuator level, camera RGB / RGBD / HSI / line-area scan, PID, hardstop / homing / rezeroing), each
 with the cards it serves and where its code lives today (`CodeHome`, every path checked to exist at its ref), or `unknown`.
+
+## Calibration routines
+
+Zach, 2026-11-07 (via the coordinator): "Any error is caused by errors in our model: the fidelity of the models and the accuracy of the
+parameters ... what are the methods we have to calibrate those parameters". A package (`CALIBRATION_PACKAGES`) is his grouping; a
+**Calibration Routine** ("Routine", his name the same day) is one way to run one (`reg.ROUTINES`, filled by `type_cards/calibration.py`),
+the record two ways to find the same parameter are compared by. Decision record: `docs/decision-calibration-routines-2026-11-07.md`.
+
+- **What it identifies**: `identifies`, a tuple of `Identifies(card, rung, parameters)`, each name a parameter of that rung (`kind="use"`
+  routines, the IK fine-tune and PID tuning, identify nothing; `kind="measure"` is a gauge, the rack's camera dwell stop ruler).
+- **Both directions**: routine -> parameters is `routine.identifies` (`routine.identifies_parameter(card, name)`); parameter -> routines
+  is `reg.routines_identifying(card, parameter)`, and `reg.parameter_routines()` is the whole index, `{card: {parameter: [routine ids]}}`
+  over every parameter of every ladder (`[]` where nothing reaches it yet).
+- **Where, how long, what it costs**: `setting` is `bench`, `deployed` or `both`; `wall_time` (the whole routine, set-up included) and
+  `operator_time` (a person's hands-on share) are `Quantity(value, "s", source)`; `equipment` names `reg.EQUIPMENT` ids, each item a cost in
+  USD with its source; `reg.equipment_cost(routine)` is their sum, its source naming each item's. Every number's `source` is a citation (a
+  file, a datasheet, a committed result) or the literal `"estimate"`.
+- **What it needs**: `excitation`, `coverage`, `repeats` (how many times its measurement is taken, averaged or checked), and `tests` (the
+  `TestType` ids whose data it uses).
+- **Where it lives**: `code` (`CodeHome`s, checked to exist at their ref; `/home/bam/sim2real` means this repo) and `status`:
+  `implemented` (the code exists, on a main or at the `ref` an unmerged branch names), `partial` (it exists for another robot or without
+  its last step) or `not implemented` (no code at all).
+- **Its oracle verdict**: `oracle` names the sysid noise-ladder checks that run its code against a hidden truth (`"<example>:<routine>"`,
+  declared in `sysid/noise_ladder.json`); `oracle_note` says why there is none. The numbers are sysid's, never typed here (below).
+- **Alternatives**: `alternatives` names the routines that find the same parameters another way; they name it back.
+- `reg.routine(id)`, `reg.routines_for(card | card_id | package_id)`; `reg.export()` adds `routines` (each with its `equipment_cost`),
+  `equipment`, `parameter_routines`, `routine_settings`, `routine_kinds`, `routine_status`.
+
+### The table the site reads: `sysid/results/calibration_routines.json`
+
+Written by `python -m sysid routines --write` (`sysid/routines.py`: a pure join of `reg.ROUTINES` with the committed ladder) and held to
+that join by `sysid/tests/test_noise_ladder.py`; the site build serves it at `/data/sysid/calibration_routines.json` (it copies every
+`sysid/results/*.json` byte for byte). Schema `sysid.calibration_routines/1`, both directions:
+
+```
+{schema, generated_from{records, ladder, ruler{path, sha256}}, levels["0x","1x","3x","10x"], variants{...}, summary_levels["1x","3x"],
+ columns[{key, what}],
+ rows[ routine -> parameters, one per routine, in reg.ROUTINES order:
+   routine title package kind setting status
+   wall_time{value unit source note}  operator_time{...}  equipment_cost{value unit source note}
+   equipment[{id title cost{value unit source note}}]
+   identifies[{card rung parameters[]}]  parameters_covered (the count)
+   excitation coverage repeats how tests[] code[{repo path ref note}] alternatives[] references[titles] note
+   recovery{ "1x"|"3x": {pass usable worst_error_over_tolerance missing parameters} }   (over every check; absent when not checked)
+   oracle{ status: "checked"|"not checked", note,
+           checks[{ id example owner(sysid|bam_ws) structure(matches|mismatch: why) parameters[keys] unclaimed{key: why} not_at{level: why}
+                    realism verdict(one line)
+                    levels{ "0x"|"1x"|"3x"|"10x"|"1x+<variant>": {pass usable worst_error_over_tolerance within_tolerance("k/n")
+                                                                parameters failing[keys] missing[keys] held_out{name: value}
+                                                                notes[text]} } }] } ],
+ parameters[ parameter -> routines and models, one per (example, key) the ladder grades:
+   example key unit true nominal tolerance{kind value}
+   card rung card_parameter            (the type card's parameter it is)
+   routines[ids]                       (reg.routines_identifying(card, card_parameter): every routine that can identify it)
+   checks[ids]                         (the ladder checks that graded it)
+   models[ one column group per model: { model ("<routine> · <fit>"), routine, check, fit ("fit", or CAN 11's rung "M0".."M4"),
+             rung, graded (the routine's own claim),
+             levels{ "<level>"|"1x+<variant>": { recovered{mean ci95[lo, hi]|null interval(how, or why none)} error error_over_tolerance
+                                                 within_tolerance pass bound } } } ] ],
+ parameter_routines{card: {parameter: [routine ids]}} }
+```
+
+`worst_error_over_tolerance` is the worst |recovered − true| ÷ the tolerance over the parameters the routine returned (1.0 = at the
+use's limit), `missing` the claimed parameters it returned nothing for (each fails; a routine that raised has every one missing and its
+message in `notes`); `pass` is the ruler's level bound (a tenth of the tolerance at 0x, k × it at kx, never wider than not calibrating),
+`usable` the tolerance itself. `recovered.mean` is the routine's estimate (its fit) and `ci95` the routine's own 95 % interval (a bootstrap
+or the fit's Jacobian; `interval` says which, or why there is none). The rows behind every cell, per parameter, are
+`sysid/results/noise_ladder.json` (schema `sysid.noise_ladder_result/1`: `checks[{id example routine owner structure parameters unclaimed
+not_at realism provenance rows[{level scale variant pass usable worst_error_over_tolerance graded_model models held_out notes provenance
+parameters[{key card rung card_parameter unit true nominal tolerance{kind value} bound recovered ci95 error error_over_tolerance pass
+within_tolerance models[{model rung graded recovered{mean ci95 interval} error error_over_tolerance within_tolerance pass}]}]}]}]`); a
+row's own `worst_error_over_tolerance` is None when any claimed value is missing.
 
 ## Lookups and export
 

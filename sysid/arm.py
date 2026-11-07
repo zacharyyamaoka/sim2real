@@ -493,9 +493,15 @@ def measure(arm: ArmModel, values: dict, noise: dict, seed: int, poses: np.ndarr
             row["tcp"] = data.site_xpos[arm.gripper["pinch"]].copy() + rng.normal(0, noise["tcp_tracker_m"], 3)
         static.append(row)
     dynamic = []
+    from sysid import world as hidden  # noqa: PLC0415
+
+    late = hidden.perturbation("torque_late")  # the noise ladder's torque_late variant (sysid/noise_ladder.json); None outside it
     for k, command in enumerate(excitations):
         rng = rng_for(seed, label, "excitation", k)
         q, qd, tau, flange, tcp = run_excitation(arm, command, offsets)
+        lag = 0 if late is None else int(round(late / DT))
+        if lag:
+            tau = np.vstack([np.repeat(tau[:1], lag, axis=0), tau[:-lag]])
         dynamic.append({"command": command, "q": q - offsets + rng.normal(0, noise["encoder_rad"], q.shape),
                         "qd": qd + rng.normal(0, noise["speed_rad_s"], qd.shape), "tau": tau + rng.normal(0, 1.0, tau.shape) * big,
                         "flange_p": np.array([p for p, _ in flange]) + rng.normal(0, noise["tracker_position_m"], (len(flange), 3)),

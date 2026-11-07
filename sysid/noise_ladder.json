@@ -1,0 +1,214 @@
+{
+  "schema": "sysid.noise_ladder/1",
+  "written": "2026-11-07, before any ladder run: the ruler every Calibration Routine is graded on, level by level (Zach, 2026-11-07, via the coordinator: run each routine against the sim's ground truth at 0, 1x, 3x and 10x the sensor noise, plus delay and quantisation where they matter, so routines compare on the same amount of noise; called procedures until Zach named them Routines the same day).",
+  "rule": "One noise draw per level: every channel of a world's \"noise\" block scaled by the level's factor, the same seeds, so 3x is exactly three times the 1x draw and a level differs from the next only in the noise's size. A parameter's error is |recovered - true|. Its bound at level 0 is exact_fraction x its tolerance (nearly exact: a tenth of what the use needs). At a level k >= 1 it is min(k x tol, max(tol, |nominal - true|)): the bound widens with the noise, as an efficient estimator's error does, but never past the error of not calibrating at all (where that error is above the tolerance). A variant runs at 1x noise plus one perturbation; its bound is the 1x bound (the use's tolerance). A row passes when its error is within its bound; it is usable when its error is within the tolerance itself. A routine passes a level when every parameter it claims passes; a parameter it claims but returns no value for fails. Tolerances are acceptance.json's for the example (the oracle's own ruler, unchanged) unless this file declares one; truths are world.json's, read by the simulator only, unless this file derives one from them.",
+  "exact_fraction": 0.1,
+  "levels": [
+    {"id": "0x", "scale": 0.0},
+    {"id": "1x", "scale": 1.0},
+    {"id": "3x", "scale": 3.0},
+    {"id": "10x", "scale": 10.0}
+  ],
+  "one_x": "1x is each world.json's noise block as committed (the oracle's current level). Where a real sensor's figure is known it is named beside the check (realism), never folded into the ruler.",
+  "variants": {
+    "camera_late": {
+      "examples": ["pendulum_can11"],
+      "what": "the link camera's samples arrive one sample late (10 ms on CAN 11's 100 Hz runs), uncorrected",
+      "value": 0.01, "unit": "s",
+      "source": "estimate: bam_rack_twin stop_camera.py corrects the D405's latency from its frame stamps; the residual after that correction is not measured, and a third of a 30 fps frame is assumed"
+    },
+    "encoder_quantised": {
+      "examples": ["pendulum_can11"],
+      "what": "the motor encoder rounded to its output quantum",
+      "value": 3.834951969714103e-05, "unit": "rad",
+      "source": "bam_rack_twin model_card.py: moteus' on-board AS5047P at the rotor, 16384 counts per revolution (ENCODER_CPR_DEFAULT; conf motor_position.sources.0.cpr), output quantum 2 pi / 16384 / N; CAN 11's N = 10 (stations: rotor_to_output_ratio 0.1)"
+    },
+    "torque_late": {
+      "examples": ["ur5e", "ur5e_2f85"],
+      "what": "the joint torque one control period late against the encoders (one 2 ms sample)",
+      "value": 0.002, "unit": "s",
+      "source": "estimate: one 500 Hz control period, the arm examples' own step (sysid/arm.py DT)"
+    },
+    "tracker_late": {
+      "examples": ["conveyor"],
+      "what": "the belt tracker one frame late against the roller encoder (one 100 Hz tracker sample)",
+      "value": 0.01, "unit": "s",
+      "source": "estimate: one frame of the 100 Hz tracker (sysid/examples/conveyor/description.json tracker_hz), uncorrected"
+    },
+    "pixel_integer": {
+      "examples": ["dual_arm_cell", "linescan_cell"],
+      "what": "every corner and dot detection rounded to the whole pixel (no sub-pixel refinement): the tag corners, the line camera's dot pixel, the D435's dot pixels",
+      "value": 1.0, "unit": "px",
+      "source": "estimate: a detector without corner refinement reports whole pixels (a uniform error of 1/sqrt(12) = 0.29 px)"
+    },
+    "encoder_14bit_9to1": {
+      "examples": ["ur5e_backlash"],
+      "what": "the motor encoder rounded to 2 pi / (2^14 x 9) at the output",
+      "value": 4.261057744126781e-05, "unit": "rad",
+      "source": "bam_ws gear_backlash/ur/calibration.py SweepConfig.encoder_counts_per_output_rev = 2**14 * 9 (the sweep's own 'sensing realism': a 14-bit motor encoder through a 9:1 reduction)"
+    }
+  },
+  "derived_truth": {
+    "can11.coulomb_sliding_nm": {
+      "of": ["can11.frictionloss_nm", "-", "can11.friction_stribeck_drop_nm"],
+      "unit": "N·m",
+      "tolerance": ["rel", 0.1],
+      "nominal_of": "can11.frictionloss_nm",
+      "why": "a Coulomb + viscous fit (the stock plateau fit, T10's tanh) reads the level a Stribeck curve settles to above its speed (truth vs = 0.1 rad/s): Fs - drop. Its tolerance is the static level's (acceptance.json can11.frictionloss_nm, rel 0.1); its nominal the description's one Coulomb level (no drop)."
+    }
+  },
+  "tolerances": {
+    "ur5e_backlash": {
+      "*.backlash_rad": ["abs", 0.0005817764173314432],
+      "why": "2 arcmin: bam_rack_twin acceptance.py GAP_CI_HALF_ARCMIN, the rack's T5 gate on a gear gap (its 95 % interval's half-width). The use: gear_backlash's study puts an uncompensated arcmin at ~0.18 mm at the cube."
+    },
+    "drift": {
+      "can11.backlash_wear_rad_per_h": ["rel", 0.1],
+      "camera_knock.d?_m": ["abs", 0.001],
+      "camera_knock.r?_rad": ["abs", 0.001],
+      "why": "acceptance.json's drift gates, unchanged: backlash_wear.rate_rel, camera_knock.shift_translation_abs_m and shift_rotation_abs_rad"
+    }
+  },
+  "drift_truth": {
+    "can11.backlash_wear_rad_per_h": {"world": ["drift", "backlash_wear", "rate_rad_per_h"], "nominal": 0.0,
+                                      "nominal_why": "the commissioned M4 twin's gap does not grow"},
+    "camera_knock.*": {"world": ["drift", "camera_knock", "shift", "*"], "nominal": 0.0,
+                       "nominal_why": "the commissioned camera: no shift until one is measured"}
+  },
+  "checks": {
+    "pendulum_can11:servo.dynamics_regression": {
+      "routine": "servo.dynamics_regression", "owner": "sysid",
+      "structure": "matches: M4's inverse-dynamics regression and friction polish hold every term the truth has (gravity, inertia, Stribeck, viscous; the gap is the next check), pipeline.identify",
+      "parameters": ["can11.gravity_nm", "can11.gravity_bottom_rad", "can11.armature_kg_m2", "can11.frictionloss_nm", "can11.friction_stribeck_drop_nm",
+                     "can11.friction_stribeck_speed_rad_s", "can11.damping_nm_s_rad"],
+      "held_out": ["link_mrad", "link_x_floor"],
+      "variants": ["camera_late", "encoder_quantised"],
+      "realism": "the oracle's link camera is 0.3 mrad white noise on every 10 ms sample (0.042 mrad/sqrt(Hz)); bam_rack_twin stop_camera.py reads one D405 frame of a station tag at 2-11 mrad (2.7 with contour refinement) at ~30 fps, 0.7-2.8 mrad/sqrt(Hz): even 10x here is quieter than the rack's camera"
+    },
+    "pendulum_can11:servo.backlash_reversals_camera": {
+      "routine": "servo.backlash_reversals_camera", "owner": "sysid",
+      "structure": "matches: two contact levels of (motor encoder - link camera), the gap the truth hides, pipeline.backlash_from_gaps",
+      "parameters": ["can11.backlash_rad"],
+      "held_out": ["link_mrad"],
+      "variants": ["camera_late", "encoder_quantised"]
+    },
+    "pendulum_can11:servo.stock_quasistatic": {
+      "routine": "servo.stock_quasistatic", "owner": "bam_ws",
+      "structure": "mismatch: quasi-static gravity sweeps and plateaus under CAN 11's ki 16000 limit cycle (pipeline.py's docstring, measured 2026-11-05: the sweeps read inertia as load, G +9.5 to +16 %; the plateau fit reads the Stribeck curve as a negative viscous term); bam_rack_twin.identify.identify_without_cad, run on the same train runs",
+      "parameters": ["can11.gravity_nm", "can11.gravity_bottom_rad", "can11.armature_kg_m2", "can11.damping_nm_s_rad", "can11.coulomb_sliding_nm"],
+      "held_out": [],
+      "variants": ["camera_late", "encoder_quantised"]
+    },
+    "pendulum_can11:servo.live_reid_t10": {
+      "routine": "servo.live_reid_t10", "owner": "bam_ws",
+      "structure": "mismatch: T10's regressor is tanh Coulomb + viscous + inertia + gravity (live_reid.TERMS), with no Stribeck drop and no gear gap, on the motor encoder's angle; bam_rack_twin live_reid.Rls through docs/round4_study.live_reid_estimates (the first 60 s, forgetting 0.999), fed the deployed check's runs (H2 operate, the motions the joint makes all day) in plan order",
+      "parameters": ["can11.gravity_nm", "can11.gravity_bottom_rad", "can11.armature_kg_m2", "can11.damping_nm_s_rad", "can11.coulomb_sliding_nm"],
+      "held_out": [],
+      "variants": ["camera_late", "encoder_quantised"]
+    },
+    "pendulum_can11:servo.gap_check_forecast": {
+      "routine": "servo.gap_check_forecast", "owner": "sysid",
+      "structure": "matches: the gap re-measured each 12 h check as in commissioning, its line on hours is the truth's linear wear law (drift.run_backlash)",
+      "parameters": ["can11.backlash_wear_rad_per_h"],
+      "levels": ["1x", "3x", "10x"],
+      "not_at": {"0x": "not applicable: the drift ratio and its forecast are ratios to the floor (two camera draws of one run), which is zero without noise"},
+      "held_out": ["forecast_error_pct", "lead_h", "gap_rms_mrad", "recalibrated_ratio"],
+      "variants": []
+    },
+    "ur5e:kinematics.zero_offsets_tracker": {
+      "routine": "kinematics.zero_offsets_tracker", "owner": "sysid",
+      "structure": "matches: FK(q_encoder + offset) on the tracker's flange pose, the truth's only kinematic error (arm.fit_kinematics)",
+      "parameters": ["*.zero_offset_rad"],
+      "held_out": ["tool_mm"],
+      "variants": ["torque_late"]
+    },
+    "ur5e:arm.dynamics_excitation": {
+      "routine": "arm.dynamics_excitation", "owner": "sysid",
+      "structure": "matches: joint torque - rigid inverse dynamics on qdd, qd, sgn(qd) per joint, the truth's armature, damping and Coulomb (arm.fit_dynamics)",
+      "parameters": ["*.armature_kg_m2", "*.damping_nm_s_rad", "*.frictionloss_nm"],
+      "held_out": ["torque_nm"],
+      "variants": ["torque_late"]
+    },
+    "ur5e_2f85:kinematics.zero_offsets_tracker": {
+      "routine": "kinematics.zero_offsets_tracker", "owner": "sysid",
+      "structure": "matches: as ur5e, the TCP marker's offset fitted beside the zeros",
+      "parameters": ["*.zero_offset_rad", "tool.tcp_x_m", "tool.tcp_z_m"],
+      "held_out": ["tool_mm"],
+      "variants": ["torque_late"]
+    },
+    "ur5e_2f85:arm.dynamics_excitation": {
+      "routine": "arm.dynamics_excitation", "owner": "sysid",
+      "structure": "matches: as ur5e, the tool's mass and centre of mass as regressor columns",
+      "parameters": ["*.armature_kg_m2", "*.damping_nm_s_rad", "*.frictionloss_nm", "tool.mass_kg", "tool.com_z_m"],
+      "held_out": ["torque_nm"],
+      "variants": ["torque_late"]
+    },
+    "ur5e_2f85:gripper.drive_traces": {
+      "routine": "gripper.drive_traces", "owner": "sysid",
+      "structure": "matches: the 2F-85 drive's force per count and damping by output error on its finger traces (arm.fit_gripper)",
+      "parameters": ["gripper.actuator_gain", "gripper.damping"],
+      "held_out": ["finger_mrad"],
+      "variants": ["torque_late"]
+    },
+    "conveyor:conveyor.radius_tracker": {
+      "routine": "conveyor.radius_tracker", "owner": "sysid",
+      "structure": "matches: tracker travel = r x roller angle + an offset per profile",
+      "parameters": ["belt.roller_radius_m"],
+      "held_out": ["belt_mm_radius"],
+      "variants": ["tracker_late"]
+    },
+    "conveyor:conveyor.dynamics_profiles": {
+      "routine": "conveyor.dynamics_profiles", "owner": "sysid",
+      "structure": "matches: the description's own MJCF at the fitted radius, mass and drag free",
+      "parameters": ["belt.moving_mass_kg", "belt.viscous_drag_n_s_m", "belt.coulomb_drag_n"],
+      "held_out": ["belt_mm"],
+      "variants": ["tracker_late"]
+    },
+    "dual_arm_cell:cell.tags_bundle_adjustment": {
+      "routine": "cell.tags_bundle_adjustment", "owner": "sysid",
+      "structure": "matches: one bundle adjustment of both mounts, the camera's pose and K on the tags' reprojection, the truth's every hidden number",
+      "parameters": ["*_mount.d?_m", "*_mount.r?_rad", "head_camera.d?_m", "head_camera.r?_rad", "head_camera.f?_px", "head_camera.c?_px"],
+      "held_out": ["reprojection_px", "pick_mm"],
+      "variants": ["pixel_integer"]
+    },
+    "dual_arm_cell:camera.pose_recal_belt_tags": {
+      "routine": "camera.pose_recal_belt_tags", "owner": "sysid",
+      "structure": "matches: the camera's six pose numbers re-fitted from the belt's and the arms' tags at the alarm (drift.run_camera)",
+      "parameters": ["camera_knock.d?_m", "camera_knock.r?_rad"],
+      "levels": ["1x", "3x", "10x"],
+      "not_at": {"0x": "not applicable: the recalibration runs at the drift alarm, and the alarm is a ratio to the commissioned reprojection error, which is round-off without noise"},
+      "held_out": ["alarm_h", "recalibrated_ratio"],
+      "variants": ["pixel_integer"]
+    },
+    "linescan_cell:linescan.geometry_dot_card": {
+      "routine": "linescan.geometry_dot_card", "owner": "sysid",
+      "structure": "matches: the closed-form push broom is the pinhole's own crossing with roll and pitch at the drawing's, as in the truth",
+      "parameters": ["hsi.focal_px", "hsi.principal_px", "hsi.height_m", "hsi.across_offset_m", "hsi.scan_line_x_m", "hsi.scan_yaw_rad"],
+      "held_out": ["scan_position_mm"],
+      "variants": ["pixel_integer"]
+    },
+    "linescan_cell:linescan.radiometry_refs": {
+      "routine": "linescan.radiometry_refs", "owner": "sysid",
+      "structure": "matches: DN = gain x R + dark per band, the truth's own law",
+      "parameters": ["hsi.gain_b*", "hsi.dark_b*"],
+      "held_out": ["spectral_angle_mrad"],
+      "variants": ["pixel_integer"]
+    },
+    "linescan_cell:rgbd.dot_card": {
+      "routine": "rgbd.dot_card", "owner": "sysid",
+      "structure": "matches: pinhole K and pose, depth = scale x z + offset, the truth's own law",
+      "parameters": ["rgbd.f?_px", "rgbd.c?_px", "rgbd.d?_m", "rgbd.r?_rad", "rgbd.depth_scale", "rgbd.depth_offset_m"],
+      "held_out": ["cloud_mm"],
+      "variants": ["pixel_integer"]
+    },
+    "ur5e_backlash:arm.backlash_gravity_sweep": {
+      "routine": "arm.backlash_gravity_sweep", "owner": "bam_ws",
+      "structure": "matches: gear_backlash.ur.calibration fits each flank's shift of the arm's own gravity curve with an output-friction term and the datasheet mesh stiffness, the plant's own terms; it claims the gravity-loadable joints (its GRAVITY_JOINTS: shoulder lift, elbow, wrist 1, wrist 2)",
+      "parameters": ["shoulder_lift.backlash_rad", "elbow.backlash_rad", "wrist_1.backlash_rad", "wrist_2.backlash_rad"],
+      "unclaimed": {"shoulder_pan.backlash_rad": "gravity cannot load a vertical pan axis (calibration.py's docstring)",
+                    "wrist_3.backlash_rad": "the tool's mass sits on the wrist 3 axis (calibration.py's docstring)"},
+      "held_out": [],
+      "variants": ["encoder_14bit_9to1"]
+    }
+  }
+}
