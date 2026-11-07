@@ -11,6 +11,11 @@ stylesheet (static/ui-shared.css), one remembered width, so every page with a le
     filter_bar(views_id)                     data-ui's rail (<data-facets>) for a <data-views>, for the workbench's left column
     chip(text, tone, title)                  a small word: a kind, a tag (tone "real" is data-ui's series 1, blue; "sim" series 2, orange)
     head()                                   the stylesheet's <link>, for a page's extra_head
+    status_tree(nodes, selected, ...)        a tree that picks a level in place (the run page): RobotDx's device tree with a status dot,
+                                             a one-line summary and a muted end per node, search, collapse and expand all, ?entity= deep
+                                             links (static/ui-shared.js); a closed disclosure on a phone too
+    dot(level, why)                          a status dot: ok, warning, error filled, unknown a hollow ring, always with its word
+    record_page(catalog, kind, ..., aside)   a record's page in the two panes below: the workbench's record on the right, `aside` left
 
 Where they go: the workbench shell's two panes (catalog_workbench.shell.page(aside=...)). Its left column is resizable and its width
 remembered (data-resizable: data-ui's resize, CONTRACT §11), each pane scrolls on its own, and below 768 px the column stacks above

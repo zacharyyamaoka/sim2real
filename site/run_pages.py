@@ -21,7 +21,8 @@ no in these dashboards we are seeing like the metrics and diagonistics that are 
 - **The run's tags** in the header, for every level: excitation, closed loop, offline scope and the config snapshot, and Zach's caveat in
   plain words (offline evaluation judges models, not tracking under changed feedback).
 
-Stdlib only. The numbers are type_cards' (selection.compute, domain.level); the page computes none of its own.
+Stdlib only. The numbers are type_cards' (selection.compute, domain.level); the page computes none of its own. WHY one page per run with
+the levels in it, the workbench's two panes, the dot's rule and the models apart: docs/decision-run-page-2026-11-07.md.
 """
 
 from __future__ import annotations
@@ -107,7 +108,8 @@ class Context:
 
     def selection(self, row: dict) -> dict:
         """sel.compute([run]) over this run's own rows: the same result as over the deployment's whole tables (compute reads only the
-        selected runs' rows; site/tests checks it), at a thousandth of the cost per page."""
+        selected runs' rows; site/tests/test_site_flow.py compares the two on a sample of runs), without indexing all 130,000 coverage
+        points again for every page."""
         tables, diags, points = self.tables(row["deployment"])
         mine = dataclasses.replace(tables, runs=[row], run_diagnostics=diags.get(row["run"], []), coverage_points=points.get(row["run"], []))
         return sel.compute([row["run"]], mine)
@@ -219,7 +221,7 @@ def short_name(n: dict) -> str:
         return n.get("device") or n["title"]
     if kind == "part":
         return (n.get("title") or "").split(": ", 1)[0] or n["id"].rsplit("/", 1)[-1]
-    return (n.get("title") or n["id"]).replace("Intel RealSense ", "RealSense ")
+    return n.get("title") or n["id"]  # WHY the whole title: the column cuts it with an ellipsis, the full words one hover away
 
 
 # --- numbers in words -------------------------------------------------------------------------------------------------------------------

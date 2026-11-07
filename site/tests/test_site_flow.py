@@ -1960,6 +1960,11 @@ def run_page_checks(out: Path, data: Path) -> dict:
                         or g.get("data-level") != dm.level(spec, fid):
                     bad["models"].append(f"{where}: {name} {g.get('data-fidelity')} {g.get('data-level')} vs {fid} {dm.level(spec, fid)}")
                     break
+    # the run page computes each run's selection over that run's own rows: the same result as over the deployment's whole tables
+    sample = runs[::150]
+    same = [sel.compute([r["run"]], tables) == sel.compute([r["run"]], dataclasses.replace(tables, runs=[r], run_diagnostics=by_d.get(r["run"], []),
+                                                                                            coverage_points=by_p.get(r["run"], []))) for r in sample]
+    check(all(same), f"a run's selection of one over its own rows is the one over the deployment's whole tables ({sum(same)} of {len(sample)} sampled runs)")
     n = len(runs)
     check(not bad["aside"], f"every run page is two panes, the entity tree on the left (aside 'Entities', resizable) and the run on the right "
                             f"({n - len(bad['aside'])} of {n}; {bad['aside'][:2]})")
@@ -2014,7 +2019,7 @@ def run_page_browser_checks(page, base: str, data: Path, media: dict, served: di
     dots = page.evaluate("""() => [...document.querySelectorAll('[role=tree] .s2r-dot')].map((d) => { const r = d.getBoundingClientRect(); const cs = getComputedStyle(d);
         return [r.width, r.height, cs.borderTopWidth, cs.backgroundColor]; })""")
     check(len(dots) == len(tree) and all(w >= 6 and h >= 6 for w, h, _b, _bg in dots), f"every node's status dot is drawn ({len(dots)} of {len(tree)}: {dots[:2]})")
-    still("40-run-tree-station")
+    still("50-run-tree-station")
     # a click on the driver: its dashboard, the URL names it, the Playback tabs (the station's) step aside
     page.locator(f"[role=tree] [role=treeitem][data-entity='{driver['id']}'] > .s2r-etree-row a").first.click()
     page.wait_for_timeout(600)
@@ -2027,7 +2032,7 @@ def run_page_browser_checks(page, base: str, data: Path, media: dict, served: di
           f"a click on the driver shows its level alone, and the URL names it ({s1['url'][:120]}; shown {s1['shown']}, tabs {s1['tabs']})")
     check(drawn and rows and all(r_[0] == t2["run"] and r_[1] == t2["device"] and r_[2] == "real" for r_ in rows),
           f"the driver's dashboard draws the board's own current from this run's samples, its device only ({len(rows)} rows)")
-    still("41-run-tree-driver")
+    still("51-run-tree-driver")
     page.go_back()
     page.wait_for_timeout(1200)
     s2 = page.evaluate(LEVEL_JS)
@@ -2084,7 +2089,7 @@ def run_page_browser_checks(page, base: str, data: Path, media: dict, served: di
         return {{ ids: s ? [...s.querySelectorAll('tr[data-entity]')].map((t) => t.dataset.entity) : [], natural: img ? img.naturalWidth : 0 }}; }}""")
     check(s3["selected"] == [dep_node["id"]] and s3["shown"] == [dep_node["id"]] and roll["ids"] == [n["id"] for n in tree] and roll["natural"] >= MIN_RENDER[0],
           f"a deep link opens the deployment's level: its render and every entity of this run in one roll-up ({len(roll['ids'])} of {len(tree)}, render {roll['natural']} px)")
-    still("43-run-tree-deployment")
+    still("53-run-tree-deployment")
     expected = {k: v for k, v in (media.get("camera_runs") or {}).items() if k not in set(media.get("refused") or [])}
     filmed = next((r for r in sorted(runs, key=lambda r: -r["duration_s"]) if r["run"] in expected and r.get("models")), None) or \
         next((r for r in runs if r["run"] in expected), None)
@@ -2108,7 +2113,7 @@ def run_page_browser_checks(page, base: str, data: Path, media: dict, served: di
     check(bool(camera) and ok and s4["shown"] == [camera["id"]],
           f"a deep link opens a camera's level on a filmed run: its clip (the camera-clip component, scoped to it) loads and follows its own clock "
           f"({filmed['run'][:50]}, {camera['id'] if camera else None}, seek {t})")
-    still("42-run-tree-camera")
+    still("52-run-tree-camera")
     # a phone: the deep-linked levels have no sideways scroll
     page.set_viewport_size({"width": 390, "height": 844})
     for u in (f"{url}?entity={quote(driver['id'], safe='')}", f"{base}/{DEP}/runs/{filmed['run']}/?entity={quote(camera['id'], safe='') if camera else ''}"):
