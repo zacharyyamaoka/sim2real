@@ -7,12 +7,20 @@ b(h) = b0 + k h; fit k from the early-life checks (k recovered vs k true); predi
 and compare it with the hour it does; show the plain detector beside it (detection after the fact vs a forecast of hours left).
 
 Backlash wear (CAN 11): commissioning is the oracle's own identification (M4, the gap included). Every 12 deployment hours the joint
-runs its daily motions (the held-out H2 operate runs) on the real, wearing joint; each check scores the commissioned twin on the
-link camera (live fidelity, x floor) and measures the gap from the motor encoder minus the link camera. The plain detector is the
-servo card's drift check (reg.check_drift: live / calibrated against the threshold, its message). The wear-aware forecast is made
-once, at the end of early life: the gap's history fitted on hours gives k (the servo card's M5.wear backlash term, a linear law at a
-fixed duty), the commissioned twin replayed with growing gaps gives the fidelity a gap will cost, and type_cards' wear_usage_at
-solves for the hour the threshold is reached. At the detector's alarm the twin is recalibrated (the gap re-measured) and re-scored.
+runs its daily motions (the held-out H2 operate runs) on the real, wearing joint; each check measures the gap from the motor encoder
+minus the link camera (the routine commissioning measured it with) and scores the commissioned twin on the link camera (live fidelity,
+x floor). The plain detector is the servo's gap drift (type_cards servo.gap_drift, dm.parameter_drift): the gap a check measures, less
+the commissioned gap, against the station's allowance (description.json monitoring.gap_allowance; CAN 11's is T5's 2 arcmin). The
+wear-aware forecast is the gap's history fitted on hours (the servo card's M5.wear backlash term, a linear law at a fixed duty), re-made
+at every check and issued once, solved by type_cards' wear_usage_at for the hour the gap reaches the commissioned gap plus the allowance.
+At the alarm the twin is recalibrated (the gap re-measured) and re-scored.
+
+WHY the gap's own units, not the fidelity ratio (2026-11-07, docs/decision-calibration-routines-2026-11-07.md, its addendum; the domain-v3
+decision's "The drift threshold"): the ratio is the twin's link error over the camera's floor, so as the camera's noise grows the same
+wear moves it less; at 3x the noise CAN 11's ratio never warned inside the 480 h horizon. The gap estimate's error grows with the noise,
+its mean does not. The ratio is still computed on every check (ratio, ratio_status, ratio_alarm_h), so each run carries the comparison;
+the gap -> drift-ratio curve the ratio's forecast needed (45 replays of the commissioned twin) is gone with it. The check needs no twin:
+where commissioning has only the gap (the regression raised), it runs without the fidelity view and the recalibration.
 
 Camera knock (the dual-arm cell): every 12 h the belt carries its printed tags past the head camera; the live reprojection error with
 the commissioned camera, divided by the commissioned one, is camera_rgb's drift check. At hour 300 the camera is knocked; at the
@@ -33,10 +41,48 @@ from sysid import world as hidden
 
 # --- backlash wear --------------------------------------------------------------------------------------------------------------
 
-def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: dict | None = None) -> dict:
+def gap_allowance(description) -> dict:
+    """The station's allowance on its gap's growth (type_cards servo.gap_drift's warn limit, set per station) as its description declares
+    it (monitoring.gap_allowance: value, unit, rule, source, why); refused unless it is a positive value in rad."""
+    allowance = dict(description.monitoring.get("gap_allowance") or {})
+    value = allowance.get("value")
+    if allowance.get("unit") != "rad" or isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
+        raise ValueError(f"{description.id}: monitoring.gap_allowance must be a positive value in rad, not {allowance!r}")
+    return allowance
+
+
+def t5_gap_allowance_rad(station) -> float | None:
+    """The rule a station's gap allowance is set by (2026-11-07): T5's gap half-width at the output (bam_rack_twin acceptance
+    GAP_CI_HALF_ARCMIN) on a geared station, None on a direct drive (no gear, no gap; its board's rotor turn is the output's).
+
+    WHY T5: the commissioned twin carries the gap commissioning measured, and T5 accepts a geared unit when that gap is known to within
+    +-2 arcmin (its 95 % interval's half-width); once wear has grown the gap further than that past the twin's, the twin's gap is off by
+    more than the unit was accepted with. The same 2 arcmin grades every UR gap in the noise ladder (sysid/noise_ladder.json)."""
+    from bam_rack_twin import acceptance  # noqa: PLC0415
+
+    if float(station.board_rotor_to_output_ratio) == 1.0:
+        return None
+    return math.radians(acceptance.GAP_CI_HALF_ARCMIN / 60.0)
+
+
+def gap_verdict(measured: float, *, commissioned: float, allowance: float) -> dict:
+    """One deployed gap check: type_cards' servo.gap_drift (dm.parameter_drift), the gap measured less the commissioned gap against the
+    allowance, with its growth and, past the allowance, the diagnostic's message."""
+    from type_cards import domain as dm  # noqa: PLC0415
+
+    spec = dm.diagnostic("integrated_servo", "servo.gap_drift")
+    status = dm.parameter_drift(spec, commissioned=float(commissioned), measured=float(measured), allowance=float(allowance))
+    return {"status": status, "growth_rad": float(measured) - float(commissioned), "message": spec.message if status == "warning" else ""}
+
+
+def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: dict | None = None,
+                 commissioned_gap: float | None = None) -> dict:
+    """CAN 11's deployed life: the gap check every 12 h against the station's allowance, the wear forecast, the recalibration at the
+    alarm. `commissioned_values` (M4's) commission a twin, whose fidelity ratio is kept beside the gap check; `commissioned_gap` alone
+    (the regression raised: the noise ladder's 10x) runs the gap check without a twin; neither, the oracle's own fit (re-made if absent)."""
     from type_cards import registry as reg  # noqa: PLC0415
 
-    from sysid import describe  # noqa: PLC0415
+    from sysid import describe, oracle  # noqa: PLC0415
     from sysid.examples.pendulum_can11 import pipeline as P  # noqa: PLC0415
 
     started = time.monotonic()
@@ -45,15 +91,18 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
     real = P.RealWorld(description, workers=workers)
     hidden_wear = real.drift["backlash_wear"]
     mon = description.monitoring
-    from sysid import oracle  # noqa: PLC0415
+    allowance = gap_allowance(description)
+    limit = float(allowance["value"])
 
-    if commissioned_values is None and P.EXAMPLE in oracle.LAST_FIT:
-        commissioned_values = oracle.LAST_FIT[P.EXAMPLE].values["M4"]
-    if commissioned_values is None:
-        measured = real.measure(plan)
-        with hidden.sealed():
-            commissioned_values = P.identify(description, measured.train).values["M4"]
-    commissioned = P.twin(commissioned_values, "commissioned")
+    if commissioned_values is None and commissioned_gap is None:
+        if P.EXAMPLE in oracle.LAST_FIT:
+            commissioned_values = oracle.LAST_FIT[P.EXAMPLE].values["M4"]
+        else:
+            measured = real.measure(plan)
+            with hidden.sealed():
+                commissioned_values = P.identify(description, measured.train).values["M4"]
+    commissioned = None if commissioned_values is None else P.twin(commissioned_values, "commissioned")
+    gap0 = float(commissioned_values["backlash_rad"]) if commissioned_values is not None else float(commissioned_gap)
     runs = P.synthetic_runs(description, plan, plan.check)
     names = sorted(runs)
     check_seconds = sum(float(runs[n].t[-1] - runs[n].t[0]) for n in names)
@@ -61,67 +110,64 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
     hours = np.arange(0.0, mon["horizon_h"] + 1e-9, mon["check_every_h"])
     rng = P.noise_rng(real.seed, "backlash wear")
     b_true = {float(h): hidden_wear["b0_rad"] + hidden_wear["rate_rad_per_h"] * h + rng.normal(0.0, hidden_wear["process_noise_rad"]) for h in hours}
-    twins = {"commissioned": commissioned}
+    twins = {} if commissioned is None else {"commissioned": commissioned}
     twins.update({f"h{h:g}": real.twin(backlash_rad=b, version=f"wear-h{h:g}") for h, b in b_true.items()})
     replays = P.replay(runs, twins, workers=workers)
-    twin_link = {n: P.link_of(replays[("commissioned", n)]) for n in names}
+    twin_link = None if commissioned is None else {n: P.link_of(replays[("commissioned", n)]) for n in names}
 
-    checks, gap_history = [], []
+    checks = []
     for h in hours:
         label = f"h{h:g}"
-        err, floor, gaps, links = [], [], [], {}
+        err, floor, gaps = [], [], []
         for n in names:
             rp = replays[(label, n)]
             link = P.link_of(rp)
+            # WHY these three draws in this order on every path: they are the check's own measurement (camera, its repeat, encoder); a
+            # gap-only run draws the repeat too, so its gaps are the twin path's, number for number
             noise = P.noise_rng(real.seed, "check", label, n)
             meas_link = link + noise.normal(0.0, real.noise["link_camera_rad"], link.size)
             repeat = link + noise.normal(0.0, real.noise["link_camera_rad"], link.size)
             meas_q = rp.q + noise.normal(0.0, real.noise["encoder_rad"], rp.q.size)
-            err.append(twin_link[n] - meas_link)
+            if twin_link is not None:
+                err.append(twin_link[n] - meas_link)
             floor.append(repeat - meas_link)
             gaps.append(meas_q - meas_link)
-            links[n] = meas_link
-        live = rms(np.concatenate(err)) / rms(np.concatenate(floor))
-        b_hat = P.backlash_from_gaps(gaps)
-        checks.append({"h": float(h), "b_true_rad": b_true[float(h)], "b_hat_rad": float(b_hat), "live_x_floor": float(live),
-                       "floor_mrad": 1e3 * rms(np.concatenate(floor)), "link_mrad": 1e3 * rms(np.concatenate(err)), "_links": links})
-        gap_history.append((float(h), float(b_hat)))
+        b_hat = float(P.backlash_from_gaps(gaps))
+        verdict = gap_verdict(b_hat, commissioned=gap0, allowance=limit)
+        check = {"h": float(h), "b_true_rad": b_true[float(h)], "b_hat_rad": b_hat, "gap_growth_rad": verdict["growth_rad"],
+                 "status": verdict["status"], "message": verdict["message"], "floor_mrad": 1e3 * rms(np.concatenate(floor))}
+        if twin_link is not None:
+            check.update(live_x_floor=float(rms(np.concatenate(err)) / rms(np.concatenate(floor))), link_mrad=1e3 * rms(np.concatenate(err)))
+        checks.append(check)
 
-    calibrated = checks[0]["live_x_floor"]
-    # the threshold: the servo card's own drift diagnostic's (reg.DRIFT_THRESHOLD, settable). WHY not TWINNED_LIMIT / calibrated (the
-    # first rule tried, 2026-11-05): a twin commissioned near 1.45x floor puts that ratio at ~1.03, inside the checks' own scatter
-    threshold = float(cards.drift_diagnostic("servo").threshold.value)
-    for c in checks:
-        verdict = cards.check_drift("servo", c["live_x_floor"], calibrated, threshold)
-        c.update({"ratio": float(verdict.ratio), "status": verdict.status, "message": verdict.message})
     alarm = next((c["h"] for c in checks if c["status"] == "warning"), None)
-    actual = crossing_hour([(c["h"], c["ratio"]) for c in checks], threshold)
+    # the truth's crossing: the first hour the hidden gap has grown the allowance past the gap the twin carries
+    actual = crossing_hour([(c["h"], c["b_true_rad"] - gap0) for c in checks], limit)
 
-    # the gap -> drift-ratio curve: the commissioned twin replayed with gaps around its own, from the twin alone (no check is read)
-    # WHY anchored on the commissioned gap, not the early checks (2026-11-05, twin C): the forecast is now issued at a check decided
-    # while the checks come in, so the curve may not depend on any of them
-    grid = float(commissioned_values["backlash_rad"]) + np.arange(-0.2e-3, 2.0e-3 + 1e-9, 0.05e-3)
-    curve_twins = {f"b{i}": P.twin({**commissioned_values, "backlash_rad": float(b)}, f"wear-curve-{i}") for i, b in enumerate(grid)}
-    curve_replays = P.replay(runs, curve_twins, workers=workers)
-    floor_mrad = checks[0]["floor_mrad"]
-    curve = [{"backlash_rad": float(b),
-              "gap_x_calibrated": 1e3 * rms(np.concatenate([P.link_of(curve_replays[(f"b{i}", n)]) - twin_link[n] for n in names])) / floor_mrad / calibrated}
-             for i, b in enumerate(grid)]
-    # the wear-aware forecast: re-made at every check from the checks so far, issued at the first whose crossing is within the
-    # planning horizon (the monitoring's early_life_h at the latest); each one reads only the checks at or before its hour
-    forecast = issue_forecast(checks, curve=curve, threshold=threshold, latest_h=float(mon["early_life_h"]))
+    # the fidelity view, the old alarm kept beside the gap check on the same checks: the servo card's drift diagnostic (reg.DRIFT_THRESHOLD)
+    # WHY not TWINNED_LIMIT / calibrated as its threshold (the first rule tried, 2026-11-05): a twin commissioned near 1.45x floor puts that
+    # ratio at ~1.03, inside the checks' own scatter
+    ratio_threshold = float(cards.drift_diagnostic("servo").threshold.value)
+    calibrated = None if twin_link is None else checks[0]["live_x_floor"]
+    if calibrated is not None:
+        for c in checks:
+            v = cards.check_drift("servo", c["live_x_floor"], calibrated, ratio_threshold)
+            c.update(ratio=float(v.ratio), ratio_status=v.status)
+    ratio_alarm = next((c["h"] for c in checks if c.get("ratio_status") == "warning"), None)
+    ratio_crossing = None if calibrated is None else crossing_hour([(c["h"], c["ratio"]) for c in checks], ratio_threshold)
+
+    # the wear-aware forecast: re-made at every check from the checks so far, issued at the first whose crossing is within the planning
+    # horizon (the monitoring's early_life_h at the latest); each one reads only the checks at or before its hour
+    level = gap0 + limit
+    forecast = issue_forecast(checks, level=level, latest_h=float(mon["early_life_h"]))
     forecast_h = forecast["forecast_h"]
-    early = [(c["h"], c["b_hat_rad"]) for c in checks if c["h"] <= forecast_h + 1e-9]
-    for point, ratio in zip(curve, forecast["curve_ratio"]):
-        point["ratio"] = ratio
-    k_hat, b0_hat, k_ci = forecast["rate"], forecast["b0_rad"], tuple(forecast["rate_ci95"])
-    b_star, predicted, remaining = forecast["gap_at_threshold_rad"], forecast["predicted_crossing_h"], forecast["remaining_h"]
-    # the card's own forecast beside it, at the same hour: the drift ratio's history alone, fitted on hours (the servo card's Forecast)
-    trend = cards.check_drift("servo", checks[len(early) - 1]["live_x_floor"], calibrated, threshold,
-                              history=[(c["h"], c["ratio"]) for c in checks if c["h"] <= forecast_h + 1e-9])
+    early = [c for c in checks if c["h"] <= forecast_h + 1e-9]
+    # the card's own trend forecast beside it, at the same hour: the drift ratio's history alone, fitted on hours (the servo card's Forecast)
+    trend = None if calibrated is None else cards.check_drift("servo", early[-1]["live_x_floor"], calibrated, ratio_threshold,
+                                                              history=[(c["h"], c["ratio"]) for c in early])
 
     recal = None
-    if alarm is not None:
+    if alarm is not None and commissioned is not None:
         # WHY fitted, not the re-measured gap plugged in (2026-11-05, twin C): a replay's error is a jagged function of the gap, and the
         # gap measured at the alarm (2.3625 mrad) landed on a spike: 1.169x against the 1.1 gate, while twins 0.025 mrad either side
         # scored 0.95-1.06. So the gap is searched near the measurement on the alarm check and scored on the NEXT check (held out).
@@ -142,41 +188,55 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
         score_h = alarm + mon["check_every_h"] if any(c["h"] == alarm + mon["check_every_h"] for c in checks) else alarm
         held = measured(f"h{score_h:g}")
         live = rms(np.concatenate([P.link_of(rp[(f"recal{best}", n)]) - held[n][0] for n in names])) / rms(np.concatenate([held[n][1] - held[n][0] for n in names]))
-        verdict = cards.check_drift("servo", live, calibrated, threshold)
+        ratio = cards.check_drift("servo", live, calibrated, ratio_threshold)
+        # the gap check on the next check, against the recalibrated gap: the alarm cleared in its own units
+        again = gap_verdict(next(c for c in checks if c["h"] == score_h)["b_hat_rad"], commissioned=float(candidates[best]), allowance=limit)
         recal = {"h": alarm, "backlash_rad": float(candidates[best]), "measured_gap_rad": at["b_hat_rad"], "scored_at_h": score_h,
                  "rule": "the gap searched over the measured gap +-0.1 mrad (0.025 mrad steps) on the alarm check's link error, scored on the next check",
-                 "live_x_floor": live, "ratio": float(verdict.ratio), "status": verdict.status}
+                 "live_x_floor": live, "ratio": float(ratio.ratio), "ratio_status": ratio.status,
+                 "gap_growth_rad": again["growth_rad"], "status": again["status"]}
 
     duty = torque_revolutions_per_hour(replays, names, "h0", check_seconds)
     wear_rung = next(r for r in reg.rungs("servo") if r.key == "M5.wear")
     wear = next(p.wear for p in wear_rung.parameters if p.name == "backlash_rad")
-    for c in checks:
-        c.pop("_links")
+    k_hat = forecast["rate"]
+    gap_spec = {"id": "servo.gap_drift", "units": "parameter", "parameter": "backlash_rad", "message": reg.DRIFT_MESSAGE,
+                "forecast": "the gap's history on hours, solved for the commissioned gap plus the allowance (type_cards wear_usage_at)"}
     doc = {
-        "schema": "sysid.drift/1", "name": "backlash_wear", "example": P.EXAMPLE,
+        "schema": "sysid.drift/2", "name": "backlash_wear", "example": P.EXAMPLE,
         "title": "Backlash wear on CAN 11: detected after the fact vs forecast ahead",
         "check_every_h": mon["check_every_h"], "horizon_h": mon["horizon_h"], "early_life_h": mon["early_life_h"],
         "check": mon["check"], "check_runs": names, "check_seconds": round(check_seconds, 1),
-        "calibrated_x_floor": calibrated, "threshold": threshold,
-        "threshold_rule": f"the servo card's drift diagnostic: live fidelity / calibrated <= {threshold:g} (reg.DRIFT_THRESHOLD; settable); calibrated {calibrated:.3f} x floor at hour 0",
-        "diagnostic": {"id": cards.drift_diagnostic("servo").id, "message": reg.DRIFT_MESSAGE, "forecast": cards.drift_diagnostic("servo").forecast.method},
+        "station": description.manifest["record"]["station"], "allowance_rad": limit, "allowance": allowance, "commissioned_gap_rad": gap0,
+        "commissioned_from": ("the commissioning fit's M4 gap: backlash_from_gaps over the train runs, the routine every check runs" if commissioned is not None
+                              else "the reversals routine's gap over the train runs (backlash_from_gaps); no twin: the regression commissioned none"),
+        "threshold_rule": (f"the servo's gap drift (type_cards servo.gap_drift, dm.parameter_drift): a check's gap less the commissioned gap "
+                           f"({1e3 * gap0:.3f} mrad) <= {1e3 * limit:.3f} mrad, the station's allowance ({allowance['rule']}, "
+                           f"{allowance.get('arcmin', 60 * math.degrees(limit)):g} arcmin); the camera's floor is not in it"),
+        "diagnostic": gap_spec,
         "checks": checks,
         "detector_alarm_h": alarm, "actual_crossing_h": actual,
-        "rate_recovered": k_hat, "rate_ci95": list(k_ci), "b0_recovered_rad": b0_hat, "rate_true": hidden_wear["rate_rad_per_h"], "b0_true_rad": hidden_wear["b0_rad"],
-        "predicted_at_h": forecast_h, "predicted_crossing_h": predicted, "remaining_h_at_prediction": remaining,
+        "actual_rule": "the first hour the hidden gap (world.json's wear line and its process noise) is the allowance past the commissioned gap, interpolated between checks",
+        "rate_recovered": k_hat, "rate_ci95": list(forecast["rate_ci95"]), "b0_recovered_rad": forecast["b0_rad"],
+        "rate_true": hidden_wear["rate_rad_per_h"], "b0_true_rad": hidden_wear["b0_rad"],
+        "predicted_at_h": forecast_h, "predicted_crossing_h": forecast["predicted_crossing_h"], "remaining_h_at_prediction": forecast["remaining_h"],
         "plan_by_h": forecast["plan_by_h"],
-        "plan_by_rule": "the hour the wear line's upper 95 % confidence band (slope and intercept, Student's t) reaches the threshold gap: the early edge maintenance plans against",
-        "forecast": {"checks_h": forecast["checks_h"], "gap_ratio_correlation": forecast["rho"], "horizon_h": FORECAST_HORIZON_H,
-                     "rolling": forecast["rolling"], "curve_fit": forecast["curve_fit"],
+        "plan_by_rule": "the hour the wear line's upper 95 % confidence band (slope and intercept, Student's t) reaches the commissioned gap plus the allowance: the early edge maintenance plans against",
+        "forecast": {"checks_h": forecast["checks_h"], "horizon_h": FORECAST_HORIZON_H, "rolling": forecast["rolling"],
                      "issue_rule": f"re-made at every check from {MIN_CHECKS} on; issued at the first whose crossing is within {FORECAST_HORIZON_H:g} h, hour {mon['early_life_h']:g} at the latest",
-                     "curve_rule": "ratio^2 = 1 + d^2 + 2 rho d, d = slope x (gap - knee)+, the systematic part of the gap's replayed link error / calibrated (fitted to the replays as jitter in quadrature with it; the jitter is dropped); rho least squares on the checks' (gap, ratio) up to the issue hour"},
-        "gap_at_threshold_rad": b_star, "curve": curve,
-        "card_trend_remaining_h": trend.remaining, "card_trend_unit": trend.unit,
+                     "rule": "the gap's history up to the issue hour fitted on hours (the servo card's M5.wear backlash term, linear at the check's fixed duty), solved for the hour it reaches the commissioned gap plus the allowance"},
+        "gap_at_threshold_rad": level,
+        # the fidelity view (the old alarm), on the same checks. `threshold` is its ratio threshold: the site's wear chart draws the ratio against it
+        "threshold": ratio_threshold, "calibrated_x_floor": calibrated, "ratio_alarm_h": ratio_alarm, "ratio_crossing_h": ratio_crossing,
+        "ratio_rule": (f"kept beside the gap check, never the alarm: live fidelity (twin vs camera) / the camera's floor, / its hour-0 value, against the servo card's "
+                       f"drift diagnostic (servo.drift, {ratio_threshold:g}); its sensitivity is the camera's"),
+        "card_trend_remaining_h": None if trend is None else trend.remaining, "card_trend_unit": None if trend is None else trend.unit,
         "recalibrated": recal,
         "wear": {"card": "servo", "rung": "M5.wear", "parameter": "backlash_rad", "usage": wear.usage, "unit": wear.unit, "law": wear.law, "rate": wear.rate,
                  "duty_nm_rev_per_h": duty, "rate_recovered_per_nm_rev": k_hat / duty if duty else None, "rate_true_per_nm_rev": hidden_wear["rate_rad_per_h"] / duty if duty else None,
                  "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"},
-        "provenance": {**result.provenance(P.EXAMPLE), "seconds": round(time.monotonic() - started, 1), "commissioned_twin": commissioned.digest(),
+        "provenance": {**result.provenance(P.EXAMPLE), "seconds": round(time.monotonic() - started, 1),
+                       "commissioned_twin": None if commissioned is None else commissioned.digest(),
                        "twin_of_record": P._rack()[0], "twin_of_record_digest": P._rack()[1].digest(), "identify_sealed": True},
     }
     if write:
@@ -199,7 +259,7 @@ FORECAST_HORIZON_H = 96.0
 MIN_CHECKS = 5  # a wear line through fewer checks (48 h) is noise
 
 
-def issue_forecast(checks, *, curve, threshold: float, latest_h: float, horizon_h: float = FORECAST_HORIZON_H) -> dict:
+def issue_forecast(checks, *, level: float, latest_h: float, horizon_h: float = FORECAST_HORIZON_H) -> dict:
     """The rolling forecast: wear_forecast at every check from the MIN_CHECKS-th on, each from the checks at or before it; issued at
     the first whose predicted crossing is within `horizon_h` of it, or at `latest_h` at the latest. Returns that forecast with
     forecast_h (the issue hour) and rolling ([hour, predicted] for every forecast made up to it)."""
@@ -207,87 +267,28 @@ def issue_forecast(checks, *, curve, threshold: float, latest_h: float, horizon_
     rolling, made = [], None
     for c in ordered[MIN_CHECKS - 1:]:
         h = float(c["h"])
-        made = wear_forecast(ordered, forecast_h=h, curve=curve, threshold=threshold)
+        made = wear_forecast(ordered, forecast_h=h, level=level)
         rolling.append([h, made["predicted_crossing_h"]])
         if (made["predicted_crossing_h"] is not None and made["predicted_crossing_h"] - h <= horizon_h) or h >= latest_h - 1e-9:
             break
     return {**made, "forecast_h": float(rolling[-1][0]), "rolling": rolling}
 
 
-def gap_curve_fit(curve, threshold: float) -> dict:
-    """The replayed gap error as jitter in quadrature with a systematic part, d(b) = sqrt(j^2 + (slope (b - knee)+)^2), least squares
-    over the curve (bounded, started from five knees). From the twin alone.
-
-    WHY (2026-11-05, twin C): the replayed d(b) is jagged (backlash contact makes each replay's error a chaotic function of the gap:
-    a ~0.2-0.3 floor even at the commissioned gap, plateaus like 0.672 / 0.648 at 2.33 / 2.38 mrad), and the threshold falling on a
-    plateau sent the crossing late: on twin C the same rho method forecast +14 % on a 0.05 mrad grid and +6.5 % on 0.025. The fit's
-    knee lands on the commissioned gap (A 1.920 vs 1.957 mrad, C 1.967 vs 1.957), residual rms 0.03."""
-    from scipy.optimize import least_squares  # noqa: PLC0415
-
-    bs = np.array([p["backlash_rad"] for p in curve], float)
-    ds = np.array([p["gap_x_calibrated"] for p in curve], float)
-    # WHY capped (2026-11-05, the production run on twin C): the replayed error bends at large gaps, so one line through 1.76-3.96 mrad
-    # flattened the slope near the crossing (1.42 vs 1.56 per mrad) and the forecast went +9.3 %. The fit stops at the first grid
-    # point past twice the d the threshold needs alone (sqrt(threshold^2 - 1)), the part of the curve a forecast reads. Measured on
-    # the same curve: caps 1.2-2.0 give +2.2 to +5.0 %, no cap +9.3 %; the rule fixes 2x before looking, not a tuned number.
-    cap = 2.0 * math.sqrt(threshold ** 2 - 1.0)
-    upto = int(np.argmax(ds > cap)) if np.any(ds > cap) else len(ds)
-    bs, ds = bs[:max(upto, 4)], ds[:max(upto, 4)]
-
-    def model(p, x):
-        return np.sqrt(p[0] ** 2 + (p[1] * np.maximum(x - p[2], 0.0)) ** 2)
-
-    slope0 = max(float(ds.max() - ds.min()) / float(bs[-1] - bs[0]), 1e-9)
-    best = None
-    for knee in np.quantile(bs, [0.0, 0.1, 0.2, 0.3, 0.5]):
-        fit = least_squares(lambda p: model(p, bs) - ds, [float(ds.min()), slope0, float(knee)],
-                            bounds=([0.0, 0.0, float(bs[0])], [np.inf, np.inf, float(bs[-1])]))
-        if best is None or fit.cost < best.cost:
-            best = fit
-    jitter, slope, knee = (float(x) for x in best.x)
-    return {"jitter": jitter, "slope_per_rad": slope, "knee_rad": knee, "rms": float(np.sqrt(np.mean(best.fun ** 2))), "cap": cap,
-            "fitted_to_rad": float(bs[-1])}
-
-
-def wear_forecast(checks, *, forecast_h: float, curve, threshold: float) -> dict:
+def wear_forecast(checks, *, forecast_h: float, level: float) -> dict:
     """The wear-aware forecast from the checks at or before `forecast_h` only (later ones are never read): the gap's history fitted on
-    hours gives the wear line; the gap -> drift-ratio curve is the systematic part of the replayed gap error, d = slope (b - knee)+
-    (gap_curve_fit, from the twin alone), combined with the commissioned error as ratio^2 = 1 + d^2 + 2 rho d, rho fitted to the
-    checks' (gap, ratio).
+    hours gives the wear line (the servo card's M5.wear term, linear at the check's fixed duty), solved for the hour it reaches `level`,
+    the commissioned gap plus the allowance (type_cards wear_usage_at), and the hour its upper 95 % band does (the plan-by hour).
 
-    WHY rho (2026-11-05): adding the two in quadrature (rho = 0) assumed the commissioned error and the gap's error independent; the
-    live checks say they are not (gap 2.38 mrad: live 1.224, quadrature 1.159) and the quadrature forecast was 28 h late (262 vs 234 h).
-    Chosen over a scaled quadrature, a linear sum, a vector sum (gain fitted or 1) and a line in the gap by fitting each on the checks
-    to hour 120 and scoring hours 132-168 (data available at the forecast hour): rho's held-out rms 0.009, the others 0.017-0.085.
-    WHY the systematic part (twin C, same day): see gap_curve_fit; over forecast hours 120-168 it stays +0.8 to +3.2 % on both twins
-    A and C, where the raw curve went +2.9 to +17.7 % on C, and a quadratic in the gap fitted to the checks alone swung -18 to +0.7 %."""
-    early = [c for c in checks if c["h"] <= forecast_h + 1e-9]
-    gaps = [(float(c["h"]), float(c["b_hat_rad"])) for c in early]
-    k, b0, k_ci = line_fit(gaps)
-    shape = gap_curve_fit(curve, threshold)
-
-    def systematic(b):
-        return shape["slope_per_rad"] * np.maximum(np.asarray(b, float) - shape["knee_rad"], 0.0)
-
-    d = systematic([g for _, g in gaps])
-    r = np.array([float(c["ratio"]) for c in early])
-    rho = float(np.sum(d * (r ** 2 - 1.0 - d ** 2)) / (2.0 * np.sum(d * d))) if np.any(d > 0) else 0.0
-
-    def ratio_of(b):
-        dv = systematic(b)
-        return np.sqrt(np.maximum(1.0 + dv ** 2 + 2.0 * rho * dv, 0.0))
-
-    bs = np.array([p["backlash_rad"] for p in curve], float)
-    fine = np.linspace(min(float(bs[0]), min(g for _, g in gaps)), float(bs[-1]), 8001)
-    b_star = crossing_hour(list(zip(fine.tolist(), ratio_of(fine).tolist())), threshold)
+    WHY the line alone (2026-11-07): with the threshold in the gap's units, the hour the check will warn is the hour the gap reaches its
+    level; the gap -> drift-ratio curve (the commissioned twin replayed at 45 gaps, a ratio^2 = 1 + d^2 + 2 rho d model fitted to it and to
+    the checks, 2026-11-05) translated the ratio's threshold into a gap, and the camera's floor sat inside that translation."""
     from type_cards import registry as reg  # noqa: PLC0415
 
-    predicted = reg.wear_usage_at(b0, k, b_star, "linear") if b_star is not None else None
-    remaining = reg.usage_remaining(gaps, b_star, "linear") if b_star is not None else None
-    return {"checks_h": [h for h, _ in gaps], "rate": k, "rate_ci95": list(k_ci), "b0_rad": b0, "rho": rho, "curve_fit": shape,
-            "gap_at_threshold_rad": b_star, "predicted_crossing_h": predicted, "remaining_h": remaining,
-            "plan_by_h": band_hour(gaps, b_star, after=forecast_h) if b_star is not None else None,
-            "curve_ratio": [float(x) for x in ratio_of(bs)]}
+    gaps = [(float(c["h"]), float(c["b_hat_rad"])) for c in checks if c["h"] <= forecast_h + 1e-9]
+    k, b0, k_ci = line_fit(gaps)
+    return {"checks_h": [h for h, _ in gaps], "rate": k, "rate_ci95": list(k_ci), "b0_rad": b0, "gap_at_threshold_rad": float(level),
+            "predicted_crossing_h": reg.wear_usage_at(b0, k, float(level), "linear"), "remaining_h": reg.usage_remaining(gaps, float(level), "linear"),
+            "plan_by_h": band_hour(gaps, float(level), after=forecast_h)}
 
 
 def band_hour(points, level: float, *, after: float, horizon: float = 1e4) -> float | None:
