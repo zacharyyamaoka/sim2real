@@ -14,6 +14,8 @@ the page's record or, when it is mounted alone, from its `.base` URL's query (st
     standalone(camera_clip())  -> views/components/camera-clip.base
     <div class="s2r-dash" data-src="/views/components/joint-3d.base?deployment=…&run=…&station=can12&device=CAN%2012&glb=…">
 
+WHY components and not a flat page, media as a cache folder and not git, side by side and not overlaid: docs/decision-media-components-2026-11-07.md.
+
 An arm is a joint chain: its 3D component is joint_3d with its links (the GLB's nodes, the links table's <link>_ columns) once a producer
 writes them; today every deployment's entities are single joints and cameras. Stdlib only; the media themselves are tools/build_media.py's.
 """
