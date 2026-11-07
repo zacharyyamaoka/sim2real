@@ -344,9 +344,23 @@ parameter's family holding every parameter the routine claims there); `dm.routin
 - A metric's per-run value comes from `per_run` (three today: `servo.tracking_rms` = runs.json `tracking_mrad`; `servo.twin_fidelity` =
   run_gates.json `stock.model_error` per model ÷ the station's T1 floor (gates.json); `driver.loop_rate` = runs.json `rate_hz`); every other
   metric has `why_not`. Performance metrics need no model; fidelity metrics are per model (`model` = the producer's label, e.g. "twin of record").
+- **Since 2026-11-07 (additive), five:** `RunSource.table` may be `run_metrics`: the rows `tools/run_metrics.py` writes per run to
+  `<dep>/run_metrics.json` (`{run device metric robotdx value unit n side why}`, keyed by the metric's own id), RobotDx's catalog entry named by
+  the metric's `robotdx` run on the run's npz by RobotDx's rack loader (`servo.stop_error`: the p90 of |q - q_target| over the last 50 ms of
+  every dwell of 0.25 s or more followed by motion, the prelude dropped, encoder side: T4's dwell scan; `driver.saturation`: the share of rows,
+  in %, the board reports on its torque cap, moteus code 102). A run with no value says why (`why`: "no dwell ..."), and a selection with none
+  carries the producer's most common why. The model-independent metrics of the rack's parts no run can give say what is missing (`WHY_NOT`).
 - `dm.level(diagnostic, value, limits=None)` -> ok | warning | error | unknown (error checked first; `limits={"warn": v, "error": v}` sets a
   per-unit value). `dm.diagnostic_row(diagnostic, value, subject=...)` -> PEP 0010 §10's row (`subject diagnostic title level rank value unit
   warn_lo warn_hi error_lo error_hi kind message` + extras), which data-ui's gate and threshold views read.
+- **A unit's own limits** (2026-11-07, additive): where a diagnostic's limit or a gate's target is set per unit (`Limit.value` None: the
+  servo's stop error against the joint's share of the 5 mm tool gate, the board's loop rate against its expected rate less 10 %), the physical
+  deployment's record sets it: `PhysicalDeployment.limits`, `UnitLimit(device, diagnostic, warn, error, target, source, note)`, each cited (the
+  rack's: bam_rack_twin acceptance.py `STOP_ALLOCATION_MRAD` as warn and T4's target, experiments.py `RATE_HZ` 100 x 0.9 as warn; the test reads
+  both from the producer's source). `inst.unit_limits` binds each to the typed node at its device whose type holds the diagnostic (a limit that
+  binds none is refused) and deployments.json carries them on the node: `limits` = `[{diagnostic, warn?, error?, target?, source, note?}]`
+  (`sel.node_limits(node)` by id, `sel.level_limits(record)` the `{"warn", "error"}` `dm.level` takes). `sel.compute` gives each diagnostic row
+  its node's limits and each gate its node's target (`target_value` beside the gate's text). Unknown stays unknown where no unit sets one.
 - Drift: v2's ratio checks are `units: "ratio"`. `servo.gap_drift` is `units: "parameter"` on `backlash_rad`: `dm.parameter_drift(d,
   commissioned=, measured=, allowance=)`, the gap's growth in rad against an allowance set per station (decision record, "The drift threshold").
 
@@ -443,13 +457,22 @@ run_diagnostics, coverage_points, floors, descriptions)` (`sel.load_tables(data,
 - Presets (`sel.presets(runs)`): all, each split, each station, each day; the file drops `run_ids` (named by `run_ids_sha256` and the rule).
 
 **The browser, live (data-ui), the same numbers:**
-1. Per run: the metric's `per_run` column (runs.json) or row (run_gates.json, ÷ the station's T1 floor from gates.json).
+1. Per run: the metric's `per_run` column (runs.json) or row (run_gates.json, ÷ the station's T1 floor from gates.json; run_metrics.json since
+   2026-11-07). The page reads them as one table, `<site>/data/domain/metric_values/<dep>.json` (`sel.metric_values(tables)`: one row per run,
+   typed node at the run's device, metric and model with a finite value, `{run node device entity_type metric model value}`), the projection of
+   exactly those sources; `sel.metrics_from_values(rows, run_ids)` is this rule in Python, tested equal to `compute` for every subset of a fixture.
 2. Across the selected runs: the metric's `aggregate`, a data-ui summary (§16 `rollup` / `summaries`, median by default) over those values.
 3. Level: the diagnostic's limits from `domain_v3.json` on that value, `dm.level`'s rule: error limit first, then warn; no value or no limit
    value is unknown. data-ui draws but does not compute a verdict (§35), so the page's host runs this one comparison.
 4. Coverage: `<site>/data/domain/coverage_cells/<dep>.json` `{rule, reachable_cells{device: n}, rows[{run device cell reachable n}]}`: the
    distinct `cell` values of rows whose `run` is selected and `reachable` is true, per device, ÷ `reachable_cells[device]`, as a % to 2
-   decimals (`sel.coverage_from_cells`, tested equal to `compute`'s).
+   decimals (`sel.coverage_from_cells`, tested equal to `compute`'s). Since 2026-11-07 (additive) it also holds `grid{device: {axes[{name unit
+   edges}], reachable["i,j,k"]}}`, the card's own axes and reachable cells, so a page draws where a joint can go and where a selection went.
+5. The page (`/metrics/<dep>/`, `site/metrics_pages.py`, `static/metrics.js`): the runs in play are its runs table's ticked rows, else every row
+   its filters leave; the aggregate is data-ui's own `summarize` of the metric's name (median: `Median`; min and max beside it), the distinct count
+   `Unique`, and the % is rounded as Python's `round(x, 2)` (ties to even). `site/tests/test_site_flow.py` holds every number to `compute` for
+   three selections made in headless Chrome. For `mean` and `sum` (no metric uses them today) data-ui sums in ascending order, `statistics.fmean`
+   exactly, so the two may differ in the last bit.
 
 ### Reports (`type_cards/frozen_reports/<id>.py` + `<id>.json`; copied to `<site>/data/domain/reports/`)
 
@@ -462,6 +485,14 @@ snapshot  {schema "sim2real.domain/3#report", report{...}, frozen_at, code, inpu
 `rep.freeze(report, tables, parameter_rows=, frozen_at=, code=)` is pure; `python3 -m type_cards.report freeze <id>` writes the snapshot
 once, `rep.verify(snapshot)` checks its digest (over everything but the digest). A page reads the snapshot and never recomputes it, so a
 report does not change as data grows; re-freezing is a new decision and a new commit. The first: `can11-frozen-schedule-2f32ddbc`.
+
+Since 2026-11-07 (additive): a report from a selection, `python3 -m type_cards.report freeze --id <id> --title ... --question ... --deployment
+<dep> (--runs a,b | --select col=v[,v] ... | --preset "<name>") [--models ...] [--parameters ...] [--note ...] [--doc ...]`: `rep.select_runs`
+names the runs one way (ids; runs.json columns, every one holding one of its values; a `sel.presets` name), refusing a column or preset that is
+none; `rep.definition_text` writes the definition (`frozen_reports/<id with _>.py`, one keyword per line), then it freezes; a report that exists
+is never overwritten. A snapshot keeps the rows it froze: `inputs.rows`, each run's `rep.ROW_FIELDS` (covered by the digest). `list` and `verify
+<id>` read them. The site shows every report at `/reports/<id>/` (`site/reports_pages.py`); 2026-11-07's: `ident-sessions-1106`,
+`otherday-sessions-1107`.
 
 ### Migration from v2 (`dm.CARD_TYPE`, `RUNG_MODELS`, `PARAMETER_MAP`, `METRIC_MAP`, `DIAGNOSTIC_MAP`; `domain_v3.json migration`)
 
