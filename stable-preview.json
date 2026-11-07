@@ -21,9 +21,16 @@
         "port": 4822,
         "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{root}/app"],
         "health": "/data/deployments.json"
+      },
+      {
+        "name": "media",
+        "port": 4824,
+        "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{home}/.cache/sim2real"],
+        "health": "/media/index.json"
       }
     ],
     "proxy": {
+      "/media/": "media",
       "/data/source/": "data",
       "/data/one-dof-test-rack/runs/": "data",
       "/data/one-dof-test-rack/why/": "data",
@@ -42,6 +49,7 @@
     },
     "watch": ["/site/", "/type_cards/", "/sysid/", "/brand/", "/tools/", "/app/registry.json"],
     "proxy": {
+      "/media/": "http://127.0.0.1:4825",
       "/data/source/": "http://127.0.0.1:4823",
       "/data/one-dof-test-rack/runs/": "http://127.0.0.1:4823",
       "/data/one-dof-test-rack/why/": "http://127.0.0.1:4823",
@@ -54,6 +62,12 @@
         "port": 4823,
         "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{root}/app"],
         "health": "/data/deployments.json"
+      },
+      {
+        "name": "media",
+        "port": 4825,
+        "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{home}/.cache/sim2real"],
+        "health": "/media/index.json"
       }
     ]
   },
