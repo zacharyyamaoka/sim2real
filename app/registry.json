@@ -19,7 +19,8 @@
     "/archive/datasets/bam_rig/rack_2026-10-25",
     "/archive/datasets/bam_rig/rack_2026-10-28",
     "/archive/datasets/bam_rig/rack_2026-10-29",
-    "/archive/datasets/bam_rig/rack_2026-11-05"
+    "/archive/datasets/bam_rig/rack_2026-11-05",
+    "/archive/datasets/bam_rig/rack_2026-11-06"
    ],
    "schedule_index": "/archive/datasets/bam_rig/schedules/one-dof-test-rack/index.json",
    "archive_note": "Every live station's schedule runs/ (the schedule index's stations[].out) are roots too, never a kept build's copies: tools/archive_roots.py.",
