@@ -405,7 +405,8 @@ response under any config. Virtual deployments have no run rows yet.
 ```
 
 - Rows: every value the oracle graded (`<example>/<key>`: the example's own fit in `recovered`, `ci95_*`, `pass`), the 8 only the noise
-  ladder grades, and one row per parameter of every typed node no graded value binds (`<node id>#<parameter>`, values null).
+  ladder grades, and one row per parameter of every typed node no graded value binds (`<node id>#<parameter>`, values null; `nominal`
+  null too, the type card's value apart in `type_nominal`: a v2 card's nominal is the instance it was written around, the servo's CAN 11's).
 - **Presets**: all = every row; winning model = `winning == true` (the parameters of the selection rule's pick where the example ran one,
   else the type's current model: `winning_basis`); with results = `has_results == true`; errors only = with results, `error_over_tolerance@*`
   columns, each row coloured by `best` (the column with the least |error over tolerance|).
