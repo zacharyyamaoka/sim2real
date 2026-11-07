@@ -425,7 +425,8 @@ def limits(dep: Deployment, device: str) -> dict:
     T4's stop allocation (its limit text, "p90 <= 3.6 mrad at the output"), T2's 1.5x floor (a model's whole-run error limit,
     the producer's error_hi on this station's model rows) and the allocation at the 100 mm marker as the tube's radius.
     None where the station has no such number: the view then draws no limit."""
-    t4 = next((g for g in dep.gates_of(device) if g["gate"].startswith("T4")), None)
+    # WHY the id word, never a prefix (the T1 floor bug, 2026-11-07: "T1" also starts "T10" and "T11")
+    t4 = next((g for g in dep.gates_of(device) if g["gate"].split()[0] == "T4"), None)
     m = T4_LIMIT.search((t4 or {}).get("target") or "")
     t4_mrad = float(m.group(1)) if m else None
     t2 = next((g["error_hi"] for rows in dep.run_gates.values() for g in rows
