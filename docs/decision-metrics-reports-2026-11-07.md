@@ -42,6 +42,9 @@
 6. **Reports are made from a selection by the CLI** (`python3 -m type_cards.report freeze --id ... --runs | --select | --preset`): it writes the
    Python definition, then freezes; it never overwrites a report. A snapshot keeps the rows it froze (`inputs.rows`). `/reports/<id>/` reads the
    snapshot and never recomputes; `?report=<id>` on the metrics page ticks its runs, so the frozen numbers and today's sit one click apart.
+   Since the v3 audit (2026-11-07, finding 7) a snapshot also keeps what its page names beside the numbers (`annotations`: the parts' titles,
+   the ladder model each label named); the three frozen before it are labelled, not re-frozen: their pages say those are today's and claim
+   to stay as they are only for what they froze (re-freezing would recompute their numbers on today's data, a new decision).
 
 ## Criteria, and how the options scored
 
