@@ -664,6 +664,11 @@ def models_section(d: Domain, node: dict) -> str:
         elif reps:
             use = ('<small class="mut">the producer\'s models that replayed its runs, and the ladder model each is:</small> '
                    + ", ".join(label_words(node, tid, k, v) for k, v in sorted(reps.items(), key=lambda kv: (-kv[1], kv[0]))))
+        elif is_scenario(d, node) and (graded := sum(1 for r in d.parameters if r["deployment"] == node["root"] and r["entity_type"] == tid
+                                                     and r.get("key") and r["node"] in {n["id"] for n in sub})):
+            # WHY not "nothing fitted": the ladder's routine fits values of this type here; it keeps no model of its own (no selection rule)
+            use = (f'<span class="mut">— no fitted model kept: the noise ladder grades {graded} of its values here, each routine\'s model in its own '
+                   f'column on </span>{pages.a("/parameters/?" + urlencode({"deployment": node["root"]}), "Parameters")}')
         else:
             use = '<span class="mut">— nothing fitted or replayed for it here</span>'
         rows.append(f'<tr data-type="{e(tid)}" data-current="{e(" ".join(m.id for m in current))}" data-used="{e(" ".join(used))}" data-basis="{e(basis)}"'
