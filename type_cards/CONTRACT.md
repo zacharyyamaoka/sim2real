@@ -349,7 +349,8 @@ parameter's family holding every parameter the routine claims there); `dm.routin
   the metric's `robotdx` run on the run's npz by RobotDx's rack loader (`servo.stop_error`: the p90 of |q - q_target| over the last 50 ms of
   every dwell of 0.25 s or more followed by motion, the prelude dropped, encoder side: T4's dwell scan; `driver.saturation`: the share of rows,
   in %, the board reports on its torque cap, moteus code 102). A run with no value says why (`why`: "no dwell ..."), and a selection with none
-  carries the producer's most common why. The model-independent metrics of the rack's parts no run can give say what is missing (`WHY_NOT`).
+  carries the producer's most common why; where every valued row names one `side`, the selection's entry carries it (`side: "encoder"`: the stop
+  error's title says "at the output", T4 calls an encoder-side value partial). The model-independent metrics of the rack's parts no run can give say what is missing (`WHY_NOT`).
 - `dm.level(diagnostic, value, limits=None)` -> ok | warning | error | unknown (error checked first; `limits={"warn": v, "error": v}` sets a
   per-unit value). `dm.diagnostic_row(diagnostic, value, subject=...)` -> PEP 0010 §10's row (`subject diagnostic title level rank value unit
   warn_lo warn_hi error_lo error_hi kind message` + extras), which data-ui's gate and threshold views read.

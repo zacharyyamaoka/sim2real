@@ -17,7 +17,9 @@
 1. **The per-run model-independent metrics are RobotDx's own catalog entries, run on each run's npz** (`tools/run_metrics.py`, to
    `app/data/<dep>/run_metrics.json`): `servo.stop_error` (the p90 at every dwell; the dwell scan and the rack loader bam_rack_twin's T4 uses)
    and `driver.saturation` (the share of rows the board reports on its torque cap, code 102). A metric's `robotdx` names the entry; its default
-   config is the definition. `tools/build_app.py` writes the table again last (it clears each deployment's folder first). The other
+   config is the definition. A value says which side measured it (the stop error's title says "at the output"; the producer's is the encoder
+   side, which T4 calls partial), on every page that shows it. `tools/build_app.py` writes the table again last (it clears each deployment's
+   folder first). The other
    model-independent metrics of the rack's parts say what their runs lack (`domain.WHY_NOT`): no commanded current, no output angle apart from
    the rotor's, no load cell, no dyno, no tag angle per run.
 2. **A unit's own limits sit on its deployment's record** (`UnitLimit` in `PhysicalDeployment.limits`): the stop allocation (warn and T4's
@@ -34,7 +36,9 @@
    headless Chrome (a rail pick, rows ticked across stations, a preset) and to the build's precomputed preset.
 5. **A page per physical deployment, `/metrics/<dep>/`**, beside the deployments pages (a node's page stays about the node over all its runs;
    this page is about a selection), linked from every node page with runs, its stations picked in the rail. Presets are the build's
-   `selection.presets` as rail filters; the "all" preset is the page's answer without script.
+   `selection.presets` as rail filters; the "all" preset is the page's answer without script. A fidelity metric shows every model that replayed
+   the runs, the headline the one with the most runs, each producer label beside the ladder model `inst.label_model` maps it to (every rack twin
+   is the servo's `M4.dynamics.twin`), linked to its row on `/models/<type>/`.
 6. **Reports are made from a selection by the CLI** (`python3 -m type_cards.report freeze --id ... --runs | --select | --preset`): it writes the
    Python definition, then freezes; it never overwrites a report. A snapshot keeps the rows it froze (`inputs.rows`). `/reports/<id>/` reads the
    snapshot and never recomputes; `?report=<id>` on the metrics page ticks its runs, so the frozen numbers and today's sit one click apart.
