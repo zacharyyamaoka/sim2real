@@ -203,13 +203,8 @@ def compute(run_ids, tables: Tables, name: str = "") -> dict:
 # --- the browser's coverage rule ------------------------------------------------------------------------------------------------------
 
 def _grid(desc: dict):
-    edges = cov.joint_edges(desc)
-    ok = cov.joint_reachable(desc)
-    centres = [cov.centres(a) for a in edges]
-    import itertools  # noqa: PLC0415
-
-    reach = {cell for cell in itertools.product(*(range(cov.n_cells(a)) for a in edges)) if ok(tuple(centres[k][i] for k, i in enumerate(cell)))}
-    return edges, reach
+    """(edges, reachable cells): the card's own rule (coverage.reachable_cells, once per description)."""
+    return cov.joint_edges(desc), cov.reachable_cells(desc)
 
 
 def coverage_cells(tables: Tables) -> dict:

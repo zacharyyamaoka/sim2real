@@ -13,6 +13,7 @@ number of axes; tests/test_registry.py holds this module to schedule.py's own CA
 from __future__ import annotations
 
 import bisect
+import functools
 import itertools
 import json
 import math
@@ -73,12 +74,14 @@ def centres(axis) -> list:
     return [0.5 * (a + b) for a, b in zip(axis[:-1], axis[1:])]
 
 
-def binned(points, grid_axes, reachable: Callable[[tuple], bool] | None = None, **extra) -> CoverageResult:
-    """Coverage over the product of `grid_axes`; `reachable(centre tuple)` drops cells the device cannot hold (None: every cell)."""
+def binned(points, grid_axes, reachable: Callable[[tuple], bool] | None = None, reach: frozenset | set | None = None, **extra) -> CoverageResult:
+    """Coverage over the product of `grid_axes`; `reachable(centre tuple)` drops cells the device cannot hold (None: every cell), or
+    `reach` names the reachable cells already (a set computed once for the same axes, reachable_cells)."""
     counts, outside = occupancy(points, grid_axes)
-    grid = [centres(a) for a in grid_axes]
-    reach = {cell for cell in itertools.product(*(range(n_cells(a)) for a in grid_axes))
-             if reachable is None or reachable(tuple(grid[k][i] for k, i in enumerate(cell)))}
+    if reach is None:
+        grid = [centres(a) for a in grid_axes]
+        reach = {cell for cell in itertools.product(*(range(n_cells(a)) for a in grid_axes))
+                 if reachable is None or reachable(tuple(grid[k][i] for k, i in enumerate(cell)))}
     visited = sum(1 for cell in counts if cell in reach)
     total = max(1, len(reach))
     return CoverageResult(pct=round(100.0 * visited / total, 2), visited=visited, reachable=len(reach), samples=len(points),
@@ -131,6 +134,26 @@ def joint_reachable(description: Mapping[str, Any]) -> Callable[[tuple], bool]:
     return ok
 
 
+@functools.lru_cache(maxsize=64)
+def _reachable_cells(key: str) -> frozenset:
+    d = json.loads(key)
+    edges, ok = joint_edges(d), joint_reachable(d)
+    grid = [centres(a) for a in edges]
+    return frozenset(cell for cell in itertools.product(*(range(n_cells(a)) for a in edges)) if ok(tuple(grid[k][i] for k, i in enumerate(cell))))
+
+
+def reachable_cells(description: Mapping[str, Any]) -> frozenset:
+    """The joint's reachable (q, qd, qdd) cells: joint_reachable at each cell's centre over joint_edges, computed once per description.
+    WHY memoized, on the whole description (its JSON, keys sorted), bounded: the site's run page computes a selection of one for each of
+    2239 runs, and each call rebuilt the same 2016-cell set (19 s of a 35 s build); any field of the description is part of the key, so
+    a changed joint is a new set (tests/test_coverage_cache.py)."""
+    return _reachable_cells(json.dumps(description, sort_keys=True, default=str))
+
+
+reachable_cells.cache_info = _reachable_cells.cache_info
+reachable_cells.cache_clear = _reachable_cells.cache_clear
+
+
 def tau_edges(description: Mapping[str, Any]) -> list[float]:
     cells = int(math.ceil(description["torque_limit_nm"] / TAU_CELL_NM))
     return [k * TAU_CELL_NM for k in range(-cells, cells + 1)]
@@ -161,7 +184,7 @@ def servo_coverage(schedule: Mapping[str, Any], split: str = "train") -> Coverag
     points = plan_points(schedule, split, ("q", "qd", "qdd", "tau_pred"))
     limit = d["torque_limit_nm"]
     load = marginal([p[3] for p in points], tau_edges(d), keep=lambda c: abs(c) <= limit) if points else 0.0
-    return binned([p[:3] for p in points], joint_edges(d), joint_reachable(d),
+    return binned([p[:3] for p in points], joint_edges(d), reach=reachable_cells(d),
                   axes={"load torque": load, "temperature": None}, unplanned=("temperature",),
                   note=f"{schedule.get('description', {}).get('name', '')} schedule {schedule.get('digest', '')}, split {split}")
 
@@ -173,7 +196,7 @@ def actuator_coverage(points: Sequence[Mapping[str, float]], description: Mappin
     temps = [p["temperature"] for p in points if p.get("temperature") is not None]
     limit = description["torque_limit_nm"]
     t_edges = [description.get("temp_min_c", 20.0) + 10.0 * i for i in range(int((description.get("temp_max_c", 80.0) - description.get("temp_min_c", 20.0)) / 10) + 1)]
-    return binned(cube, joint_edges(description), joint_reachable(description),
+    return binned(cube, joint_edges(description), reach=reachable_cells(description),
                   axes={"load torque": marginal(load, tau_edges(description), keep=lambda c: abs(c) <= limit) if load else None,
                         "temperature": marginal(temps, t_edges) if temps else None},
                   unplanned=tuple(k for k, v in (("load torque", load), ("temperature", temps)) if not v))

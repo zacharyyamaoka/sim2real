@@ -64,8 +64,9 @@ def test_a_description_is_computed_once_and_any_change_is_a_new_one():
     again = cov.reachable_cells(json.loads(json.dumps(d)))  # an equal description read again: the same cells, not computed again
     info = cov.reachable_cells.cache_info()
     assert again == first and info.misses == 1 and info.hits == 1
-    lighter = {**d, "torque_limit_nm": d["torque_limit_nm"] * 3}  # any field of the description is part of the key
-    assert cov.reachable_cells(lighter) != first and cov.reachable_cells.cache_info().misses == 2
+    # any field of the description is part of the key: a weaker joint (a torque limit the fixture's gravity load passes) is a new set
+    weaker = {**d, "torque_limit_nm": 0.6}
+    assert cov.reachable_cells(weaker) == per_call(weaker) != first and cov.reachable_cells.cache_info().misses == 2
     assert cov.reachable_cells.cache_info().maxsize is not None, "the cache is bounded"
 
 
