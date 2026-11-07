@@ -167,28 +167,28 @@ def test_the_servo_ladder_selects_the_truths_rung():
     assert below and all(r["held_out_ratio"] > r["limit"] for r in doc["rungs"] if r["key"] in below)
 
 
+def as_written(doc: dict) -> dict:
+    """A fresh result as sysid.result.write puts it in the results file (its JSON: tuples as lists, numbers as JSON's)."""
+    from sysid import result as written  # noqa: PLC0415
+
+    return json.loads(json.dumps(doc, default=written.plain, allow_nan=False))
+
+
 def assert_same_result(committed: dict, fresh: dict, example: str) -> None:
-    """A fresh oracle result is the committed one."""
-    a, b = by_key(committed["parameters"]), by_key(fresh["parameters"])
-    assert a.keys() == b.keys()
-    for key in a:
-        for field in ("nominal", "true", "recovered"):
-            x, y = a[key][field], b[key][field]
-            assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-12), f"{example} {key} {field}: committed {x}, now {y}"
-    ma, mb = {m["id"]: m for m in committed["metrics"]}, {m["id"]: m for m in fresh["metrics"]}
-    assert ma.keys() == mb.keys()
-    for mid in ma:
-        assert math.isclose(ma[mid]["before"], mb[mid]["before"], rel_tol=1e-9) and math.isclose(ma[mid]["after"], mb[mid]["after"], rel_tol=1e-9), mid
+    """A fresh oracle result is the committed one: every field as the results file holds it, numbers to 1e-9 relative, only the declared
+    volatile provenance left out (where and when it ran: test_noise_ladder.VOLATILE_PROVENANCE, the ladder's same rule). WHY every field
+    (the v3 audit, 2026-11-07, finding 6, its sibling here): read for nominal, true, recovered and the metrics' before and after only, a
+    moved interval, verdict, held-out factor or selected rung still matched what the site shows."""
+    from test_noise_ladder import _same_value  # noqa: PLC0415  (the one rule for every fresh-result comparison)
+
+    _same_value(committed, as_written(fresh), (example,))
 
 
 def assert_same_drift(committed: dict, fresh: dict, name: str) -> None:
-    """A fresh drift demo is the committed one."""
-    keys = (("rate_recovered", "predicted_crossing_h", "plan_by_h", "actual_crossing_h", "detector_alarm_h", "commissioned_gap_rad", "allowance_rad",
-             "gap_alarm_h", "ratio_alarm_h", "ratio_crossing_h") if name == "backlash_wear" else ("alarm_h",))
-    for key in keys:
-        x, y = committed[key], fresh[key]
-        assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), f"{name} {key}: committed {x}, now {y}"
-    assert math.isclose(committed["recalibrated"]["ratio"], fresh["recalibrated"]["ratio"], rel_tol=1e-9)
+    """A fresh drift demo is the committed one, by the same rule: every check, the forecast, the alarms and the recalibration."""
+    from test_noise_ladder import _same_value  # noqa: PLC0415
+
+    _same_value(committed, as_written(fresh), (name,))
 
 
 @pytest.mark.parametrize("example", EXAMPLES)
