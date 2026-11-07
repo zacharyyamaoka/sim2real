@@ -351,15 +351,17 @@ def routines_base_properties() -> dict:
 
 
 def routines_base() -> dict:
-    order = ["title", "setting", "wall_time_s", "operator_time_s", "cost_usd", "equipment", "identifies", "n_parameters", "recovery_1x", "pass_1x",
-             "recovery_3x", "pass_3x", "status", "kind", "package"]
+    # WHY this order (Zach's list: where it runs, its time, its $ cost, its equipment, its recovery at 1x and 3x, its status): the short answers
+    # first, the long lists (equipment, what it identifies) after them, so a 1280 px pane shows the verdicts without a sideways scroll
+    order = ["title", "setting", "status", "wall_time_s", "cost_usd", "recovery_1x", "pass_1x", "recovery_3x", "pass_3x", "equipment", "operator_time_s",
+             "identifies", "n_parameters", "kind", "package"]
     return {"data": "/data/routines.json", "properties": routines_base_properties(),
             "views": [{"type": "table", "name": "Routine → parameters", "order": order,
                        "columnSize": {"title": 300, "equipment": 220, "identifies": 360}}]}
 
 
 def parameter_routines_base() -> dict:
-    order = ["parameter", "type_title", "family", "introduced_in", "unit", "routines", "n_routines", "where", "status"]
+    order = ["parameter", "type_title", "routines", "n_routines", "where", "status", "introduced_in", "family", "unit"]
     return {"data": "/data/parameter-routines.json",
             "views": [{"type": "table", "name": "Parameter → routines", "order": order, "columnSize": {"parameter": 240, "routines": 420}}]}
 
@@ -489,14 +491,17 @@ def parameters_dataset(d: Data) -> dict:
 def parameters_base(d: Data) -> dict:
     cols = d.params["result_columns"]
     keys = {c["id"]: slug(c["id"]) for c in cols}
-    base = ["name", "deployment", "entity_type", "family", "introduced_in"]
+    # WHY the values right after the name (Zach's table: true, nominal, recovered [95 %], error, tolerance): the type and the model a parameter
+    # enters at follow them, and the family is the rail's
+    base = ["name", "deployment"]
+    after = ["entity_type", "introduced_in"]
     fit = ["fit_rec", "fit_err", "fit_tol", "fit_ok"]
     # WHY a typographic apostrophe: the .base writer emits a plain key with a straight one that its own reader takes for a quote (found here)
     fit_group = {"Oracle fit (the example’s own)": fit}
     groups = {column_label(c): [f"{p}__{keys[c['id']]}" for p in ("rec", "err", "tol", "ok")] for c in cols}
     errs = [f"err__{keys[c['id']]}" for c in cols]
-    size = {"name": 260, "deployment": 130, "entity_type": 130, "family": 96, "introduced_in": 190, **{k: 150 for k in ("fit_rec",)},
-            **{f"rec__{keys[c['id']]}": 150 for c in cols}}
+    size = {"name": 240, "deployment": 120, "entity_type": 130, "introduced_in": 190, "fit_rec": 170, "fit_err": 120, "fit_tol": 100,
+            **{f"rec__{keys[c['id']]}": 170 for c in cols}, **{f"err__{keys[c['id']]}": 120 for c in cols}}
     # WHY declared digits (data-ui §17 addendum): the stored numbers are exact (4.6611971558188605); a person reads 4 significant figures,
     # as Zach's own table did ("4.205 mrad"), and the exact value stays one hover away
     numbers = ["true", "nominal", "fit_rec", "fit_err"] + [f"{p}__{keys[c['id']]}" for c in cols for p in ("rec", "err")]
@@ -509,14 +514,14 @@ def parameters_base(d: Data) -> dict:
                                                                "info": "a (routine, model) column group: keeps the rows it graded; With results then draws its group and every other model that graded them"},
                    {"property": "winning", "label": "Winning model"}, {"property": "has_results", "label": "Has a result"}],
         "views": [
-            {"type": "table", "name": "All parameters", "units": "inline", "order": base + ["true", "nominal"] + fit, "columnGroups": fit_group, "columnSize": size},
-            {"type": "table", "name": "Winning model", "units": "inline", "filters": "winning == true", "order": base + ["true", "nominal"] + fit, "columnGroups": fit_group,
-             "columnSize": size},
+            {"type": "table", "name": "All parameters", "units": "inline", "order": base + ["true", "nominal"] + fit + after, "columnGroups": fit_group, "columnSize": size},
+            {"type": "table", "name": "Winning model", "units": "inline", "filters": "winning == true", "order": base + ["true", "nominal"] + fit + after,
+             "columnGroups": fit_group, "columnSize": size},
             {"type": "table", "name": "With results", "units": "inline", "filters": "has_results == true", "order": base + ["true", "nominal"] + [x for ids in groups.values() for x in ids],
              "columnGroups": groups, "emptyGroups": "hide", "columnSize": size},
             {"type": "table", "name": "Errors only", "units": "inline", "filters": "has_results == true", "order": ["name", "deployment", "true"] + errs,
              "columnGroups": {column_label(c): [f"err__{keys[c['id']]}"] for c in cols}, "best": {"among": errs, "by": "absmin"},
-             "emptyGroups": "hide", "columnSize": {"name": 260, "deployment": 130}},
+             "emptyGroups": "hide", "columnSize": {"name": 240, "deployment": 120, **{e: 170 for e in errs}}},
         ],
     }
 

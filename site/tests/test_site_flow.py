@@ -2984,15 +2984,17 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
     label = drawn[0] if drawn else ""
     page.locator("#parameters-views .dv-bar [data-bar=menu][data-name=properties]").first.click()
     soft_wait(page, "() => !!document.querySelector('.dv-prop-group')", timeout=8000)
-    page.locator(f".dv-prop-group[data-group={json.dumps(label)}] input").first.uncheck()
+    # WHY by index: a label holds "·", which json.dumps escapes as \u00b7, an escape CSS does not read
+    at = page.evaluate("(g) => [...document.querySelectorAll('.dv-prop-group')].findIndex((li) => li.dataset.group === g)", label)
+    page.locator(".dv-prop-group input").nth(max(at, 0)).uncheck()
     page.wait_for_timeout(400)
     gone = page.evaluate(PARAMS_JS) or {}
-    page.locator(f".dv-prop-group[data-group={json.dumps(label)}] input").first.check()
+    page.locator(".dv-prop-group input").nth(max(at, 0)).check()
     page.wait_for_timeout(400)
     back = page.evaluate(PARAMS_JS) or {}
     page.keyboard.press("Escape")
     ids = layout["groups"].get(label, [])
-    check(bool(label) and not any(i in gone.get("cols", []) for i in ids) and all(i in back.get("cols", []) for i in ids),
+    check(bool(label) and at >= 0 and not any(i in gone.get("cols", []) for i in ids) and all(i in back.get("cols", []) for i in ids),
           f"Properties hides a model's whole group and shows it again ({label!r}: {sum(i in gone.get('cols', []) for i in ids)} then {sum(i in back.get('cols', []) for i in ids)} of {len(ids)} columns)")
 
     # a deployment page's model link lands on its ladder row
