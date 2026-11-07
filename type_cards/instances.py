@@ -257,7 +257,29 @@ def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
         return {"deployment": node["root"], "node": node["id"], "entity_type": tid, "parameter": name, "family": spec.family,
                 "introduced_in": spec.introduced_in, "unit": spec.unit, "winning": name in params, "winning_basis": basis}
 
+    def add_columns(row: dict, entry: dict, tid: str) -> None:
+        """One column group per (routine, model) the ladder graded this value with, at the oracle's own noise."""
+        for m in entry.get("models", []):
+            lv = m["levels"].get(LEVEL)
+            if lv is None:
+                continue
+            fam = row["family"]
+            mid = (next(i for i in dm.legacy_models(entry["card"], m["rung"]) if dm.model(tid, i).family == fam) if m.get("rung")
+                   else dm.fitted_model(m["routine"], tid, fam))
+            cid = f"{m['routine']}:{mid}"
+            col = columns.setdefault(cid, {"id": cid, "routine": m["routine"], "routine_title": reg.routine(m["routine"]).title, "model": mid,
+                                           "entity_type": tid, "family": fam, "fit": m["fit"], "label": f"{m['routine']} · {mid}",
+                                           "properties": [f"{x}@{cid}" for x in RESULT_PROPERTIES]})
+            if col["entity_type"] != tid:
+                raise ValueError(f"result column {cid} would hold two types' values ({col['entity_type']}, {tid})")
+            rec = lv.get("recovered") or {}
+            lo, hi = rec.get("ci95") or (None, None)
+            row.update({f"recovered@{cid}": rec.get("mean"), f"ci95_lo@{cid}": lo, f"ci95_hi@{cid}": hi, f"interval@{cid}": rec.get("interval"),
+                        f"error@{cid}": lv.get("error"), f"tolerance@{cid}": (entry.get("tolerance") or {}).get("value"),
+                        f"error_over_tolerance@{cid}": lv.get("error_over_tolerance"), f"within@{cid}": lv.get("within_tolerance")})
+
     for ex, doc in results.items():
+        done = set()
         for p in doc["parameters"]:
             tid, name = dm.legacy_parameter(p["card"], _v2_name(p["card_parameter"]))
             node = key_node[(ex, p["key"])]
@@ -267,25 +289,25 @@ def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
                    "true": p.get("true"), "nominal": p.get("nominal"), "nominal_source": p.get("nominal_source"), "tolerance_kind": tol.get("kind"),
                    "tolerance": tol.get("value"), "recovered": p.get("recovered"), "ci95_lo": ci[0], "ci95_hi": ci[1], "pass": p.get("pass"),
                    "method": p.get("method")}
-            entry = entries.get((ex, p["key"]))
-            for m in (entry or {}).get("models", []):
-                lv = m["levels"].get(LEVEL)
-                if lv is None:
-                    continue
-                fam = row["family"]
-                mid = (next(i for i in dm.legacy_models(entry["card"], m["rung"]) if dm.model(tid, i).family == fam) if m.get("rung")
-                       else dm.fitted_model(m["routine"], tid, fam))
-                cid = f"{m['routine']}:{mid}"
-                col = columns.setdefault(cid, {"id": cid, "routine": m["routine"], "routine_title": reg.routine(m["routine"]).title, "model": mid,
-                                               "entity_type": tid, "family": fam, "fit": m["fit"], "label": f"{m['routine']} · {mid}",
-                                               "properties": [f"{x}@{cid}" for x in RESULT_PROPERTIES]})
-                if col["entity_type"] != tid:
-                    raise ValueError(f"result column {cid} would hold two types' values ({col['entity_type']}, {tid})")
-                rec = lv.get("recovered") or {}
-                lo, hi = rec.get("ci95") or (None, None)
-                row.update({f"recovered@{cid}": rec.get("mean"), f"ci95_lo@{cid}": lo, f"ci95_hi@{cid}": hi, f"interval@{cid}": rec.get("interval"),
-                            f"error@{cid}": lv.get("error"), f"tolerance@{cid}": (entry.get("tolerance") or {}).get("value"),
-                            f"error_over_tolerance@{cid}": lv.get("error_over_tolerance"), f"within@{cid}": lv.get("within_tolerance")})
+            if (ex, p["key"]) in entries:
+                add_columns(row, entries[(ex, p["key"])], tid)
+            rows.append(row)
+            bound.add((ex, tid, name))
+            done.add(p["key"])
+        # WHY rows the example does not have: the noise ladder grades a few values only it hides (CAN 11's sliding Coulomb level and the
+        # wear rate, the cell's camera knock); each sits on the deployment's one node of its type, else on the deployment itself
+        for (ex2, key), entry in entries.items():
+            if ex2 != ex or key in done:
+                continue
+            tid, name = dm.legacy_parameter(entry["card"], _v2_name(entry["card_parameter"]))
+            typed = [n for n in nodes if n["root"] == ex and n["entity_type"] == tid]
+            node = typed[0] if len(typed) == 1 else next(n for n in nodes if n["id"] == ex)
+            tol = entry.get("tolerance") or {}
+            row = {"id": f"{ex}/{key}", **base(node, tid, name), "key": key, "element": None, "unit": entry["unit"], "true": entry.get("true"),
+                   "nominal": entry.get("nominal"), "nominal_source": "graded by the noise ladder only (sysid/results/noise_ladder.json)",
+                   "tolerance_kind": tol.get("kind"), "tolerance": tol.get("value"), "recovered": None, "ci95_lo": None, "ci95_hi": None,
+                   "pass": None, "method": None}
+            add_columns(row, entry, tid)
             rows.append(row)
             bound.add((ex, tid, name))
     for n in nodes:

@@ -132,6 +132,16 @@ def test_every_graded_value_is_a_row_as_the_oracle_wrote_it(table):
             assert r["entity_type"] == dm.CARD_TYPE[p["card"]] and r["deployment"] == ex
             assert r["parameter"] in {x.name for x in dm.TYPES[r["entity_type"]].parameters}
             assert r["has_results"] is True
+    # the noise ladder grades a few values the examples do not (CAN 11's sliding Coulomb level and wear rate, the cell's camera knock):
+    # rows too, on the deployment's one node of their type
+    routines = json.loads((REPO / "sysid" / "results" / "calibration_routines.json").read_text())
+    for p in routines["parameters"]:
+        if p["example"] in EXAMPLES:
+            r = rows[f"{p['example']}/{p['key']}"]
+            assert (r["true"], r["entity_type"]) == (p["true"], dm.CARD_TYPE[p["card"]]), p["key"]
+            assert r["node"].startswith(p["example"])
+    assert rows["dual_arm_cell/camera_knock.dx_m"]["node"] == "dual_arm_cell/torso/head_camera"
+    assert rows["pendulum_can11/can11.backlash_wear_rad_per_h"]["parameter"] == "backlash_wear_rad_per_nm_rev"
 
 
 def test_one_column_group_per_routine_and_model(table):
