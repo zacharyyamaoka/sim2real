@@ -5,7 +5,7 @@
   "ladder": "sysid/results/noise_ladder.json",
   "ruler": {
    "path": "sysid/noise_ladder.json",
-   "sha256": "4ab3e070da52364abc9e0d9c7a9c23ae777be14667a4c7bc658d2ef3bd9b6771"
+   "sha256": "26c5a78b2b71b8fe85ad1fd26828382220bb783eef78abedabc92e8cc6799fe9"
   }
  },
  "levels": [
@@ -2118,7 +2118,7 @@
    "excitation": "the joint's daily motions (H2 operate: pickplace, cycle, jog, sweep)",
    "coverage": "the motions the joint makes all day",
    "repeats": 1,
-   "how": "each check measures the gap as commissioning does (motor encoder - link camera) and warns when it has grown past the station's allowance over the commissioned gap (servo.gap_drift, in rad; CAN 11's is T5's 2 arcmin); a line on hours gives the wear rate, and the forecast solves it for the hour the gap reaches the commissioned gap plus the allowance",
+   "how": "each check measures the gap as commissioning does (motor encoder - link camera) and warns when it has grown past the station's allowance over the commissioned gap (servo.gap_drift, in rad; CAN 11's is T5's 2 arcmin) or when the twin's fidelity ratio passes the servo card's drift threshold (servo.drift), whichever comes first; a line on hours gives the wear rate, and the forecast solves it for the hour the gap reaches the commissioned gap plus the allowance",
    "tests": [
     "servo.wear_regression"
    ],
@@ -2143,7 +2143,7 @@
       ],
       "unclaimed": {},
       "not_at": {
-       "0x": "not applicable: the drift ratio and its forecast are ratios to the floor (two camera draws of one run), which is zero without noise"
+       "0x": "not run: the servo's drift alarm warns on either check, the gap check or the fidelity ratio, and the ratio's denominator is the camera's floor (two draws of one run), which is zero without noise, so the alarm as deployed is undefined here; the gap check alone would run"
       },
       "realism": "",
       "levels": {
@@ -2159,10 +2159,11 @@
          "forecast_error_pct": 2.0376525448537115,
          "lead_h": 124.40136633778269,
          "gap_rms_mrad": 0.018842738328380508,
-         "recalibrated_ratio": 0.9702797518408391,
+         "recalibrated_ratio": 0.9337113394453105,
          "predicted_crossing_h": 298.35949022015154,
          "actual_crossing_h": 292.4013663377827,
-         "detector_alarm_h": 300.0,
+         "detector_alarm_h": 204.0,
+         "gap_alarm_h": 300.0,
          "ratio_alarm_h": 204.0,
          "ratio_crossing_h": 197.29366853745597,
          "commissioned_gap_mrad": 1.9570825511019962,
@@ -2186,6 +2187,7 @@
          "predicted_crossing_h": 360.27059424600276,
          "actual_crossing_h": 359.15413556536384,
          "detector_alarm_h": 360.0,
+         "gap_alarm_h": 360.0,
          "ratio_alarm_h": null,
          "ratio_crossing_h": null,
          "commissioned_gap_mrad": 2.0735659594397493,
@@ -2209,6 +2211,7 @@
          "predicted_crossing_h": 878.0613028618552,
          "actual_crossing_h": null,
          "detector_alarm_h": null,
+         "gap_alarm_h": null,
          "ratio_alarm_h": null,
          "ratio_crossing_h": null,
          "commissioned_gap_mrad": 4.6804810465865545,
@@ -2242,7 +2245,7 @@
    },
    "alternatives": [],
    "references": [],
-   "note": "WHY in the gap's own units (2026-11-07, docs/decision-calibration-routines-2026-11-07.md, addendum): the old alarm, live fidelity over the camera's floor, went deaf as the camera's noise grew (never inside 480 h at 3x); the gap's alarm does not read the camera's floor. The ratio is still computed on the same checks, beside it"
+   "note": "WHY in the gap's own units (2026-11-07, docs/decision-calibration-routines-2026-11-07.md, addendum): the old alarm, live fidelity over the camera's floor, went deaf as the camera's noise grew (never inside 480 h at 3x); the gap's alarm does not read the camera's floor. The ratio is still computed on the same checks and the alarm warns on either one (the addendum's last line)"
   },
   {
    "routine": "servo.camera_dwell_stop_ruler",

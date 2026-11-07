@@ -111,7 +111,7 @@
       "structure": "matches: the gap re-measured each 12 h check as in commissioning, its line on hours is the truth's linear wear law (drift.run_backlash)",
       "parameters": ["can11.backlash_wear_rad_per_h"],
       "levels": ["1x", "3x", "10x"],
-      "not_at": {"0x": "not applicable: the drift ratio and its forecast are ratios to the floor (two camera draws of one run), which is zero without noise"},
+      "not_at": {"0x": "not run: the servo's drift alarm warns on either check, the gap check or the fidelity ratio, and the ratio's denominator is the camera's floor (two draws of one run), which is zero without noise, so the alarm as deployed is undefined here; the gap check alone would run"},
       "held_out": ["forecast_error_pct", "lead_h", "gap_rms_mrad", "recalibrated_ratio"],
       "variants": []
     },

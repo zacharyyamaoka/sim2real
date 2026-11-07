@@ -157,7 +157,7 @@ unchanged.
 - `sysid/drift.py` warns when a check's gap, less the commissioned gap, passes the station's allowance (`description.json`
   `monitoring.gap_allowance`). The commissioned gap is M4's, measured by the routine every check runs.
 - The forecast is the wear line solved for the commissioned gap plus the allowance. The gap-to-ratio curve (45 twin replays) is gone.
-- The fidelity ratio is still computed on every check (`ratio`, `ratio_alarm_h`) but is never the alarm.
+- The fidelity ratio is still computed on every check (`ratio`, `ratio_alarm_h`) but is never the alarm. (Superseded the same day: see **Update** below, the alarm warns on either check.)
 - The check needs no twin. At 10x, where the regression raises, the ladder now runs it on the reversals routine's gap.
 - The `servo.gap_check_forecast` routine record says how it warns now.
 
@@ -207,3 +207,26 @@ check's status. A site lane can redraw it as `checks[].gap_growth_rad` against `
 - To keep the 1x warning at 204 h, warn on either check. The ratio is already computed every check.
 
 **Undo:** `git revert -m 1` the merge commit. That restores the ratio alarm, the curve forecast and the earlier results together.
+
+**Update (2026-11-07, `claude/cleanup-1107`): the servo's alarm warns on either check.** Decided because at 1x the gap check alone comes
+96 h after the ratio's. `drift.servo_verdict` warns when the gap check or the fidelity ratio does, and `first_alarm` is the first such
+check; each check carries `gap_status`, `ratio_status`, `status` (either) and `warned_by`, the run `detector_alarm_h` (either),
+`gap_alarm_h`, `ratio_alarm_h` and `alarm_by`. The forecast, its target (the commissioned gap plus the allowance) and the recalibration's
+rule are unchanged; the recalibration now runs at whichever alarm comes first.
+
+| noise | alarm (either) | fired by | gap check alone | ratio alone | hidden gap crossed | recalibrated ratio |
+|---|---|---|---|---|---|---|
+| 1x | **204 h** | ratio | 300 h | 204 h | 292.4 h | 0.934 |
+| 3x | **360 h** | gap | 360 h | never inside 480 h | 359.2 h | 0.973 |
+| 10x | never inside 480 h | (no twin, no ratio) | never | not run | never | not run |
+
+- The gap check's own timing check is kept as it was (it warns within one check of the hidden crossing: 7.6 h after at 1x), on
+  `gap_alarm_h`. Beside it a separate assertion holds the either-alarm: its hour is the earlier of the two and never later than the gap
+  check's. The old assertion could not hold the either-alarm itself: at 1x the alarm now comes 88 h *before* the hidden crossing.
+- The forecast checks (+2.0 % at 1x, one check, lead 124 h) and the alarm hours at 3x and 10x are unchanged.
+- The site's wear chart plots each check's gap growth against the allowance, with the ratio as the secondary series (its threshold on
+  the allowance line) and each dot carrying the alarm status and which check fired it.
+- The 0x `not_at` reason names both checks now (the ratio's denominator, the camera's floor, is zero without noise, so the alarm as
+  deployed is undefined at 0x). The ruler's digest is re-pinned in test_noise_ladder.py for that text; no bound moved.
+
+**Undo (the update):** `git revert -m 1` its merge commit. That restores the gap-only alarm, the results and the chart together.

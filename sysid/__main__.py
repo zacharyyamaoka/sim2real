@@ -100,7 +100,8 @@ def main(argv=None) -> int:
         doc = {"backlash_wear": drift_module.run_backlash, "camera_knock": drift_module.run_camera}[name](workers=args.workers, write=args.write)
         if name == "backlash_wear":
             print(f"backlash_wear: rate {doc['rate_recovered']:.4g} rad/h (true {doc['rate_true']:.4g}); predicted crossing {doc['predicted_crossing_h']} h (plan by {doc['plan_by_h']} h) at "
-                  f"{doc['predicted_at_h']:g} h, actual {doc['actual_crossing_h']} h, detector {doc['detector_alarm_h']} h; recalibrated ratio "
+                  f"{doc['predicted_at_h']:g} h, actual {doc['actual_crossing_h']} h, alarm {doc['detector_alarm_h']} h by {'+'.join(doc['alarm_by']) or '-'} "
+                  f"(gap {doc['gap_alarm_h']} h, ratio {doc['ratio_alarm_h']} h); recalibrated ratio "
                   f"{(doc['recalibrated'] or {}).get('ratio')}", flush=True)
         else:
             print(f"camera_knock: knock {doc['knock_h']} h, alarm {doc['alarm_h']} h, recalibrated ratio {(doc['recalibrated'] or {}).get('ratio')}", flush=True)

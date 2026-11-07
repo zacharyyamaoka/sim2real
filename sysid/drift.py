@@ -9,18 +9,22 @@ and compare it with the hour it does; show the plain detector beside it (detecti
 Backlash wear (CAN 11): commissioning is the oracle's own identification (M4, the gap included). Every 12 deployment hours the joint
 runs its daily motions (the held-out H2 operate runs) on the real, wearing joint; each check measures the gap from the motor encoder
 minus the link camera (the routine commissioning measured it with) and scores the commissioned twin on the link camera (live fidelity,
-x floor). The plain detector is the servo's gap drift (type_cards servo.gap_drift, dm.parameter_drift): the gap a check measures, less
-the commissioned gap, against the station's allowance (description.json monitoring.gap_allowance; CAN 11's is T5's 2 arcmin). The
+x floor). The plain detector is the servo's drift alarm, which warns on EITHER of two checks: the gap drift (type_cards servo.gap_drift,
+dm.parameter_drift: the gap a check measures, less the commissioned gap, against the station's allowance; description.json
+monitoring.gap_allowance; CAN 11's is T5's 2 arcmin) or the fidelity ratio (the servo card's servo.drift), whichever comes first. The
 wear-aware forecast is the gap's history fitted on hours (the servo card's M5.wear backlash term, a linear law at a fixed duty), re-made
 at every check and issued once, solved by type_cards' wear_usage_at for the hour the gap reaches the commissioned gap plus the allowance.
 At the alarm the twin is recalibrated (the gap re-measured) and re-scored.
 
-WHY the gap's own units, not the fidelity ratio (2026-11-07, docs/decision-calibration-routines-2026-11-07.md, its addendum; the domain-v3
+WHY the gap's own units beside the fidelity ratio (2026-11-07, docs/decision-calibration-routines-2026-11-07.md, its addendum; the domain-v3
 decision's "The drift threshold"): the ratio is the twin's link error over the camera's floor, so as the camera's noise grows the same
 wear moves it less; at 3x the noise CAN 11's ratio never warned inside the 480 h horizon. The gap estimate's error grows with the noise,
-its mean does not. The ratio is still computed on every check (ratio, ratio_status, ratio_alarm_h), so each run carries the comparison;
-the gap -> drift-ratio curve the ratio's forecast needed (45 replays of the commissioned twin) is gone with it. The check needs no twin:
-where commissioning has only the gap (the regression raised), it runs without the fidelity view and the recalibration.
+its mean does not. WHY either, not the gap alone (the addendum's last line, decided 2026-11-07): at 1x the gap check alone warns 96 h
+after the ratio does, and the ratio is already computed on every check (ratio, ratio_status, ratio_alarm_h), so the servo warns on
+whichever comes first (servo_verdict, first_alarm; each check's status, gap_status, warned_by; the doc's detector_alarm_h, gap_alarm_h,
+alarm_by). The forecast stays the gap's: the gap -> drift-ratio curve the ratio's forecast needed (45 replays of the commissioned twin) is
+gone. The gap check needs no twin: where commissioning has only the gap (the regression raised), the alarm is the gap check alone and
+the fidelity view and the recalibration are skipped.
 
 Camera knock (the dual-arm cell): every 12 h the belt carries its printed tags past the head camera; the live reprojection error with
 the commissioned camera, divided by the commissioned one, is camera_rgb's drift check. At hour 300 the camera is knocked; at the
@@ -75,10 +79,22 @@ def gap_verdict(measured: float, *, commissioned: float, allowance: float) -> di
     return {"status": status, "growth_rad": float(measured) - float(commissioned), "message": spec.message if status == "warning" else ""}
 
 
+def servo_verdict(gap_status: str, ratio_status: str | None = None) -> dict:
+    """The servo's drift alarm on one check: it warns when EITHER check does, the gap check (gap_verdict) or the fidelity ratio (None: no
+    twin, no ratio, the gap check alone); warned_by names which."""
+    warned_by = [name for name, status in (("gap", gap_status), ("ratio", ratio_status)) if status == "warning"]
+    return {"status": "warning" if warned_by else "ok", "warned_by": warned_by}
+
+
+def first_alarm(checks) -> tuple[float | None, list]:
+    """(hour, warned_by) of the first check whose status is a warning, (None, []) if none is."""
+    return next(((float(c["h"]), list(c["warned_by"])) for c in checks if c["status"] == "warning"), (None, []))
+
+
 def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: dict | None = None,
                  commissioned_gap: float | None = None) -> dict:
-    """CAN 11's deployed life: the gap check every 12 h against the station's allowance, the wear forecast, the recalibration at the
-    alarm. `commissioned_values` (M4's) commission a twin, whose fidelity ratio is kept beside the gap check; `commissioned_gap` alone
+    """CAN 11's deployed life: the gap check and the fidelity ratio every 12 h (the alarm is either), the wear forecast, the recalibration at
+    the alarm. `commissioned_values` (M4's) commission a twin, whose fidelity ratio is kept beside the gap check; `commissioned_gap` alone
     (the regression raised: the noise ladder's 10x) runs the gap check without a twin; neither, the oracle's own fit (re-made if absent)."""
     from type_cards import registry as reg  # noqa: PLC0415
 
@@ -135,16 +151,15 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
         b_hat = float(P.backlash_from_gaps(gaps))
         verdict = gap_verdict(b_hat, commissioned=gap0, allowance=limit)
         check = {"h": float(h), "b_true_rad": b_true[float(h)], "b_hat_rad": b_hat, "gap_growth_rad": verdict["growth_rad"],
-                 "status": verdict["status"], "message": verdict["message"], "floor_mrad": 1e3 * rms(np.concatenate(floor))}
+                 "gap_status": verdict["status"], "message": verdict["message"], "floor_mrad": 1e3 * rms(np.concatenate(floor))}
         if twin_link is not None:
             check.update(live_x_floor=float(rms(np.concatenate(err)) / rms(np.concatenate(floor))), link_mrad=1e3 * rms(np.concatenate(err)))
         checks.append(check)
 
-    alarm = next((c["h"] for c in checks if c["status"] == "warning"), None)
     # the truth's crossing: the first hour the hidden gap has grown the allowance past the gap the twin carries
     actual = crossing_hour([(c["h"], c["b_true_rad"] - gap0) for c in checks], limit)
 
-    # the fidelity view, the old alarm kept beside the gap check on the same checks: the servo card's drift diagnostic (reg.DRIFT_THRESHOLD)
+    # the fidelity view, the alarm's second check beside the gap check on the same checks: the servo card's drift diagnostic (reg.DRIFT_THRESHOLD)
     # WHY not TWINNED_LIMIT / calibrated as its threshold (the first rule tried, 2026-11-05): a twin commissioned near 1.45x floor puts that
     # ratio at ~1.03, inside the checks' own scatter
     ratio_threshold = float(cards.drift_diagnostic("servo").threshold.value)
@@ -153,6 +168,12 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
         for c in checks:
             v = cards.check_drift("servo", c["live_x_floor"], calibrated, ratio_threshold)
             c.update(ratio=float(v.ratio), ratio_status=v.status)
+            c["message"] = c["message"] or (v.message if v.status == "warning" else "")
+    # the servo's alarm: either check (servo_verdict); no twin, no ratio: the gap check alone
+    for c in checks:
+        c.update(servo_verdict(c["gap_status"], c.get("ratio_status")))
+    alarm, alarm_by = first_alarm(checks)
+    gap_alarm = next((c["h"] for c in checks if c["gap_status"] == "warning"), None)
     ratio_alarm = next((c["h"] for c in checks if c.get("ratio_status") == "warning"), None)
     ratio_crossing = None if calibrated is None else crossing_hour([(c["h"], c["ratio"]) for c in checks], ratio_threshold)
 
@@ -212,10 +233,13 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
                               else "the reversals routine's gap over the train runs (backlash_from_gaps); no twin: the regression commissioned none"),
         "threshold_rule": (f"the servo's gap drift (type_cards servo.gap_drift, dm.parameter_drift): a check's gap less the commissioned gap "
                            f"({1e3 * gap0:.3f} mrad) <= {1e3 * limit:.3f} mrad, the station's allowance ({allowance['rule']}, "
-                           f"{allowance.get('arcmin', 60 * math.degrees(limit)):g} arcmin); the camera's floor is not in it"),
+                           f"{allowance.get('arcmin', 60 * math.degrees(limit)):g} arcmin); the camera's floor is not in it. The alarm warns on this "
+                           f"or the fidelity ratio below, whichever comes first"),
         "diagnostic": gap_spec,
         "checks": checks,
-        "detector_alarm_h": alarm, "actual_crossing_h": actual,
+        "detector_alarm_h": alarm, "gap_alarm_h": gap_alarm, "alarm_by": alarm_by, "actual_crossing_h": actual,
+        "alarm_rule": "the servo's drift alarm warns on either check, the gap check or the fidelity ratio, whichever comes first (servo_verdict); "
+                      "detector_alarm_h is that hour, gap_alarm_h and ratio_alarm_h each check's own, alarm_by who fired it",
         "actual_rule": "the first hour the hidden gap (world.json's wear line and its process noise) is the allowance past the commissioned gap, interpolated between checks",
         "rate_recovered": k_hat, "rate_ci95": list(forecast["rate_ci95"]), "b0_recovered_rad": forecast["b0_rad"],
         "rate_true": hidden_wear["rate_rad_per_h"], "b0_true_rad": hidden_wear["b0_rad"],
@@ -226,9 +250,9 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
                      "issue_rule": f"re-made at every check from {MIN_CHECKS} on; issued at the first whose crossing is within {FORECAST_HORIZON_H:g} h, hour {mon['early_life_h']:g} at the latest",
                      "rule": "the gap's history up to the issue hour fitted on hours (the servo card's M5.wear backlash term, linear at the check's fixed duty), solved for the hour it reaches the commissioned gap plus the allowance"},
         "gap_at_threshold_rad": level,
-        # the fidelity view (the old alarm), on the same checks. `threshold` is its ratio threshold: the site's wear chart draws the ratio against it
+        # the fidelity view (the alarm's second check), on the same checks. `threshold` is its ratio threshold: the site's wear chart draws the ratio against it
         "threshold": ratio_threshold, "calibrated_x_floor": calibrated, "ratio_alarm_h": ratio_alarm, "ratio_crossing_h": ratio_crossing,
-        "ratio_rule": (f"kept beside the gap check, never the alarm: live fidelity (twin vs camera) / the camera's floor, / its hour-0 value, against the servo card's "
+        "ratio_rule": (f"the alarm's second check, beside the gap check (either warns): live fidelity (twin vs camera) / the camera's floor, / its hour-0 value, against the servo card's "
                        f"drift diagnostic (servo.drift, {ratio_threshold:g}); its sensitivity is the camera's"),
         "card_trend_remaining_h": None if trend is None else trend.remaining, "card_trend_unit": None if trend is None else trend.unit,
         "recalibrated": recal,

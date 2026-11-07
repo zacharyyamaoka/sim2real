@@ -8,6 +8,8 @@ pieces that need no replay:
 - the gap check is type_cards' own servo.gap_drift (dm.parameter_drift), never a second rule;
 - its allowance is set per station, and CAN 11's is T5's: bam_rack_twin's unit gate on a geared joint's gap (GAP_CI_HALF_ARCMIN, 2 arcmin
   at the output, its 95 % interval's half-width), read live, so a change to T5 fails here; a direct drive has no gap and no allowance;
+- the servo's alarm warns on either check, the gap check or the fidelity ratio (2026-11-07, the addendum's last line): a check warns when
+  either does, the alarm is the first such check and names which one(s) fired it, and a run with no twin (no ratio) is the gap check alone;
 - the forecast is the wear line on the checks so far, solved for the hour the gap reaches the commissioned gap plus the allowance, and it
   reads no check after its own hour.
 
@@ -115,3 +117,22 @@ def test_the_forecast_is_issued_inside_its_horizon_or_at_the_end_of_early_life()
     assert late["forecast_h"] == 168.0 and late["predicted_crossing_h"] - 168.0 > drift.FORECAST_HORIZON_H
     assert late == {**drift.wear_forecast(_line(0.00195, 1.0e-6), forecast_h=168.0, level=0.00195 + 0.00058),
                     "forecast_h": 168.0, "rolling": late["rolling"]}
+
+
+def test_the_servo_alarm_warns_on_either_check():
+    from sysid import drift
+
+    table = [("ok", "ok", "ok", []), ("warning", "ok", "warning", ["gap"]), ("ok", "warning", "warning", ["ratio"]),
+             ("warning", "warning", "warning", ["gap", "ratio"]), ("ok", None, "ok", []), ("warning", None, "warning", ["gap"])]
+    for gap, ratio, status, by in table:
+        assert drift.servo_verdict(gap, ratio) == {"status": status, "warned_by": by}, (gap, ratio)
+
+    def checks(*pairs):
+        return [{"h": 12.0 * i, **drift.servo_verdict(gap, ratio), "gap_status": gap, "ratio_status": ratio} for i, (gap, ratio) in enumerate(pairs)]
+
+    # the ratio first (1x: the ratio crosses its 1.25 a hundred hours before the gap crosses its allowance), then the gap first, then neither
+    assert drift.first_alarm(checks(("ok", "ok"), ("ok", "warning"), ("warning", "warning"))) == (12.0, ["ratio"])
+    assert drift.first_alarm(checks(("ok", "ok"), ("ok", "ok"), ("warning", "ok"), ("warning", "warning"))) == (24.0, ["gap"])
+    assert drift.first_alarm(checks(("ok", "ok"), ("ok", "ok"))) == (None, [])
+    # no twin: no ratio, the gap check alone
+    assert drift.first_alarm(checks(("ok", None), ("warning", None))) == (12.0, ["gap"])
