@@ -34,7 +34,7 @@ AREAS = (
     Area("analysis", "Analysis", "/analysis/", "Why it fails, and the gate standing: where every twin falls short"),
     Area("data", "Every run", "/runs/", "Every real run, newest first, with its station, kind and models"),
     Area("sources", "Stations", "/stations/", "Every station's gates T1-T11 in one matrix"),
-    Area("guides", "Deployments", "/deployments/", "The machines we do sim to real on"),
+    Area("guides", "Deployments", "/deployments/", "Every deployment, virtual and physical, and each of its parts"),
     Area("programs", "Types", "/types/", "One card per part type: metrics, model, coverage, view and procedure"),
 )
 REPORTS = (("why-it-fails", "Why it fails", "Every gate cell that does not pass, in words: the number against its limit, why, and the next step."),

@@ -317,8 +317,13 @@ def level_head(v: RunView, n: dict, sub: str) -> str:
         at = by_id.get(at.get("parent"))
     crumbs = (f'<p class="s2r-level-path">{" › ".join(path)} › <span title="{e(n.get("title") or "")}">{e(n.get("title") or "")}</span></p>'
               if path else "")  # WHY none on the root: its heading is its whole title
+    from deployments_pages import node_url  # noqa: PLC0415  (the deployments lane's page of every node; imported late: it imports the site's views)
+
+    # WHY a link to the node's own page: this section is the node in one run; its page is the node over every run (Domain model v3)
+    own = (f'<p class="s2r-level-page">{pages.a(node_url(n["id"]), "Its own page")}: '
+           f'{"every run of it, its models and its numbers over all of its runs" if level_kind(n) != "camera" else "what it sees and its models"}.</p>')
     return (f'<h2 class="s2r-level-h">{ui_shared.dot(v.levels[n["id"]], v.whys[n["id"]])}<span class="s2r-level-ic">{ui_shared.icon(ui_shared.icon_word(n))}</span>'
-            f'{e(short_name(n))} <small>{e(sub)}</small></h2>\n{crumbs}')
+            f'{e(short_name(n))} <small>{e(sub)}</small></h2>\n{crumbs}{own}')
 
 
 def what(text: str) -> str:

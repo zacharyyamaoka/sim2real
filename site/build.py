@@ -20,6 +20,8 @@ Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing her
                      poses and the camera runs' clips; --media, else $SIM2REAL_MEDIA, else ~/.cache/sim2real/media), when it is built
     OUT/<pages>      /, /<deployment>/, /<deployment>/<station>/, /<deployment>/runs/<run>/, /runs/, /search/,
                      /stations/, /deployments/, /analysis/…
+    OUT/deployments/ the deployments index and /deployments/<node id>/ for every node of every deployment's tree (site/deployments_pages.py;
+                     its rows in OUT/data/deployment-cards.json)
 """
 
 from __future__ import annotations
@@ -89,8 +91,9 @@ def site_files(site):
     yield "index.html", s2r.page(site, "sim2real: how close each twin is to its real hardware", "/", pages.home_body(site), "home",
                                  description="sim2real: every robot run against its virtual runs, the gates per station, and why each one fails.",
                                  trail=results_line(plural(n_runs, "run"), breadcrumb([s2r.ROOT_CRUMB])), data_ui=True)
-    yield "deployments/index.html", s2r.page(site, "Deployments: sim2real", "/deployments/", pages.deployments_body(site), "deployments",
-                                             trail=breadcrumb([s2r.ROOT_CRUMB, ("Deployments", "/deployments/")]))
+    # the deployments index and one page per node of every deployment's tree (Domain model v3: site/deployments_pages.py)
+    import deployments_pages  # noqa: PLC0415
+    yield from deployments_pages.files(site)
     yield "stations/index.html", s2r.page(site, "Stations: sim2real", "/stations/", pages.stations_body(site), "stations",
                                           trail=breadcrumb([s2r.ROOT_CRUMB, ("Stations", "/stations/")]))
     for url, title, kind, intro in (("/runs/", "Every run", "runs", "Every real run, newest first."),
@@ -187,6 +190,8 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     site = adapter.load(out / "data")
     site.media = link_media(media_root, out)
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
+    import deployments_pages  # noqa: PLC0415  (the deployments index's rows, beside search.json: the workbench's writer keeps out of data/)
+    deployments_pages.write_data(out / "data", site)
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
               "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts, "domain": domain_counts,
