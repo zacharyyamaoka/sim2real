@@ -422,7 +422,7 @@ response under any config. Virtual deployments have no run rows yet.
  result_columns[{id ("<routine>:<model id>"), routine, routine_title, model, entity_type, family, fit, label, properties[]}],
  column_groups{label: [properties]}                        (data-ui §16 columnGroups: "each model ... its own Recovered error tolerance")
  presets{all | winning model | with results | errors only: {filter, columns, what, color_by?}},
- rows[ id deployment node entity_type parameter family introduced_in unit winning winning_basis(selected|current) key element true nominal
+ rows[ id deployment node owner entity_type parameter family introduced_in unit winning winning_basis(selected|current) key element true nominal
        nominal_source tolerance_kind tolerance recovered ci95_lo ci95_hi pass method best has_results
        + per result column C: recovered@C ci95_lo@C ci95_hi@C interval@C error@C tolerance@C error_over_tolerance@C within@C ]}
 ```
@@ -430,6 +430,13 @@ response under any config. Virtual deployments have no run rows yet.
 - Rows: every value the oracle graded (`<example>/<key>`: the example's own fit in `recovered`, `ci95_*`, `pass`), the 8 only the noise
   ladder grades, and one row per parameter of every typed node no graded value binds (`<node id>#<parameter>`, values null; `nominal`
   null too, the type card's value apart in `type_nominal`: a v2 card's nominal is the instance it was written around, the servo's CAN 11's).
+- **Binding is per instance** (2026-11-07, the v3 audit's finding 4: keyed by deployment and type, one measured servo hid every unmeasured
+  servo's rows beside it). `node` is where the value sits (the sysid tree's node; a ladder-only value, its deployment's one node of its type,
+  else the deployment); `owner` (`inst.owner`) is the typed node it belongs to: `node` when that is of the value's type, else the one node of
+  the type in the smallest subtree around `node` that holds one (a joint's zero offset is its chain's `joint_zero_offsets`; the 2F-85 tool's
+  mass its arm's, its TCP its gripper's), null when that subtree holds two or more or the tree none (a component that is no node: the dual-arm
+  cell's mounts, the line-scan cell's depth camera's colour stream). A value binds `(owner, parameter)` only; a listed row's `owner` is its
+  node. So every typed node has each parameter of its type once: values it owns, or one row saying none is recorded, never both.
 - **Presets**: all = every row; winning model = `winning == true` (the parameters of the selection rule's pick where the example ran one,
   else the type's current model: `winning_basis`); with results = `has_results == true`; errors only = with results, `error_over_tolerance@*`
   columns, each row coloured by `best` (the column with the least |error over tolerance|).

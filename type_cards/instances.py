@@ -11,8 +11,9 @@ Pure functions over what the producers wrote, never a new number:
 - physical_nodes(data): each registry deployment's tree in RobotDx's shape (deployment -> fdcanusb adapter -> station, as
   site/deploy_tree.py builds it), each station's parts (its type's members, labelled from the bam_rack_twin record; a gearbox the record
   calls "none" is absent) and the cameras its v3 record declares (type_cards/deployments/);
-- parameter_table(nodes, results, routines): one row per parameter of every typed node, the oracle's values where it graded one, one
-  column group per (routine, model) from sysid/results/calibration_routines.json at the oracle's own noise ("1x");
+- parameter_table(nodes, results, routines): one row per parameter of every typed node, the oracle's values where it graded one (each
+  value bound to the part it belongs to, owner(), never to its deployment's type), one column group per (routine, model) from
+  sysid/results/calibration_routines.json at the oracle's own noise ("1x");
 - label_model(deployment, label): the ladder model a producer's model label is (type_cards/deployments/<id>.py `models`), exact words;
 - write(data): the site's projections under <data>/domain/ (site/build.py calls it after deploy_tree.write).
 A node is a deployment of its own: its subtree (subtree) and its children (sub_deployments). Stdlib only.
@@ -311,11 +312,30 @@ def _winning(nodes: list[dict], results: dict) -> dict[tuple[str, str], tuple[se
     return out
 
 
+def owner(nodes: list[dict], start: dict, tid: str) -> str | None:
+    """The typed node a value of type `tid` belongs to, from the node it sits on: that node when it is of the type, else the one node of
+    the type in the smallest subtree around it that holds one (a joint's zero offset is its chain's; the 2F-85 tool's mass is its arm's,
+    its TCP its gripper's); None when that subtree holds two or more (the value cannot say whose) or the tree holds none (a component that is
+    not a node: an assembly's arm, a depth camera's colour stream). WHY per instance (the v3 audit, finding 4): keyed by the deployment and
+    the type, one measured servo hid the rows of every unmeasured servo beside it."""
+    by_id = {n["id"]: n for n in nodes if n["root"] == start["root"]}
+    mine = list(by_id.values())
+    at = start
+    while at is not None:
+        if at["entity_type"] == tid:
+            return at["id"]
+        typed = [x["id"] for x in subtree(mine, at["id"]) if x["entity_type"] == tid]
+        if typed:
+            return typed[0] if len(typed) == 1 else None
+        at = by_id.get(at["parent"])
+    return None
+
+
 def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
     by_sysid = {(n["root"], n["sysid_id"]): n for n in nodes if n["sysid_id"]}
     key_node = {(ex, key): by_sysid[(ex, row["id"])] for ex, doc in results.items() for row in doc["tree"] for key in row["parameters"]}
     winning = _winning(nodes, results)
-    rows, bound = [], set()
+    rows, bound = [], set()  # bound: (owner node, type, parameter), per instance
     columns: dict[str, dict] = {}
     entries = {(p["example"], p["key"]): p for p in routines.get("parameters", []) if p["example"] in results}
 
@@ -346,21 +366,24 @@ def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
                         f"error@{cid}": lv.get("error"), f"tolerance@{cid}": (entry.get("tolerance") or {}).get("value"),
                         f"error_over_tolerance@{cid}": lv.get("error_over_tolerance"), f"within@{cid}": lv.get("within_tolerance")})
 
+    by_id = {n["id"]: n for n in nodes}
     for ex, doc in results.items():
         done = set()
         for p in doc["parameters"]:
             tid, name = dm.legacy_parameter(p["card"], _v2_name(p["card_parameter"]))
             node = key_node[(ex, p["key"])]
+            mine = owner(nodes, node, tid)
             tol = p.get("tolerance") or {}
             ci = p.get("ci95") or (None, None)
-            row = {"id": f"{ex}/{p['key']}", **base(node, tid, name), "key": p["key"], "element": p.get("component"), "unit": p["unit"],
+            row = {"id": f"{ex}/{p['key']}", **base(node, tid, name), "owner": mine, "key": p["key"], "element": p.get("component"), "unit": p["unit"],
                    "true": p.get("true"), "nominal": p.get("nominal"), "nominal_source": p.get("nominal_source"), "tolerance_kind": tol.get("kind"),
                    "tolerance": tol.get("value"), "recovered": p.get("recovered"), "ci95_lo": ci[0], "ci95_hi": ci[1], "pass": p.get("pass"),
                    "method": p.get("method")}
             if (ex, p["key"]) in entries:
                 add_columns(row, entries[(ex, p["key"])], tid)
             rows.append(row)
-            bound.add((ex, tid, name))
+            if mine:
+                bound.add((mine, tid, name))
             done.add(p["key"])
         # WHY rows the example does not have: the noise ladder grades a few values only it hides (CAN 11's sliding Coulomb level and the
         # wear rate, the cell's camera knock); each sits on the deployment's one node of its type, else on the deployment itself
@@ -368,25 +391,26 @@ def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
             if ex2 != ex or key in done:
                 continue
             tid, name = dm.legacy_parameter(entry["card"], _v2_name(entry["card_parameter"]))
-            typed = [n for n in nodes if n["root"] == ex and n["entity_type"] == tid]
-            node = typed[0] if len(typed) == 1 else next(n for n in nodes if n["id"] == ex)
+            mine = owner(nodes, by_id[ex], tid)
+            node = by_id[mine] if mine else by_id[ex]
             tol = entry.get("tolerance") or {}
-            row = {"id": f"{ex}/{key}", **base(node, tid, name), "key": key, "element": None, "unit": entry["unit"], "true": entry.get("true"),
+            row = {"id": f"{ex}/{key}", **base(node, tid, name), "owner": mine, "key": key, "element": None, "unit": entry["unit"], "true": entry.get("true"),
                    "nominal": entry.get("nominal"), "nominal_source": "graded by the noise ladder only (sysid/results/noise_ladder.json)",
                    "tolerance_kind": tol.get("kind"), "tolerance": tol.get("value"), "recovered": None, "ci95_lo": None, "ci95_hi": None,
                    "pass": None, "method": None}
             add_columns(row, entry, tid)
             rows.append(row)
-            bound.add((ex, tid, name))
+            if mine:
+                bound.add((mine, tid, name))
     for n in nodes:
         if not n["entity_type"]:
             continue
         for spec in dm.TYPES[n["entity_type"]].parameters:
-            if (n["root"], n["entity_type"], spec.name) in bound:
+            if (n["id"], n["entity_type"], spec.name) in bound:
                 continue
             # WHY nominal null and the card's value apart: a v2 card's nominal is the instance it was written around (the servo card's
             # are CAN 11's), so on any other part it would read as that part's own
-            rows.append({"id": f"{n['id']}#{spec.name}", **base(n, n["entity_type"], spec.name), "key": None, "element": None, "true": None,
+            rows.append({"id": f"{n['id']}#{spec.name}", **base(n, n["entity_type"], spec.name), "owner": n["id"], "key": None, "element": None, "true": None,
                          "nominal": None, "type_nominal": spec.nominal if isinstance(spec.nominal, (int, float)) else None,
                          "nominal_source": f"not recorded for this part; type_nominal is the type card's ({spec.source})",
                          "tolerance_kind": None, "tolerance": None, "recovered": None, "ci95_lo": None, "ci95_hi": None, "pass": None, "method": None})
