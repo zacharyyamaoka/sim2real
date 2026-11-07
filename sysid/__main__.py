@@ -6,7 +6,7 @@
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid list
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid all --write
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid ladder conveyor --write
-    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid procedures --write
+    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid routines --write
 """
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ def main(argv=None) -> int:
     ladder.add_argument("--variants", nargs="+", help="only these variants (sysid/noise_ladder.json variants)")
     ladder.add_argument("--workers", type=int, default=6)
     ladder.add_argument("--write", action="store_true", help=f"merge the rows into {RESULTS_DIR}/noise_ladder.json")
-    procs = sub.add_parser("procedures", help="the procedure table: type_cards' records joined with the committed ladder")
-    procs.add_argument("--write", action="store_true", help=f"write {RESULTS_DIR}/calibration_procedures.json")
+    routines = sub.add_parser("routines", help="the Calibration Routines table: type_cards' records joined with the committed ladder")
+    routines.add_argument("--write", action="store_true", help=f"write {RESULTS_DIR}/calibration_routines.json")
     args = parser.parse_args(argv)
 
     if args.command == "ladder":
@@ -59,17 +59,17 @@ def main(argv=None) -> int:
             if args.write and checks:
                 ladder_module.merge(checks)
         return 0
-    if args.command == "procedures":
+    if args.command == "routines":
         from . import ladder as ladder_module  # noqa: PLC0415
-        from . import procedures as procedures_module  # noqa: PLC0415
+        from . import routines as routines_module  # noqa: PLC0415
 
-        doc = procedures_module.table(json.loads(ladder_module.RESULT_PATH.read_text(encoding="utf-8")))
+        doc = routines_module.table(json.loads(ladder_module.RESULT_PATH.read_text(encoding="utf-8")))
         for row in doc["rows"]:
             cells = ", ".join(f"{k} {'pass' if v['pass'] else 'FAIL'} {v['worst_error_over_tolerance'] if v['worst_error_over_tolerance'] is None else round(v['worst_error_over_tolerance'], 3)}"
                               for k, v in row["recovery"].items())
-            print(f"{row['procedure']:38s} {row['setting']:8s} {row['status']:16s} {cells or row['oracle']['status']}")
+            print(f"{row['routine']:38s} {row['setting']:8s} {row['status']:16s} {cells or row['oracle']['status']}")
         if args.write:
-            result.write(doc, "calibration_procedures")
+            result.write(doc, "calibration_routines")
         return 0
 
     if args.command == "list":

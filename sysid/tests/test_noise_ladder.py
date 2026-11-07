@@ -1,26 +1,29 @@
-"""The noise ladder: every calibration procedure the sysid oracle can run, graded on the same hidden truth at 0, 1x, 3x and 10x its
+"""The noise ladder: every Calibration Routine the sysid oracle can run, graded on the same hidden truth at 0, 1x, 3x and 10x its
 sensor noise, and with a delay or a quantisation where one matters (2026-11-07), written before the ladder code.
 
-Zach, 2026-11-07 (via the coordinator): any twin error is the models' fidelity or the parameters' accuracy, so the procedures that
-calibrate the parameters are first-class, and they are compared "on the same amount of noise". His note of Nov 6 on kinematic
+Zach, 2026-11-07 (via the coordinator): any twin error is the models' fidelity or the parameters' accuracy, so the routines that
+calibrate the parameters are first-class ("Calibration Routine", his name for them the same day), compared "on the same amount of noise",
+and every parameter keeps true, nominal, recovered (its mean and 95 % interval), error and tolerance per model. His note of Nov 6 on kinematic
 calibration: "Definetily test this in simluation where you have access to the ground truth to see what like perfect would be type
 thing. Also see if you can recover the perfect values... (you can change the amount of noise you add to the sensor measurements...)".
 
 The ruler is sysid/noise_ladder.json, pinned below by digest and committed before any ladder result; the results are
-sysid/results/noise_ladder.json (python -m sysid ladder --write); the comparison table is sysid/results/calibration_procedures.json
-(python -m sysid procedures --write), the join of the ladder and type_cards' procedure records.
+sysid/results/noise_ladder.json (python -m sysid ladder --write); the comparison table is sysid/results/calibration_routines.json
+(python -m sysid routines --write), the join of the ladder and type_cards' routine records, routine -> parameters and parameter -> routines.
 
 What it holds:
 - the ruler: pinned, and committed before the first ladder result; levels 0 < 1 < 3 < 10; the bound's arithmetic on worked numbers;
-  every check names a type-card procedure that names it back; every parameter a check claims has a tolerance and a truth;
+  every check names a type-card routine that names it back; every parameter a check claims has a tolerance and a truth;
 - the results: every check at every level and variant the ruler declares (a level not run says why); every verdict is the ruler's
-  arithmetic on the row's own numbers; every truth is the world's; backlash hidden and graded on every geared joint the oracle has;
+  arithmetic on the row's own numbers; every truth is the world's; backlash hidden and graded on every geared joint the oracle has; every
+  parameter placed on its card and kept per model (recovered mean and 95 % interval, error), the graded model the row's own numbers;
 - the oracle: a check's 1x row is the committed example result (the same code at the same noise gives the same numbers);
 - the code: the fast checks re-run here and equal the committed ladder; the slow ones (CAN 11, the UR arms, the wear demo) re-run when
   SYSID_LADDER_SLOW=1 (most of an hour);
 - the table: calibration_procedures.json is the join recomputed here, in the shape type_cards/CONTRACT.md documents.
 
-Failures at a level are findings, not test failures: the ladder exists to say what breaks where. What this file fails on is a
+Failures at a level are findings, not test failures: the ladder exists to say what breaks where (a routine that raises is a failed row
+with its message, never a crashed ladder). What this file fails on is a
 verdict that is not the ruler's, a number that is not the code's, or a row the ruler asked for and nobody ran.
 
     env -u VIRTUAL_ENV /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -p no:cacheprovider /home/bam/sim2real/sysid/tests/test_noise_ladder.py
@@ -43,17 +46,18 @@ SYSID = Path(__file__).resolve().parents[1]
 REPO = SYSID.parent
 RULER_PATH = SYSID / "noise_ladder.json"
 # WHY pinned: the bounds are data the ladder reads; a digest here makes any edit to them an edit of this file, reviewed as a ruler change
-RULER_SHA256 = "5f9f32a73292c901f691874f83d355fc44b08754c00bde0a6b4af2f4b664678e"
+RULER_SHA256 = "4ab3e070da52364abc9e0d9c7a9c23ae777be14667a4c7bc658d2ef3bd9b6771"
 RULER = json.loads(RULER_PATH.read_text())
 ACCEPTANCE = json.loads((SYSID / "acceptance.json").read_text())
 RESULTS = SYSID / "results" / "noise_ladder.json"
-TABLE = SYSID / "results" / "calibration_procedures.json"
+TABLE = SYSID / "results" / "calibration_routines.json"
 SLOW = os.environ.get("SYSID_LADDER_SLOW") == "1"
 FAST_EXAMPLES = ("conveyor", "dual_arm_cell", "linescan_cell", "ur5e_backlash")
 GEARED = {"pendulum_can11": ["can11.backlash_rad"],
           "ur5e_backlash": ["shoulder_lift.backlash_rad", "elbow.backlash_rad", "wrist_1.backlash_rad", "wrist_2.backlash_rad"]}
-TABLE_ROW_KEYS = ("procedure", "title", "package", "kind", "setting", "status", "wall_time", "operator_time", "equipment", "equipment_cost",
+TABLE_ROW_KEYS = ("routine", "title", "package", "kind", "setting", "status", "wall_time", "operator_time", "equipment", "equipment_cost",
                   "identifies", "parameters_covered", "excitation", "coverage", "repeats", "oracle", "alternatives", "note")
+PARAMETER_KEYS = ("example", "key", "card", "rung", "card_parameter", "unit", "true", "nominal", "tolerance", "routines", "checks", "models")
 
 
 def committed() -> dict:
@@ -113,13 +117,13 @@ def test_the_levels_and_the_bound_rule():
         assert variant["examples"] and variant["unit"] and variant["source"] and variant["value"] > 0, name
 
 
-def test_every_check_is_a_type_card_procedure_and_back():
+def test_every_check_is_a_type_card_routine_and_back():
     from type_cards import registry as reg
 
-    named = {name: p.id for p in reg.PROCEDURES for name in p.oracle}
+    named = {name: r.id for r in reg.ROUTINES for name in r.oracle}
     assert set(named) == set(RULER["checks"]), (sorted(set(named) - set(RULER["checks"])), sorted(set(RULER["checks"]) - set(named)))
     for check_id, check in RULER["checks"].items():
-        assert named[check_id] == check["procedure"] == check_id.split(":", 1)[1], check_id
+        assert named[check_id] == check["routine"] == check_id.split(":", 1)[1], check_id
         assert check["owner"] in ("sysid", "bam_ws") and check["structure"].split(":")[0] in ("matches", "mismatch"), check_id
         assert set(check.get("variants", [])) <= set(RULER["variants"]), check_id
         assert all(example_of(check_id) in RULER["variants"][v]["examples"] for v in check.get("variants", [])), check_id
@@ -276,24 +280,72 @@ def test_the_slow_checks_are_this_code(example):
 # --- the comparison table -------------------------------------------------------------------------------------------------------
 
 def test_the_comparison_table_is_the_join_of_the_records_and_the_ladder():
-    from sysid import procedures
+    from sysid import routines
 
-    assert json.loads(TABLE.read_text()) == procedures.table(committed())
+    assert json.loads(TABLE.read_text()) == routines.table(committed())
 
 
 def test_the_table_has_the_contracts_shape():
     from type_cards import registry as reg
 
     doc = json.loads(TABLE.read_text())
-    assert doc["schema"] == "sysid.calibration_procedures/1" and doc["levels"] == [level["id"] for level in RULER["levels"]]
-    assert [r["procedure"] for r in doc["rows"]] == [p.id for p in reg.PROCEDURES]
+    assert doc["schema"] == "sysid.calibration_routines/1" and doc["levels"] == [level["id"] for level in RULER["levels"]]
+    assert [r["routine"] for r in doc["rows"]] == [r.id for r in reg.ROUTINES]
     for row in doc["rows"]:
-        assert all(k in row for k in TABLE_ROW_KEYS), (row["procedure"], [k for k in TABLE_ROW_KEYS if k not in row])
+        assert all(k in row for k in TABLE_ROW_KEYS), (row["routine"], [k for k in TABLE_ROW_KEYS if k not in row])
         oracle = row["oracle"]
-        assert oracle["status"] in ("checked", "not checked") and (oracle["status"] == "checked") == bool(oracle["checks"]), row["procedure"]
+        assert oracle["status"] in ("checked", "not checked") and (oracle["status"] == "checked") == bool(oracle["checks"]), row["routine"]
         for c in oracle["checks"]:
             for level in ("1x", "3x"):
                 cell = c["levels"].get(level)
-                assert cell is None or {"pass", "worst_error_over_tolerance", "within_tolerance", "parameters"} <= set(cell), (row["procedure"], level)
+                assert cell is None or {"pass", "worst_error_over_tolerance", "within_tolerance", "parameters", "missing"} <= set(cell), (row["routine"], level)
+    assert doc["parameter_routines"] == reg.parameter_routines()
     text = (REPO / "type_cards" / "CONTRACT.md").read_text()
-    assert "sysid.calibration_procedures/1" in text and "calibration_procedures.json" in text
+    assert "sysid.calibration_routines/1" in text and "calibration_routines.json" in text
+
+
+# --- per parameter: per model, and both directions --------------------------------------------------------------------------------
+
+def test_every_parameter_keeps_true_nominal_recovered_interval_error_and_tolerance_per_model():
+    """The coordinator, 2026-11-07: for every parameter keep true, nominal, recovered (mean plus a 95 % interval), error and tolerance per
+    model, so a site can show one recovered / error column group per model. The graded model's numbers are the row's own; every model's
+    error is |mean - true| and its interval, where the routine makes one, an ordered pair."""
+    for check, row in rows():
+        for p in row["parameters"]:
+            assert {"true", "nominal", "tolerance", "recovered", "ci95", "error", "card", "rung", "card_parameter", "unit", "models"} <= set(p), check["id"]
+            graded = [m for m in p["models"] if m["graded"]]
+            assert len(graded) <= 1 and (graded or p["recovered"] is None), (check["id"], row["level"], p["key"])
+            if graded:
+                g = graded[0]
+                assert g["recovered"]["mean"] == p["recovered"] and g["recovered"]["ci95"] == p["ci95"] and g["error"] == p["error"], p["key"]
+            for m in p["models"]:
+                mean, ci = m["recovered"]["mean"], m["recovered"]["ci95"]
+                assert m["recovered"]["interval"], (check["id"], p["key"], m["model"])
+                if mean is not None:
+                    assert m["error"] == pytest.approx(abs(mean - p["true"]), rel=1e-12, abs=1e-15), (check["id"], p["key"], m["model"])
+                assert ci is None or (len(ci) == 2 and ci[0] <= ci[1]), (check["id"], p["key"], m["model"], ci)
+    regression = next(c for c in committed()["checks"] if c["id"] == "pendulum_can11:servo.dynamics_regression")
+    one_x = next(r for r in regression["rows"] if r["level"] == "1x" and r["variant"] is None)
+    gravity = next(p for p in one_x["parameters"] if p["key"] == "can11.gravity_nm")
+    assert [m["model"] for m in gravity["models"]] == ["M0", "M2", "M3", "M4"] and all(m["recovered"]["ci95"] for m in gravity["models"])
+
+
+def test_parameter_to_routines_and_routine_to_parameters_agree():
+    """Both directions (the coordinator, 2026-11-07): every graded parameter is placed on a card parameter, and the routines the table says
+    can identify it are exactly type_cards' routines_identifying for that card parameter; the routine graded on it is one of them wherever
+    the routine names that card parameter."""
+    from type_cards import registry as reg
+
+    doc = json.loads(TABLE.read_text())
+    for entry in doc["parameters"]:
+        assert all(k in entry for k in PARAMETER_KEYS), entry["key"]
+        assert entry["card"] in reg.CARDS and entry["card_parameter"], (entry["example"], entry["key"])
+        assert entry["routines"] == [r.id for r in reg.routines_identifying(entry["card"], entry["card_parameter"])], (entry["example"], entry["key"])
+        for group in entry["models"]:
+            routine = reg.routine(group["routine"])
+            if routine.identifies_parameter(entry["card"], entry["card_parameter"]):
+                assert group["routine"] in entry["routines"], (entry["key"], group["routine"])
+            for level, cell in group["levels"].items():
+                assert {"recovered", "error", "error_over_tolerance", "within_tolerance", "pass", "bound"} <= set(cell), (entry["key"], level)
+    keys = {(e["example"], e["key"]) for e in doc["parameters"]}
+    assert keys == {(c["example"], k) for c in committed()["checks"] for k in c["parameters"]}

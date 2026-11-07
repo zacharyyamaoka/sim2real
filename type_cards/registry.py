@@ -42,11 +42,10 @@ from typing import Callable
 
 from . import coverage as cov
 from . import schema
-from .schema import (DRIFT_MESSAGE, DRIFT_THRESHOLD, ESTIMATE, KINDS, OUT_OF_COVERAGE, PROCEDURE_KINDS, PROCEDURE_SETTINGS,  # noqa: F401
-                     PROCEDURE_STATUS, ROLES, SCHEMA, SETTINGS, TWINNED_LIMIT, WEAR_LAWS, Architecture, CalibrationPackage,
-                     CalibrationProcedure, CodeHome, CoverageNeed, Diagnostic, DriftResult, Equipment, Forecast, Gate, Identifies, Limit,
-                     Quantity, Reference, Rung, RungScore, TestType, Wear, coverage_flag, drift_check, mlp_weights, usage_remaining,
-                     wear_usage_at, wear_value)
+from .schema import (DRIFT_MESSAGE, DRIFT_THRESHOLD, ESTIMATE, KINDS, OUT_OF_COVERAGE, ROLES, ROUTINE_KINDS, ROUTINE_SETTINGS,  # noqa: F401
+                     ROUTINE_STATUS, SCHEMA, SETTINGS, TWINNED_LIMIT, WEAR_LAWS, Architecture, CalibrationPackage, CalibrationRoutine,
+                     CodeHome, CoverageNeed, Diagnostic, DriftResult, Equipment, Forecast, Gate, Identifies, Limit, Quantity, Reference,
+                     Rung, RungScore, TestType, Wear, coverage_flag, drift_check, mlp_weights, usage_remaining, wear_usage_at, wear_value)
 
 REPO = Path(__file__).resolve().parents[1]
 ROBOTDX_REPO = Path("/home/bam/io-diagnostics")
@@ -704,8 +703,9 @@ from . import references as _references  # noqa: E402
 
 # Zach's calibration packages (PROJECT - Sim2Real, Nov 5 2026): type_cards/calibration.py
 CALIBRATION_PACKAGES: tuple[CalibrationPackage, ...] = _calibration.PACKAGES
-# the ways to run them (2026-11-07): each procedure's place, time, cost, equipment, excitation, coverage, repeats and oracle checks
-PROCEDURES: tuple[CalibrationProcedure, ...] = _calibration.PROCEDURES
+# the ways to run them, Calibration Routines (2026-11-07): each routine's place, time, cost, equipment, excitation, coverage, repeats
+# and oracle checks
+ROUTINES: tuple[CalibrationRoutine, ...] = _calibration.ROUTINES
 EQUIPMENT: dict[str, Equipment] = _calibration.EQUIPMENT
 # each wear law's references (real, citable): type_cards/references.py
 WEAR_LAW_REFERENCES: dict[str, tuple[Reference, ...]] = _references.WEAR_LAW_REFERENCES
@@ -798,26 +798,43 @@ def packages_for(card: Card | str) -> tuple[CalibrationPackage, ...]:
     return tuple(p for p in CALIBRATION_PACKAGES if cid in p.serves)
 
 
-def procedure(procedure_id: str) -> CalibrationProcedure:
-    for p in PROCEDURES:
-        if p.id == procedure_id:
-            return p
-    raise KeyError(f"no calibration procedure {procedure_id!r}")
+def routine(routine_id: str) -> CalibrationRoutine:
+    for r in ROUTINES:
+        if r.id == routine_id:
+            return r
+    raise KeyError(f"no calibration routine {routine_id!r}")
 
 
-def procedures_for(card_or_package: Card | str) -> tuple[CalibrationProcedure, ...]:
-    """The procedures that identify a parameter of a card (a Card or a card id), or that run a package (a package id)."""
+def routines_for(card_or_package: Card | str) -> tuple[CalibrationRoutine, ...]:
+    """The routines that identify a parameter of a card (a Card or a card id), or that run a package (a package id)."""
     if isinstance(card_or_package, str) and card_or_package not in CARDS:
         if not any(p.id == card_or_package for p in CALIBRATION_PACKAGES):
             raise KeyError(f"no card or calibration package {card_or_package!r}")
-        return tuple(p for p in PROCEDURES if p.package == card_or_package)
+        return tuple(r for r in ROUTINES if r.package == card_or_package)
     cid = _card(card_or_package).id
-    return tuple(p for p in PROCEDURES if any(i.card == cid for i in p.identifies))
+    return tuple(r for r in ROUTINES if any(i.card == cid for i in r.identifies))
 
 
-def equipment_cost(proc: CalibrationProcedure) -> Quantity:
-    """The procedure's equipment cost in USD: the sum of its items' (EQUIPMENT), its source naming each item's."""
-    return schema.equipment_cost(proc, EQUIPMENT)
+def routines_identifying(card: Card | str, parameter: str) -> tuple[CalibrationRoutine, ...]:
+    """Parameter -> routines: every routine that identifies `parameter` of `card` (the other direction of Routine.identifies)."""
+    c = _card(card)
+    if not any(parameter in r.parameter_names for r in c.rungs):
+        raise KeyError(f"{c.id} has no parameter {parameter!r} on any rung")
+    return tuple(r for r in ROUTINES if r.identifies_parameter(c.id, parameter))
+
+
+def parameter_routines() -> dict[str, dict[str, list[str]]]:
+    """{card id: {parameter: [routine ids]}} over every parameter of every card's ladder, [] where no routine reaches it."""
+    out = {}
+    for cid, c in CARDS.items():
+        names = list(dict.fromkeys(n for r in c.rungs for n in r.parameter_names))
+        out[cid] = {n: [r.id for r in ROUTINES if r.identifies_parameter(cid, n)] for n in names}
+    return out
+
+
+def equipment_cost(routine_: CalibrationRoutine) -> Quantity:
+    """The routine's equipment cost in USD: the sum of its items' (EQUIPMENT), its source naming each item's."""
+    return schema.equipment_cost(routine_, EQUIPMENT)
 
 
 ALIASES = {
@@ -872,6 +889,6 @@ def export() -> dict:
             "drift_message": DRIFT_MESSAGE, "drift_threshold": DRIFT_THRESHOLD, "out_of_coverage": OUT_OF_COVERAGE,
             "twinned_limit": TWINNED_LIMIT, "selection_rule": SELECTION_RULE, "steps": _plain(STEPS), "cards": cards,
             "calibration_packages": _plain(CALIBRATION_PACKAGES),
-            "procedure_settings": list(PROCEDURE_SETTINGS), "procedure_kinds": list(PROCEDURE_KINDS), "procedure_status": list(PROCEDURE_STATUS),
-            "procedures": [{**_plain(p), "equipment_cost": _plain(equipment_cost(p))} for p in PROCEDURES],
-            "equipment": {k: _plain(v) for k, v in EQUIPMENT.items()}}
+            "routine_settings": list(ROUTINE_SETTINGS), "routine_kinds": list(ROUTINE_KINDS), "routine_status": list(ROUTINE_STATUS),
+            "routines": [{**_plain(r), "equipment_cost": _plain(equipment_cost(r))} for r in ROUTINES],
+            "equipment": {k: _plain(v) for k, v in EQUIPMENT.items()}, "parameter_routines": parameter_routines()}
