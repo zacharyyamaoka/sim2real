@@ -16,6 +16,8 @@ from pathlib import Path
 
 from catalog_workbench.html import e
 
+import media as site_media
+
 REPO = Path(__file__).resolve().parents[1]
 # WHY committed results and never a computation here: docs/decision-sysid-oracle-2026-11-05.md (the site stays stdlib, and every
 # number it shows is one the oracle test holds to the code)
@@ -182,7 +184,8 @@ def parameter_rows(doc: dict, limit: int | None = None) -> str:
     for r in shown:
         unit = display(r["true"] if r["true"] is not None else r["recovered"], r["unit"])[1]
         cells = [num(display(r[k], r["unit"])[0]) for k in ("true", "nominal", "recovered")]
-        body.append(f'<tr data-key="{e(r["key"])}"><th scope="row" title="{e(r["key"])}">{e(short_name(r["key"]))} <small>{e(unit)}</small></th>'
+        what = site_media.param_what(r["name"])
+        body.append(f'<tr data-key="{e(r["key"])}"><th scope="row" title="{e(r["key"] + (": " + what if what else ""))}">{e(short_name(r["key"]))} <small>{e(unit)}</small></th>'
                     f'<td>{cells[0]}</td><td>{cells[1]}</td><td><b>{cells[2]}</b></td><td class="s2r-ex-m">{mark(r["pass"])}</td></tr>')
     more = "" if len(shown) == len(rows) else f'<tr class="s2r-ex-more"><td colspan="5"><a href="{url(doc["example"])}#parameters">all {len(rows)} parameters</a></td></tr>'
     return (f'<table class="s2r-ex-params"><thead><tr><th scope="col">parameter</th><th scope="col">true</th><th scope="col">nominal</th>'
@@ -211,20 +214,23 @@ def metric_rows(doc: dict) -> str:
     return f'<ul class="s2r-ex-metrics">{"".join(out)}</ul>'
 
 
-def card(doc: dict) -> str:
+def card(doc: dict, media=None) -> str:
+    """One example: its render on top (Zach, 2026-11-07: "in these cards I was hoping to see an image of the actual deployment"), what you
+    are looking at, then the five parts; the model's sentence opens its parameters."""
     ex = doc["example"]
     return f"""<article class="s2r-ex" data-example="{e(ex)}" data-params="{doc['verdict']['parameters']}" data-params-pass="{doc['verdict']['parameters_pass']}">
-<header><h3><a href="{url(ex)}">{e(doc['title'])}</a></h3><p class="s2r-ex-sub">{e(doc.get('subtitle', ''))}</p>{verdict_chip(doc)}</header>
+{site_media.figure(media, ex, caption=False)}<header><h3><a href="{url(ex)}">{e(doc['title'])}</a></h3><p class="s2r-ex-sub">{e(doc.get('subtitle', ''))}</p>{verdict_chip(doc)}</header>
+<p class="s2r-what">{e(site_media.example_what(doc, media))}</p>
 <section><h4>Description in</h4><p class="s2r-ex-model">{model_line(doc)}</p></section>
 <section><h4>Typed tree</h4>{tree_list(doc, 7)}</section>
 <section><h4>Schedule and coverage</h4><p class="s2r-ex-sched">{e(schedule_line(doc))}</p>{coverage_line(doc)}</section>
-<section><h4>Parameters: true / nominal / recovered</h4>{parameter_rows(doc, CARD_ROWS)}</section>
+<section><h4>Parameters: true / nominal / recovered</h4><p class="s2r-model-what">{e(site_media.example_model_what(doc))}</p>{parameter_rows(doc, CARD_ROWS)}</section>
 <section><h4>Held-out error, before → after</h4>{metric_rows(doc)}</section>
 <p class="s2r-ex-open"><a href="{url(ex)}">Open the example</a></p>
 </article>"""
 
 
-def section(docs: dict) -> str:
+def section(docs: dict, media=None) -> str:
     examples = [docs[x] for x in EXAMPLES if x in docs]
     if not examples:
         return ""
@@ -239,7 +245,7 @@ the description's nominal values, never sees the truth, and must land every hidd
 stated factor (sysid/acceptance.json). <b>{passing} of {len(examples)} examples pass</b>; {params_pass} of {params} hidden values recovered.</p>
 {drift}
 <div class="s2r-ex-grid">
-{''.join(card(d) for d in examples)}
+{''.join(card(d, media) for d in examples)}
 </div>
 </section>"""
 
@@ -259,13 +265,14 @@ def drift_lines(docs: dict) -> str:
     return f'<ul class="s2r-ex-drift">{"".join(out)}</ul>' if out else ""
 
 
-def tiles(docs: dict):
-    """(href, name, count, picture) per example for the home's Choose column."""
+def tiles(docs: dict, media=None):
+    """(href, name, count, picture) per example for the home's Choose column: its render where the media are built, else its line icon."""
     out = []
     for ex in EXAMPLES:
         if ex in docs:
             d = docs[ex]
-            out.append((url(ex), d["title"], d["verdict"]["parameters"], f'<span class="pic s2r-ex-pic" data-verdict="{d["verdict"]["status"]}">{ICON.get(ex, "")}</span>'))
+            picture = site_media.thumb(media, ex) or f'<span class="pic s2r-ex-pic" data-verdict="{d["verdict"]["status"]}">{ICON.get(ex, "")}</span>'
+            out.append((url(ex), d["title"], d["verdict"]["parameters"], picture))
     return out
 
 
@@ -281,7 +288,7 @@ ICON = {
 
 # --- one page per example -------------------------------------------------------------------------------------------------------
 
-def page_body(doc: dict, docs: dict) -> str:
+def page_body(doc: dict, docs: dict, media=None) -> str:
     ex = doc["example"]
     v = doc["verdict"]
     params = doc["parameters"]
@@ -291,7 +298,8 @@ def page_body(doc: dict, docs: dict) -> str:
         tol = r.get("tolerance") or {}
         tol_text = (f"± {quantity(tol['value'], r['unit'], 3)}" if tol.get("kind") == "abs" else f"± {num(100 * tol['value'], 3)} %") if tol else "—"
         place = f"{e(r['card'])} {e(r['rung'])}" if r.get("card") else "—"
-        full.append(f'<tr data-key="{e(r["key"])}"><th scope="row">{e(r["key"])}</th><td>{place}<br><small>{e(r.get("card_parameter") or "")}</small></td>'
+        what = site_media.param_what(r["name"])
+        full.append(f'<tr data-key="{e(r["key"])}"><th scope="row">{e(r["key"])}{"<br><small class=" + chr(34) + "s2r-param-what" + chr(34) + ">" + e(what) + "</small>" if what else ""}</th><td>{place}<br><small>{e(r.get("card_parameter") or "")}</small></td>'
                     f'<td>{quantity(r["true"], r["unit"])}</td><td>{quantity(r["nominal"], r["unit"])}</td>'
                     f'<td><b>{quantity(r["recovered"], r["unit"])}</b><br><small>{ci_text(r)}</small></td>'
                     f'<td>{quantity(err, r["unit"], 3) if err is not None else "—"}</td><td>{tol_text}</td><td>{mark(r["pass"])}</td></tr>')
@@ -309,7 +317,9 @@ def page_body(doc: dict, docs: dict) -> str:
     cov = doc["schedule"]["coverage"]
     prov = doc.get("provenance", {})
     return f"""<h1>{e(doc['title'])} <small>{e(doc.get('subtitle', ''))}</small></h1>
+{site_media.figure(media, ex, cls="s2r-shot s2r-hero", eager=True)}
 <p class="lede">{e(doc.get('summary', ''))}</p>
+<p class="s2r-what">{e(site_media.example_what(doc, media))}</p>
 <p>{verdict_chip(doc)}</p>
 <h2 id="description">Description in</h2>
 <p>Model: {model_line(doc)} · {e(doc['description']['model'].get('source', ''))}<br>Manifest: <code>{e(doc['description']['manifest'])}</code></p>
@@ -321,6 +331,7 @@ def page_body(doc: dict, docs: dict) -> str:
 <p><small>{e(cov.get('function', ''))}. Rule: {e(cov.get('rule', ''))}.</small></p>
 {plane_svg(cov)}
 <h2 id="parameters">Parameters ({v['parameters_pass']} of {v['parameters']} within tolerance)</h2>
+<p class="s2r-model-what">{e(site_media.example_model_what(doc))}</p>
 <div class="s2r-scroll"><table class="s2r-table s2r-ex-full"><thead><tr><th>parameter</th><th>card · rung</th><th>true (hidden)</th><th>nominal</th><th>recovered [95 %]</th><th>error</th><th>tolerance</th><th></th></tr></thead><tbody>{''.join(full)}</tbody></table></div>
 <h2 id="metrics">Held-out error, before → after</h2>
 <div class="s2r-scroll"><table class="s2r-table"><thead><tr><th>metric</th><th>before (nominal)</th><th>after (fitted)</th><th>unit</th><th>better by</th><th>needs</th><th></th><th></th></tr></thead><tbody>{metrics}</tbody></table></div>

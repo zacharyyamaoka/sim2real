@@ -1,0 +1,78 @@
+{
+  "app": "sim2real",
+  "name": "sim2real",
+  "icon": "brand/icons/sim2real-app.svg",
+  "stable": {
+    "port": 4820,
+    "build": [
+      ["python3", "-I", "site/build.py", "--out", ".sps-site"],
+      ["find", ".sps-site", "-type", "l", "-delete"]
+    ],
+    "output": ".sps-site",
+    "spa": false,
+    "env": {
+      "PATH": "{home}/.local/bin:/usr/local/bin:/usr/bin:/bin",
+      "SIM2REAL_DATA": "{root}/app/data",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    },
+    "processes": [
+      {
+        "name": "data",
+        "port": 4822,
+        "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{root}/app"],
+        "health": "/data/deployments.json"
+      },
+      {
+        "name": "media",
+        "port": 4824,
+        "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{home}/.cache/sim2real"],
+        "health": "/media/index.json"
+      }
+    ],
+    "proxy": {
+      "/media/": "media",
+      "/data/source/": "data",
+      "/data/one-dof-test-rack/runs/": "data",
+      "/data/one-dof-test-rack/why/": "data",
+      "/data/one-dof-test-rack/dx/": "data",
+      "/data/one-dof-test-rack/coverage.json": "data"
+    }
+  },
+  "preview": {
+    "port": 4821,
+    "static": {"directory": "dist/site", "spa": false},
+    "command": ["python3", "-I", "site/build.py", "--out", "dist/site"],
+    "health": "/",
+    "env": {
+      "PATH": "{home}/.local/bin:/usr/local/bin:/usr/bin:/bin",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    },
+    "watch": ["/site/", "/type_cards/", "/sysid/", "/brand/", "/tools/", "/app/registry.json"],
+    "proxy": {
+      "/media/": "http://127.0.0.1:4825",
+      "/data/source/": "http://127.0.0.1:4823",
+      "/data/one-dof-test-rack/runs/": "http://127.0.0.1:4823",
+      "/data/one-dof-test-rack/why/": "http://127.0.0.1:4823",
+      "/data/one-dof-test-rack/dx/": "http://127.0.0.1:4823",
+      "/data/one-dof-test-rack/coverage.json": "http://127.0.0.1:4823"
+    },
+    "processes": [
+      {
+        "name": "data",
+        "port": 4823,
+        "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{root}/app"],
+        "health": "/data/deployments.json"
+      },
+      {
+        "name": "media",
+        "port": 4825,
+        "command": ["/usr/bin/python3", "-m", "http.server", "{port}", "--bind", "127.0.0.1", "--directory", "{home}/.cache/sim2real"],
+        "health": "/media/index.json"
+      }
+    ]
+  },
+  "snapshot": {
+    "exclude": ["/docs/", "/reports/", "/dashboards/", "/diagnostics_ref/", "/README.md", "/CLAUDE.md", "tests/", "/index.html"],
+    "link": ["vendor/data-ui/dist"]
+  }
+}
