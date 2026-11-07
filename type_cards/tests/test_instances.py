@@ -43,8 +43,11 @@ def nodes():
 
 def test_six_virtual_deployments_from_the_oracle(nodes):
     roots = [n for n in nodes if n["parent"] is None]
-    assert [r["id"] for r in roots] == list(EXAMPLES)
+    # the six landing examples, then (2026-11-07, the v3 audit's finding 5) the noise ladder's scenarios, held by their own test below
+    assert [r["id"] for r in roots] == list(EXAMPLES) + list(inst.SCENARIOS)
     for r in roots:
+        if r["id"] in inst.SCENARIOS:
+            continue
         assert r["kind"] == "virtual" and "oracle example" in r["tags"]
         assert r["page"] == f"/sysid/{r['id']}/" and r["depth"] == 0 and r["root"] == r["id"]
         assert r["title"] == RESULTS[r["id"]]["title"]
@@ -202,6 +205,37 @@ def test_every_typed_part_has_each_parameter_once_bound_or_listed(nodes, table):
             listed = [r["id"] for r in mine if r["key"] is None]
             graded = [r["id"] for r in mine if r["key"] is not None]
             assert (graded and not listed) or (not graded and listed == [f"{n['id']}#{spec.name}"]), (n["id"], spec.name, graded, listed)
+
+
+def test_the_noise_ladders_scenario_is_a_virtual_deployment_whose_values_are_rows():
+    """The v3 audit (2026-11-07, finding 5): the parameters table dropped every ladder value whose example is not one of the six landing
+    examples, so the ur5e_backlash scenario's joint gaps (gear_backlash's gravity sweep on the UR's joints) reached no page. sysid's
+    noise-ladder scenarios (sysid/oracle.py SCENARIOS: an oracle world graded by the ladder only, never on the landing page) are virtual
+    deployments too, their trees from their committed sysid result; every value the ladder grades is a row, on the part the tree puts it."""
+    results = inst.load_results(REPO / "sysid" / "results")
+    assert inst.SCENARIOS == ("ur5e_backlash",) and set(results) == set(EXAMPLES) | set(inst.SCENARIOS)
+    nodes = inst.virtual_nodes(results)
+    root = next(n for n in nodes if n["id"] == "ur5e_backlash")
+    assert (root["kind"], root["parent"], root["page"]) == ("virtual", None, None)
+    assert "noise-ladder scenario" in root["tags"] and "oracle example" not in root["tags"] and "noise-ladder scenario" in dm.TAGS
+    assert [n["sysid_id"] for n in nodes if n["root"] == "ur5e_backlash"] == [r["id"] for r in results["ur5e_backlash"]["tree"]]
+    routines = json.loads((REPO / "sysid" / "results" / "calibration_routines.json").read_text())
+    rows = {r["id"]: r for r in inst.parameter_table(nodes, results, routines)["rows"]}
+    ladder = {f"{p['example']}/{p['key']}" for p in routines["parameters"]}
+    assert ladder <= set(rows), f"ladder values with no row: {sorted(ladder - set(rows))[:5]}"
+    sweep = [c for c in {k.split("@", 1)[1] for r in rows.values() for k in r if k.startswith("recovered@")} if c.startswith("arm.backlash_gravity_sweep:")]
+    assert sweep, "the gravity sweep has its column group"
+    entries = {p["key"]: p for p in routines["parameters"] if p["example"] == "ur5e_backlash"}
+    for key, entry in entries.items():
+        r = rows[f"ur5e_backlash/{key}"]
+        joint = f"ur5e_backlash/ur5e/{key.split('.')[0]}"
+        assert (r["deployment"], r["node"], r["owner"], r["entity_type"], r["parameter"]) == ("ur5e_backlash", joint, joint, "integrated_servo", "backlash_rad")
+        assert (r["true"], r["nominal"], r["tolerance"]) == (entry["true"], entry["nominal"], entry["tolerance"]["value"]), key
+        fit = [m for m in entry["models"] if "1x" in m["levels"]]
+        assert [r.get(f"recovered@{c}") for c in sweep] == [m["levels"]["1x"]["recovered"]["mean"] for m in fit] if fit else all(r.get(f"recovered@{c}") is None for c in sweep)
+    assert rows["ur5e_backlash/shoulder_lift.backlash_rad"]["has_results"] and not rows["ur5e_backlash/wrist_1.backlash_rad"]["has_results"]
+    # the joints the sweep cannot load keep their own row, saying nothing is recorded
+    assert "ur5e_backlash/ur5e/shoulder_pan#backlash_rad" in rows and "ur5e_backlash/ur5e/shoulder_lift#backlash_rad" not in rows
 
 
 def test_one_column_group_per_routine_and_model(table):

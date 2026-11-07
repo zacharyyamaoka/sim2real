@@ -223,6 +223,23 @@ def test_the_1x_rows_are_the_committed_oracle_results():
                 assert math.isclose(p["recovered"], knock["shift_recovered"][p["key"].split(".", 1)[1]], rel_tol=1e-9, abs_tol=1e-12), p["key"]
 
 
+def test_the_scenarios_committed_result_is_its_ladder_1x_row():
+    """The noise ladder's scenarios (sysid/oracle.py SCENARIOS) are virtual deployments since 2026-11-07 (the v3 audit, finding 5): a
+    committed result (python -m sysid run ur5e_backlash --write) gives the site the scenario's typed tree, and the values it recovered are
+    its ladder 1x row's (the same code at the same noise gives the same numbers), never a second 1x."""
+    from sysid import oracle
+
+    for example in oracle.SCENARIOS:
+        doc = json.loads((SYSID / "results" / f"{example}.json").read_text())
+        assert doc["example"] == example and doc["tree"] and doc["provenance"]["identify_sealed"] is True, example
+        ladder = {p["key"]: p["recovered"] for check, row in rows() if example_of(check["id"]) == example and row["level"] == "1x"
+                  and row["variant"] is None for p in row["parameters"]}
+        own = {p["key"]: p["recovered"] for p in doc["parameters"]}
+        assert own and own.keys() == {k for k, v in ladder.items() if v is not None}, (example, sorted(own), sorted(ladder))
+        for key, value in own.items():
+            assert math.isclose(value, ladder[key], rel_tol=1e-9, abs_tol=1e-12), (example, key, value, ladder[key])
+
+
 def test_backlash_is_hidden_and_graded_on_every_geared_joint():
     """Zach's brief: backlash a first-class oracle parameter wherever a joint has gears (the pendulum, the UR joints)."""
     by_check = {c["id"]: c for c in committed()["checks"]}
