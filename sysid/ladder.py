@@ -316,7 +316,12 @@ def _pendulum(level: str, plan, description, workers: int, wear: bool) -> dict:
     if fit_error:
         out["pendulum_can11:servo.dynamics_regression"] = _failed(fit_error)
         if wear:
-            out["pendulum_can11:servo.gap_check_forecast"] = _failed(f"not run: its commissioning (the regression's M4 fit) {fit_error}")
+            # WHY the gap check still runs (2026-11-07): its alarm and forecast are in the gap's own units, read from commissioning's gap (the
+            # reversals routine, the M4 fit's own) and each check's; the regression's failure costs it only the twin (the fidelity ratio, the
+            # recalibration)
+            out["pendulum_can11:servo.gap_check_forecast"] = (
+                _failed(f"not run: its commissioning gap (the reversals routine) {gap_error}") if gap_error else
+                _gap_check(drift.run_backlash(workers=workers, commissioned_gap=float(gap)), [f"no twin: the regression's M4 fit {fit_error}"]))
         return out
     scores = P.score(description, plan, fit, measured, workers=workers)
     # each rung's own estimates only (a rung's fixed terms, like M0's zero friction, are not estimates); M4's static level and drop are
@@ -330,17 +335,25 @@ def _pendulum(level: str, plan, description, workers: int, wear: bool) -> dict:
     out["pendulum_can11:servo.dynamics_regression"] = produced(rungs, "M4", held)
     out["pendulum_can11:servo.backlash_reversals_camera"]["held_out"] = {"link_mrad": held["link_mrad"]}
     if wear:
-        doc = drift.run_backlash(workers=workers, commissioned_values=fit.values["M4"])
-        actual, predicted = doc["actual_crossing_h"], doc["predicted_crossing_h"]
-        gaps = [c["b_hat_rad"] - c["b_true_rad"] for c in doc["checks"]]
-        out["pendulum_can11:servo.gap_check_forecast"] = produced(
-            {"wear": model({"can11.backlash_wear_rad_per_h": doc["rate_recovered"]}, {"can11.backlash_wear_rad_per_h": tuple(doc["rate_ci95"])},
-                           "the gap line's 95 % interval on the checks up to the forecast (drift.line_fit)", rung="M5.wear")}, "wear",
-            {"forecast_error_pct": None if not (actual and predicted) else 100.0 * (predicted - actual) / actual,
-             "lead_h": None if actual is None else actual - doc["predicted_at_h"], "gap_rms_mrad": 1e3 * _rms(gaps),
-             "recalibrated_ratio": (doc.get("recalibrated") or {}).get("ratio"), "predicted_crossing_h": predicted, "actual_crossing_h": actual,
-             "detector_alarm_h": doc["detector_alarm_h"]})
+        out["pendulum_can11:servo.gap_check_forecast"] = _gap_check(drift.run_backlash(workers=workers, commissioned_values=fit.values["M4"]))
     return out
+
+
+def _gap_check(doc: dict, notes=()) -> dict:
+    """The deployed gap check's row from its drift demo (sysid.drift.run_backlash): the wear rate graded; held out, the gap check's alarm
+    and the hour the hidden gap crossed its allowance, the forecast, and the fidelity ratio's own alarm on the same checks (the old
+    detector, kept for the comparison)."""
+    actual, predicted = doc["actual_crossing_h"], doc["predicted_crossing_h"]
+    gaps = [c["b_hat_rad"] - c["b_true_rad"] for c in doc["checks"]]
+    return produced(
+        {"wear": model({"can11.backlash_wear_rad_per_h": doc["rate_recovered"]}, {"can11.backlash_wear_rad_per_h": tuple(doc["rate_ci95"])},
+                       "the gap line's 95 % interval on the checks up to the forecast (drift.line_fit)", rung="M5.wear")}, "wear",
+        {"forecast_error_pct": None if not (actual and predicted) else 100.0 * (predicted - actual) / actual,
+         "lead_h": None if actual is None else actual - doc["predicted_at_h"], "gap_rms_mrad": 1e3 * _rms(gaps),
+         "recalibrated_ratio": (doc.get("recalibrated") or {}).get("ratio"), "predicted_crossing_h": predicted, "actual_crossing_h": actual,
+         "detector_alarm_h": doc["detector_alarm_h"], "ratio_alarm_h": doc["ratio_alarm_h"], "ratio_crossing_h": doc["ratio_crossing_h"],
+         "commissioned_gap_mrad": 1e3 * doc["commissioned_gap_rad"], "allowance_mrad": 1e3 * doc["allowance_rad"]},
+        notes)
 
 
 def _fit_model(fit, interval: str, rung: str | None = None) -> dict:
