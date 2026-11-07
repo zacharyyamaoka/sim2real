@@ -79,6 +79,8 @@ LEVEL_RANK = {"ok": 0, "warning": 1, "unknown": 2, "error": 4}  # RobotDx's rank
 AGGREGATES = ("median", "mean", "min", "max", "sum", "count")
 TAGS = {
     "oracle example": "declared: a system-ID oracle example (sysid/), the description in and a better model out against a hidden truth",
+    "noise-ladder scenario": "declared: a system-ID noise-ladder scenario (sysid/oracle.py SCENARIOS), an oracle world graded by the ladder only "
+                             "at 0x to 10x its sensor noise, never on the landing page",
     "uses camera": "derived: a camera of any type (camera, depth_camera, hyperspectral_camera) is in its tree",
     "uses arm": "derived: a rigid body chain is in its tree",
     "uses gripper": "derived: a gripper is in its tree",

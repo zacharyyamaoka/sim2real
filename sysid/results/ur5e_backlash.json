@@ -1,0 +1,274 @@
+{
+ "title": "UR5e joint backlash",
+ "subtitle": "gear_backlash's UR plant on QDD drivetrains",
+ "summary": "Menagerie's UR5e on QDD-style drivetrains (gear_backlash's UR study plant): each joint a motor hinge with its rotor as armature, a gear gap and a tuned mesh stop, then the link. The description takes each gap at a QDD planetary's datasheet value; the arm's gaps are larger. The routine is gear_backlash's own gravity-crossing sweep: from the motor encoders and motor torques only, it finds each gravity-loadable joint's two flanks and so its gap.",
+ "tree": [
+  {
+   "id": "cell",
+   "title": "bench cell",
+   "word": "deployment",
+   "type": "deployment",
+   "type_title": "Deployment",
+   "group": "structure",
+   "type_source": "structural",
+   "parent": null,
+   "depth": 0,
+   "binds": {},
+   "parameters": []
+  },
+  {
+   "id": "ur5e",
+   "title": "UR5e arm on QDD drivetrains",
+   "word": "ur5e",
+   "type": "arm_6dof",
+   "type_title": "6-DOF robot arm",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "cell",
+   "depth": 1,
+   "binds": {
+    "base_body": "base",
+    "flange_site": "attachment_site"
+   },
+   "parameters": []
+  },
+  {
+   "id": "shoulder_pan",
+   "title": "shoulder pan joint (QDD servo with a gear gap)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 2,
+   "binds": {
+    "joint": "shoulder_pan_joint",
+    "actuator": "shoulder_pan"
+   },
+   "parameters": [
+    "shoulder_pan.backlash_rad"
+   ]
+  },
+  {
+   "id": "shoulder_lift",
+   "title": "shoulder lift joint (QDD servo with a gear gap)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 2,
+   "binds": {
+    "joint": "shoulder_lift_joint",
+    "actuator": "shoulder_lift"
+   },
+   "parameters": [
+    "shoulder_lift.backlash_rad"
+   ]
+  },
+  {
+   "id": "elbow",
+   "title": "elbow joint (QDD servo with a gear gap)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 2,
+   "binds": {
+    "joint": "elbow_joint",
+    "actuator": "elbow"
+   },
+   "parameters": [
+    "elbow.backlash_rad"
+   ]
+  },
+  {
+   "id": "wrist_1",
+   "title": "wrist 1 joint (QDD servo with a gear gap)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 2,
+   "binds": {
+    "joint": "wrist_1_joint",
+    "actuator": "wrist_1"
+   },
+   "parameters": [
+    "wrist_1.backlash_rad"
+   ]
+  },
+  {
+   "id": "wrist_2",
+   "title": "wrist 2 joint (QDD servo with a gear gap)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 2,
+   "binds": {
+    "joint": "wrist_2_joint",
+    "actuator": "wrist_2"
+   },
+   "parameters": [
+    "wrist_2.backlash_rad"
+   ]
+  },
+  {
+   "id": "wrist_3",
+   "title": "wrist 3 joint (QDD servo with a gear gap)",
+   "word": "integrated servo",
+   "type": "servo",
+   "type_title": "Integrated servo",
+   "group": "actuator",
+   "type_source": "type_cards",
+   "parent": "ur5e",
+   "depth": 2,
+   "binds": {
+    "joint": "wrist_3_joint",
+    "actuator": "wrist_3"
+   },
+   "parameters": [
+    "wrist_3.backlash_rad"
+   ]
+  }
+ ],
+ "schedule": {
+  "coverage": {
+   "train": {
+    "pct": 33.33,
+    "visited": 2,
+    "reachable": 6,
+    "samples": 2,
+    "axes": {},
+    "unplanned": [
+     "shoulder_pan: gravity cannot load this axis (vertical pan / tool mass on the wrist-3 axis)",
+     "wrist_1: no pose where gravity beats friction 2.5x on this joint and on every other loaded joint (best 0.3x)",
+     "wrist_2: no pose where gravity beats friction 2.5x on this joint and on every other loaded joint (best 2.2x)",
+     "wrist_3: gravity cannot load this axis (vertical pan / tool mass on the wrist-3 axis)"
+    ]
+   },
+   "function": "sysid adapter: the joints with a calibration pose (gear_backlash calibration_pose: gravity beats friction 2.5x)",
+   "rule": "share of the six joints the sweep can load by gravity at a collision-free pose"
+  },
+  "why": {
+   "shoulder_pan": "gravity cannot load this axis (vertical pan / tool mass on the wrist-3 axis)",
+   "shoulder_lift": "gravity/friction margin 4.5x",
+   "elbow": "gravity/friction margin 4.4x",
+   "wrist_1": "no pose where gravity beats friction 2.5x on this joint and on every other loaded joint (best 0.3x)",
+   "wrist_2": "no pose where gravity beats friction 2.5x on this joint and on every other loaded joint (best 2.2x)",
+   "wrist_3": "gravity cannot load this axis (vertical pan / tool mass on the wrist-3 axis)"
+  }
+ },
+ "parameters": [
+  {
+   "key": "shoulder_lift.backlash_rad",
+   "component": "shoulder_lift",
+   "name": "backlash_rad",
+   "unit": "rad",
+   "nominal": 0.0008726646259971647,
+   "nominal_source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)",
+   "true": 0.002908882086657216,
+   "recovered": 0.0027277601991486907,
+   "ci95": null,
+   "rung": null,
+   "card": null,
+   "card_parameter": null,
+   "on_card": false,
+   "fit_step": "gravity_sweep",
+   "method": "gear_backlash calibration.identify on each swept joint's motor angles and torques: Gauss-Newton on each flank's shift of the arm's gravity curve with an output-friction term, the datasheet mesh stiffness removed, 3 passes base to tip",
+   "tolerance": null,
+   "pass": null,
+   "nominal_pass": null
+  },
+  {
+   "key": "elbow.backlash_rad",
+   "component": "elbow",
+   "name": "backlash_rad",
+   "unit": "rad",
+   "nominal": 0.0008726646259971647,
+   "nominal_source": "estimate: a QDD planetary datasheet's 3 arcmin (the low case of gear_backlash's study grid, 0 / 3 / 10 / 15 / 30 arcmin)",
+   "true": 0.002908882086657216,
+   "recovered": 0.0036254491498324223,
+   "ci95": null,
+   "rung": null,
+   "card": null,
+   "card_parameter": null,
+   "on_card": false,
+   "fit_step": "gravity_sweep",
+   "method": "gear_backlash calibration.identify on each swept joint's motor angles and torques: Gauss-Newton on each flank's shift of the arm's gravity curve with an output-friction term, the datasheet mesh stiffness removed, 3 passes base to tip",
+   "tolerance": null,
+   "pass": null,
+   "nominal_pass": null
+  }
+ ],
+ "metrics": [],
+ "models": [],
+ "flanks": {
+  "shoulder_lift": {
+   "low_rad": -0.0012559208995163277,
+   "high_rad": 0.001471839299632363,
+   "friction_nm": 0.9977546181342531,
+   "samples": [
+    4377,
+    4377
+   ]
+  },
+  "elbow": {
+   "low_rad": -0.0020617735964192168,
+   "high_rad": 0.0015636755534132055,
+   "friction_nm": 0.9615484281077445,
+   "samples": [
+    4362,
+    4320
+   ]
+  }
+ },
+ "selected_rung": null,
+ "notes": [
+  "A noise-ladder scenario: its ruler is sysid/noise_ladder.json, not acceptance.json."
+ ],
+ "schema": "sysid.result/1",
+ "example": "ur5e_backlash",
+ "verdict": {
+  "parameters_pass": 0,
+  "parameters": 0,
+  "metrics_pass": 0,
+  "metrics": 0,
+  "failing": [],
+  "status": "pass"
+ },
+ "provenance": {
+  "identify_sealed": true,
+  "code": "37c944c",
+  "imports": [
+   {
+    "repo": "/home/bam/.cache/like_keras/mujoco_menagerie",
+    "name": "mujoco_menagerie",
+    "branch": "main",
+    "commit": "71f066a",
+    "date": "2026-07-04T13:08:40-07:00",
+    "dirty": false,
+    "paths": 1
+   },
+   {
+    "repo": "/home/bam/bam_ws",
+    "name": "bam_ws",
+    "branch": "main",
+    "commit": "e35ae7ad",
+    "date": "2026-10-23T11:18:04-07:00",
+    "dirty": false,
+    "paths": 4
+   }
+  ],
+  "seconds": 10.0
+ }
+}

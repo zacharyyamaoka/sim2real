@@ -388,6 +388,9 @@ row  id root parent depth title kind(virtual|physical) tags[] structural entity_
   carry their station's `device`. `runs`: the runs whose device is under the node (a camera's: null, it is not known which it filmed).
 - **Virtual** (`inst.virtual_nodes(results)`): each oracle example's sysid typed tree, node for node; a v2-typed node gets its v3 type; an
   "arm + gripper" is `structural: assembly` (a chain and a gripper composed); `runs` 0 (sysid does not persist its simulated runs).
+  Since 2026-11-07 (the v3 audit's finding 5) also each noise-ladder scenario (`inst.SCENARIOS`, sysid/oracle.py's: `ur5e_backlash`), from
+  its committed result (`python -m sysid run <id> --write`; sysid's test holds its values to the ladder's 1x row), tagged `noise-ladder
+  scenario`, `page` null (no landing page); its parameter rows are its ladder entries, each on the node its tree gives the key.
 - **Producer model labels** (2026-11-07, additive): `PhysicalDeployment.models`, a tuple of `dm.ModelLabel(label type model fit friction
   differs source)`, is which ladder model each model a producer replays is (the words before " vs real" in RobotDx's stock.model_error rows,
   `sel.model_label`). `inst.label_model(deployment, label)` -> the record or None (exact words; a label nobody mapped maps to nothing);
