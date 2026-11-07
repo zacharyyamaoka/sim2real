@@ -79,32 +79,33 @@ def capture(site: Path, media: Path, run: str) -> dict:
             page = ctx.new_page()
             page.goto(f"{base}/")
             page.wait_for_load_state("load")
-            page.wait_for_timeout(1600)
-            page.locator("#oracle").scroll_into_view_if_needed()
-            page.wait_for_timeout(1800)
-            page.mouse.wheel(0, 420)
             page.wait_for_timeout(1200)
+            page.locator("#oracle").scroll_into_view_if_needed()
+            page.wait_for_timeout(1500)
             page.evaluate("window.scrollTo({top: 0, behavior: 'smooth'})")
-            page.wait_for_timeout(900)
+            page.wait_for_timeout(700)
             tile = page.locator(f"a.tile[href='/{DEP}/']").first
             tile.hover()
-            page.wait_for_timeout(500)
+            page.wait_for_timeout(400)
             tile.click()
             page.wait_for_load_state("load")
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(1600)
             page.goto(f"{base}/{DEP}/runs/{run}/")
             page.wait_for_load_state("load")
-            page.wait_for_timeout(1500)
-            page.locator("[role=tabpanel][data-tab=playback] video[data-t0]").first.wait_for(timeout=30000)
-            page.locator(".dv-pb-time").first.scroll_into_view_if_needed()
-            page.mouse.wheel(0, -60)
-            page.wait_for_timeout(1500)
+            video_el = page.locator("[role=tabpanel][data-tab=playback] video[data-t0]").first
+            video_el.wait_for(timeout=30000)
+            # the playback bar and the two clips in one view while it plays (the clips sit right under the bar)
+            page.evaluate("""() => { const v = document.querySelector('[role=tabpanel][data-tab=playback] video[data-t0]');
+                const bar = document.querySelector('.dv-pb-time'); const top = Math.min(bar.getBoundingClientRect().top, v.getBoundingClientRect().top);
+                window.scrollBy(0, top - 70); }""")
+            page.wait_for_function("() => [...document.querySelectorAll('[role=tabpanel][data-tab=playback] video[data-t0]')].every((v) => v.readyState >= 2)", timeout=30000)
+            page.wait_for_timeout(800)
             page.locator("button[aria-label*='Play' i]").first.click()
-            page.wait_for_timeout(5200)
+            page.wait_for_timeout(5500)
             page.locator(".dd-panel").filter(has=page.locator(".dd-panel-h:has-text('Output link · 3D in its joint frame')")).first.scroll_into_view_if_needed()
-            page.wait_for_timeout(3600)
+            page.wait_for_timeout(3200)
             page.locator("button[aria-label*='Pause' i]").first.click()
-            page.wait_for_timeout(600)
+            page.wait_for_timeout(400)
             video = Path(page.video.path())
             ctx.close()
 
@@ -204,12 +205,13 @@ def capture(site: Path, media: Path, run: str) -> dict:
                         "-compression_level", "6", str(webp)], check=True)
         shots[name] = webp
     mp4 = media / "hero.mp4"
-    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-vf", "fps=12,scale=880:-2", "-c:v", "libx264", "-crf", "34", "-preset", "slow",
-                    "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(mp4)], check=True)
+    # WHY twice the speed: on a shared, loaded machine the pages take their time to load; at 2x the click-through stays near 20 s
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-vf", "setpts=PTS/2,fps=12,scale=880:-2", "-c:v", "libx264", "-crf", "34",
+                    "-preset", "slow", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(mp4)], check=True)
     shots["hero"] = mp4
     gif = media / "hero.gif"
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-vf",
-                    "fps=1,scale=320:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=24[p];[b][p]paletteuse=dither=none", str(gif)], check=False)
+                    "setpts=PTS/2,fps=1,scale=320:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=24[p];[b][p]paletteuse=dither=none", str(gif)], check=False)
     if gif.is_file():
         shots["gif"] = gif
     return shots
@@ -276,7 +278,7 @@ the recorder holds frames in RAM, 120 s at most), or not the one that sees their
 
 <h2>Hero: the landing page → the rack's tile → a run the camera filmed (Play) → the link in 3D</h2>
 <video src="{data_uri(shots['hero'], 'video/mp4')}" autoplay muted loop controls playsinline></video>{gif}
-<p class="mute">The run: <code>{esc(run)}</code>. Recorded headless from the built site served on a free port (never :4700).</p>
+<p class="mute">The run: <code>{esc(run)}</code>. Recorded headless from the built site served on a free port (never :4700); shown at twice the speed.</p>
 
 <h2>1. An image of the deployment on every card</h2>
 <p>Each oracle example's card, and its page, opens with MuJoCo's offscreen render (EGL, MuJoCo {esc(index.get('renderer', {}).get('mujoco'))}) of the
