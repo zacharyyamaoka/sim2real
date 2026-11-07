@@ -1690,6 +1690,97 @@ def media_browser_checks(page, base: str, data: Path, media: dict, still) -> Non
           f"{[round(p['time'], 3) for p in playing]} at clock {now:.3f})")
 
 
+# ---- the media as entity-scoped components (the coordinator, 2026-11-07, for the run page's next redesign: "an entity tree on the left
+# (deployment -> sub-parts, like RobotDx's device tree); the standard dashboard for the selected level on the right ... build your 3D view,
+# the video and the 'what you're looking at' text as components scoped to an entity (a joint, a camera, an arm). A page should be able to
+# drop them in per entity level."); written before site/components.py
+COMPONENTS = {  # component -> the entity placeholder every one of its datasets is scoped by
+    "joint-3d": ("{station}", "{device}"),
+    "camera-clip": ("{camera}",),
+    "joint-render": ("{device}",),
+}
+
+
+def component_checks(out: Path, data: Path, media: dict) -> None:
+    """No browser: each component is its own .base (views/components/<name>.base) that plays alone (its own clock over its entity's
+    samples) and scopes every dataset to its entity; the run page is composed of the same views; the link poses and clips name their
+    entity; /components/ mounts each one for a real entity, its entity in the .base URL's query."""
+    sys.path.insert(0, str(REPO / "vendor" / "data-ui" / "dist" / "python"))
+    import data_ui_base  # noqa: PLC0415
+
+    bad, docs = [], {}
+    for name, keys in COMPONENTS.items():
+        path = out / "views" / "components" / f"{name}.base"
+        if not path.is_file():
+            bad.append(f"{name}: no {path.name}")
+            continue
+        doc = docs[name] = data_ui_base.loads(path.read_text())
+        for ds_name, ds in (doc.get("datasets") or {}).items():
+            text = json.dumps(ds)
+            if "{run}" not in text or "{deployment}" not in text:
+                bad.append(f"{name}.{ds_name}: not a run's ({ds.get('data')})")
+            if ds_name != "samples" and not any(k in (ds.get("filters") or "") for k in keys):
+                bad.append(f"{name}.{ds_name}: not scoped to its entity ({ds.get('filters')!r})")
+        samples = (doc.get("datasets") or {}).get("samples") or {}
+        if (doc.get("clock") or {}).get("data") != "samples" or "{device}" not in (samples.get("filters") or ""):
+            bad.append(f"{name}: no clock of its own over its entity's samples")
+    check(not bad and len(docs) == len(COMPONENTS), f"each media component is a .base of its own, scoped to its entity, with its own clock ({sorted(docs)}; {bad[:4]})")
+    run_view = data_ui_base.loads((out / "views" / "run.base").read_text())
+    media_path = out / "views" / "run-media.base"
+    media_view = data_ui_base.loads(media_path.read_text()) if media_path.is_file() else {"views": []}
+    composed = []
+    for name, page_doc in (("joint-3d", run_view), ("joint-3d", media_view), ("camera-clip", media_view), ("joint-render", media_view)):
+        own = {v["name"]: v for v in (docs.get(name) or {}).get("views", []) if v.get("type") in ("trajectory3d", "video")}
+        on_page = {v["name"]: v for v in page_doc.get("views", [])}
+        composed.append(bool(own) and all(on_page.get(k) == v for k, v in own.items()))
+    check(all(composed), f"the run page is composed of the components' own views, not copies of them ({composed})")
+    index = media.get("index") or {}
+    entries = index.get("runs", {})
+    runs = {r["run"]: r for r in json.loads((data / "runs.json").read_text())["rows"]}
+    t2 = next(k for k in runs if "t2~heldout_can12~runs~s18" in k)
+    clip_run = next((k for k in sorted(entries) if entries[k].get("media")), None)
+    links = json.loads((out / "media" / entries[t2]["links"]).read_text())["rows"]
+    rows = json.loads((out / "media" / entries[clip_run]["media"]).read_text())["rows"] if clip_run else []
+    check({x.get("device") for x in links} == {runs[t2]["device"]} and rows and all(r.get("device") == runs[clip_run]["device"] for r in rows),
+          f"the link poses and the clips name their entity: a joint's device on every row ({ {x.get('device') for x in links} }; {[r.get('device') for r in rows]})")
+    page = out / "components" / "index.html"
+    html = page.read_text() if page.is_file() else ""
+    mounts = re.findall(r'data-src="(/views/components/([a-z0-9-]+)\.base\?[^"]+)"', html)
+    named = {m[1] for m in mounts}
+    scoped = all(("device=" in m[0] or "camera=" in m[0]) and "run=" in m[0] and "deployment=" in m[0] for m in mounts)
+    check(named == set(COMPONENTS) and scoped, f"/components/ mounts each component for a real entity, its entity in the .base URL's query ({sorted(named)}; scoped {scoped})")
+
+
+def component_browser_checks(page, base: str, still) -> None:
+    """In the browser: on /components/, each component mounted alone for its entity draws: the joint's links posed (robots ready) and the
+    camera's clip loaded and on its own clock."""
+    page.goto(f"{base}/components/")
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(1500)
+    got = {}
+    for name in COMPONENTS:
+        slot = page.locator(f"[data-component='{name}']").first
+        if not slot.count():
+            got[name] = "no slot"
+            continue
+        slot.scroll_into_view_if_needed()
+        page.wait_for_timeout(2500)
+        if name == "joint-3d":
+            ok = soft_wait(page, """() => { const s = document.querySelector("[data-component='joint-3d'] .dv-scene3d"); const h = s && s.scene3d;
+                return !!h && h.robot().state === 'ready' && Object.keys(h.robot().links || {}).length >= 2; }""", timeout=45000)
+            got[name] = ok
+        else:
+            ok = soft_wait(page, f"""() => {{ const v = document.querySelector("[data-component='{name}'] video[data-t0]"); return !!v && v.readyState >= 2; }}""", timeout=30000)
+            if ok:
+                page.evaluate(f"""() => {{ const d = document.querySelector("[data-component='{name}'] data-dashboard"); d.clock.pause(); d.clock.seek(1.0); }}""")
+                page.wait_for_timeout(1200)
+                v = page.evaluate(f"""() => {{ const v = document.querySelector("[data-component='{name}'] video[data-t0]"); return [v.currentTime, Number(v.dataset.t0)]; }}""")
+                ok = abs(v[0] - (1.0 - v[1])) <= 1 / 30 + 0.02
+            got[name] = ok
+    still("33-components")
+    check(all(v is True for v in got.values()) and len(got) == len(COMPONENTS), f"/components/: each component mounted alone for its entity draws and plays ({got})")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -1722,6 +1813,7 @@ def main() -> int:
     # the media (2026-11-07): the renders, the station models, every run's link poses, the camera runs' clips, and the pages that show them
     media = media_checks(out, data)
     media_page_checks(out, data, media)
+    component_checks(out, data, media)
     # the deployment tree, the run tags and the configuration snapshot (Zach, PROJECT - Sim2Real, Nov 5 2026)
     layout = deploy_tree_checks(data, out, doc)
     import tempfile  # noqa: PLC0415
@@ -2356,6 +2448,8 @@ def main() -> int:
             # 15. the media (2026-11-07): the cards' renders, the run's 3D robots at the clock's t, a camera run's two videos on the clock
             with guard("the media"):
                 media_browser_checks(page, base, data, media, still)
+            with guard("the media components"):
+                component_browser_checks(page, base, still)
 
             # 13. the deployment tree in the rail, every run flat, a run's configuration (Zach, PROJECT - Sim2Real, Nov 5 2026)
             with guard("the deployment tree in the rail"):
