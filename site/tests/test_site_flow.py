@@ -3367,7 +3367,9 @@ def reports_browser_checks(page, base: str, ctx: dict, still) -> None:
 
 def deployments_splitter_checks(page, base: str) -> None:
     """The run page's fix (077f9b7), asked of the deployments pages: with the right pane scrolled, no data-ui splitter outside the left
-    column shows over the trail (a rail's splitter placed in the page's coordinates would stay there once its rail scrolls away)."""
+    column shows over the trail (a rail's splitter placed in the page's coordinates would stay there once its rail scrolls away). WHY the
+    hit test and not the box: a splitter scrolled up inside the pane overlaps the trail's box but is clipped by the pane, unseen; what shows
+    is what the point hits (the run page's own check). It can fail: on a filmed run's page with the fix undone it does (2026-11-07)."""
     for u in ("/deployments/", f"/deployments/{DEP}/", f"/deployments/{DEP}/fdcanusb-0607623A/can11/", METRICS_URL):
         page.goto(base + u)
         page.wait_for_load_state("load")
@@ -3377,7 +3379,7 @@ def deployments_splitter_checks(page, base: str) -> None:
         over = page.evaluate("""() => { const trail = document.querySelector('.trail'); if (!trail) return null; const t = trail.getBoundingClientRect(); const y = (t.top + t.bottom) / 2;
             return [...document.querySelectorAll('.dv-splitter')].filter((s) => !s.hidden && !s.closest('aside') && s.getClientRects().length).map((s) => {
               const r = s.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, y);
-              return { left: Math.round(r.left), top: Math.round(r.top), over: !!hit && (hit === s || s.contains(hit)) || (r.top < t.bottom - 1 && r.bottom > t.top + 1 && r.left < t.right && r.right > t.left) }; }); }""")
+              return { left: Math.round(r.left), top: Math.round(r.top), over: !!hit && (hit === s || s.contains(hit)) }; }); }""")
         check(over is not None and not any(x["over"] for x in over),
               f"with {u}'s pane scrolled, no splitter outside the left column shows over the trail ({over})")
 
