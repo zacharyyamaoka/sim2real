@@ -154,6 +154,16 @@ ZHU_2025 = R("Zhu, Tanaka, Rafeedi, Hong (2025). Cycloidal quasi-direct drive ac
              "robotics. arXiv:2410.16591.", "https://arxiv.org/abs/2410.16591", kind="preprint",
              note="a longer history (a 30-step GRU) when ripple or backlash matter")
 
+# --- calibration procedures (2026-11-07) -----------------------------------------------------------------------------------------
+UR_CALIBRATION = R("Universal Robots, FZI (2026). ur_calibration: extract a UR's factory calibration and correct the URDF "
+                   "(Universal_Robots_ROS_Driver).", "https://github.com/UniversalRobots/Universal_Robots_ROS_Driver/tree/master/ur_calibration",
+                   kind="code", note="the robot's DH deltas, and calibration_correction's URDF correction: Zach's 'UR offset thing' (Nov 6)")
+KDL_NR = R("Orocos (2026). Kinematics and Dynamics Library: ChainIkSolverPos_NR.", "https://github.com/orocos/orocos_kinematics_dynamics",
+           kind="code", note="Newton-Raphson position IK on a chain, MoveIt's stock KDL solver: the scheme an IK fine-tune would follow")
+OPENCV_HANDEYE = R("OpenCV (2026). calib3d: calibrateHandEye (Tsai, Park, Horaud, Andreff, Daniilidis).",
+                   "https://github.com/opencv/opencv/blob/4.x/modules/calib3d/src/calibration_handeye.cpp", kind="code",
+                   note="the stock AX = XB solvers in one call")
+
 WEAR_LAW_REFERENCES = {
     "linear": (LU_MEEKER_1993, MEEKER_1998),
     "sqrt": (WHITMORE_1995, JUNKER_1969),

@@ -247,6 +247,95 @@ class CalibrationPackage:
     references: tuple[Reference, ...] = ()
 
 
+# --- calibration procedures (2026-11-07) ------------------------------------------------------------------------------------
+# WHY first-class (Zach, 2026-11-07, via the coordinator): "Any error is caused by errors in our model: the fidelity of the models and
+# the accuracy of the parameters ... this whole conversation is about what are the parameters and what are the methods we have to
+# calibrate those parameters." A package (CalibrationPackage) is Zach's grouping; a procedure is one way to run it, with its own
+# place, time, cost, equipment, excitation and oracle verdict, so two ways to find the same parameter compare row by row.
+
+# Where a procedure can run: a TestType's two SETTINGS, or both (a routine needing nothing the facility lacks).
+PROCEDURE_SETTINGS = ("bench", "deployed", "both")
+# identify: it returns parameter values; measure: it is a gauge (it reads a metric or a calibration constant, e.g. the camera dwell
+# ruler's output stop error); use: it consumes a calibration at run time (the IK fine-tune), identifying nothing.
+PROCEDURE_KINDS = ("identify", "measure", "use")
+PROCEDURE_STATUS = ("implemented", "partial", "not implemented")
+ESTIMATE = "estimate"  # a Quantity's source when nobody measured or published the number
+
+
+@dataclass(frozen=True)
+class Quantity:
+    """A number, its unit and where it comes from: a citation (a file, a datasheet, a measured run) or ESTIMATE."""
+    value: float | None
+    unit: str
+    source: str
+    note: str = ""
+
+    @property
+    def estimated(self) -> bool:
+        return self.source == ESTIMATE
+
+
+@dataclass(frozen=True)
+class Equipment:
+    """Something a procedure needs beyond the robot's own sensors; its cost is per item, in USD."""
+    id: str
+    title: str
+    cost: Quantity
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class Identifies:
+    """The parameters a procedure identifies on one card's rung (each a parameter of that rung, by name)."""
+    card: str
+    rung: str
+    parameters: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CalibrationProcedure:
+    """One way to calibrate parameters: where it runs, what it costs, what it needs, and how well it recovers a hidden truth.
+
+    The oracle verdict is not typed here: `oracle` names the sysid noise-ladder checks that run this procedure against the simulator's
+    hidden truth (sysid/noise_ladder.json, "<example>:<procedure id>"), and their verdicts are sysid's committed results
+    (sysid/results/noise_ladder.json, joined per procedure in sysid/results/calibration_procedures.json). WHY not a field holding the
+    numbers: type_cards is the spec and stdlib-only; a number computed by the oracle lives where the oracle's test holds it to the code.
+    """
+    id: str
+    title: str
+    package: str                          # the CalibrationPackage.id it is one way to run
+    identifies: tuple[Identifies, ...]    # () only for kind "use"
+    setting: str                          # PROCEDURE_SETTINGS
+    wall_time: Quantity                   # s, the whole procedure, set-up included
+    operator_time: Quantity               # s, a person's hands-on share of it
+    equipment: tuple[str, ...]            # EQUIPMENT ids; () = nothing beyond the robot's own sensors
+    excitation: str                       # the motion or input it needs
+    coverage: str                         # the share of which space it needs
+    repeats: int                          # how many times its measurement is taken (averaged or checked)
+    how: str
+    kind: str = "identify"                # PROCEDURE_KINDS
+    tests: tuple[str, ...] = ()           # TestType ids whose data it uses
+    code: tuple[CodeHome, ...] = ()       # where it is implemented; () = not implemented
+    status: str = "not implemented"       # PROCEDURE_STATUS
+    oracle: tuple[str, ...] = ()          # sysid noise-ladder check ids that run it; () = none (oracle_note says why)
+    oracle_note: str = ""
+    alternatives: tuple[str, ...] = ()    # procedures that identify the same parameters another way (they name this one back)
+    references: tuple[Reference, ...] = ()
+    note: str = ""
+
+
+def equipment_cost(procedure: CalibrationProcedure, equipment: Mapping[str, Equipment]) -> Quantity:
+    """The procedure's equipment cost: the sum of its items' costs, its source naming every item's (ESTIMATE where any is one)."""
+    items = [equipment[e] for e in procedure.equipment]
+    total = float(sum(item.cost.value or 0.0 for item in items))
+    if not items:
+        return Quantity(0.0, "USD", "nothing beyond the robot's own sensors")
+    estimated = [item.id for item in items if item.cost.source == ESTIMATE]
+    cited = [f"{item.id}: {item.cost.source}" for item in items if item.cost.source != ESTIMATE]
+    source = "; ".join(([f"{ESTIMATE} ({', '.join(estimated)})"] if estimated else []) + cited)
+    return Quantity(total, "USD", source)
+
+
 @dataclass(frozen=True)
 class DriftResult:
     status: str                          # ok | warning

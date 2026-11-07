@@ -54,9 +54,11 @@ def procedures():
 
 
 def exists(home) -> bool:
+    # WHY this repo's canonical path is read as the checkout under test: a worktree's new files are not in the main checkout until merged
+    repo = str(REPO) if home.repo == "/home/bam/sim2real" else home.repo
     if home.ref:
-        return subprocess.run(["git", "-C", home.repo, "cat-file", "-e", f"{home.ref}:{home.path}"], capture_output=True).returncode == 0
-    return (Path(home.repo) / home.path).exists()
+        return subprocess.run(["git", "-C", repo, "cat-file", "-e", f"{home.ref}:{home.path}"], capture_output=True).returncode == 0
+    return (Path(repo) / home.path).exists()
 
 
 # --- the shape ---------------------------------------------------------------------------------------------------------------
