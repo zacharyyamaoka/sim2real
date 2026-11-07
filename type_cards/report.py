@@ -6,8 +6,8 @@ the Reports is a great way to just see an overview fixed."
 
 A report's definition is a Python record, one per file: type_cards/frozen_reports/<id>.py (`record = Report(...)`, its rows by id). Its
 snapshot, type_cards/frozen_reports/<id>.json, is written once by freeze() and never edited: the definition, the selection computed over
-its runs (selection.compute), its models' records and its parameter rows as the parameters table held them, when, from which code, and a
-digest over all of it. A page reads the snapshot; nothing recomputes it, so a report never changes as data grows. Re-freezing is a new
+its runs (selection.compute), its models' records and its parameter rows as the parameters table held them, the titles and label map its
+page names them by (annotations), when, from which code, and a digest over all of it. A page reads the snapshot; nothing recomputes it, so a report never changes as data grows. Re-freezing is a new
 decision (a new snapshot, its own commit).
 
     python3 -m type_cards.report freeze <id> [--data /home/bam/sim2real/app/data]
@@ -75,8 +75,32 @@ def verify(snapshot: dict) -> bool:
     return snapshot.get("schema") == SCHEMA and snapshot.get("digest") == digest(snapshot)
 
 
-def freeze(report: Report, tables: sel.Tables, *, parameter_rows: list[dict], frozen_at: str, code: str) -> dict:
-    """The snapshot: a pure function of its inputs (frozen_at and code are passed in, never read here)."""
+def model_label_records(deployment: str, labels) -> dict[str, dict | None]:
+    """{label: {type, model, model_title} | None}: the ladder model each producer's label names on the deployment's record today
+    (instances.label_model, exact words); None for a label nobody mapped."""
+    from . import instances  # noqa: PLC0415
+
+    out = {}
+    for label in sorted(set(labels)):
+        m = instances.label_model(deployment, label)
+        out[label] = {"type": m.type, "model": m.model, "model_title": dm.model(m.type, m.model).title} if m else None
+    return out
+
+
+def annotations(report: Report, tables: sel.Tables, selection: dict, labels: dict | None) -> dict:
+    """What a report's page names beside its numbers, as it was at freeze: the deployment's and every computed node's title, and the
+    ladder model each model label in its results named. WHY in the snapshot (the v3 audit, 2026-11-07, finding 7): read from today's records,
+    renaming a station or remapping a label changed what a verified report said."""
+    wanted = {report.deployment} | {n["node"] for n in selection["nodes"]}
+    titles = {n["id"]: n.get("title") for n in tables.nodes if n["id"] in wanted}
+    used = {x["model"] for n in selection["nodes"] for x in n["metrics"] + n["diagnostics"] + n["gates"] if x.get("model")}
+    named = model_label_records(report.deployment, used) if labels is None else {label: labels.get(label) for label in sorted(used)}
+    return {"titles": titles, "model_labels": named}
+
+
+def freeze(report: Report, tables: sel.Tables, *, parameter_rows: list[dict], frozen_at: str, code: str, labels: dict | None = None) -> dict:
+    """The snapshot: a pure function of its inputs (frozen_at and code are passed in, never read here; `labels`, {label: its ladder model
+    record or None}, is read from the deployment's record when not given)."""
     selection = sel.compute(report.runs, tables, name=report.title)
     by_id = {r["id"]: r for r in parameter_rows}
     models = []
@@ -89,7 +113,8 @@ def freeze(report: Report, tables: sel.Tables, *, parameter_rows: list[dict], fr
                        "rows": [{k: r[k] for k in ROW_FIELDS if k in r} for r in used]},
             "results": {"selection": selection, "models": models,
                         "parameters": [by_id.get(pid) or {"id": pid, "missing": "not a row of the parameters table at freeze time"}
-                                       for pid in report.parameters]}}
+                                       for pid in report.parameters]},
+            "annotations": annotations(report, tables, selection, labels)}
     snap["digest"] = digest(snap)
     return snap
 

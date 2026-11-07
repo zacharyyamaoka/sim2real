@@ -489,8 +489,15 @@ run_diagnostics, coverage_points, floors, descriptions)` (`sel.load_tables(data,
 ```
 Report    id title question runs[run ids] models["<type>/<model>"] parameters[parameters-table row ids] deployment note
 snapshot  {schema "sim2real.domain/3#report", report{...}, frozen_at, code, inputs{runs_sha256 runs},
-           results{selection (sel.compute), models[Model], parameters[rows as the table held them]}, digest}
+           results{selection (sel.compute), models[Model], parameters[rows as the table held them]},
+           annotations{titles{node id: title}, model_labels{label: {type model model_title} | null}}, digest}
 ```
+
+`annotations` (2026-11-07, the v3 audit's finding 7) is what the page names beside the numbers, as it was at freeze: the title of the
+report's deployment and of every node it computed, and the ladder model each model label in its results named (`rep.model_label_records`:
+the deployment's record, `inst.label_model`; null for a label nobody mapped). Read from today's records, renaming a station or remapping a
+label changed what a verified report said. A snapshot frozen before it (the first three) has none: its page reads those from today's
+records and says so where they show, and claims only what is frozen (re-freezing them would be a new decision with new numbers).
 
 `rep.freeze(report, tables, parameter_rows=, frozen_at=, code=)` is pure; `python3 -m type_cards.report freeze <id>` writes the snapshot
 once, `rep.verify(snapshot)` checks its digest (over everything but the digest). A page reads the snapshot and never recomputes it, so a
