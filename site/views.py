@@ -42,6 +42,8 @@ sys.path.insert(1, str(REPO / "vendor" / "data-ui" / "dist" / "python"))
 import build_pages  # noqa: E402
 import data_ui_base  # noqa: E402
 
+import components  # noqa: E402  (site/components.py: the media as entity-scoped components)
+
 
 def rooted(value):
     """Every `data/…` path made `/data/…` (the .base files move from /app/ to /views/)."""
@@ -334,7 +336,7 @@ def station_coverage() -> dict:
     return scoped(with_voxels(doc, "Runs per cell · {device}"), 'device == "{device}"')
 
 
-def run_playback() -> dict:
+def run_playback(models: list[str] | None = None, robots: bool = True) -> dict:
     """The run's Playback, plus the gates' limits: T4's stop allocation on the error against the target and T2's 1.5x floor on
     each model's error against real (threshold_band, one rule pair per series), and the output link coloured by its distance
     from the target with T4's allocation as a tube round the target's path (path_overlay). The numbers are the station's,
@@ -362,7 +364,17 @@ def run_playback() -> dict:
     panels[at:at] = [{"text": "### Distance from the target\nThe real marker's path coloured by how far it is from the target at that instant "
                               "(the producer's err_mm: blue near, amber far), with T4's stop allocation at the marker as a tube round the target's path.", "w": 12},
                      {"view": "Output link · distance from the target", "w": 12, "h": 5}]
-    return doc
+    # WHY a component (the coordinator, 2026-11-07: the run page's next redesign drops the media in per entity level): the joint's 3D card is
+    # site/components.py's joint-3d, composed in place of build_pages' own card, the same views a page of any entity level mounts
+    return components.compose(doc, components.joint_3d(models or [])) if robots else doc
+
+
+def run_media(models: list[str] | None = None) -> dict:
+    """A run whose session filmed its station: the Playback plus the camera-clip and joint-render components side by side, right under
+    the playback bar (tools/build_media.py's media.json, PEP 0005's media rows). WHY two video cards and not data-ui's video-compare
+    overlay: the render is a front view of the joint's own frame, not the camera's calibrated pinhole, so an onion or a wipe would lay
+    unregistered pictures on each other; side by side they read as what they are."""
+    return components.compose(run_playback(models), components.clips_pair(), after="Playback")
 
 
 def run_why() -> dict:
@@ -465,6 +477,7 @@ PAGES = {
     "station-runs.base": ("a station's Runs tab", station_runs),
     "station-coverage.base": ("a station's Coverage tab", station_coverage),
     "run.base": ("a run's Playback tab", run_playback),
+    "run-media.base": ("a run's Playback tab when its session filmed it: the camera clip and the twin's render above the plots", run_media),
     "run-why.base": ("a run's Why it fails tab: its station's residual decomposition", run_why),
     "station-schedule.base": ("a station's Schedule tab: the test schedule before anything runs (bam_rack_twin.schedule)", station_schedule),
     "station-gates.base": ("a station's Gates tab: its gate history, every run's checks and their evidence", station_gates),
@@ -478,9 +491,22 @@ def files(site=None):
     import deploy_tree  # noqa: PLC0415
 
     levels = [f"node_{k}" for k in range(1, deploy_tree.depth(site) + 1)] if site is not None else []
-    for name, (what, make) in PAGES.items():
-        doc = rooted(make(levels) if name == "deployment-runs.base" else make())
+    # every model name a run plays, so the 3D card draws each translucent (data-ui keys a robot's look by its series)
+    models = sorted({s for r in (site.runs if site is not None else []) for s in r.get("situations", []) if s not in ("real", "target")})
+    # WHY no robots without the media: their link poses and link model are tools/build_media.py's (a site built without them keeps the paths)
+    media = getattr(site, "media", None) is not None
+    pages = dict(PAGES)
+    if media:
+        # each media component alone, mountable at any entity level: its entity in the .base URL's query (site/components.py)
+        for cname, cmake in components.COMPONENTS.items():
+            pages[f"components/{cname}.base"] = (f"the {cname} component alone: {cmake().what if cname != 'joint-3d' else cmake(models).what}",
+                                                 lambda cmake=cmake, cname=cname: components.standalone(cmake(models) if cname == "joint-3d" else cmake(),
+                                                                                                         style=copy.deepcopy(build_pages.STYLE)))
+    for name, (what, make) in pages.items():
+        if name == "run-media.base" and not media:
+            continue
+        doc = rooted(make(levels) if name == "deployment-runs.base" else make(models, media) if name == "run.base" else make(models) if name == "run-media.base" else make())
         text = (f"# sim2real · {what}\n# Written by site/views.py from tools/build_pages.py (do not edit by hand). static/sim2real.js fills "
-                f"{{deployment}}, {{run}}, {{station}} and {{device}}.\n") + data_ui_base.dumps(doc)
+                f"{{deployment}}, {{run}}, {{station}}, {{device}} and {{glb}}.\n") + data_ui_base.dumps(doc)
         assert data_ui_base.loads(text) == json.loads(json.dumps(doc)), f"{name}: the .base does not round-trip"
         yield f"views/{name}", text

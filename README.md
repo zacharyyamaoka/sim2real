@@ -34,6 +34,31 @@ Build the data (about 20 s; the twin replays are optional and take about 1.5 min
     uv run --no-project --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/app/tests/test_trajectory_contract.py --data --robotdx
 
+Then the media (about 9 minutes the first time on a quiet machine, then only what changed; a cache folder, never git), and the site:
+
+    env -u VIRTUAL_ENV MUJOCO_GL=egl /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/build_media.py
+    python3 /home/bam/sim2real/site/build.py
+
+`tools/build_media.py` writes `~/.cache/sim2real/media` (or `$SIM2REAL_MEDIA`), which the site serves at `/media/` (Zach, 2026-11-07: "a
+bit more media rich ... we can basically always have a 3D view ... in these cards I was hoping to see an image of the actual deployment"):
+
+| media | what | from |
+|---|---|---|
+| `scenes/<id>.jpg` | a MuJoCo render on top of each oracle card and each deployment | each sysid example's MJCF (`sysid.describe` composes it), the rack's cad2robot payload |
+| `<dep>/stations/<station>.glb` | the station's output link for the run page's 3D card | drawn from its twin's MJCF: the disc, the 100 mm marker, the twin's gravity load |
+| `<dep>/runs/<run>/links.json` | the link's pose per series at each t (data-ui's robotics `links` table) | the run's samples: a turn about the joint axis by each series' q |
+| `<dep>/runs/<run>/media.json`, `real_<serial>.mp4`, `sim.mp4` | where the session filmed the station: the camera cut onto the run's clock, beside MuJoCo's render of the link on the same frames | the session's D405 recording (`cameras/cam_<serial>.mp4` + its stamps), bam_rack_twin's camera map |
+
+A run with clips plays them on its Playback (`views/run-media.base`) above the 3D card; every run page says what you are looking at
+and, for each model it plays, what the model is and its parameters (its own MJCF, or the identification file's points). Built without
+the media, the site shows every page as before.
+
+The 3D view, the clips and the "what you're looking at" words are components scoped to an entity (`site/components.py`: `joint_3d` for a
+joint, `camera_clip` for a camera, `joint_render` for a joint; `what_joint` / `what_camera`), so a page drops them in per entity level (the
+run page's next redesign: an entity tree on the left, the selected level's dashboard on the right). Each is also a dashboard of its own,
+`views/components/<name>.base`, its entity in the URL's query (`?deployment=…&run=…&station=…&device=…&glb=…` or `&camera=…`);
+`/components/` mounts each one for a real entity. The run page is composed of the same views (`components.compose`).
+
 The run tables (`runs.json`, `devices.json`, and per run `samples`, `poses`, `diff_samples`, `diff_poses`) are data-ui's
 robotics contract v1 tables (`vendor/data-ui/gallery/robotics/CONTRACT.md`, CONTRACT §32), checked against its 13 schemas
 as they are written. `tools/trajectory.py` computes difference(a, b) and reproduces data-ui's fixture exactly.

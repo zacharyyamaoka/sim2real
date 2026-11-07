@@ -14,6 +14,8 @@ Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing her
     OUT/static/      robotparts' shell.js, site.js and site.css (pinned, byte for byte), analysis.css, the vendored
                      data-ui kit, sim2real's own sim2real.css / sim2real.js and its logo
     OUT/views/       the .base files each tab's dashboard reads (site/views.py), and /views/runs.base
+    OUT/media        a link to the media folder (tools/build_media.py: the cards' renders, each station's link model, every run's link
+                     poses and the camera runs' clips; --media, else $SIM2REAL_MEDIA, else ~/.cache/sim2real/media), when it is built
     OUT/<pages>      /, /<deployment>/, /<deployment>/<station>/, /<deployment>/runs/<run>/, /runs/, /search/,
                      /stations/, /deployments/, /analysis/…
 """
@@ -34,6 +36,7 @@ sys.path.insert(1, str(HERE / "vendor"))
 sys.dont_write_bytecode = True
 
 import adapter  # noqa: E402
+import media as site_media  # noqa: E402
 
 DEFAULT_OUT = pathlib.Path.home() / ".cache" / "sim2real" / "site"
 MARKER = ".sim2real-site"
@@ -107,9 +110,14 @@ def site_files(site):
         for example in landing.EXAMPLES:
             if example in oracle:
                 doc = oracle[example]
-                yield f"sysid/{example}/index.html", s2r.page(site, f"{doc['title']}: system-ID oracle", landing.url(example), landing.page_body(doc, oracle), "sysid",
+                yield f"sysid/{example}/index.html", s2r.page(site, f"{doc['title']}: system-ID oracle", landing.url(example), landing.page_body(doc, oracle, getattr(site, "media", None)), "sysid",
                                                               description=doc.get("summary", "")[:240],
                                                               trail=breadcrumb([s2r.ROOT_CRUMB, ("System-ID oracle", "/sysid/"), (doc["title"], landing.url(example))]))
+    if getattr(site, "media", None):
+        # the media components, each mounted alone for a real entity (site/components.py): the shelf a page per entity level takes them from
+        yield "components/index.html", s2r.page(site, "Components: sim2real", "/components/", pages.components_body(site), "components",
+                                                description="The media as entity-scoped components: a joint's link in 3D, a camera's clip, a joint's render.",
+                                                trail=breadcrumb([s2r.ROOT_CRUMB, ("Components", "/components/")]), data_ui=True)
     yield "search/suggest.json", s2r.suggest_index(site)
     yield from views.files(site)
     yield "views/runs.base", pages.runs_base(site)
@@ -127,7 +135,20 @@ def site_files(site):
         yield f"static/data-ui/{rel}", (adapter.KIT / rel).read_bytes()
 
 
-def build(data: pathlib.Path, out: pathlib.Path) -> dict:
+def link_media(root: pathlib.Path, out: pathlib.Path) -> site_media.Media | None:
+    """OUT/media -> the media folder, when tools/build_media.py has written one. WHY linked, never copied: its clips and link poses are
+    ~0.5 GB of build outputs, rebuilt by their own tool; WHY never from a worktree or this repo: a worktree's folder goes when it does,
+    and media are never committed."""
+    if not (root / "index.json").is_file():
+        print(f"site: no media at {root} (tools/build_media.py writes them): the pages show no render, link model or clip", file=sys.stderr)
+        return None
+    if adapter.in_worktree(root) or str(root.resolve()).startswith(str(adapter.REPO.resolve()) + "/"):
+        raise SystemExit(f"refusing to serve media from {root}: build them outside the repo and its worktrees (tools/build_media.py --out)")
+    os.symlink(root.resolve(), out / "media")
+    return site_media.load(out / "media")
+
+
+def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site_media.DEFAULT) -> dict:
     started = time.monotonic()
     adapter.check_kit()
     from catalog_workbench.build import build as workbench_build  # noqa: PLC0415
@@ -157,11 +178,15 @@ def build(data: pathlib.Path, out: pathlib.Path) -> dict:
     before = adapter.load(out / "data")
     overlay_counts = overlays.write(out / "data", lambda dep_id, row: pages.cell_href(before.deployment(dep_id), row))
     site = adapter.load(out / "data")
+    site.media = link_media(media_root, out)
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
               "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts,
               "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments),
+              "media": ({"root": str(media_root.resolve()), "scenes": len(site.media.scenes), "stations": len(site.media.stations),
+                         "links": sum(1 for r in site.runs if (site.media.runs.get(r["run"]) or {}).get("links")),
+                         "clips": sum(1 for r in site.runs if site.media.clips(r["run"]))} if site.media else None),
               "seconds": round(time.monotonic() - started, 1)}
     (out / ".sim2real-build.json").write_text(json.dumps(result, indent=1) + "\n")
     print(f"site: {result['files']:,} files, {result['bytes'] / 1e6:.1f} MB -> {out} in {result['seconds']} s "
@@ -173,13 +198,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--data", type=pathlib.Path, default=adapter.DATA, help=f"the app's data (default {adapter.DATA})")
     parser.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT, help=f"the site folder (default {DEFAULT_OUT})")
+    parser.add_argument("--media", type=pathlib.Path, default=site_media.DEFAULT, help=f"the media folder tools/build_media.py wrote (default {site_media.DEFAULT})")
     parser.add_argument("--repin", action="store_true", help="pin the data-ui kit vendor/data-ui/dist holds now (site/DATA_UI.json)")
     args = parser.parse_args(argv)
     if args.repin:
         pin = adapter.repin()
         print(f"pinned the vendored data-ui kit: manifest {pin['manifest_sha256'][:12]}, {pin['files']} files")
         return
-    build(args.data.resolve(), args.out.resolve())
+    build(args.data.resolve(), args.out.resolve(), args.media)
 
 
 if __name__ == "__main__":

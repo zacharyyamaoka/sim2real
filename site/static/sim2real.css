@@ -162,7 +162,7 @@
 .s2r-ex-no { color: var(--s2r-fail); }
 .s2r-ex-params { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; table-layout: fixed; }
 .s2r-ex-params th, .s2r-ex-params td { text-align: right; padding: 2px 4px; border-bottom: 1px solid var(--rule2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.s2r-ex-params th:first-child { text-align: left; width: 37%; font-weight: 500; }
+.s2r-ex-params th:first-child { text-align: left; width: 44%; font-weight: 500; }
 .s2r-ex-params th:first-child small { color: var(--ink3); }
 .s2r-ex-params .s2r-ex-m { width: 18px; text-align: center; padding: 0; }
 .s2r-ex-params thead th { color: var(--ink3); font-weight: 500; }
@@ -196,3 +196,37 @@
 @media (max-width: 520px) { .s2r-ex-grid { grid-template-columns: minmax(0, 1fr); } .s2r-ex { padding: 10px; } }
 .s2r-ex-rule { color: var(--ink3); }
 .s2r-ex-key { white-space: nowrap; }
+
+/* the media (2026-11-07, Zach: "in these cards I was hoping to see an image of the actual deployment ... more explanatory"): a MuJoCo
+   render on top of every oracle card and deployment, the line that says what you are looking at, each model in words */
+.s2r-shot { margin: 0 0 10px; }
+.s2r-shot img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; border: 1px solid var(--rule2); background: var(--bg2, #eef0f2); }
+.s2r-shot figcaption { font-size: 12px; color: var(--ink3); margin-top: 4px; }
+.s2r-ex > .s2r-shot { margin: -2px -4px 10px; }
+.s2r-hero { max-width: 760px; }
+.s2r-hero img { aspect-ratio: 16 / 10; }
+.s2r-headshot { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 16px; align-items: start; margin: 6px 0 8px; }
+.s2r-headshot .s2r-hero { margin: 0; }
+.s2r-headshot p:first-child { margin-top: 0; }
+@media (max-width: 760px) { .s2r-headshot { grid-template-columns: minmax(0, 1fr); } }
+.s2r-what { margin: 6px 0 8px; font-size: 14px; line-height: 1.45; max-width: 1100px; color: var(--ink); }
+.s2r-ex .s2r-what { font-size: 13px; color: var(--ink2, var(--ink)); margin: 6px 0 2px; }
+.s2r-model-what { margin: 2px 0 6px; font-size: 13px; color: var(--ink2, var(--ink)); }
+.tile .pic.s2r-tile-shot { padding: 0; }
+.pic img.s2r-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
+.s2r-models { margin: 22px 0 8px; }
+.s2r-models > .lede { max-width: 1000px; }
+.s2r-model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.s2r-model { border: 1px solid var(--rule2); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.s2r-model h3 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.s2r-model h3 small { font-weight: 400; font-size: 12px; overflow-wrap: anywhere; }
+.s2r-sim-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--data-series-2); flex: none; }
+.s2r-model-params { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.s2r-model-params th small { color: var(--ink3); font-weight: 400; }
+.s2r-model-params td { text-align: right; }
+.s2r-model-src { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--ink3); }
+@media (max-width: 520px) { .s2r-model-grid { grid-template-columns: minmax(0, 1fr); } }
+.s2r-param-what { color: var(--ink3); font-weight: 400; }
+.s2r-comp { margin: 22px 0 6px; }
+.s2r-comp h2 { margin-bottom: 4px; }
+.s2r-comp code { overflow-wrap: anywhere; }

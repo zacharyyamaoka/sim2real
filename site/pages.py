@@ -20,8 +20,10 @@ from catalog_workbench.home import Group, tile, tile_home
 from catalog_workbench.html import breadcrumb, e, plural, results_line
 
 import adapter
+import components
 import deploy_tree
 import landing
+import media as site_media
 import types_pages
 from adapter import Deployment, Site, Station, deployment_url, rewrite_links, run_url, station_key, station_url
 
@@ -206,12 +208,18 @@ def adapter_name(path: str) -> str:
 
 # --- the deployment ---------------------------------------------------------------------------------------------------
 
+def media_of(site) -> site_media.Media | None:
+    return getattr(site, "media", None)
+
+
 def deployment_header(site: Site, dep: Deployment) -> str:
     row = dep.row
     return f"""{record_json(deployment=dep.id, run="", station="", device="")}
 <h1>{e(row["title"])}</h1>
 <p class="sub">{e(row.get("kind") or "")} · {e(row.get("family") or "")} · {e(row.get("where") or "")}</p>
-<p>{e(row.get("summary") or "")}</p>
+<div class="s2r-headshot">{site_media.figure(media_of(site), dep.id, cls="s2r-shot s2r-hero", eager=True)}
+<div><p>{e(row.get("summary") or "")}</p>
+{site_media.what_deployment(row, media_of(site))}</div></div>
 {kpis([("Stations", str(row.get("stations"))), ("Real runs", f'{row.get("runs"):,}'), ("Runs with models", str(row.get("runs_with_models"))),
        ("Hours of real data", str(row.get("hours"))), ("Days", str(row.get("days"))), ("Last run", e(when(row.get("last_run")))),
        ("Config snapshots", config_coverage(dep.runs))])}
@@ -435,8 +443,15 @@ def run_header(site: Site, row: dict) -> str:
     dep = site.deployment(row["deployment"])
     best = (f'{e(row["best_model"])} {num(row.get("best_model_mrad"))} mrad from real' if row.get("best_model") else "no model replayed this run")
     verdict = row.get("verdict")
-    return f"""{record_json(deployment=row["deployment"], run=row["run"], station=station_key(row["device"]), device=row["device"], **limits(dep, row["device"]))}
+    media = media_of(site)
+    # WHY the station's link model and the clip's camera in the record: the joint-3d and camera-clip components read them as {glb} and
+    # {camera} (static/sim2real.js fills them from here; a component mounted alone reads them from its .base URL's query)
+    glb = (media.glb_url(row["deployment"], station_key(row["device"])) if media else None) or ""
+    camera = next((x.id for x in components.entities_of(row, media) if x.kind == "camera"), "")
+    return f"""{record_json(deployment=row["deployment"], run=row["run"], station=station_key(row["device"]), device=row["device"], glb=glb, camera=camera,
+                        **limits(dep, row["device"]))}
 <h1>{e(run_title(row))}</h1>
+{components.what_html(components.what_joint(row, media), components.what_camera(row, media))}
 <p class="sub">{e(when(row.get("started")))} · {e(row.get("kind") or "")} · {num(row.get("duration_s"))} s · {e(row.get("gains") or "")} · {e(row.get("compare") or "")}</p>
 <p class="s2r-runline"><span class="s2r-real">real</span> vs target {num(row.get("tracking_mrad"))} mrad · closest model: {best}{(" · twinned? " + chip(verdict)) if verdict else ""}</p>
 <p class="s2r-gline">{a(station_url(dep.id, row["device"]), row["device"])} gates: {gate_chips(dep, row["device"])}</p>
@@ -454,7 +469,10 @@ def config_line(row: dict) -> str:
 
 
 def run_playback(site, row: dict) -> str:
-    return dashboard("/views/run.base", f"{run_title(row)}: playback", own_url=True)
+    """The playback (with the camera clip and the twin's render when the run's session filmed it), then each model in words."""
+    media = media_of(site)
+    base = "/views/run-media.base" if media and media.clips(row["run"]) else "/views/run.base"
+    return dashboard(base, f"{run_title(row)}: playback", own_url=True) + site_media.models_section(row, media)
 
 
 def run_gates(site, row: dict) -> str:
@@ -522,14 +540,16 @@ def app_icon() -> str:
 def home_body(site: Site) -> str:
     groups = []
     deps = site.deployments
+    media = media_of(site)
+    # WHY the render (Zach, 2026-11-07: "in these cards I was hoping to see an image of the actual deployment")
     groups.append(Group("deployments", "Deployments", "/deployments/", len(deps),
-                        tuple(tile(deployment_url(d.id), d.row["title"], len(d.runs), app_icon()) for d in deps)))
+                        tuple(tile(deployment_url(d.id), d.row["title"], len(d.runs), site_media.thumb(media, d.id) or app_icon()) for d in deps)))
     tiles = tuple(tile(st.url, st.device, len(st.deployment.runs_of(st.device)),
                        f'<span class="pic" data-thumb>{strip_svg(st.deployment, st.device)}</span>') for st in site.stations)
     groups.append(Group("stations", "Stations", "/stations/", len(tiles), tiles))
     # the system-ID oracle (sysid/, site/landing.py): six robot descriptions in, a better model out, each against a hidden truth
     oracle = landing.load()
-    examples = tuple(tile(*t) for t in landing.tiles(oracle))
+    examples = tuple(tile(*t) for t in landing.tiles(oracle, media))
     if examples:
         groups.append(Group("examples", "Oracle examples", "/sysid/", len(examples), examples))
     frame = tile_home("sim2real: how close each twin is to its real hardware", "Choose", groups)
@@ -542,7 +562,7 @@ def home_body(site: Site) -> str:
                  [[e(when(r["started"])), a(run_url(r), r["title"]), a(station_url(r["deployment"], r["device"]), r["device"]), e(r.get("kind") or ""), e(r.get("compare") or "")]
                   for r in newest])
     return f"""{frame}
-{landing.section(oracle)}
+{landing.section(oracle, media)}
 {where}
 <h2>Newest runs</h2>{runs}<p>{a("/runs/", f"Every run ({len(site.runs):,})")}</p>
 <h2>Analysis</h2>
@@ -704,3 +724,39 @@ def analysis_list(site: Site, reports) -> str:
     return f"""<div class="an-listhead"><h1>Analysis</h1>
 <p class="an-lede">Standard analyses over every deployment's gates and runs, each one page built from the same tables as the record pages.</p></div>
 <ul class="s2r-analyses">{items}</ul>"""
+
+
+# --- the media components, each mounted alone for a real entity -------------------------------------------------------------------
+
+def components_body(site: Site) -> str:
+    """/components/: each media component (site/components.py) mounted alone for one real entity, its entity in its .base URL's query:
+    the shelf the run page's next redesign (an entity tree, the selected level's dashboard) takes them from."""
+    media = media_of(site)
+    if not media:
+        return "<h1>Components</h1><p>The media are not built (tools/build_media.py), so there is no component to show.</p>"
+    runs = sorted(site.runs, key=lambda r: r["started"], reverse=True)
+    joint_run = next((r for r in runs if r.get("models", 0) >= 2), runs[0])
+    # the clip: CAN 14's filmed waypoints run (its tag mid-frame in the camera's best light), else any run with clips
+    filmed = [r for r in runs if media.clips(r["run"])]
+    clip_run = next((r for r in sorted(filmed, key=lambda r: -r["duration_s"]) if r["device"] == "CAN 14" and r.get("kind") == "waypoints"),
+                    filmed[0] if filmed else None)
+    parts = []
+    joint = components.entities_of(joint_run, media)[0]
+    glb = media.glb_url(joint_run["deployment"], joint.station) or ""
+    entries = [("joint-3d", joint, joint_run, glb, "", components.joint_3d().what)]
+    if clip_run:
+        clip_joint, clip_camera = components.entities_of(clip_run, media)[:2]
+        entries += [("camera-clip", clip_camera, clip_run, "", clip_run["device"], components.camera_clip().what),
+                    ("joint-render", clip_joint, clip_run, "", "", components.joint_render().what)]
+    for name, entity, run, glb_url, device, what in entries:
+        label = f"{entity.kind} {entity.id}"
+        url = components.mount_url(name, entity, run["run"], glb=glb_url, device=device)
+        parts.append(f"""<section class="s2r-comp" id="{e(name)}"><h2>{e(name)} <small class="mut">· {e(label)}</small></h2>
+<p>{e(what[0].upper() + what[1:])}. Here: {a(run_url(run), run_title(run))}.</p>
+<p class="mut"><small>Mounted as <code>{e(url)}</code></small></p>
+{components.mount(name, entity, run["run"], glb=glb_url, device=device, label=f"{name} · {label}")}</section>""")
+    return f"""<h1>Components</h1>
+<p class="lede">The media as components scoped to an entity (site/components.py): a joint's link in 3D, a camera's clip, MuJoCo's render of a
+joint's link, and the words that say what you are looking at. Each is a data-ui dashboard of its own (its datasets the run's, filtered to its
+entity, its own clock), so a page drops it in at any entity level of a deployment's tree; the run page is composed of the same ones.</p>
+{"".join(parts)}"""
