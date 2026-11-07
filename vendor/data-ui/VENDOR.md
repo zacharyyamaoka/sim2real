@@ -2,15 +2,25 @@
 
 A built copy of data-ui, never edited here. Re-vendor it from data-ui; do not patch it in place.
 
-- **Source:** `/home/bam/data-ui` `main` @ `d5ede93` (2026-10-30, "test(perf oracle)": `integrate/packet` merged, the table `digits` fix cd5efe5, CONTRACT §36). Before: `integrate/packet` @ `006e9d5`, a trial.
-- **Built green:** `node build.mjs` (3.7 s); unit tests 756, 755 pass, 1 skipped, 0 fail (`node --test tests/unit/*.test.mjs tools/facets.test.mjs`).
-- **How it was built:** `git -C /home/bam/data-ui archive d5ede93 | tar -x -C <scratch>`, `node_modules` linked read-only from `/home/bam/data-ui/node_modules` (the same package-lock.json as d5ede93), `node build.mjs` in the scratch copy. Nothing in `/home/bam/data-ui` was written.
+- **Source:** `/home/bam/data-ui` branch `vendor/sim2real-d5ede93-s49` @ `190eba14` (2026-11-07): `main` @ `d5ede93` (the kit before, below) plus CONTRACT §49 backported (a table's `best`, column groups shown or hidden whole in Property visibility, `emptyGroups: hide`; on data-ui `main` as `69e6d5c4`). Before: `main` @ `d5ede93` (2026-10-30, "test(perf oracle)": `integrate/packet` merged, the table `digits` fix cd5efe5, CONTRACT §36).
+- **Built green:** `node bin/data-ui.mjs vendor 190eba14 --kit-dir dist --without site/ --also …` (data-ui's own vendor tool: a clean archive of the commit, built, every file checked against the build's manifest); on the branch, unit 764 tests, 761 pass, 3 skipped, 0 fail; `tests/browser/table_best_checks.py` 19/19; `table_oracle_checks.py` 111/111. The rebuilt d5ede93 code is byte for byte the kit before except §49's three files (`data-ui.js`, `data-ui.css`, `views/table.js`); lazy chunks differ in their hashed names only.
+- **How it was built:** in 2026-10-30's vendoring, `git -C /home/bam/data-ui archive d5ede93 | tar -x -C <scratch>`, `node_modules` linked read-only, `node build.mjs`; since 2026-11-07, data-ui's vendor tool (`VENDOR.json` beside this file records the commit and every file's sha256).
 - **`dist/`:** the build's `dist/` without `site/` and the `*.map` source maps (13 MB, 142 files). `dist/manifest.json` still lists the maps' hashes; the pages never load them. `dist/LICENSES.md` names every bundled npm package and its licence.
 - **`gallery/sim-to-real/`:** from `gallery/examples/sim-to-real/` at the same sha: `samples.json`, `media.json` + `media/`, `motors.json`, README.
 - **`gallery/robotics/`:** the producer-facing contract at the same sha: `CONTRACT.md`, `schemas/`, `fixture.py` and `fixtures/difference/`.
 - **`gallery/pid-tuning/media/ur5e_links.glb`:** from `gallery/examples/pid-tuning/media/` (Menagerie's UR5e meshes, BSD-3-Clause).
 
 To update: rebuild data-ui (or a newer branch), then replace `dist/` and `gallery/` wholesale, record the new commit here and re-pin the site (`python3 site/build.py --repin`).
+
+## Why a backport and not data-ui main (2026-11-07, the models/routines/parameters lane)
+
+sim2real's parameters view needed three things data-ui lacked (Zach, 2026-11-06: one column group per model, "color the models by row based on
+what has the lowest error", "filter what model results we are showing"). They are CONTRACT §49, landed on data-ui `main`. Vendoring `main` itself
+would also bring the 327 commits since d5ede93, and §47 among them changes a default: the one-row chrome folds a panel's tabs into a chip at
+390 px and draws the rail's facet headings differently, and sim2real's site test reaches the old chrome (measured on 2026-11-07: with main's kit
+the full site test failed "the filter bar sits left of the cards, by kind and by tags" and could not find the Why it fails panel by its tab at 390
+px). So this kit is d5ede93 with §49 alone; moving sim2real to data-ui `main` is its own lane (the site test's chrome locators, its pages' toolbars,
+the old app's flow test). Undo: re-vendor `d5ede93` and re-pin.
 
 ## What changed since a0b229b, and what the catalog-workbench site adopts (2026-10-29)
 

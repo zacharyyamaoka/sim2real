@@ -2881,13 +2881,15 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
     page.goto(f"{base}{model_url('integrated_servo', 'M4.dynamics.twin')}")
     page.wait_for_load_state("load")
     page.wait_for_timeout(600)
+    # WHY below the bar and not merely in the viewport: the site's bar is sticky, so a row scrolled to the very top sits under it, unread
     row = page.evaluate("""() => { const tr = document.getElementById('M4.dynamics.twin'); if (!tr) return null; const r = tr.getBoundingClientRect();
+        const bar = document.querySelector('header.top'); const b = bar ? bar.getBoundingClientRect().bottom : 0;
         const used = [...tr.querySelectorAll('td[data-col=used] a[data-node]')].map((a) => [a.dataset.node, a.dataset.how]);
-        return { top: r.top, bottom: r.bottom, vh: innerHeight, used, head: [...tr.closest('table').querySelectorAll('thead th')].map((t) => t.textContent.trim().toLowerCase()) }; }""")
-    check(bool(row) and 0 <= row["top"] < row["vh"] and ["rung", "model", "parameters", "adds", "identified here", "used on"] == row["head"][:6]
+        return { top: r.top, bottom: r.bottom, bar: b, vh: innerHeight, used, head: [...tr.closest('table').querySelectorAll('thead th')].map((t) => t.textContent.trim().toLowerCase()) }; }""")
+    check(bool(row) and row["bar"] - 1 <= row["top"] < row["vh"] and ["rung", "model", "parameters", "adds", "identified here", "used on"] == row["head"][:6]
           and any(h == "twin of record" for _n, h in row["used"]),
-          f"/models/integrated_servo/#M4.dynamics.twin opens with that row in view, under rung · model · parameters · adds · identified here · used on, "
-          f"used on the rack's twins of record ({row and (round(row['top']), row['head'][:6], row['used'][:2])})")
+          f"/models/integrated_servo/#M4.dynamics.twin opens with that row in view below the bar, under rung · model · parameters · adds · identified here · "
+          f"used on, used on the rack's twins of record ({row and (round(row['top']), round(row['bar']), row['head'][:6], sorted({h for _n, h in row['used']})[:4])})")
     still("60-models-servo")
     page.goto(f"{base}{model_url('rigid_body_chain')}")
     page.wait_for_load_state("load")
@@ -2960,6 +2962,7 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
     # with results, the rail on one deployment: exactly the models that graded its rows, each group's header over its columns
     page.goto(f"{base}/parameters/?deployment=pendulum_can11")
     page.wait_for_load_state("load")
+    soft_wait(page, f"() => {{ const s = ({PARAMS_JS})(); return !!s && s.matched !== null && s.cols.length > 0; }}")
     page.evaluate("(n) => document.getElementById('parameters-views').selectView(n)", "With results")
     soft_wait(page, f"() => {{ const s = ({PARAMS_JS})(); return !!s && s.view === 'With results' && s.matched > 0; }}")
     page.wait_for_timeout(600)
@@ -2996,6 +2999,7 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
     if layout.get("can11"):
         page.goto(f"{base}{node_url(layout['can11'])}")
         page.wait_for_load_state("load")
+        page.wait_for_timeout(600)
         link = page.locator("#models a[data-model-link='M4.dynamics.twin']").first
         link.scroll_into_view_if_needed()
         link.click()
@@ -3004,9 +3008,10 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
         except Exception:  # noqa: BLE001  (the check says where it went)
             pass
         page.wait_for_timeout(500)
-        top = page.evaluate("() => { const tr = document.getElementById('M4.dynamics.twin'); return tr ? tr.getBoundingClientRect().top : null; }")
-        check(page.url.endswith(model_url("integrated_servo", "M4.dynamics.twin")) and top is not None and 0 <= top < 900,
-              f"CAN 11's deployment page links its twin's model to that model's ladder row, in view ({page.url.split('/', 3)[-1]}, row at {top})")
+        top = page.evaluate("() => { const tr = document.getElementById('M4.dynamics.twin'); const bar = document.querySelector('header.top'); "
+                            "return tr ? [tr.getBoundingClientRect().top, bar ? bar.getBoundingClientRect().bottom : 0] : null; }")
+        check(page.url.endswith(model_url("integrated_servo", "M4.dynamics.twin")) and top is not None and top[1] - 1 <= top[0] < 900,
+              f"CAN 11's deployment page links its twin's model to that model's ladder row, in view below the bar ({page.url.split('/', 3)[-1]}, row at {top})")
 
     # a phone: no sideways scroll
     page.set_viewport_size({"width": 390, "height": 844})

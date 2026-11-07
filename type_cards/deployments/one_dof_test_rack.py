@@ -10,6 +10,7 @@ RT = "bam_ws src/dev/bam_rack_twin"
 # written in their friction law (LuGre in place of M3's Stribeck, weakening and capture, on every twin but the dataset study's) and in
 # holding the board's current ceiling (M5's kt_out and max_current: a config read) with no heat term. The coordinator's call ("Twin of
 # record is the M4.dynamics twin") and the servo card's own today's model (its nominals are CAN 11's twin lugre-d-M1-e37b0e7d) agree.
+# The options and why not M5 (the highest layer a term reaches): docs/decision-models-routines-parameters-2026-11-07.md.
 LUGRE = "LuGre (Canudas de Wit, Olsson, Astrom & Lischinsky 1995): bristle stiffness and damping, Coulomb and static levels, a Stribeck speed; plus viscous damping"
 CEILING = "it holds the board's current ceiling (M5's kt_out and max_current, a config read) and no heat term (thermal_r_c)"
 

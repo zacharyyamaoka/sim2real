@@ -346,10 +346,14 @@ def parameter_routines_dataset() -> dict:
             "rows": parameter_routine_rows()}
 
 
+def routines_base_properties() -> dict:
+    return {"recovery_1x": {"digits": 3}, "recovery_3x": {"digits": 3}}
+
+
 def routines_base() -> dict:
     order = ["title", "setting", "wall_time_s", "operator_time_s", "cost_usd", "equipment", "identifies", "n_parameters", "recovery_1x", "pass_1x",
              "recovery_3x", "pass_3x", "status", "kind", "package"]
-    return {"data": "/data/routines.json",
+    return {"data": "/data/routines.json", "properties": routines_base_properties(),
             "views": [{"type": "table", "name": "Routine → parameters", "order": order,
                        "columnSize": {"title": 300, "equipment": 220, "identifies": 360}}]}
 
@@ -493,20 +497,24 @@ def parameters_base(d: Data) -> dict:
     errs = [f"err__{keys[c['id']]}" for c in cols]
     size = {"name": 260, "deployment": 130, "entity_type": 130, "family": 96, "introduced_in": 190, **{k: 150 for k in ("fit_rec",)},
             **{f"rec__{keys[c['id']]}": 150 for c in cols}}
+    # WHY declared digits (data-ui §17 addendum): the stored numbers are exact (4.6611971558188605); a person reads 4 significant figures,
+    # as Zach's own table did ("4.205 mrad"), and the exact value stays one hover away
+    numbers = ["true", "nominal", "fit_rec", "fit_err"] + [f"{p}__{keys[c['id']]}" for c in cols for p in ("rec", "err")]
     return {
         "data": f"/data/{DATA_FILE}",
+        "properties": {pid: {"digits": 4} for pid in numbers},
         "facets": [{"as": "current", "label": "Your filters"},
                    {"property": "deployment", "label": "Deployment"}, {"property": "entity_type", "label": "Type"},
                    {"property": "family", "label": "Family"}, {"property": "models", "label": "Models with a result",
                                                                "info": "a (routine, model) column group: keeps the rows it graded; With results then draws its group and every other model that graded them"},
                    {"property": "winning", "label": "Winning model"}, {"property": "has_results", "label": "Has a result"}],
         "views": [
-            {"type": "table", "name": "All parameters", "order": base + ["true", "nominal"] + fit, "columnGroups": fit_group, "columnSize": size},
-            {"type": "table", "name": "Winning model", "filters": "winning == true", "order": base + ["true", "nominal"] + fit, "columnGroups": fit_group,
+            {"type": "table", "name": "All parameters", "units": "inline", "order": base + ["true", "nominal"] + fit, "columnGroups": fit_group, "columnSize": size},
+            {"type": "table", "name": "Winning model", "units": "inline", "filters": "winning == true", "order": base + ["true", "nominal"] + fit, "columnGroups": fit_group,
              "columnSize": size},
-            {"type": "table", "name": "With results", "filters": "has_results == true", "order": base + ["true", "nominal"] + [x for ids in groups.values() for x in ids],
+            {"type": "table", "name": "With results", "units": "inline", "filters": "has_results == true", "order": base + ["true", "nominal"] + [x for ids in groups.values() for x in ids],
              "columnGroups": groups, "emptyGroups": "hide", "columnSize": size},
-            {"type": "table", "name": "Errors only", "filters": "has_results == true", "order": ["name", "deployment", "true"] + errs,
+            {"type": "table", "name": "Errors only", "units": "inline", "filters": "has_results == true", "order": ["name", "deployment", "true"] + errs,
              "columnGroups": {column_label(c): [f"err__{keys[c['id']]}"] for c in cols}, "best": {"among": errs, "by": "absmin"},
              "emptyGroups": "hide", "columnSize": {"name": 260, "deployment": 130}},
         ],

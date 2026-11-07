@@ -14,6 +14,8 @@
 .s2r-use { overflow-wrap: anywhere; }
 /* WHY a tint on the row its anchor names (a deployment page's "models used here" lands on it): the reader sees which row was meant */
 .s2r-ladder tr:target > :is(th, td) { background: var(--accent-bg); }
+/* WHY a margin: the site's bar is sticky, so an anchored row scrolled to the very top would sit under it */
+.s2r-ladder tr[id] { scroll-margin-top: 84px; }
 .s2r-ei-lg { width: 22px; height: 22px; vertical-align: -3px; }
 .s2r-ei-lg svg { width: 22px; height: 22px; }
 
