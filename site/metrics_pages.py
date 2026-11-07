@@ -185,11 +185,14 @@ def labels(d: dpages.Domain, dep: str) -> dict[str, dict]:
     return out
 
 
-def model_words(label: str, mapped: dict) -> str:
-    """A producer's label and, where it maps to one, the ladder model it is, linked (the models lane's rows: /models/<type>/#<model>)."""
+def model_words(label: str, mapped: dict, as_: str = "", mark: str = "") -> str:
+    """A producer's label and, where it maps to one, the ladder model it is, linked (the models lane's rows: /models/<type>/#<model>).
+    `as_` says whose map that is (a report's: frozen, or today's) as data-as; `mark` is a word shown after the model (a report's "today")."""
     m = mapped.get(label)
     to = (f' <span class="mut">→</span> <a data-model-link="{e(m["model"])}" href="{e(m["url"])}"><code>{e(m["model"])}</code></a>' if m else "")
-    return f'<span data-label="{e(label)}" data-ladder="{e(m["model"] if m else "")}">{e(label)}{to}</span>'
+    if mark:
+        to += f' <small class="mut">{e(mark)}</small>'
+    return f'<span data-label="{e(label)}" data-ladder="{e(m["model"] if m else "")}"{f" data-as={chr(34)}{e(as_)}{chr(34)}" if as_ else ""}>{e(label)}{to}</span>'
 
 
 def spec(d: dpages.Domain, dep: str, presets: dict) -> dict:
