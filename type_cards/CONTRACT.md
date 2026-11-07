@@ -432,8 +432,8 @@ response under any config. Virtual deployments have no run rows yet.
        + per result column C: recovered@C ci95_lo@C ci95_hi@C interval@C error@C tolerance@C error_over_tolerance@C within@C ]}
 ```
 
-- Rows: every value the oracle graded (`<example>/<key>`: the example's own fit in `recovered`, `ci95_*`, `pass`), the 8 only the noise
-  ladder grades, and one row per parameter of every typed node no graded value binds (`<node id>#<parameter>`, values null; `nominal`
+- Rows: every value the oracle graded (`<example>/<key>`: the example's own fit in `recovered`, `ci95_*`, `pass`), the values only the noise
+  ladder grades (8 on the examples, and every value of a scenario: `ur5e_backlash`'s 4 joint gaps), and one row per parameter of every typed node no graded value binds (`<node id>#<parameter>`, values null; `nominal`
   null too, the type card's value apart in `type_nominal`: a v2 card's nominal is the instance it was written around, the servo's CAN 11's).
 - **Binding is per instance** (2026-11-07, the v3 audit's finding 4: keyed by deployment and type, one measured servo hid every unmeasured
   servo's rows beside it). `node` is where the value sits (the sysid tree's node; a ladder-only value, its deployment's one node of its type,
