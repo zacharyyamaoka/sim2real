@@ -167,8 +167,9 @@ def load_definitions() -> dict[str, Report]:
 def _code() -> str:
     repo = Path(__file__).resolve().parents[1]
     head = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
-    # WHY the snapshots are left out: freezing writes one, which is not the code it was computed with
-    dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--", "type_cards", ":!type_cards/frozen_reports/*.json"],
+    # WHY the reports are left out: freezing writes a snapshot, and (2026-11-07) freeze --id writes the report's definition first; neither
+    # is the code it was computed with
+    dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--", "type_cards", ":!type_cards/frozen_reports"],
                            capture_output=True, text=True).stdout.strip()
     return head + ("+dirty" if dirty else "")
 
