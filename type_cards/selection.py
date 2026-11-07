@@ -22,6 +22,7 @@ import hashlib
 import json
 import math
 import statistics
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -36,13 +37,15 @@ SCHEMA = "sim2real.domain/3#selection"
 class Tables:
     """What a selection reads, one deployment's: its v3 nodes (instances), runs.json's rows, RobotDx's per-run diagnostic rows
     (run_gates.json), the coverage table's points (coverage.json: the absolute output angle in degrees), each station's T1 floor in
-    mrad (gates.json) and each station's joint description (its live test schedule's)."""
+    mrad (gates.json) and each station's joint description (its live test schedule's); since 2026-11-07 the model-independent metrics
+    tools/run_metrics.py writes per run (run_metrics.json: RobotDx's catalog entries on each run's npz)."""
     nodes: list = field(default_factory=list)
     runs: list = field(default_factory=list)
     run_diagnostics: list = field(default_factory=list)
     coverage_points: list = field(default_factory=list)
     floors: dict = field(default_factory=dict)
     descriptions: dict = field(default_factory=dict)
+    run_metrics: list = field(default_factory=list)   # tools/run_metrics.py's rows (run_metrics.json), 2026-11-07, additive
 
 
 def aggregate(values: list[float], how: str) -> float | None:
@@ -66,12 +69,23 @@ def model_label(title: str) -> str:
     return title[:-len(" vs real")] if title.endswith(" vs real") else title
 
 
-def _metric_entries(spec: dm.MetricSpec, runs: list[dict], diags: dict, floor: float | None) -> list[dict]:
+def _metric_entries(spec: dm.MetricSpec, runs: list[dict], diags: dict, floor: float | None, measured: dict | None = None) -> list[dict]:
     base = {"metric": spec.id, "title": spec.title, "unit": spec.unit, "pinned": spec.pinned, "family": spec.family,
             "aggregate": spec.aggregate}
     src = spec.per_run
     if src is None:
         return [{**base, "model": None, "value": None, "low": None, "high": None, "n": 0, "source": "", "why": spec.why_not}]
+    if src.table == "run_metrics":
+        rows = [m for r in runs for m in (measured or {}).get(r["run"], ()) if m.get("metric") == spec.id]
+        values = [float(m["value"]) for m in rows if _number(m.get("value"))]
+        # WHY the producer's own words when no run has a value: "no dwell of 0.25 s or more" says why a sine has no stop error
+        whys = Counter(m.get("why") for m in rows if not _number(m.get("value")) and m.get("why"))
+        why = "" if values else (whys.most_common(1)[0][0] if whys else f"no selected run has a run_metrics.json row for {spec.id} (tools/run_metrics.py)")
+        # WHY the side beside the value: the stop error's title says "at the output", and the producer measures it on the encoder side (T4's
+        # partial); a page says which, never the title alone
+        sides = {m.get("side") for m in rows if _number(m.get("value")) and m.get("side")}
+        return [{**base, "model": None, **_summary(values, spec.aggregate), "source": f"run_metrics.json {spec.id}", "why": why,
+                 **({"side": sides.pop()} if len(sides) == 1 else {})}]
     if src.table == "runs":
         values = [float(r[src.column]) for r in runs if _number(r.get(src.column))]
         return [{**base, "model": None, **_summary(values, spec.aggregate), "source": f"runs.json {src.column}",
@@ -108,24 +122,27 @@ def _summary(values: list[float], how: str) -> dict:
     return {"value": aggregate(values, how), "low": float(min(values)), "high": float(max(values)), "n": len(values)}
 
 
-def _gates(t: dm.EntityType, entries: dict) -> list[dict]:
+def _gates(t: dm.EntityType, entries: dict, limits: dict | None = None) -> list[dict]:
     out = []
     diags = {d.id: d for d in t.diagnostics}
     for g in t.gates:
         d = diags.get(g.diagnostic)
         metric = d.metric if d else ""
+        unit_target = ((limits or {}).get(g.diagnostic) or {}).get("target")
         for e in entries.get(metric, [{"model": None, "value": None}]):
             value = e["value"]
             if value is None:
                 verdict, why = "not_run", "no value from the selected runs"
-            elif g.target.value is None:
+            elif g.target.value is None and unit_target is None:
                 verdict, why = "unknown", f"its target is set per unit ({g.target.note or 'no value'})"
             else:
-                verdict, why = reg.gate_status(g, value), ""
+                # WHY a unit's target (2026-11-07): the T4 gate's target is the joint's own allocation, set on the deployment's record
+                verdict, why = reg.gate_status(g, value, None if g.target.value is not None else unit_target), ""
             # WHY "statistic": the gate's target on this selection's aggregate, never bam_rack_twin's acceptance statistic (T2 pools its
             # held-out set its own way); the acceptance verdicts stay gates.json's
             out.append({"gate": g.id, "diagnostic": g.diagnostic, "metric": metric, "model": e["model"], "verdict": verdict, "value": value,
-                        "target": g.target.text(), "acceptance": g.acceptance, "statistic": "the selection's aggregate (its metric's)", "why": why})
+                        "target": g.target.text(), "acceptance": g.acceptance, "statistic": "the selection's aggregate (its metric's)", "why": why,
+                        **({"target_value": unit_target} if g.target.value is None and unit_target is not None else {})})
     return out
 
 
@@ -173,16 +190,18 @@ def compute(run_ids, tables: Tables, name: str = "") -> dict:
     found = [i for i in ids if i in by_run]
     diags = _index(tables.run_diagnostics)
     points = _index(tables.coverage_points)
+    measured = _index(tables.run_metrics)
     devices = {by_run[i]["device"] for i in found}
     out_nodes = []
     for node in sorted((n for n in tables.nodes if n.get("device") in devices and n.get("entity_type")), key=lambda n: n["id"]):
         t = dm.TYPES[node["entity_type"]]
         runs = [by_run[i] for i in found if by_run[i]["device"] == node["device"]]
         floor = tables.floors.get(node["device"])
+        limits = node_limits(node)
         entries: dict[str, list[dict]] = {}
         metrics = []
         for spec in t.metrics:
-            got = _metric_entries(spec, runs, diags, floor)
+            got = _metric_entries(spec, runs, diags, floor, measured)
             entries[spec.id] = got
             metrics += got
         rows = []
@@ -190,14 +209,93 @@ def compute(run_ids, tables: Tables, name: str = "") -> dict:
             if d.units != "metric":
                 continue  # a drift check needs its calibrated or commissioned value, which a selection alone does not hold
             for e in entries.get(d.metric, []):
-                rows.append(dm.diagnostic_row(d, e["value"], subject=node["id"], metric=d.metric, model=e["model"], runs=e["n"],
-                                              device=node["device"], hint="threshold_band"))
+                rows.append(dm.diagnostic_row(d, e["value"], subject=node["id"], limits=level_limits(limits.get(d.id)), metric=d.metric,
+                                              model=e["model"], runs=e["n"], device=node["device"], hint="threshold_band"))
         out_nodes.append({"node": node["id"], "device": node["device"], "entity_type": t.id, "runs": len(runs), "metrics": metrics,
-                          "diagnostics": rows, "gates": _gates(t, entries),
+                          "diagnostics": rows, "gates": _gates(t, entries, limits),
                           "coverage": _coverage(t, node["device"], {r["run"] for r in runs}, tables, points)})
     return {"schema": SCHEMA, "name": name, "runs": len(found), "run_ids": found,
             "run_ids_sha256": hashlib.sha256("\n".join(found).encode()).hexdigest(), "unknown_runs": [i for i in ids if i not in by_run],
             "nodes": out_nodes}
+
+
+def node_limits(node: dict) -> dict[str, dict]:
+    """A node's per-unit limits by diagnostic id (deployments.json `limits`: one record per diagnostic, instances.unit_limits)."""
+    return {x["diagnostic"]: x for x in (node.get("limits") or [])}
+
+
+def level_limits(limit: dict | None) -> dict[str, float]:
+    """The {"warn": v, "error": v} that domain.level and diagnostic_row take, from one of a node's limit records."""
+    return {k: float(limit[k]) for k in ("warn", "error") if limit and limit.get(k) is not None}
+
+
+# --- the browser's metrics rule -------------------------------------------------------------------------------------------------------
+
+METRIC_VALUE_FIELDS = (("run", "string"), ("node", "string"), ("device", "string"), ("entity_type", "string"), ("metric", "string"),
+                       ("model", "string"), ("value", "number"))
+
+
+def metric_values(tables: Tables) -> dict:
+    """The run x metric table the browser aggregates (CONTRACT, "Domain model v3"): one row per (run, typed node at the run's device, metric,
+    model) whose per-run value is a finite number, exactly the values compute() reads (each fidelity value already ÷ the station's T1 floor).
+    WHY a projection, as coverage_cells is: the page reads one table whatever the source (runs.json, run_gates.json, run_metrics.json)."""
+    diags = _index(tables.run_diagnostics)
+    measured = _index(tables.run_metrics)
+    by_device: dict = {}
+    for n in tables.nodes:
+        if n.get("device") is not None and n.get("entity_type"):
+            by_device.setdefault(n["device"], []).append(n)
+    rows = []
+    for run in sorted(tables.runs, key=lambda r: r["run"]):
+        for node in sorted(by_device.get(run.get("device"), []), key=lambda n: n["id"]):
+            for spec in dm.TYPES[node["entity_type"]].metrics:
+                for model, value in _run_values(spec, run, diags, measured, tables.floors.get(node["device"])):
+                    rows.append({"run": run["run"], "node": node["id"], "device": node["device"], "entity_type": node["entity_type"],
+                                 "metric": spec.id, "model": model, "value": value})
+    return {"name": "metric_values", "title": "Every run's value of every metric, per node and model", "contract": dm.SCHEMA,
+            "rule": "a metric over a selection = its aggregate (data-ui's summary of that name: median by default) over the values of rows whose "
+                    "`run` is selected, per (node, metric, model), with min, max and the count beside it (selection.metrics_from_values)",
+            "schema": {"fields": [{"name": f, "type": t} for f, t in METRIC_VALUE_FIELDS]}, "rows": rows}
+
+
+def _run_values(spec: dm.MetricSpec, run: dict, diags: dict, measured: dict, floor: float | None) -> list[tuple[str | None, float]]:
+    """One run's (model, value) pairs of a metric, by its per_run source: _metric_entries' rule for a selection of one."""
+    src = spec.per_run
+    if src is None:
+        return []
+    if src.table == "runs":
+        return [(None, float(run[src.column]))] if _number(run.get(src.column)) else []
+    if src.table == "run_metrics":
+        return [(None, float(m["value"])) for m in measured.get(run["run"], ()) if m.get("metric") == spec.id and _number(m.get("value"))]
+    out = []
+    for d in diags.get(run["run"], ()):
+        if d.get("diagnostic") != src.diagnostic or not _number(d.get("value")):
+            continue
+        value = float(d["value"])
+        if src.divide_by == "floor":
+            if not floor:
+                continue
+            value /= floor
+        out.append((model_label(d.get("title", "")) if src.per_model else None, value))
+    return out
+
+
+def metrics_from_values(rows, run_ids) -> dict[tuple, dict]:
+    """The browser's rule in Python: {(node, metric, model): {value, low, high, n}} over the rows whose run is selected, the value being the
+    metric's aggregate (tests/test_selection.py holds it equal to compute()'s for every subset of a fixture)."""
+    ids = set(run_ids)
+    groups: dict[tuple, list[float]] = {}
+    types: dict[tuple, str] = {}
+    for r in rows:
+        if r["run"] in ids:
+            key = (r["node"], r["metric"], r["model"])
+            groups.setdefault(key, []).append(float(r["value"]))
+            types[key] = r["entity_type"]
+    out = {}
+    for key, values in groups.items():
+        spec = dm.metric(types[key], key[1])
+        out[key] = _summary(values, spec.aggregate if spec else "median")
+    return out
 
 
 # --- the browser's coverage rule ------------------------------------------------------------------------------------------------------
@@ -212,9 +310,15 @@ def coverage_cells(tables: Tables) -> dict:
     reachable and how many points fell in it; reachable_cells per device is the denominator. Devices with a joint description only."""
     rows = []
     reachable = {}
+    grid = {}
     for device, desc in sorted(tables.descriptions.items()):
         edges, reach = _grid(desc)
         reachable[device] = len(reach)
+        # WHY the grid (2026-11-07, additive): a page draws where the joint can go and where a selection went (the coverage heatmap) from the
+        # same cells it counts; the axes are the card's own (coverage.joint_edges: q relative to the joint's origin, rad)
+        grid[device] = {"axes": [{"name": name, "unit": unit, "edges": [float(x) for x in e]}
+                                 for (name, unit), e in zip((("q", "rad"), ("qd", "rad/s"), ("qdd", "rad/s^2")), edges)],
+                        "reachable": sorted(",".join(map(str, c)) for c in reach)}
         counts: dict = {}
         for p in tables.coverage_points:
             if p.get("device") != device:
@@ -227,7 +331,7 @@ def coverage_cells(tables: Tables) -> dict:
                  for (run, cell), n in sorted(counts.items())]
     return {"name": "coverage_cells", "rule": "coverage of a selection = distinct `cell` values of rows whose `run` is selected and `reachable` is "
             "true, per device, ÷ reachable_cells[device], as a % to 2 decimals (selection.coverage_from_cells)",
-            "reachable_cells": reachable, "rows": rows}
+            "reachable_cells": reachable, "grid": grid, "rows": rows}
 
 
 def coverage_from_cells(rows, run_ids, reachable_cells: dict) -> dict[str, float]:
@@ -281,4 +385,5 @@ def load_tables(data: Path, deployment: str, schedules: Path | None = None, node
     if nodes is None:
         nodes = [n for n in instances.physical_nodes(Path(data)) if n["root"] == deployment]
     return Tables(nodes=nodes, runs=_rows(folder / "runs.json"), run_diagnostics=_rows(folder / "run_gates.json"),
-                  coverage_points=_rows(folder / "coverage.json"), floors=floors, descriptions=descriptions)
+                  coverage_points=_rows(folder / "coverage.json"), floors=floors, descriptions=descriptions,
+                  run_metrics=_rows(folder / "run_metrics.json"))

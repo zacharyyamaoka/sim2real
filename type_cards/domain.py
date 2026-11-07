@@ -171,8 +171,9 @@ class ParameterSpec:
 @dataclass(**KW)
 class RunSource:
     """Where one run's value of a metric is read: a runs.json column, or RobotDx's per-run diagnostic rows (run_gates.json), one per
-    model when `per_model`, divided by the station's T1 floor when `divide_by` is "floor"."""
-    table: Literal["runs", "run_diagnostics"]
+    model when `per_model`, divided by the station's T1 floor when `divide_by` is "floor", or (2026-11-07, additive) the model-independent
+    metrics tools/run_metrics.py writes per run (run_metrics.json, RobotDx's catalog entries on the run's npz), keyed by the metric's id."""
+    table: Literal["runs", "run_diagnostics", "run_metrics"]
     column: str = ""
     diagnostic: str = ""
     per_model: bool = False
@@ -315,6 +316,22 @@ class ModelLabel:
 
 
 @dataclass(**KW)
+class UnitLimit:
+    """One unit's value of a limit its type's diagnostic leaves per unit (`Limit.value` None): the servo's stop error against the joint's
+    share of the 5 mm tool gate, the board's loop rate against its expected rate less 10 %. `warn` and `error` are the diagnostic's sides
+    (domain.level's `limits`), `target` its gate's (registry.gate_status's `limit`); each None where the unit sets none. WHY a record on
+    the deployment (2026-11-07, the metrics lane): a unit's limit is a fact of the machine it is in, cited to where its producer keeps it,
+    and "unknown stays unknown" until one is written here (never a type's guess)."""
+    device: str                                # the unit (runs.json `device`: "CAN 11")
+    diagnostic: str                            # a DiagnosticSpec id of the type of the node at that device ("servo.stop_error.dx")
+    warn: float | None = None
+    error: float | None = None
+    target: float | None = None
+    source: str                                # where the number comes from (a file and its constant)
+    note: str = ""
+
+
+@dataclass(**KW)
 class PhysicalDeployment:
     """The v3 part of a physical deployment's record (type_cards/deployments/<id>.py, one per file). Its producer fields (archive days,
     the bam_rack_twin record, the schedule index) stay in app/registry.json, where the producer lanes keep them."""
@@ -323,6 +340,7 @@ class PhysicalDeployment:
     cameras: tuple[CameraDecl, ...] = ()
     note: str = ""
     models: tuple[ModelLabel, ...] = ()        # its producer's model labels and the ladder model each is (2026-11-07, additive)
+    limits: tuple[UnitLimit, ...] = ()         # each unit's value of a limit its type sets per unit (2026-11-07, additive)
 
 
 # --- the migration from the v2 cards --------------------------------------------------------------------------------------------------
@@ -483,8 +501,34 @@ PER_RUN = {
                                                            note="run_gates.json: RobotDx stock.model_error per model (twin vs real RMS, mrad) ÷ "
                                                                 "the station's T1 floor (gates.json)"),
     ("foc_controller", "driver.loop_rate"): RunSource(table="runs", column="rate_hz", note="runs.json: the run's achieved sample rate"),
+    # WHY RobotDx's catalog entries (2026-11-07, the metrics lane): the metric's `robotdx` id is the entry, its default config the definition
+    # (io-diagnostics robotdx/diagnostics/defaults.py), run on the run's npz by RobotDx's rack loader, the loader and dwell scan bam_rack_twin's
+    # T4 uses (stop_accuracy.py), so one stop means one thing in T4, RobotDx and here
+    ("integrated_servo", "servo.stop_error"): RunSource(table="run_metrics", note="run_metrics.json (tools/run_metrics.py): RobotDx servo.stop_error "
+                                                        "per run, the p90 of |q - q_target| at the end of every dwell of 0.25 s or more followed by "
+                                                        "motion (the last 50 ms), the prelude dropped; measured on the encoder side (T4's partial)"),
+    ("foc_controller", "driver.saturation"): RunSource(table="run_metrics", note="run_metrics.json (tools/run_metrics.py): RobotDx driver.saturation "
+                                                       "per run, the share of rows the board reports on its torque cap (moteus limiter code 102), in %"),
 }
 WHY_NOT_RUN = "no producer writes it per run yet; the type card says how it is measured"
+# WHY a reason per metric for the rack's parts (2026-11-07, the metrics lane): with the stop error and the saturation computed per run, the
+# model-independent metrics left without a value are the ones the runs cannot give; each says what is missing, read off the run files
+# (the npz channels: t q q_target qd qd_target tau i_q i_d mode fault temp_c voltage power_w wall, rotor_rev on some)
+WHY_NOT = {
+    ("foc_controller", "driver.current_tracking"): "the board logs its q current (i_q) but not the current it was commanded: in position mode "
+                                                   "its own loop sets that command, and no run records it",
+    ("bldc_motor", "motor.envelope"): "needs the motor's datasheet speed-torque curve at each run's bus voltage beside its top speed and torque; "
+                                      "no producer joins them per run (T7's envelope sessions measure the top speed)",
+    ("bldc_motor", "motor.torque_truth"): "needs a torque measured apart from the board's (a load cell or a known load, T6); no run records one",
+    ("gearbox", "gearbox.lost_motion"): "needs the input held and the torque reversed (T5's hysteresis loop); the board's one encoder is on the "
+                                        "rotor, so a run cannot see the gap at the output",
+    ("gearbox", "gearbox.transmission_error"): "needs the output angle apart from the input's: the board's one encoder is on the rotor, so the "
+                                               "output a run logs is the rotor over the ratio",
+    ("gearbox", "gearbox.efficiency"): "needs input and output power apart (a dyno); a run logs the board's power only",
+    ("encoder", "encoder.output_agreement"): "needs the output's own angle on the run's clock (the camera's tag angle); the filmed runs' tag "
+                                             "angles are not extracted per run yet",
+    ("encoder", "encoder.homing"): "is measured across power cycles (the zero each boot reports), not within one run",
+}
 COMPONENTS = {"integrated_servo": ("joint-3d", "joint-render"), "camera": ("camera-clip",), "depth_camera": ("camera-clip",)}
 COVERAGE_FROM_RUNS = {"integrated_servo"}
 REACHABLE = {"servo": "computed: the joint can hold the cell's centre and brake before its range ends (coverage.joint_reachable)",
@@ -621,7 +665,7 @@ def _metrics(tid: str) -> tuple[MetricSpec, ...]:
             src = PER_RUN.get((tid, mid))
             seen[mid] = MetricSpec(id=mid, type=tid, family=m.family, title=m.title, unit=m.unit, defined_on=m.defined_on,
                                    pinned=mid in PINNED[tid], model_dependent=m.family == "fidelity", aggregate="median", per_run=src,
-                                   why_not="" if src else WHY_NOT_RUN, robotdx=m.robotdx, normalised=m.normalised, acceptance=m.gate,
+                                   why_not="" if src else WHY_NOT.get((tid, mid), WHY_NOT_RUN), robotdx=m.robotdx, normalised=m.normalised, acceptance=m.gate,
                                    today=m.today, legacy=((card_id, m.id),))
     pinned = [seen[i] for i in PINNED[tid]]
     return tuple(pinned + [m for m in seen.values() if not m.pinned])

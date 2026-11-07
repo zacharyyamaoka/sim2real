@@ -694,6 +694,11 @@ def elsewhere(d: Domain, node: dict) -> str:
         links.append(pages.a(node["page"], f"{label_of(node)}'s station page: its gates, why it fails, its schedule"))
     if node.get("entity_type"):
         links.append(f"{type_link(node['entity_type'])}: the type card, its metrics and model ladder")
+    rows = d.run_rows(node)
+    if rows:  # the metrics lane (2026-11-07): its runs on the metrics page, its stations picked in the rail (data-ui's readable URL)
+        devices = sorted({r["device"] for r in rows}, key=lambda x: (len(x), x))
+        pick = "" if node["parent"] is None else "?" + urlencode({"device": ",".join(devices)})
+        links.append(pages.a(f"/metrics/{node['root']}/{pick}", "Its metrics, diagnostics and coverage over any selection of its runs"))
     return f'<p class="s2r-else">{" · ".join(links)}</p>' if links else ""
 
 

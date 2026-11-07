@@ -234,3 +234,123 @@ def test_on_the_rack_every_station_divides_by_its_own_t1_row():
     t10 = {g["device"]: g["value"] for g in gates if g["gate"].split()[0] == "T10" and isinstance(g.get("value"), (int, float))}
     assert "CAN 12" in t10 and t10["CAN 12"] != t1["CAN 12"], "the case that tells T1 from T10 is on the rack (CAN 12)"
     assert tables.floors == pytest.approx(t1)
+
+
+# --- model-independent metrics per run (the run_metrics producer) and per-unit limits (2026-11-07, the metrics lane) -------------------
+# Zach (2026-11-06): diagnostics "are basically like metrics + gate that reports warning or error ... we can calculate these metrics on a per
+# run basis ... but also accross all the runs". Before this, no producer wrote a model-independent diagnostic per run, so the run page's dots
+# read unknown: the stop error had no per-run value, and the board's loop rate a value with no limit (its limit is per unit). tools/
+# run_metrics.py now writes <dep>/run_metrics.json (RobotDx's catalog entries servo.stop_error and driver.saturation per run), and a physical
+# deployment's record sets each unit's limits (type_cards/deployments/<id>.py `limits`), which instances puts on its nodes.
+
+RUN_METRICS = [
+    {"run": "r1", "device": "A", "metric": "servo.stop_error", "value": 2.0, "unit": "mrad", "n": 4},
+    {"run": "r2", "device": "A", "metric": "servo.stop_error", "value": 5.0, "unit": "mrad", "n": 6},
+    {"run": "r3", "device": "A", "metric": "servo.stop_error", "value": None, "unit": "mrad", "n": 0, "why": "no dwell of 0.25 s or more followed by motion"},
+    {"run": "r1", "device": "A", "metric": "driver.saturation", "value": 0.0, "unit": "%", "n": 100},
+    {"run": "r2", "device": "A", "metric": "driver.saturation", "value": 3.0, "unit": "%", "n": 100},
+    {"run": "r3", "device": "A", "metric": "driver.saturation", "value": 1.0, "unit": "%", "n": 100},
+    {"run": "r4", "device": "B", "metric": "servo.stop_error", "value": 9.0, "unit": "mrad", "n": 2},
+]
+# WHY a list of records on a node (deployments.json `limits`): the house table's column types are the robotics contract's words (string,
+# number, integer, boolean, array), so a node's limits are an array, one record per diagnostic it sets (sel.node_limits reads them by id)
+LIMITS = {"rig/a": [{"diagnostic": "servo.stop_error.dx", "warn": 3.6, "target": 3.6, "source": "the fixture"}],
+          "rig/a/driver": [{"diagnostic": "driver.loop_rate.dx", "warn": 90.0, "source": "the fixture"}]}
+
+
+def with_limits(nodes=NODES, limits=LIMITS):
+    return [{**n, "limits": limits.get(n["id"], [])} for n in nodes]
+
+
+@pytest.fixture()
+def unit_tables():
+    return sel.Tables(nodes=with_limits(), runs=RUNS, run_diagnostics=DIAGNOSTICS, coverage_points=COVERAGE, floors={"A": 2.0, "B": 1.0},
+                      descriptions={"A": DESC_A}, run_metrics=RUN_METRICS)
+
+
+def test_run_metrics_feed_the_stop_error_and_the_saturation(unit_tables):
+    out = sel.compute(["r1", "r2", "r3"], unit_tables)
+    a = node(out, "rig/a")
+    stop = metric(a, "servo.stop_error")
+    assert (stop["value"], stop["low"], stop["high"], stop["n"]) == (3.5, 2.0, 5.0, 2)   # median of 2 and 5; r3 has no stop
+    assert stop["source"].startswith("run_metrics.json") and stop["why"] == ""
+    sat = metric(node(out, "rig/a/driver"), "driver.saturation")
+    assert (sat["value"], sat["n"]) == (1.0, 3)
+    none = metric(node(sel.compute(["r3"], unit_tables), "rig/a"), "servo.stop_error")
+    assert none["value"] is None and "dwell" in none["why"], "a run with no stop says why, in the producer's words"
+
+
+def test_a_units_limits_give_the_diagnostics_their_levels(unit_tables):
+    a = node(sel.compute(["r1", "r2", "r3"], unit_tables), "rig/a")
+    stop = next(d for d in a["diagnostics"] if d["diagnostic"] == "servo.stop_error.dx")
+    assert (stop["level"], stop["value"], stop["warn_hi"]) == ("ok", 3.5, 3.6)
+    assert next(d for d in node(sel.compute(["r2"], unit_tables), "rig/a")["diagnostics"] if d["diagnostic"] == "servo.stop_error.dx")["level"] == "warning"
+    driver = node(sel.compute(["r1", "r2", "r3"], unit_tables), "rig/a/driver")
+    loop = next(d for d in driver["diagnostics"] if d["diagnostic"] == "driver.loop_rate.dx")
+    assert (loop["level"], loop["value"], loop["warn_lo"]) == ("ok", 90.0, 90.0)              # >= the expected rate - 10 %: its fine side
+    slow = node(sel.compute(["r3"], unit_tables), "rig/a/driver")
+    assert next(d for d in slow["diagnostics"] if d["diagnostic"] == "driver.loop_rate.dx")["level"] == "warning"   # 80 Hz
+    sat = next(d for d in driver["diagnostics"] if d["diagnostic"] == "driver.saturation.dx")
+    assert sat["level"] == "ok" and sat["value"] == 1.0                                         # <= 2 %, the card's own limit
+    b = node(sel.compute(["r4"], unit_tables), "rig/b")
+    assert next(d for d in b["diagnostics"] if d["diagnostic"] == "servo.stop_error.dx")["level"] == "unknown", \
+        "a unit with no limit set stays unknown, whatever its value: never a guess"
+
+
+def test_a_units_target_judges_its_gate(unit_tables):
+    gates = {g["gate"]: g for g in node(sel.compute(["r1", "r2", "r3"], unit_tables), "rig/a")["gates"] if g.get("model") is None}
+    assert gates["servo.stop_error.gate"]["verdict"] == "pass" and gates["servo.stop_error.gate"]["value"] == 3.5
+    worse = {g["gate"]: g for g in node(sel.compute(["r2"], unit_tables), "rig/a")["gates"] if g.get("model") is None}
+    assert worse["servo.stop_error.gate"]["verdict"] == "fail"
+
+
+def test_the_metric_values_table_is_every_per_run_value(unit_tables):
+    """The browser's input for metrics (CONTRACT, "Domain model v3"): one row per (run, node, metric, model) with a finite value, exactly the
+    values compute() aggregates; its schema names the fields."""
+    doc = sel.metric_values(unit_tables)
+    rows = doc["rows"]
+    assert {"run", "node", "device", "metric", "model", "value"} <= set(rows[0])
+    key = {(r["run"], r["node"], r["metric"], r["model"]) for r in rows}
+    assert ("r1", "rig/a", "servo.tracking_rms", None) in key and ("r3", "rig/a/driver", "driver.loop_rate", None) in key
+    assert ("r2", "rig/a", "servo.twin_fidelity", "refit R1") in key and ("r3", "rig/a", "servo.stop_error", None) not in key
+    assert next(r for r in rows if (r["run"], r["metric"], r["model"]) == ("r2", "servo.twin_fidelity", "twin of record"))["value"] == pytest.approx(2.5)
+    assert all(math.isfinite(r["value"]) for r in rows)
+    assert {f["name"] for f in doc["schema"]["fields"]} >= {"run", "node", "metric", "model", "value"}
+
+
+def test_the_browser_rule_gives_the_same_metrics(unit_tables):
+    """Per (node, metric, model): the metric's aggregate (data-ui's summary of that name) over the selected runs' rows of the metric
+    values table, with min, max and the count beside it: compute()'s numbers, for every subset of the fixture's runs."""
+    import itertools  # noqa: PLC0415
+
+    rows = sel.metric_values(unit_tables)["rows"]
+    ids = ["r1", "r2", "r3", "r4"]
+    for k in range(1, len(ids) + 1):
+        for pick in itertools.combinations(ids, k):
+            live = sel.metrics_from_values(rows, pick)
+            out = sel.compute(pick, unit_tables)
+            want = {(n["node"], m["metric"], m["model"]): (m["value"], m["low"], m["high"], m["n"]) for n in out["nodes"] for m in n["metrics"]
+                    if m["value"] is not None}
+            assert {k2: (v["value"], v["low"], v["high"], v["n"]) for k2, v in live.items()} == want, pick
+
+
+def test_the_coverage_grid_lists_each_devices_reachable_cells(unit_tables):
+    """coverage_cells' grid (additive): each device's axes (name, unit, edges) and its reachable cells, so a page can draw where a joint can
+    go and where the selection went (the heatmap) from the same cells the browser counts."""
+    cells = sel.coverage_cells(unit_tables)
+    grid = cells["grid"]["A"]
+    assert [a["name"] for a in grid["axes"]] == ["q", "qd", "qdd"] and all(len(a["edges"]) >= 2 for a in grid["axes"])
+    assert len(grid["reachable"]) == cells["reachable_cells"]["A"]
+    reach = set(grid["reachable"])
+    assert all(r["reachable"] == (r["cell"] in reach) for r in cells["rows"] if r["device"] == "A")
+
+
+def test_a_run_metric_says_which_side_measured_it():
+    """The stop error's title says "at the output"; the producer measures it on the encoder side (T4 calls an encoder-side pass partial), and
+    the selection says so beside the value."""
+    rows = [{**r, "side": "encoder"} if r["metric"] == "servo.stop_error" else r for r in RUN_METRICS]
+    t = sel.Tables(nodes=with_limits(), runs=RUNS, run_diagnostics=DIAGNOSTICS, coverage_points=COVERAGE, floors={"A": 2.0}, descriptions={"A": DESC_A},
+                   run_metrics=rows)
+    stop = metric(node(sel.compute(["r1", "r2"], t), "rig/a"), "servo.stop_error")
+    assert stop["side"] == "encoder" and stop["value"] == 3.5
+    assert "side" not in metric(node(sel.compute(["r1", "r2"], t), "rig/a/driver"), "driver.saturation")

@@ -38,7 +38,7 @@ LEVEL = "1x"  # the oracle's own noise: the committed oracle results are the lad
 RESULT_PROPERTIES = ("recovered", "ci95_lo", "ci95_hi", "interval", "error", "tolerance", "error_over_tolerance", "within")
 NODE_FIELDS = ("id", "root", "parent", "depth", "title", "kind", "tags", "structural", "entity_type", "entity_title", "card", "device",
                "sysid_id", "sees", "runs", "children", "page", "source", "machine", "where", "summary", "dashboard", "dashboard_panels",
-               "components", "current_models")
+               "components", "current_models", "limits")
 STATION_PARTS = ("motor", "driver", "gearbox", "encoder")  # the integrated servo's members, in the record's words
 
 
@@ -58,6 +58,7 @@ def _rows(path: Path) -> list:
 
 def _node(**kw) -> dict:
     node = {f: None for f in NODE_FIELDS}
+    node["limits"] = []
     node.update(kw)
     tid = node.get("entity_type")
     if tid:
@@ -199,7 +200,32 @@ def physical_nodes(data: Path, registry: Path = REGISTRY) -> list[dict]:
             mine.append(_node(id=f"{dep}/camera-{cam.serial}", root=dep, parent=dep, depth=1, title=f"{cam.model} · {cam.serial}", kind="physical",
                               entity_type=cam.type, sees=[stations[c] for c in cam.sees if c in stations], runs=None, page=f"/{dep}/",
                               source=cam.source))
+        bound = unit_limits(rec, mine)
+        for n in mine:
+            n["limits"] = bound.get(n["id"], [])
         out += _finish(mine, rec.tags)
+    return out
+
+
+LIMIT_SIDES = ("warn", "error", "target")
+
+
+def unit_limits(record: dm.PhysicalDeployment, nodes: list[dict]) -> dict[str, list[dict]]:
+    """{node id: [{diagnostic, warn?, error?, target?, source, note?}]}: each of the record's per-unit limits on the typed node at its device
+    whose type holds that diagnostic (a station's servo diagnostics, its driver's). A side the unit does not set is left out. A limit that
+    binds no node (a diagnostic no type at that device holds, a device not in the tree) is refused: a typo must not read as unknown."""
+    out: dict[str, list[dict]] = {}
+    for u in record.limits:
+        hosts = [n for n in nodes if n.get("device") == u.device and n.get("entity_type")
+                 and any(d.id == u.diagnostic for d in dm.TYPES[n["entity_type"]].diagnostics)]
+        if not hosts:
+            raise ValueError(f"{record.id}: the limit on {u.diagnostic} at {u.device} binds no node (no node there has a type with that diagnostic)")
+        entry = {"diagnostic": u.diagnostic, **{k: getattr(u, k) for k in LIMIT_SIDES if getattr(u, k) is not None}, "source": u.source,
+                 **({"note": u.note} if u.note else {})}
+        for n in hosts:
+            if any(x["diagnostic"] == u.diagnostic for x in out.get(n["id"], [])):
+                raise ValueError(f"{record.id}: two limits on {u.diagnostic} at {u.device}")
+            out.setdefault(n["id"], []).append(dict(entry))
     return out
 
 
@@ -394,7 +420,8 @@ def _dump(path: Path, doc) -> None:
 
 def write(data: Path, out: Path | None = None, schedules: Path | None = None) -> dict:
     """<data>/domain/: deployments.json, parameters.json, model_labels.json, selections/<deployment>.json (the presets, computed),
-    coverage_cells/<deployment>.json (the browser's coverage table) and reports/<id>.json (the frozen reports, copied). Returns counts."""
+    coverage_cells/<deployment>.json (the browser's coverage table), metric_values/<deployment>.json (the browser's metrics table) and
+    reports/<id>.json (the frozen reports, copied). Returns counts."""
     from . import report as rep  # noqa: PLC0415
     from . import selection as sel  # noqa: PLC0415
 
@@ -422,7 +449,11 @@ def write(data: Path, out: Path | None = None, schedules: Path | None = None) ->
         _dump(out / "selections" / f"{dep}.json", {"schema": sel.SCHEMA, "deployment": dep, "rule": "selection.presets: every run, each split, "
                                                     "each station, each day; run_ids_sha256 names the ids", "presets": computed})
         _dump(out / "coverage_cells" / f"{dep}.json", sel.coverage_cells(tables))
+        # WHY beside coverage_cells (2026-11-07): the browser's metrics rule reads one run x metric table, as its coverage rule reads cells
+        values = sel.metric_values(tables)
+        _dump(out / "metric_values" / f"{dep}.json", values)
         counts["selections"][dep] = len(computed)
+        counts.setdefault("metric_values", {})[dep] = len(values["rows"])
     (out / "reports").mkdir(exist_ok=True)
     for path in sorted(rep.REPORTS_DIR.glob("*.json")):
         shutil.copyfile(path, out / "reports" / path.name)

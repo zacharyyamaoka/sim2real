@@ -294,3 +294,84 @@ def test_the_label_map_is_a_house_table_the_site_serves(tmp_path):
     for r in doc["rows"]:
         spec = dm.model(r["type"], r["model"])
         assert (r["model_key"], r["model_title"], r["family"], r["k"]) == (spec.key, spec.title, spec.family, spec.k)
+
+
+# --- per-unit limits (2026-11-07, the metrics lane) --------------------------------------------------------------------------------
+# A diagnostic whose limit is "set per unit" (the servo's stop error: the joint's share of the 5 mm tool gate; the board's loop rate: the
+# expected rate less 10 %) reads unknown until a unit sets it. The rack's record sets them, each with its source, and instances puts them on
+# the nodes they bind (deployments.json `limits`), where selection.compute and the browser read them.
+
+RACK_TWIN = Path("/home/bam/bam_ws/src/dev/bam_rack_twin/bam_rack_twin")
+
+
+def _constant(path: Path, name: str):
+    """A module-level constant read from the producer's source (ast, never imported): the oracle the record's copy is held to."""
+    import ast  # noqa: PLC0415
+
+    for stmt in ast.parse(path.read_text()).body:
+        if isinstance(stmt, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in stmt.targets):
+            return ast.literal_eval(stmt.value)
+        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name) and stmt.target.id == name:
+            return ast.literal_eval(stmt.value)
+    raise KeyError(name)
+
+
+def test_a_unit_limit_is_a_frozen_keyword_record():
+    import dataclasses  # noqa: PLC0415
+
+    assert dataclasses.is_dataclass(dm.UnitLimit) and dm.UnitLimit.__dataclass_params__.frozen
+    assert all(f.kw_only for f in dataclasses.fields(dm.UnitLimit))
+    assert [f.name for f in dataclasses.fields(dm.UnitLimit)][:6] == ["device", "diagnostic", "warn", "error", "target", "source"]
+    assert "limits" in [f.name for f in dataclasses.fields(dm.PhysicalDeployment)]
+
+
+def test_the_rack_sets_each_stations_stop_allocation_and_loop_rate():
+    rack = inst.physical_records()["one-dof-test-rack"]
+    by = {(u.device, u.diagnostic): u for u in rack.limits}
+    devices = {f"CAN {c}" for c in (1, 4, 11, 12, 13, 14, 15, 21)}
+    assert {d for d, x in by if x == "servo.stop_error.dx"} == devices
+    assert {d for d, x in by if x == "driver.loop_rate.dx"} == devices
+    for u in rack.limits:
+        assert u.source, f"{u.device} {u.diagnostic}: every per-unit limit says where it comes from"
+        assert u.warn is not None or u.error is not None or u.target is not None
+        dm.diagnostic(dm.TYPES[{"servo.stop_error.dx": "integrated_servo", "driver.loop_rate.dx": "foc_controller"}[u.diagnostic]].id, u.diagnostic)
+    assert by[("CAN 11", "servo.stop_error.dx")].warn == 3.6 and by[("CAN 11", "servo.stop_error.dx")].target == 3.6
+    assert by[("CAN 11", "driver.loop_rate.dx")].warn == 90.0
+
+
+@pytest.mark.skipif(not (RACK_TWIN / "acceptance.py").is_file(), reason="bam_ws is not on this machine")
+def test_the_racks_limits_are_the_producers_own_numbers():
+    """The stop allocation is bam_rack_twin acceptance.py's STOP_ALLOCATION_MRAD, the expected rate experiments.py's RATE_HZ (less RobotDx's
+    tolerance, 10 %), read from their source here, so a change there turns this red rather than leaving a stale copy."""
+    allocation = _constant(RACK_TWIN / "acceptance.py", "STOP_ALLOCATION_MRAD")
+    rate = _constant(RACK_TWIN / "hardware" / "experiments.py", "RATE_HZ")
+    rack = inst.physical_records()["one-dof-test-rack"]
+    stop = {u.device: u for u in rack.limits if u.diagnostic == "servo.stop_error.dx"}
+    loop = {u.device: u for u in rack.limits if u.diagnostic == "driver.loop_rate.dx"}
+    assert {d: (u.warn, u.target) for d, u in stop.items()} == {f"CAN {c}": (v, v) for c, v in allocation.items()}
+    assert {d: u.warn for d, u in loop.items()} == {f"CAN {c}": pytest.approx(rate * 0.9) for c in allocation}
+
+
+@pytest.mark.skipif(not (DATA / "one-dof-test-rack" / "devices.json").is_file(), reason="the app's data is not built")
+def test_the_limits_reach_the_nodes_they_bind():
+    nodes = inst.physical_nodes(DATA)
+    assert "limits" in inst.NODE_FIELDS
+    rack = [n for n in nodes if n["root"] == "one-dof-test-rack"]
+    from type_cards import selection as sel  # noqa: PLC0415
+
+    can11 = next(n for n in rack if n["structural"] == "station" and n["device"] == "CAN 11")
+    assert sel.node_limits(can11)["servo.stop_error.dx"]["warn"] == 3.6 and sel.node_limits(can11)["servo.stop_error.dx"]["source"]
+    driver = next(n for n in rack if n["entity_type"] == "foc_controller" and n["device"] == "CAN 11")
+    assert [(x["diagnostic"], x["warn"]) for x in driver["limits"]] == [("driver.loop_rate.dx", 90.0)] and driver["limits"][0]["source"]
+    assert set(driver["limits"][0]) == {"diagnostic", "warn", "source"}, "a side the unit does not set is left out, never null-filled"
+    motor = next(n for n in rack if n["entity_type"] == "bldc_motor" and n["device"] == "CAN 11")
+    assert motor["limits"] == [], "a limit binds only the node whose type holds that diagnostic"
+    virtual = inst.virtual_nodes(RESULTS)
+    assert all(n["limits"] == [] for n in virtual)
+    assert {f["name"]: f["type"] for f in inst.deployments_dataset(nodes + virtual)["schema"]["fields"]}["limits"] == "array"
+
+
+def test_a_limit_on_a_diagnostic_no_node_holds_is_refused(tmp_path):
+    bad = dm.PhysicalDeployment(id="one-dof-test-rack", limits=(dm.UnitLimit(device="CAN 11", diagnostic="servo.nope.dx", warn=1.0, source="x"),))
+    with pytest.raises(ValueError):
+        inst.unit_limits(bad, [{"id": "r/can11", "device": "CAN 11", "entity_type": "integrated_servo"}])

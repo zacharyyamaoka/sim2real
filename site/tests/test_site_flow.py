@@ -3030,6 +3030,360 @@ def models_browser_checks(page, base: str, layout: dict, still) -> None:
     page.set_viewport_size({"width": 1280, "height": 900})
 
 
+# ---- metrics, diagnostics and coverage over selected runs, and reports (2026-11-07, the metrics lane: w2d) ---------------------------
+# Zach (PROJECT - Sim2Real, 2026-11-06): "Each entity type has Metrics ... the most improtant ones we kinda pin to the top ... DIAGONISTICS ...
+# metrics + gate that reports warning or error ... we can calculate these metrics on a per run basis... but also accross all the runs ... its
+# just the row model you can basically like include or not what runs will be included in the metrics/diagonistics etc"; coverage "As a model
+# can be good BUT only in a certain area ... visualize quickly like the currently selected runs or run what is its coverage"; "Reports ... a
+# set number of rows ... 'freeze it' and see the ful lbreak down ... even as you add more data". Written before site/metrics_pages.py and
+# site/reports_pages.py: the page at /metrics/<dep>/ is a runs table (data-ui, selectable, its rail on the left) whose filtered rows, or its
+# selection when it has one, drive the metrics, diagnostics and coverage beside it, computed in the browser by the contract's rule
+# (type_cards/CONTRACT.md, "Domain model v3": the metric values table, data-ui's own summaries, each diagnostic's limits with the unit's own,
+# the distinct reachable cells); every number is held to selection.compute in Python for three selections made in the page.
+
+METRICS_URL = f"/metrics/{DEP}/"
+SPEC_RE = re.compile(r'<script type="application/json" id="s2r-metrics-spec">(.*?)</script>', re.S)
+RESULT_JS = "() => window.s2rMetrics && window.s2rMetrics.ready ? window.s2rMetrics.snapshot() : null"
+
+
+def py_round2(x: float) -> float:
+    return round(x, 2)
+
+
+def heat_rows(cells: dict, device: str, ids: set) -> dict[tuple[int, int], tuple[int, int]]:
+    """(q cell, qd cell) -> (visited, reachable): the reachable cells over qdd, and those the selected runs visited (the browser's heatmap)."""
+    reach = cells["grid"][device]["reachable"]
+    seen = {r["cell"] for r in cells["rows"] if r["device"] == device and r["reachable"] and r["run"] in ids}
+    out: dict = {}
+    for c in reach:
+        i, j, _k = (int(x) for x in c.split(","))
+        v, n = out.get((i, j), (0, 0))
+        out[(i, j)] = (v + (c in seen), n + 1)
+    return out
+
+
+def compare_selection(got: dict, want: dict, label: str) -> None:
+    """The browser's result (window.s2rMetrics.snapshot().result) against selection.compute over the same ids: every node, every metric's
+    value / low / high / n per model, every diagnostic's level and value, every gate's verdict, and coverage's pct, visited and reachable."""
+    g_nodes = {n["node"]: n for n in got.get("nodes", [])}
+    w_nodes = {n["node"]: n for n in want["nodes"]}
+    check(set(g_nodes) == set(w_nodes) and got.get("runs") == want["runs"],
+          f"{label}: the browser computes the same nodes over the same {want['runs']} runs (differ {sorted(set(g_nodes) ^ set(w_nodes))[:3]})")
+    bad: list = []
+    for nid, w in w_nodes.items():
+        g = g_nodes.get(nid) or {}
+        gm = {(m["metric"], m.get("model")): m for m in g.get("metrics", [])}
+        for m in w["metrics"]:
+            x = gm.get((m["metric"], m.get("model")))
+            if x is None or any(x.get(k) != m[k] for k in ("value", "low", "high", "n")):
+                bad.append((nid, m["metric"], m.get("model"), m["value"], (x or {}).get("value")))
+        gd = {(d["diagnostic"], d.get("model")): d for d in g.get("diagnostics", [])}
+        for d in w["diagnostics"]:
+            x = gd.get((d["diagnostic"], d.get("model")))
+            if x is None or x.get("level") != d["level"] or x.get("value") != d["value"]:
+                bad.append((nid, d["diagnostic"], d.get("model"), d["level"], (x or {}).get("level")))
+        gg = {(x["gate"], x.get("model")): x for x in g.get("gates", [])}
+        for x in w["gates"]:
+            if (gg.get((x["gate"], x.get("model"))) or {}).get("verdict") != x["verdict"]:
+                bad.append((nid, x["gate"], x.get("model"), x["verdict"]))
+        wc, gc = w["coverage"], g.get("coverage") or {}
+        if any(gc.get(k) != wc.get(k) for k in ("pct", "visited", "reachable", "verdict")):
+            bad.append((nid, "coverage", wc.get("pct"), gc.get("pct"), wc.get("visited"), gc.get("visited")))
+    check(not bad, f"{label}: every metric (value, low, high, n), diagnostic level, gate verdict and coverage number in the browser is "
+                   f"selection.compute's ({len(bad)} differ: {bad[:3]})")
+
+
+def metrics_data_checks(out: Path, data: Path) -> dict:
+    """No browser: the producer's per-run table, the metric values table (the projection of the served tables), the presets the build
+    precomputed with selection.compute, the page's spec and its no-script answer, the runs table's per-run values and levels, and the run
+    pages' dots, real now for the station (its stop error against its allocation) and the driver (its loop rate and its saturation)."""
+    from collections import Counter  # noqa: PLC0415
+    from html import unescape  # noqa: PLC0415
+    from type_cards import domain as dm  # noqa: PLC0415
+    from type_cards import selection as sel  # noqa: PLC0415
+
+    nodes = json.loads((out / "data" / "domain" / "deployments.json").read_text())["rows"]
+    mine = [n for n in nodes if n["root"] == DEP]
+    tables = sel.load_tables(out / "data", DEP, nodes=mine)
+    runs = tables.runs
+    produced = json.loads((data / "run_metrics.json").read_text())["rows"]
+    pairs = {(r["run"], r["metric"]) for r in produced}
+    stops = [r for r in produced if r["metric"] == "servo.stop_error" and r["value"] is not None]
+    sats = [r for r in produced if r["metric"] == "driver.saturation" and r["value"] is not None]
+    check(pairs == {(r["run"], m) for r in runs for m in ("servo.stop_error", "driver.saturation")} and len(stops) > len(runs) // 3
+          and len(sats) == len(runs),
+          f"tools/run_metrics.py wrote a stop error and a saturation row for every run ({len(pairs)} rows; a stop error on {len(stops)}, "
+          f"a saturation on {len(sats)} of {len(runs)} runs)")
+    served = json.loads((out / "data" / "domain" / "metric_values" / f"{DEP}.json").read_text())
+    check(served["rows"] == sel.metric_values(tables)["rows"] and len(served["rows"]) > len(runs),
+          f"data/domain/metric_values/{DEP}.json is selection.metric_values of the served tables ({len(served['rows']):,} rows)")
+    presets = json.loads((out / "data" / "domain" / "selections" / f"{DEP}.json").read_text())["presets"]
+    named = sel.presets(runs)
+    for name in ("all", "station: CAN 11", "day: 2026-11-06"):
+        fresh = sel.compute(named[name], tables, name=name)
+        fresh.pop("run_ids")
+        check(presets.get(name) == fresh, f"the build precomputed the preset {name!r} with selection.compute ({fresh['runs']} runs)")
+    lv = {}
+    for name, p in presets.items():
+        if name.startswith("station: "):
+            st = next((n for n in p["nodes"] if n["entity_type"] == "integrated_servo"), None)
+            d = next((d for d in (st or {}).get("diagnostics", []) if d["diagnostic"] == "servo.stop_error.dx"), {})
+            lv[name] = d.get("level")
+    check(len(lv) == 8 and all(v in ("ok", "warning") for v in lv.values()),
+          f"every station's preset judges its stop error against its own allocation ({lv})")
+    page = out / "metrics" / DEP / "index.html"
+    html = page.read_text() if page.is_file() else ""
+    m = SPEC_RE.search(html)
+    spec = json.loads(unescape(m.group(1))) if m else {}
+    typed = {n["id"]: n for n in mine if n.get("entity_type") and n.get("device")}
+    got_nodes = {n["id"]: n for n in spec.get("nodes", [])}
+    check(bool(spec) and set(got_nodes) == set(typed) and all(got_nodes[k].get("limits") == typed[k]["limits"] for k in typed)
+          and set(spec.get("types", {})) == {n["entity_type"] for n in typed.values()},
+          f"{METRICS_URL} carries its spec: every typed node of {DEP} with its device and limits, and their types' metrics and diagnostics "
+          f"({len(got_nodes)} nodes, {len(spec.get('types', {}))} types)")
+    allp = presets.get("all") or {"nodes": []}
+    want_vals = {(n["node"], m["metric"], m.get("model") or ""): m["value"] for n in allp["nodes"] for m in n["metrics"]
+                 if m["value"] is not None and m["pinned"]}
+    shown = {(a.get("data-node"), a.get("data-metric"), a.get("data-model", "")): float(a["data-value"]) for a in start_tags(html, "span", "data-metric")
+             if a.get("data-value") and a.get("data-node")}
+    check(bool(want_vals) and all(shown.get(k) == v for k, v in want_vals.items()),
+          f"{METRICS_URL} without script shows the 'all' preset's pinned numbers, as the build computed them "
+          f"({sum(1 for k, v in want_vals.items() if shown.get(k) == v)} of {len(want_vals)})")
+    mr = json.loads((out / "data" / "domain" / "metric_runs" / f"{DEP}.json").read_text())["rows"]
+    by_run = {r["run"]: r for r in mr}
+    vals = {(r["run"], r["metric"], r["model"]): r["value"] for r in served["rows"]}
+    station_of = {n["device"]: n for n in mine if n.get("structural") == "station"}
+    driver_of = {n["device"]: n for n in mine if n.get("entity_type") == "foc_controller"}
+    stop_dx = dm.diagnostic("integrated_servo", "servo.stop_error.dx")
+    loop_dx = dm.diagnostic("foc_controller", "driver.loop_rate.dx")
+    sat_dx = dm.diagnostic("foc_controller", "driver.saturation.dx")
+    wrong = []
+    for r in runs[:: max(1, len(runs) // 300)]:
+        st, dr = station_of[r["device"]], driver_of[r["device"]]
+        row = by_run.get(r["run"]) or {}
+        stop = vals.get((r["run"], "servo.stop_error", None))
+        loop = vals.get((r["run"], "driver.loop_rate", None))
+        sat = vals.get((r["run"], "driver.saturation", None))
+        want = {"stop_error_mrad": stop, "loop_rate_hz": loop, "saturation_pct": sat,
+                "stop_level": dm.level(stop_dx, stop, sel.level_limits(sel.node_limits(st).get(stop_dx.id))),
+                "loop_level": dm.level(loop_dx, loop, sel.level_limits(sel.node_limits(dr).get(loop_dx.id))),
+                "saturation_level": dm.level(sat_dx, sat, sel.level_limits(sel.node_limits(dr).get(sat_dx.id)))}
+        if any(row.get(k) != v for k, v in want.items()):
+            wrong.append((r["run"][:40], {k: (row.get(k), v) for k, v in want.items() if row.get(k) != v}))
+    check(len(mr) == len(runs) and not wrong, f"the page's runs table holds every run with its per-run values and levels, each the metric values "
+                                             f"table's and domain.level's with the unit's limits ({len(mr)} rows; {wrong[:2]})")
+    # the run pages' dots: real levels now where a run gives a value (the brief: "The run page's dots then show real levels")
+    known = Counter()
+    checked = 0
+    for r in runs[:: max(1, len(runs) // 120)]:
+        text = (out / adapter_run_path(r)).read_text()
+        items = {a.get("data-entity"): a.get("data-level") for a in start_tags(text, "li", "data-entity") if a.get("role") == "treeitem"}
+        st, dr = station_of[r["device"]]["id"], driver_of[r["device"]]["id"]
+        stop = vals.get((r["run"], "servo.stop_error", None))
+        known["station"] += items.get(st) in ("ok", "warning", "error")
+        known["driver"] += items.get(dr) in ("ok", "warning", "error")
+        known["station_should"] += stop is not None
+        checked += 1
+    check(checked > 0 and known["station"] == known["station_should"] and known["driver"] == checked,
+          f"the run pages' dots show real levels: the station's wherever the run has a stop error ({known['station']} of {known['station_should']}), "
+          f"the driver's on every run ({known['driver']} of {checked} sampled)")
+    return {"tables": tables, "presets": presets, "named": named, "spec": spec, "cells": json.loads((out / "data" / "domain" / "coverage_cells" / f"{DEP}.json").read_text())}
+
+
+def adapter_run_path(row: dict) -> str:
+    import adapter  # noqa: PLC0415
+    return adapter.run_url(row).strip("/") + "/index.html"
+
+
+def metrics_browser_checks(page, base: str, ctx: dict, still) -> None:
+    """At 1280 px: the runs table and its rail; three selections made in the page (a rail pick, rows ticked across two stations, a preset),
+    each computed in the browser and held to selection.compute; the numbers the page draws are the ones it computed; the coverage heatmap
+    is the selection's cells; the point about coverage in words; the selection's freeze command; then a phone."""
+    from type_cards import selection as sel  # noqa: PLC0415
+
+    tables, cells = ctx["tables"], ctx["cells"]
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(f"{base}{METRICS_URL}")
+    page.wait_for_load_state("load")
+    ready = soft_wait(page, "() => window.s2rMetrics && window.s2rMetrics.ready && document.querySelectorAll('#metrics-runs tbody tr').length > 0", timeout=45000)
+    check(ready, f"{METRICS_URL} loads: the runs table draws and the page computes its first selection")
+    first = page.evaluate(RESULT_JS) or {}
+    check(first.get("how") == "filtered" and len(first.get("ids") or []) == len(tables.runs),
+          f"with nothing filtered or ticked, every run is in play ({first.get('how')}, {len(first.get('ids') or [])} of {len(tables.runs)})")
+    compare_selection(first.get("result") or {}, sel.compute(first.get("ids") or [], tables), "every run")
+    side = page.evaluate("""() => { const a = document.querySelector('aside'); const t = document.getElementById('metrics-runs');
+        const r = document.getElementById('s2r-metrics-results'); if (!a || !t || !r) return null;
+        const ar = a.getBoundingClientRect(), tr = t.getBoundingClientRect(), rr = r.getBoundingClientRect();
+        return {aside: [ar.left, ar.right], runs: [tr.left, tr.right, tr.top, tr.bottom], results: [rr.left, rr.right, rr.top, rr.bottom],
+                rail: !!a.querySelector('data-facets')}; }""") or {}
+    check(bool(side) and side["rail"] and side["aside"][1] <= side["runs"][0] + 1
+          and (side["results"][0] >= side["runs"][1] - 1 or side["results"][2] >= side["runs"][3] - 1),
+          f"the runs' filter rail sits left of the runs table, and the results beside or under it, never over it ({side})")
+    # 1. a rail pick: Station CAN 12
+    page.locator('aside data-facets input[data-p="device"][data-value="CAN 12"]').first.click()
+    soft_wait(page, "() => { const s = window.s2rMetrics && window.s2rMetrics.snapshot(); return s && s.ids.length > 0 && s.ids.length < %d; }" % len(tables.runs))
+    page.wait_for_timeout(800)
+    one = page.evaluate(RESULT_JS) or {}
+    want_ids = sorted(r["run"] for r in tables.runs if r["device"] == "CAN 12")
+    check(one.get("how") == "filtered" and sorted(one.get("ids") or []) == want_ids,
+          f"a rail pick (Station CAN 12) puts its runs in play ({len(one.get('ids') or [])} of {len(want_ids)})")
+    compare_selection(one.get("result") or {}, sel.compute(one.get("ids") or [], tables), "selection 1, the rail's CAN 12")
+    still("60-metrics-rail-can12")
+    drawn = page.evaluate("""() => [...document.querySelectorAll('#s2r-metrics-results [data-node][data-metric][data-value]')].map((e) => [e.dataset.node,
+        e.dataset.metric, e.dataset.model || '', e.dataset.value === '' ? null : Number(e.dataset.value)])""") or []
+    res = {(n["node"], m["metric"], m.get("model") or ""): m["value"] for n in (one.get("result") or {}).get("nodes", []) for m in n["metrics"]}
+    check(bool(drawn) and all(res.get((a, b, c)) == v for a, b, c, v in drawn),
+          f"the numbers the page draws are the ones it computed ({sum(1 for a, b, c, v in drawn if res.get((a, b, c)) == v)} of {len(drawn)})")
+    heat = page.evaluate("() => { const v = document.getElementById('metrics-coverage'); return v && v.model ? v.model.rows.map((r) => ({device: r.device, q: r.q_i, qd: r.qd_i, visited: r.visited, reachable: r.reachable})) : null; }") or []
+    want_heat = heat_rows(cells, "CAN 12", set(one.get("ids") or []))
+    got_heat = {(h["q"], h["qd"]): (h["visited"], h["reachable"]) for h in heat if h["device"] == "CAN 12"}
+    pix = page.evaluate("""() => { const c = document.querySelector('#metrics-coverage canvas'); if (!c) return null; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let ink = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && (Math.abs(d[i] - d[i + 1]) > 18 || Math.abs(d[i + 1] - d[i + 2]) > 18)) ink++; return [c.width, c.height, ink]; }""")
+    check(got_heat == want_heat and bool(pix) and pix[2] > 500,
+          f"the coverage heatmap is the selection's cells: per (q, qd) cell the reachable qdd bands and those visited ({sum(1 for k in want_heat if got_heat.get(k) == want_heat[k])} "
+          f"of {len(want_heat)} cells; canvas {pix})")
+    page.evaluate("document.getElementById('s2r-metrics-coverage').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(600)
+    words = page.evaluate("() => (document.querySelector('.s2r-trust') || {}).textContent || ''")
+    check("only" in words and "coverage" in words.lower() and "trust" in words.lower(),
+          f"the page says the point in words: a model is good only where the runs went, so coverage is how far to trust the numbers ({words[:120]!r})")
+    still("61-metrics-coverage-heatmap")
+    # 2. rows ticked across two stations (the table's own checkboxes), the rail cleared first
+    page.evaluate("document.getElementById('metrics-runs').filters = null")
+    page.wait_for_timeout(1200)
+    rows_js = "() => [...document.querySelectorAll('#metrics-runs tbody tr')].map((tr, i) => [i, tr.textContent])"
+    listed = page.evaluate(rows_js) or []
+    picks, seen_dev = [], set()
+    for i, text in listed:
+        dev = next((d for d in ("CAN 11", "CAN 21", "CAN 12") if d in text), None)
+        if dev and (len(picks) < 3 or dev not in seen_dev) and len(picks) < 5:
+            picks.append(i)
+            seen_dev.add(dev)
+        if len(picks) >= 5 and len(seen_dev) >= 2:
+            break
+    for i in picks:
+        page.locator("#metrics-runs tbody tr").nth(i).locator(".dv-selbox").first.click()
+        page.wait_for_timeout(250)
+    page.wait_for_timeout(800)
+    two = page.evaluate(RESULT_JS) or {}
+    stations = {r["device"] for r in tables.runs if r["run"] in set(two.get("ids") or [])}
+    check(two.get("how") == "selected" and len(two.get("ids") or []) == len(picks) and len(stations) >= 2,
+          f"ticked rows are the runs in play ({two.get('how')}, {len(two.get('ids') or [])} of {len(picks)} ticked, stations {sorted(stations)})")
+    compare_selection(two.get("result") or {}, sel.compute(two.get("ids") or [], tables), "selection 2, rows ticked")
+    still("62-metrics-ticked-rows")
+    freeze = page.evaluate("() => (document.querySelector('.s2r-freeze code') || {}).textContent || ''")
+    check("type_cards.report freeze" in freeze and all(i in freeze for i in (two.get("ids") or ["?"])),
+          f"the page writes the command that freezes this selection as a report ({freeze[:90]!r}…)")
+    # 3. a preset: the day of the identification sessions; the browser's numbers are the build's precomputed preset's, and compute's
+    page.evaluate("document.getElementById('metrics-runs').clearSelection()")
+    page.locator(".s2r-preset", has_text="2026-11-06").first.click()
+    page.wait_for_timeout(1500)
+    three = page.evaluate(RESULT_JS) or {}
+    named = ctx["named"]["day: 2026-11-06"]
+    check(three.get("how") == "filtered" and sorted(three.get("ids") or []) == named,
+          f"the preset 'day: 2026-11-06' puts that day's runs in play ({len(three.get('ids') or [])} of {len(named)})")
+    want3 = sel.compute(three.get("ids") or [], tables)
+    compare_selection(three.get("result") or {}, want3, "selection 3, the preset day: 2026-11-06")
+    pre = dict(ctx["presets"]["day: 2026-11-06"])
+    w3 = dict(want3)
+    w3.pop("run_ids")
+    w3["name"] = pre.get("name")
+    check(pre == w3, "the preset's precomputed numbers (the build's selection.compute) are the browser's and compute's")
+    still("63-metrics-preset-day")
+    # a report's runs, from its page's link: ?report=<id> ticks them
+    page.goto(f"{base}{METRICS_URL}?report=can11-frozen-schedule-2f32ddbc")
+    soft_wait(page, "() => { const s = window.s2rMetrics && window.s2rMetrics.ready && window.s2rMetrics.snapshot(); return s && s.how === 'selected'; }", timeout=30000)
+    rep = page.evaluate(RESULT_JS) or {}
+    snap = json.loads((REPO / "type_cards" / "frozen_reports" / "can11-frozen-schedule-2f32ddbc.json").read_text())
+    check(sorted(rep.get("ids") or []) == sorted(snap["report"]["runs"]), f"?report= ticks a report's runs ({len(rep.get('ids') or [])} of {len(snap['report']['runs'])})")
+    # a phone: no sideways scroll
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(f"{base}{METRICS_URL}")
+    page.wait_for_load_state("load")
+    soft_wait(page, "() => window.s2rMetrics && window.s2rMetrics.ready", timeout=30000)
+    ok, detail = no_sideways_scroll(page)
+    check(ok, f"at 390 px {METRICS_URL} has no sideways scroll ({detail})")
+    page.set_viewport_size({"width": 1280, "height": 900})
+
+
+def reports_data_checks(out: Path) -> dict:
+    """No browser: /reports/ lists every committed report; each report's page shows its snapshot, never a number of its own: its rows, every
+    node's metrics, diagnostics with their levels and coverage, its models and its parameter rows; the digest verifies."""
+    from type_cards import report as rep  # noqa: PLC0415
+
+    definitions = rep.load_definitions()
+    snaps = {rid: rep.read_snapshot(rep.REPORTS_DIR / f"{rid}.json") for rid in definitions}
+    index = (out / "reports" / "index.html").read_text() if (out / "reports" / "index.html").is_file() else ""
+    listed = {a.get("data-report"): a for a in start_tags(index, "li", "data-report")}
+    check(set(listed) == set(snaps) and len(snaps) >= 3 and all(listed[k].get("data-verified") == "true" and int(listed[k].get("data-runs", -1)) == len(s["report"]["runs"])
+                                                               for k, s in snaps.items()),
+          f"/reports/ lists every committed report with its runs and its digest verified ({sorted(listed)} of {sorted(snaps)})")
+    for rid, snap in snaps.items():
+        path = out / "reports" / rid / "index.html"
+        html = path.read_text() if path.is_file() else ""
+        art = next(iter(start_tags(html, "article", "data-report")), {})
+        rows = {a.get("data-run") for a in start_tags(html, "tr", "data-run")}
+        cells = {(a.get("data-node"), a.get("data-metric"), a.get("data-model", "")): a.get("data-value") for a in start_tags(html, "span", "data-metric")}
+        want = {(n["node"], m["metric"], m.get("model") or ""): repr(float(m["value"])) for n in snap["results"]["selection"]["nodes"] for m in n["metrics"]
+                if m["value"] is not None}
+        levels = {(a.get("data-node"), a.get("data-diagnostic"), a.get("data-model", "")): a.get("data-level") for a in start_tags(html, "tr", "data-diagnostic")}
+        want_lv = {(n["node"], d["diagnostic"], d.get("model") or ""): d["level"] for n in snap["results"]["selection"]["nodes"] for d in n["diagnostics"]}
+        cov = {a.get("data-coverage-node"): a.get("data-coverage-pct") for a in start_tags(html, "div", "data-coverage-node")}
+        want_cov = {n["node"]: ("" if n["coverage"]["pct"] is None else repr(float(n["coverage"]["pct"]))) for n in snap["results"]["selection"]["nodes"]
+                    if n["entity_type"] == "integrated_servo"}
+        models = {a.get("data-model-key") for a in start_tags(html, "section", "data-model-key")}
+        params = [a.get("data-parameter-row") for a in start_tags(html, "tr", "data-parameter-row")]
+        check(art.get("data-verified") == "true" and art.get("data-digest") == snap["digest"] and rows == set(snap["report"]["runs"])
+              and cells == want and levels == want_lv and cov == want_cov and models == set(snap["report"]["models"]) and params == list(snap["report"]["parameters"]),
+              f"/reports/{rid}/ shows its snapshot: {len(rows)} rows, {len(cells)} metric values, {len(levels)} diagnostic levels, coverage {cov}, "
+              f"{len(models)} models, {len(params)} parameter rows; digest {art.get('data-digest', '')[:12]} verified")
+    return {"snaps": snaps}
+
+
+def reports_browser_checks(page, base: str, ctx: dict, still) -> None:
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(f"{base}/reports/")
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(800)
+    n = page.evaluate("() => document.querySelectorAll('li[data-report] a').length")
+    check(n == len(ctx["snaps"]), f"/reports/ draws a link per report ({n})")
+    still("70-reports-index")
+    newest = sorted(ctx["snaps"].values(), key=lambda s: s["frozen_at"])[-1]
+    page.goto(f"{base}/reports/{newest['report']['id']}/")
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(2500)
+    still("71-report-page")
+    table_rows = page.evaluate("() => document.querySelectorAll('[data-report-rows] tbody tr, [data-report-rows] [role=row]').length")
+    check(table_rows > 0, f"a report's page lists its rows ({table_rows} drawn)")
+    page.set_viewport_size({"width": 390, "height": 844})
+    for u in ("/reports/", f"/reports/{newest['report']['id']}/"):
+        page.goto(base + u)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(1200)
+        ok, detail = no_sideways_scroll(page)
+        check(ok, f"at 390 px {u} has no sideways scroll ({detail})")
+    page.set_viewport_size({"width": 1280, "height": 900})
+
+
+def deployments_splitter_checks(page, base: str) -> None:
+    """The run page's fix (077f9b7), asked of the deployments pages: with the right pane scrolled, no data-ui splitter outside the left
+    column shows over the trail (a rail's splitter placed in the page's coordinates would stay there once its rail scrolls away). WHY the
+    hit test and not the box: a splitter scrolled up inside the pane overlaps the trail's box but is clipped by the pane, unseen; what shows
+    is what the point hits (the run page's own check). It can fail: on a filmed run's page with the fix undone it does (2026-11-07)."""
+    for u in ("/deployments/", f"/deployments/{DEP}/", f"/deployments/{DEP}/fdcanusb-0607623A/can11/", METRICS_URL):
+        page.goto(base + u)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(2500)
+        page.evaluate("(() => { const p = document.getElementById('pane'); if (p) p.scrollTop = 1400; })()")
+        page.wait_for_timeout(900)
+        over = page.evaluate("""() => { const trail = document.querySelector('.trail'); if (!trail) return null; const t = trail.getBoundingClientRect(); const y = (t.top + t.bottom) / 2;
+            return [...document.querySelectorAll('.dv-splitter')].filter((s) => !s.hidden && !s.closest('aside') && s.getClientRects().length).map((s) => {
+              const r = s.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, y);
+              return { left: Math.round(r.left), top: Math.round(r.top), over: !!hit && (hit === s || s.contains(hit)) }; }); }""")
+        check(over is not None and not any(x["over"] for x in over),
+              f"with {u}'s pane scrolled, no splitter outside the left column shows over the trail ({over})")
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -3080,6 +3434,13 @@ def main() -> int:
     models: dict = {}
     with guard("the models, routines and parameters pages' data"):
         models = models_data_checks(out, data)
+    # metrics, diagnostics and coverage over selected runs, and the reports (2026-11-07, the metrics lane)
+    metrics: dict = {}
+    with guard("the metrics page's data"):
+        metrics = metrics_data_checks(out, data)
+    reports: dict = {}
+    with guard("the reports' pages"):
+        reports = reports_data_checks(out)
 
     vendored = SITE / "vendor" / "catalog_workbench"
     manifest = json.loads((vendored / "MANIFEST.json").read_text())["files"]
@@ -3727,6 +4088,13 @@ def main() -> int:
             # 17. the models by entity type, the routines both ways, the parameters view (w2c, 2026-11-07)
             with guard("the models, routines and parameters pages"):
                 models_browser_checks(page, base, models, still)
+            # 18. metrics over selected runs, and the reports (2026-11-07, the metrics lane)
+            with guard("the metrics page in the browser"):
+                metrics_browser_checks(page, base, metrics, still)
+            with guard("the reports in the browser"):
+                reports_browser_checks(page, base, reports, still)
+            with guard("the deployments pages' splitters"):
+                deployments_splitter_checks(page, base)
 
             # 10. a phone: no sideways scroll anywhere on the click path, the search still in the bar
             page.set_viewport_size({"width": 390, "height": 844})

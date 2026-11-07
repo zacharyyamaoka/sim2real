@@ -1,0 +1,94 @@
+/* sim2real · the metrics page and the reports (site/metrics_pages.py, site/reports_pages.py). Tokens only: the site's (--ink, --rule, --bg2)
+   and data-ui's (--data-series-1 is real, blue); green and red mean a level only, always with its word. */
+
+/* WHY the right pane is a containing block (the run page's fix, 077f9b7): data-ui places a splitter absolutely in its offsetParent's
+   coordinates; in a pane that scrolls on its own it must scroll and clip with the pane, never stay over the trail */
+body[data-page="metrics"] .mpane, body[data-page="reports"] .mpane { position: relative; }
+
+.s2r-metrics h1 .n { color: var(--ink3); font-weight: 450; }
+.s2r-presets { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 12px; }
+.s2r-pgroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.s2r-pword { font-size: 11.5px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.s2r-preset { font: inherit; font-size: 12.5px; line-height: 22px; padding: 0 9px; border-radius: 11px; border: 1px solid var(--rule); background: transparent;
+  color: var(--ink); cursor: pointer; white-space: nowrap; }
+.s2r-preset .n { color: var(--ink3); font-size: 11.5px; }
+.s2r-preset:hover { background: var(--bg2); }
+.s2r-preset[aria-pressed="true"] { border-color: var(--data-series-1); box-shadow: inset 0 0 0 1px var(--data-series-1); }
+
+/* the runs and what they give: side by side where both fit, the runs first and the answer under them otherwise */
+.s2r-metrics { container-type: inline-size; }
+.s2r-mgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+/* WHY beside at 860 px of column (Zach: the metrics "beside" the runs): a tick changes the numbers in view, no scroll between them */
+@container (min-width: 860px) { .s2r-mgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.s2r-mruns { min-width: 0; }
+/* WHY hidden: a link-mode table draws its own "open" tick in the title cell, a second selection beside data-ui's selectable column (the one
+   the page reads); the title stays a link to the run's page */
+#metrics-runs .dv-open-check { display: none; }
+.s2r-mruns data-views { height: min(70vh, 640px); }
+.s2r-mresults { min-width: 0; }
+.s2r-mhow { margin: 0 0 8px; color: var(--ink2); }
+.s2r-merr { color: var(--s2r-fail, #b42318); }
+.s2r-mnodes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.s2r-mnode { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.s2r-mnode h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 6px; font-size: 15px; }
+.s2r-mnode h3 small { color: var(--ink3); font-weight: 450; }
+.s2r-mnode h3 .s2r-mlink { margin-left: auto; font-size: 12px; font-weight: 450; }
+.s2r-mtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; margin: 0 0 6px; }
+.s2r-mtile { min-width: 0; }
+/* WHY the title wraps (never an ellipsis): it carries the model's label and the ladder model it is, which a narrow card must still show whole */
+.s2r-mtile dt { font-size: 11.5px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; overflow-wrap: anywhere; }
+.s2r-mtile dt small { text-transform: none; letter-spacing: 0; }
+.s2r-mtile dd { margin: 0; font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.s2r-mtile > small { display: block; color: var(--ink3); font-size: 11.5px; overflow-wrap: anywhere; }
+.s2r-mcov { font-size: 13px; margin: 4px 0; }
+.s2r-mbar { position: relative; display: block; height: 8px; max-width: 420px; border-radius: 4px; background: var(--bg2); box-shadow: inset 0 0 0 1px var(--rule2, var(--rule)); margin: 5px 0 2px; }
+.s2r-mbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--data-series-1); opacity: .75; }
+.s2r-mbar b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink); }
+.s2r-mparts { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12.5px; color: var(--ink2); }
+.s2r-mparts li { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; padding: 1px 0; }
+.s2r-mval { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
+.s2r-mtile-wide { grid-column: 1 / -1; }
+.s2r-mothers { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; color: var(--ink2); display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.s2r-mothers li { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-width: 0; max-width: 100%; }
+.s2r-mothers small { color: var(--ink3); }
+
+/* a level, with its word: ok green, warning amber, error red, unknown muted */
+.s2r-lv { display: inline-block; padding: 0 6px; border-radius: 9px; font-size: 11.5px; font-weight: 650; line-height: 17px; white-space: nowrap; }
+.s2r-lv-ok { color: var(--s2r-pass); background: var(--s2r-pass-bg); }
+.s2r-lv-warning { color: var(--s2r-warn); background: var(--s2r-warn-bg); }
+.s2r-lv-error { color: var(--s2r-fail); background: var(--s2r-fail-bg); }
+.s2r-lv-unknown { color: var(--s2r-none); background: var(--s2r-none-bg); }
+
+.s2r-mcoverage { margin-top: 18px; }
+.s2r-trust { max-width: 78ch; color: var(--ink2); }
+.s2r-mheat data-views { min-height: 220px; }
+.s2r-mdetail { margin-top: 16px; }
+.s2r-mdetail > summary { cursor: pointer; }
+.s2r-mdetail > summary h2 { display: inline; font-size: 17px; }
+.s2r-mdetail data-views { height: min(60vh, 520px); }
+.s2r-freeze { margin: 18px 0 8px; }
+.s2r-freeze > summary { cursor: pointer; font-weight: 600; }
+.s2r-freeze pre { white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow: auto; background: var(--bg2); padding: 8px 10px; border-radius: 6px; font-size: 12px; }
+.s2r-copy { font: inherit; font-size: 12.5px; padding: 1px 10px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; color: var(--ink); cursor: pointer; }
+.s2r-mindex { list-style: none; padding: 0; }
+.s2r-mindex li { padding: 6px 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+
+/* the reports */
+.s2r-reports { list-style: none; padding: 0; display: grid; gap: 10px; }
+.s2r-reports li { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; }
+.s2r-reports li a b { font-size: 15px; }
+.s2r-reports li p { margin: 4px 0 0; color: var(--ink2); }
+.s2r-reports li small { color: var(--ink3); }
+.s2r-rep h2 { margin-top: 22px; }
+.s2r-rep .s2r-question { font-size: 16px; max-width: 80ch; }
+.s2r-rep .s2r-frozen { color: var(--ink2); font-size: 13px; }
+.s2r-rep table { font-size: 13px; }
+.s2r-rep .s2r-rnode { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+.s2r-rep .s2r-rnode h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 6px; font-size: 15px; }
+.s2r-rep .s2r-rmodel { border-left: 3px solid var(--data-series-2); padding: 2px 10px; margin: 8px 0; }
+.s2r-rep .s2r-rmodel h3 { margin: 0; font-size: 14px; }
+
+
+.s2r-mkey { max-width: 90ch; font-size: 12.5px; }
+.s2r-pin { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 8px; font-size: 10.5px; font-weight: 600; line-height: 15px;
+  color: var(--ink2); box-shadow: inset 0 0 0 1px var(--rule); vertical-align: 1px; }

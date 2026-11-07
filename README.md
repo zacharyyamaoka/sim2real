@@ -100,7 +100,8 @@ generic entity types with one model ladder each in families (`M2.kinematics.geom
 coverage over any selection of runs (`type_cards/selection.py`), the parameters table with a column group per routine and model, and
 frozen reports (`type_cards/frozen_reports/`). The type level is committed (`type_cards/domain_v3.json`, `python3 -m type_cards.domain
 --write`); the site build writes the rest to `OUT/data/domain/` (`deployments.json`, `parameters.json`, `selections/<dep>.json`,
-`coverage_cells/<dep>.json`, `reports/<id>.json`). The deployments pages and the run page read them (below).
+`coverage_cells/<dep>.json`, `metric_values/<dep>.json`, `reports/<id>.json`). The deployments pages, the run page and the metrics page read them
+(below).
 
 **Deployments pages** (`site/deployments_pages.py`, decision: `docs/decision-deployments-pages-2026-11-07.md`): `/deployments/` is the index,
 a left filter bar (kind, tags; data-ui's rail) over data-ui cards of the seven deployments, each with its render; every node of every tree has
@@ -126,6 +127,34 @@ calibration routine both ways (routine -> parameters, parameter -> routines), ea
 status. `/parameters/` is the contract's parameters table in data-ui: four presets (all, winning model, with results, errors only), a column group per
 (routine, model), each row's least error marked, a model's group shown or hidden from Properties (data-ui CONTRACT §49, vendored as a backport onto
 d5ede93: `vendor/data-ui/VENDOR.md`).
+
+## Metrics over a selection, and reports
+
+Decision: `docs/decision-metrics-reports-2026-11-07.md`. Zach (2026-11-06): "its just the row model you can basically like include or not what
+runs will be included in the metrics/diagonistics etc"; "Reports ... freeze it ... even as you add more data".
+
+**`/metrics/<dep>/`** (`site/metrics_pages.py`, `static/metrics.js`): the runs table (data-ui, selectable; its rail in the left column, presets
+above it: every run, each station, each day, each split) and beside it what the runs in play give: each station's pinned metrics (the median,
+min to max, the count; every model of a fidelity metric), its diagnostics' levels, its parts' metrics and its coverage against the gate; every
+diagnostic and metric in data-ui tables; the coverage heatmap (q x qd, each cell shaded by the share of its qdd bands visited; blank where the
+joint cannot reach); the command that freezes the selection. The runs in play are the ticked rows, else every row the filters leave. The page
+computes them by the contract's browser rule (`type_cards/CONTRACT.md`, "Domain model v3"), with data-ui's own `summarize`; the site test holds
+every number to `selection.compute` for three selections made in headless Chrome. `?report=<id>` ticks a report's runs; every deployment page with
+runs links its metrics page with its stations picked.
+
+**`/reports/`** (`site/reports_pages.py`): every frozen report and its page, read from its snapshot (metrics, diagnostics with their levels,
+gates, coverage, models, parameter rows, its rows), never recomputed. Make one from a selection (it writes `type_cards/frozen_reports/<id>.py` and
+`<id>.json`; commit both):
+
+    PYTHONPATH=/home/bam/sim2real python3 -m type_cards.report freeze --id my-report --title "…" --question "…" --deployment one-dof-test-rack --select "device=CAN 11" --select "split=held_out"
+
+**The per-run model-independent metrics** (`tools/run_metrics.py`, written last by `tools/build_app.py`, or alone in about 6 s): RobotDx's catalog
+entries `servo.stop_error` (p90 at every dwell, T4's scan) and `driver.saturation` (rows on the torque cap) on each run's npz, to
+`app/data/<dep>/run_metrics.json`. With each station's limits in `type_cards/deployments/one_dof_test_rack.py` (its stop allocation and loop rate,
+from bam_rack_twin), the run pages' station and driver dots show real levels.
+
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/run_metrics.py
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" --with pytest pytest -q /home/bam/sim2real/tools/tests/test_run_metrics.py
 
 ## Diagnostics
 

@@ -40,6 +40,9 @@ AREAS = (
     Area("programs", "Models", "/models/", "Each generic type's model ladder, by family, and where each model is used"),
     Area("guides", "Routines", "/routines/", "Every calibration routine and what it identifies, and every parameter's routines"),
     Area("data", "Parameters", "/parameters/", "Every parameter: true, nominal and recovered per model, with presets"),
+    # the metrics lane (2026-11-07): metrics, diagnostics and coverage over any selection of runs, and the frozen reports
+    Area("analysis", "Metrics", "/metrics/", "Metrics, diagnostics and coverage over the runs you pick, live"),
+    Area("guides", "Reports", "/reports/", "Named, frozen sets of runs with their results as they were"),
 )
 REPORTS = (("why-it-fails", "Why it fails", "Every gate cell that does not pass, in words: the number against its limit, why, and the next step."),
            ("gate-standing", "Gate standing", "The stations × gates matrix, passing per gate, and the caveats on the numbers."))

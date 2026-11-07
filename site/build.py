@@ -24,6 +24,9 @@ Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing her
                      its rows in OUT/data/deployment-cards.json)
     OUT/models/      a page per generic type, its model ladder by family; OUT/routines/, the calibration routines both ways; OUT/parameters/,
                      every parameter in data-ui (site/models_pages.py; rows in OUT/data/routines.json, parameter-routines.json, parameters-view.json)
+    OUT/metrics/     /metrics/<dep>/: metrics, diagnostics and coverage over any selection of a deployment's runs, live (site/metrics_pages.py,
+                     static/metrics.js; the runs table's rows in OUT/data/domain/metric_runs/<dep>.json)
+    OUT/reports/     /reports/ and /reports/<id>/: every frozen report, read from its snapshot (site/reports_pages.py)
 """
 
 from __future__ import annotations
@@ -99,6 +102,11 @@ def site_files(site):
     # the models by entity type, the calibration routines both ways, the parameters view (site/models_pages.py)
     import models_pages  # noqa: PLC0415
     yield from models_pages.files(site)
+    # metrics over any selection of runs, and the frozen reports (the metrics lane, 2026-11-07: site/metrics_pages.py, site/reports_pages.py)
+    import metrics_pages  # noqa: PLC0415
+    import reports_pages  # noqa: PLC0415
+    yield from metrics_pages.files(site)
+    yield from reports_pages.files(site)
     yield "stations/index.html", s2r.page(site, "Stations: sim2real", "/stations/", pages.stations_body(site), "stations",
                                           trail=breadcrumb([s2r.ROOT_CRUMB, ("Stations", "/stations/")]))
     for url, title, kind, intro in (("/runs/", "Every run", "runs", "Every real run, newest first."),
@@ -199,10 +207,12 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     deployments_pages.write_data(out / "data", site)
     import models_pages  # noqa: PLC0415  (the routines' and the parameters view's rows, beside the deployments' cards)
     models_pages.write_data(out / "data", site)
+    import metrics_pages  # noqa: PLC0415  (the metrics page's runs table: each run's per-run values and levels)
+    metric_runs = metrics_pages.write_data(out / "data", site)
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
               "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts, "domain": domain_counts,
-              "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments),
+              "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments), "metric_runs": metric_runs,
               "media": ({"root": str(media_root.resolve()), "scenes": len(site.media.scenes), "stations": len(site.media.stations),
                          "links": sum(1 for r in site.runs if (site.media.runs.get(r["run"]) or {}).get("links")),
                          "clips": sum(1 for r in site.runs if site.media.clips(r["run"]))} if site.media else None),
