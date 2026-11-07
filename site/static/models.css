@@ -1,0 +1,32 @@
+/* The models by entity type, the routines both ways, the parameters view (site/models_pages.py). After robotparts' site.css, sim2real.css and
+   ui-shared.css; tokens only, so it reads in both themes. */
+
+/* a type's ladder: Zach's own table (2026-11-06): rung, model, parameters, adds, identified here; the adds and the identified keys muted */
+.s2r-ladder { table-layout: auto; }
+.s2r-ladder th[data-col="rung"] { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.s2r-ladder td[data-col="model"] { min-width: 220px; }
+.s2r-ladder td[data-col="parameters"] { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.s2r-ladder td[data-col="adds"] { min-width: 180px; }
+.s2r-ladder td[data-col="identified"], .s2r-ladder td[data-col="used"] { min-width: 220px; font-size: 13px; }
+.s2r-ladder .s2r-eq { color: var(--ink3); }
+.s2r-adds { color: var(--ink3); overflow-wrap: anywhere; }
+.s2r-idf + .s2r-idf, .s2r-used + .s2r-used { margin-top: 4px; }
+.s2r-use { overflow-wrap: anywhere; }
+/* WHY a tint on the row its anchor names (a deployment page's "models used here" lands on it): the reader sees which row was meant */
+.s2r-ladder tr:target > :is(th, td) { background: var(--accent-bg); }
+/* WHY a margin: the site's bar is sticky, so an anchored row scrolled to the very top would sit under it */
+.s2r-ladder tr[id] { scroll-margin-top: 84px; }
+.s2r-ei-lg { width: 22px; height: 22px; vertical-align: -3px; }
+.s2r-ei-lg svg { width: 22px; height: 22px; }
+
+/* the models index */
+.s2r-mtypes th small { font-weight: 400; }
+.s2r-mtypes .s2r-nw { white-space: nowrap; }
+
+/* the routines: two tabs, a data-ui table in each */
+.s2r-routines .panels data-views, .s2r-params data-views { min-height: 420px; }
+.s2r-routines .tabs { margin-top: 12px; }
+
+@media (max-width: 767px) {
+  .s2r-ladder td[data-col="model"], .s2r-ladder td[data-col="adds"], .s2r-ladder td[data-col="identified"], .s2r-ladder td[data-col="used"] { min-width: 0; }
+}

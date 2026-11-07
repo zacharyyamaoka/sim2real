@@ -116,6 +116,17 @@ that level captured (the station's Playback tabs, a camera's clip, a part's chan
 own section. Every level heads with the run's tags and Zach's caveat (offline evaluation judges models, not tracking under changed feedback).
 A level is a link: `/<deployment>/runs/<run>/?entity=<node id>`.
 
+## Models, routines, parameters
+
+`site/models_pages.py` (decision: `docs/decision-models-routines-parameters-2026-11-07.md`): `/models/` lists the eleven generic types, and
+`/models/<type>/` is a type's model ladder, one table per family, with Zach's columns (rung, model, parameters, adds, identified here) and where each
+model is used (the oracle examples' fits, and the rack's stations by the producer's model labels, which `type_cards/deployments/one_dof_test_rack.py`
+maps to the ladder: every one is the servo's `M4.dynamics.twin`); every deployment page's models link to their ladder rows. `/routines/` is every
+calibration routine both ways (routine -> parameters, parameter -> routines), each routine's setting, time, cost, equipment, recovery at 1x and 3x and
+status. `/parameters/` is the contract's parameters table in data-ui: four presets (all, winning model, with results, errors only), a column group per
+(routine, model), each row's least error marked, a model's group shown or hidden from Properties (data-ui CONTRACT §49, vendored as a backport onto
+d5ede93: `vendor/data-ui/VENDOR.md`).
+
 ## Diagnostics
 
 The stock diagnostics library is `robotdx.diagnostics` in `/home/bam/io-diagnostics` (lifted from `diagnostics_ref` at

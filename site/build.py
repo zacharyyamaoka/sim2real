@@ -22,6 +22,8 @@ Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing her
                      /stations/, /deployments/, /analysis/…
     OUT/deployments/ the deployments index and /deployments/<node id>/ for every node of every deployment's tree (site/deployments_pages.py;
                      its rows in OUT/data/deployment-cards.json)
+    OUT/models/      a page per generic type, its model ladder by family; OUT/routines/, the calibration routines both ways; OUT/parameters/,
+                     every parameter in data-ui (site/models_pages.py; rows in OUT/data/routines.json, parameter-routines.json, parameters-view.json)
 """
 
 from __future__ import annotations
@@ -94,6 +96,9 @@ def site_files(site):
     # the deployments index and one page per node of every deployment's tree (Domain model v3: site/deployments_pages.py)
     import deployments_pages  # noqa: PLC0415
     yield from deployments_pages.files(site)
+    # the models by entity type, the calibration routines both ways, the parameters view (site/models_pages.py)
+    import models_pages  # noqa: PLC0415
+    yield from models_pages.files(site)
     yield "stations/index.html", s2r.page(site, "Stations: sim2real", "/stations/", pages.stations_body(site), "stations",
                                           trail=breadcrumb([s2r.ROOT_CRUMB, ("Stations", "/stations/")]))
     for url, title, kind, intro in (("/runs/", "Every run", "runs", "Every real run, newest first."),
@@ -192,6 +197,8 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
     import deployments_pages  # noqa: PLC0415  (the deployments index's rows, beside search.json: the workbench's writer keeps out of data/)
     deployments_pages.write_data(out / "data", site)
+    import models_pages  # noqa: PLC0415  (the routines' and the parameters view's rows, beside the deployments' cards)
+    models_pages.write_data(out / "data", site)
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
               "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts, "domain": domain_counts,

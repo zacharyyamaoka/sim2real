@@ -597,6 +597,19 @@ def every_metric(d: Domain, entries: list[dict]) -> str:
     return f'<details class="s2r-more"><summary>Every metric, model, diagnostic and gate ({len(rows)})</summary>{table}</details>'
 
 
+def model_link(tid: str, mid: str) -> str:
+    """A model id linking to its row on its type's ladder (/models/<type>/#<model id>, site/models_pages.py)."""
+    return f'<a data-model-link="{e(mid)}" href="/models/{e(tid)}/#{e(mid)}"><code>{e(mid)}</code></a>'
+
+
+def label_words(node: dict, tid: str, label: str, n: int) -> str:
+    """A producer's label with its run count and, where type_cards maps it (inst.label_model), the ladder model it is, linked."""
+    m = inst.label_model(node["root"], label)
+    ladder = m.model if m and m.type == tid else ""
+    to = f' <span class="mut">→</span> {model_link(tid, ladder)}' if ladder else ""
+    return f'<span data-label="{e(label)}" data-ladder="{e(ladder)}">{e(label)} <small>({n:,})</small>{to}</span>'
+
+
 def models_section(d: Domain, node: dict) -> str:
     sub = d.subtree(node["id"])
     here = Counter(n["entity_type"] for n in sub if n["entity_type"])
@@ -612,12 +625,13 @@ def models_section(d: Domain, node: dict) -> str:
         current = dm.current_models(tid)
         used, basis, rung = fits.get(tid, ((), "", ""))
         reps = replayed.get(tid, Counter())
-        cur = " ".join(f'<code>{e(m.id)}</code> <small>{e(m.title)}</small>' for m in current)
+        # WHY links (w2c, 2026-11-07, the brief: "models used here" links to the model's ladder row): each id opens its row on /models/<type>/
+        cur = " ".join(f'{model_link(tid, m.id)} <small>{e(m.title)}</small>' for m in current)
         if used:
-            use = " ".join(f'<code>{e(i)}</code> <small>{e(dm.model(tid, i).title)}</small>' for i in used) + f'<br><small class="mut">{e(BASIS_WORDS[basis])} (v2 rung {e(rung)})</small>'
+            use = " ".join(f'{model_link(tid, i)} <small>{e(dm.model(tid, i).title)}</small>' for i in used) + f'<br><small class="mut">{e(BASIS_WORDS[basis])} (v2 rung {e(rung)})</small>'
         elif reps:
-            use = ('<small class="mut">the producer\'s models that replayed its runs:</small> '
-                   + ", ".join(f'{e(k)} <small>({v:,})</small>' for k, v in sorted(reps.items(), key=lambda kv: (-kv[1], kv[0]))))
+            use = ('<small class="mut">the producer\'s models that replayed its runs, and the ladder model each is:</small> '
+                   + ", ".join(label_words(node, tid, k, v) for k, v in sorted(reps.items(), key=lambda kv: (-kv[1], kv[0]))))
         else:
             use = '<span class="mut">— nothing fitted or replayed for it here</span>'
         rows.append(f'<tr data-type="{e(tid)}" data-current="{e(" ".join(m.id for m in current))}" data-used="{e(" ".join(used))}" data-basis="{e(basis)}"'
@@ -626,7 +640,8 @@ def models_section(d: Domain, node: dict) -> str:
     if not rows:
         return ('<section id="models" aria-labelledby="mod-h"><h2 id="mod-h">Models, per entity type</h2>'
                 f'<p class="mut">No typed part under it: a {e(level_word(node))} holds no model of its own.</p></section>')
-    used_words = ("the oracle's fit" if node["kind"] == "virtual" else "the producer's models that replayed its runs (their labels as the producer wrote them)")
+    used_words = ("the oracle's fit" if node["kind"] == "virtual" else "the producer's models that replayed its runs (their labels as the producer wrote them, "
+                  "each with the ladder model type_cards maps it to)")
     return f"""<section id="models" aria-labelledby="mod-h"><h2 id="mod-h">Models, per entity type</h2>
 <p class="lede">Each type's model ladder (type_cards, domain v3): the model current on it, and the ones used here, {used_words}.</p>
 <div class="s2r-scroll"><table class="s2r-table s2r-mods"><thead><tr><th scope="col">Entity type</th><th scope="col">Here</th><th scope="col">Current on its ladder</th><th scope="col">Used here</th></tr></thead>
