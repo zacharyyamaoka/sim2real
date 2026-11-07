@@ -1798,7 +1798,7 @@ CARDS_JS = """() => { const v = document.getElementById('deployments-views'); if
   const cards = [...v.querySelectorAll('article.dv-cards-card')].filter((c) => c.getClientRects().length > 0);
   return { matched: v.model.matched ?? (v.model.rows ? v.model.rows.length : null),
            cards: cards.map((c) => { const img = c.querySelector('img'); const r = c.getBoundingClientRect();
-             return { id: c.dataset.id, title: ((c.querySelector('.dv-cards-title') || {}).textContent || '').trim(), src: img ? img.getAttribute('src') : null,
+             return { id: c.dataset.id, title: ((c.querySelector('.dv-cards-title') || {}).textContent || '').trim(), src: img ? new URL(img.getAttribute('src'), location.href).pathname : null,
                       loaded: !!img && img.complete && img.naturalWidth > 0, box: [r.left, r.right, r.top, r.bottom] }; }) }; }"""
 # the runs table a deployment page mounts (#runs): the rows its data-views holds after the page's own scope
 NODE_RUNS_JS = """() => { const e = [...document.querySelectorAll('#runs data-dashboard data-views')].find((x) => x.getClientRects().length > 0);
@@ -1994,7 +1994,9 @@ def deployments_data_checks(out: Path, data: Path) -> dict:
                 if not dm.TYPES[e["entity_type"]].coverage.from_runs:
                     continue
                 c, a = e["coverage"], covs.get(e["node"])
-                if a is None or a.get("data-coverage") != str(c["pct"]) or a.get("data-visited") != str(c["visited"]) or a.get("data-reachable") != str(c["reachable"]):
+                said = lambda v: "" if v is None else str(v)  # noqa: E731  (unknown stays unknown: an empty value, and the page says why)
+                if (a is None or a.get("data-coverage") != said(c["pct"]) or a.get("data-visited") != said(c["visited"]) or a.get("data-reachable") != said(c["reachable"])
+                        or (c["pct"] is None and (c.get("why") or "?") not in html_text(section_of(text, "coverage")))):
                     bad["coverage"].append(f"{n['id']}: {e['node']} {a and a.get('data-coverage')} vs {c['pct']}")
             if n.get("structural") == "station":  # two paths, one number: the build's own preset of the station
                 pre = next((x for x in (presets.get(f"station: {n['device']}") or {}).get("nodes", []) if x["node"] == n["id"]), None)
@@ -2025,6 +2027,30 @@ def deployments_data_checks(out: Path, data: Path) -> dict:
              "models": "per entity type its current model and the ones used here (the oracle's fit, the models that replayed its runs)"}
     for key, what in words.items():
         check(not bad[key], f"every deployment node ({len(nodes)}) has {what} ({len(bad[key])} wrong: {bad[key][:3]})")
+    # a station's link in 3D: the media lane's joint-3d component (site/components.py), mounted for the newest run a model replayed
+    # (else its newest run with link poses), its entity and its link model in the mount's query
+    if media_index.is_file():
+        from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+        index = json.loads(media_index.read_text())
+        models_of = {(s["deployment"], s["station"]): "/media/" + s["glb"] for s in index.get("stations", []) if s.get("glb")}
+        wrong = []
+        for n in nodes:
+            if n["kind"] != "physical" or n.get("structural") != "station":
+                continue
+            page_path = out / "deployments" / n["id"] / "index.html"
+            text = page_path.read_text() if page_path.is_file() else ""
+            mine = sorted((r for r in runs if r["device"] == n["device"] and (index.get("runs", {}).get(r["run"]) or {}).get("links")),
+                          key=lambda r: r["started"], reverse=True)
+            want_run = next((r for r in mine if r.get("models")), mine[0] if mine else None)
+            mounts = [a for a in start_tags(section_of(text, "link-3d"), "div", "data-component") if a["data-component"] == "joint-3d"]
+            q = parse_qs(urlparse(mounts[0]["data-src"]).query) if mounts else {}
+            key = station_key_of(n["device"])
+            if not (want_run and mounts and mounts[0]["data-src"].startswith("/views/components/joint-3d.base?") and q.get("run") == [want_run["run"]]
+                    and q.get("device") == [n["device"]] and q.get("station") == [key] and q.get("deployment") == [n["root"]]
+                    and q.get("glb") == [models_of.get((n["root"], key))]):
+                wrong.append(f"{n['id']}: {mounts[0].get('data-src', '')[:120] if mounts else 'no mount'} vs {want_run['run'] if want_run else None}")
+        check(not wrong, f"every station's page shows its link in 3D, the media lane's joint-3d component on its newest replayed run ({wrong[:2]})")
     rack = (out / DEP / "index.html").read_text()
     oracle_pages = [x for x in ORACLE_EXAMPLES if f'href="{node_url(x)}"' not in (out / "sysid" / x / "index.html").read_text()]
     check(f'href="{node_url(DEP)}"' in rack and not oracle_pages,
@@ -2149,7 +2175,7 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     soft_wait(page, f"() => ({NODE_RUNS_JS})() === {n_all}", timeout=45000)
     got = page.evaluate(NODE_RUNS_JS)
     check(got == n_all, f"the rack's runs table holds every run under it ({got} of {n_all})")
-    page.evaluate("window.scrollTo(0, 0)")
+    page.evaluate("(document.getElementById('pane') || document.scrollingElement).scrollTo(0, 0)")
     page.wait_for_timeout(300)
     still("42-deployment-physical")
     adapter = layout["adapter"]
@@ -2165,12 +2191,16 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
         return [Number(c.dataset.coverage), fill.getBoundingClientRect().width, track.getBoundingClientRect().width]; }}""")
     check(bool(bar) and bar[2] > 60 and abs(bar[1] / bar[2] - min(bar[0], 100) / 100) < 0.015,
           f"CAN 11's coverage bar is as long as its number ({bar and f'{bar[0]} % drawn {bar[1]:.1f} of {bar[2]:.1f} px'})")
+    page.locator("#link-3d").scroll_into_view_if_needed()
+    drawn = soft_wait(page, """() => { const s = document.querySelector("#link-3d [data-component='joint-3d'] .dv-scene3d"); const h = s && s.scene3d;
+        return !!h && h.robot().state === 'ready' && Object.keys(h.robot().links || {}).length >= 2; }""", timeout=45000)
+    check(drawn, "CAN 11's page draws its link in 3D (the joint-3d component: its link model loaded, every series posed)")
     n11 = len(layout["runs_under"][can11])
     page.locator("#runs").scroll_into_view_if_needed()
     soft_wait(page, f"() => ({NODE_RUNS_JS})() === {n11}", timeout=45000)
     got = page.evaluate(NODE_RUNS_JS)
     check(got == n11, f"CAN 11's page, opened from its adapter's tree, holds exactly its runs ({got} of {n11})")
-    page.evaluate("window.scrollTo(0, 0)")
+    page.evaluate("(document.getElementById('pane') || document.scrollingElement).scrollTo(0, 0)")
     page.wait_for_timeout(300)
     still("43-deployment-station")
 
