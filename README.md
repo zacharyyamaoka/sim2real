@@ -60,7 +60,7 @@ the media, the site shows every page as before.
 
 The 3D view, the clips and the "what you're looking at" words are components scoped to an entity (`site/components.py`: `joint_3d` for a
 joint, `camera_clip` for a camera, `joint_render` for a joint; `what_joint` / `what_camera`), so a page drops them in per entity level (the
-run page's next redesign: an entity tree on the left, the selected level's dashboard on the right). Each is also a dashboard of its own,
+run page does: its station's level has the joint's, a camera's level that camera's clip). Each is also a dashboard of its own,
 `views/components/<name>.base`, its entity in the URL's query (`?deployment=…&run=…&station=…&device=…&glb=…` or `&camera=…`);
 `/components/` mounts each one for a real entity. The run page is composed of the same views (`components.compose`).
 
@@ -100,13 +100,21 @@ generic entity types with one model ladder each in families (`M2.kinematics.geom
 coverage over any selection of runs (`type_cards/selection.py`), the parameters table with a column group per routine and model, and
 frozen reports (`type_cards/frozen_reports/`). The type level is committed (`type_cards/domain_v3.json`, `python3 -m type_cards.domain
 --write`); the site build writes the rest to `OUT/data/domain/` (`deployments.json`, `parameters.json`, `selections/<dep>.json`,
-`coverage_cells/<dep>.json`, `reports/<id>.json`).
+`coverage_cells/<dep>.json`, `reports/<id>.json`). The deployments pages and the run page read them (below).
 
 **Deployments pages** (`site/deployments_pages.py`, decision: `docs/decision-deployments-pages-2026-11-07.md`): `/deployments/` is the index,
 a left filter bar (kind, tags; data-ui's rail) over data-ui cards of the seven deployments, each with its render; every node of every tree has
-its page at `/deployments/<node id>/`: its tree on the left (`site/ui_shared.py` `entity_tree`, shared with the run page), its
+its page at `/deployments/<node id>/`: its tree on the left (`site/ui_shared.py` `entity_tree`; the run page's is `status_tree`, beside it), its
 sub-deployments, its runs, the models per entity type, and its pinned metrics and coverage over all of its runs (`sel.compute`). The rack's
 record page (`/one-dof-test-rack/`: gates, why it fails, evidence) and each oracle example's page (`/sysid/<id>/`) stay, linked both ways.
+
+**The run page** (`site/run_pages.py`; decision `docs/decision-run-page-2026-11-07.md`): the run's entity tree in the left column (the
+contract's tree: deployment, adapter, station, the station's parts, the cameras that see it; RobotDx's device tree, `ui_shared.status_tree`:
+a dot per node at its level in this run, search, collapse and expand, its width dragged and remembered) and on the right the picked level's
+dashboard: pinned and other model-independent metrics, diagnostics with their levels, coverage for this run (`sel.compute([run])`), then what
+that level captured (the station's Playback tabs, a camera's clip, a part's channels as `views/levels/<type>.base`), and the models in their
+own section. Every level heads with the run's tags and Zach's caveat (offline evaluation judges models, not tracking under changed feedback).
+A level is a link: `/<deployment>/runs/<run>/?entity=<node id>`.
 
 ## Diagnostics
 

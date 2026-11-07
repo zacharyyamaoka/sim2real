@@ -1787,6 +1787,365 @@ def component_browser_checks(page, base: str, still) -> None:
     check(all(v is True for v in got.values()) and len(got) == len(COMPONENTS), f"/components/: each component mounted alone for its entity draws and plays ({got})")
 
 
+# ---- the run page: an entity tree on the left, the selected level's standard dashboard on the right (Zach, PROJECT - Sim2Real, 2026-11-06:
+# "if I click on any run I should be able to view the data for that run. On the left should be like an entity tree. so you can see basically
+# the results at different levels. and then on the page what shows is the standard dashboard for that level with the data that was capture
+# from the run"; "in these dashboards we are seeing like the metrics and diagonistics that are indepdent of the models"; type_cards/CONTRACT.md,
+# "The run page: entity tree and the standard dashboard per level"); written before site/run_pages.py and site/ui_shared.py. The oracle is
+# the contract's own: the served deployments.json for the tree, sel.compute([run]) for levels, the browser's coverage rule (coverage_cells)
+# for coverage, run_gates.json ÷ gates.json's T1 row for each model's fidelity, domain.level for its level.
+ENTITY_ASIDE = re.compile(r'<aside class="fcol s2r-aside" id="entities" aria-label="Entities" data-resizable="right"[^>]*>(.*?)</aside>', re.S)
+TREEITEM = re.compile(r'<li role="treeitem"([^>]*)>')
+PANE = re.compile(r'<section class="s2r-level"([^>]*)>')
+LEVEL_VIEWS = ("bldc_motor", "foc_controller", "gearbox", "encoder")  # the parts whose captured data a level dashboard draws (views/levels/)
+
+
+def attrs(text: str) -> dict:
+    from html import unescape  # noqa: PLC0415
+    return {k: unescape(v) for k, v in re.findall(r'([\w-]+)="([^"]*)"', text)}
+
+
+def run_tree_of(nodes: list[dict], row: dict) -> list[dict]:
+    """The contract's rule, from the served deployments.json: the run's deployment's nodes at the run's device (its station and its parts),
+    every ancestor of them, and the cameras whose `sees` holds the run's station; depth first, siblings in deployments.json's order."""
+    mine = [n for n in nodes if n["root"] == row["deployment"]]
+    by_id = {n["id"]: n for n in mine}
+    own = [n for n in mine if n.get("device") == row["device"]]
+    station = next(n for n in own if n.get("structural") == "station")
+    keep = set()
+    for n in own:
+        while n is not None and n["id"] not in keep:
+            keep.add(n["id"])
+            n = by_id.get(n.get("parent"))
+    keep |= {n["id"] for n in mine if station["id"] in (n.get("sees") or [])}
+    kids: dict = {}
+    for n in mine:
+        kids.setdefault(n.get("parent"), []).append(n)
+    out: list[dict] = []
+
+    def walk(parent):
+        for n in kids.get(parent, []):
+            if n["id"] in keep:
+                out.append(n)
+                walk(n["id"])
+    walk(None)
+    return out
+
+
+def run_levels(tree: list[dict], result: dict) -> dict[str, str]:
+    """Each node's level in this run: a typed node's worst model-independent diagnostic (domain.LEVEL_RANK; none is unknown), a structural
+    node the worst under it, a camera unknown (no run is known to be its)."""
+    from type_cards import domain as dm  # noqa: PLC0415
+
+    rank = dm.LEVEL_RANK
+    own = {}
+    for n in result["nodes"]:
+        rows = [d for d in n["diagnostics"] if not dm.metric(n["entity_type"], d["metric"]).model_dependent]
+        own[n["node"]] = max((d["level"] for d in rows), key=rank.get, default="unknown")
+    levels = {}
+    for n in reversed(tree):  # children before their parents
+        if n["id"] in own:
+            levels[n["id"]] = own[n["id"]]
+        elif n.get("entity_type") and not n.get("structural"):
+            levels[n["id"]] = "unknown"
+        else:
+            under = [levels[c["id"]] for c in tree if c.get("parent") == n["id"]]
+            levels[n["id"]] = max(under, key=rank.get, default="unknown")
+    return levels
+
+
+def run_page_checks(out: Path, data: Path) -> dict:
+    """No browser, every run page: the entity tree in the left pane is the contract's tree for the run, each node with its icon, its level's
+    dot, a one-line summary and a deep link; one level section per node, the run's station shown first; the run tags and the caveat in the
+    header; the station's pinned numbers, coverage and models are the contract's."""
+    from urllib.parse import quote  # noqa: PLC0415
+    from type_cards import domain as dm  # noqa: PLC0415
+    from type_cards import selection as sel  # noqa: PLC0415
+
+    nodes = json.loads((out / "data" / "domain" / "deployments.json").read_text())["rows"]
+    runs = json.loads((data / "runs.json").read_text())["rows"]
+    tables = sel.load_tables(out / "data", DEP, nodes=[n for n in nodes if n["root"] == DEP])
+    gates = json.loads((data / "gates.json").read_text())["rows"]
+    t1 = {g["device"]: g["value"] for g in gates if g["gate"].split()[0] == "T1" and isinstance(g.get("value"), (int, float))}
+    cells = json.loads((out / "data" / "domain" / "coverage_cells" / f"{DEP}.json").read_text())
+    cells_of: dict = {}
+    for c in cells["rows"]:
+        cells_of.setdefault(c["run"], []).append(c)
+    errors_of: dict = {}
+    for g in tables.run_diagnostics:
+        if g.get("diagnostic") == "stock.model_error" and isinstance(g.get("value"), (int, float)):
+            errors_of.setdefault(g["run"], {})[sel.model_label(g.get("title", ""))] = g["value"]
+    spec = dm.diagnostic("integrated_servo", "servo.twin_fidelity.dx")
+    by_d, by_p = sel._index(tables.run_diagnostics), sel._index(tables.coverage_points)
+    media_runs = (json.loads((out / "media" / "index.json").read_text()).get("runs") or {}) if (out / "media" / "index.json").is_file() else {}
+    import dataclasses  # noqa: PLC0415
+    bad = {k: [] for k in ("aside", "tree", "dots", "links", "panes", "tags", "caveat", "metrics", "coverage", "models")}
+    for r in runs:
+        html = (out / DEP / "runs" / r["run"] / "index.html").read_text()
+        where = r["run"][:60]
+        aside = ENTITY_ASIDE.search(html)
+        main_at = html.find('<div class="mpane" id="pane">')
+        if not aside or main_at < aside.end() or "<main class=\"panes\">" not in html:
+            for bucket in bad.values():  # WHY every bucket: a page with no tree has none of the rest, never a vacuous pass
+                bucket.append(where)
+            continue
+        tree = run_tree_of(nodes, r)
+        station = next(n for n in tree if n.get("structural") == "station")
+        items = [attrs(m.group(1)) for m in TREEITEM.finditer(aside.group(1))]
+        if [i.get("data-entity") for i in items] != [n["id"] for n in tree] or [i.get("aria-level") for i in items] != [str(n["depth"] + 1) for n in tree]:
+            bad["tree"].append(where)
+        selected = [i.get("data-entity") for i in items if i.get("aria-selected") == "true"]
+        if selected != [station["id"]]:
+            bad["tree"].append(f"{where}: selected {selected}")
+        result = sel.compute([r["run"]], dataclasses.replace(tables, runs=[r], run_diagnostics=by_d.get(r["run"], []), coverage_points=by_p.get(r["run"], [])))
+        want = run_levels(tree, result)
+        if {i.get("data-entity"): i.get("data-level") for i in items} != want:
+            bad["dots"].append(where)
+        body = aside.group(1)
+        for n in tree:
+            if f'href="?entity={quote(n["id"], safe="")}"' not in body:
+                bad["links"].append(f"{where}: {n['id']}")
+                break
+        lis = re.split(r'<li role="treeitem"', body)[1:]
+        if any(not re.search(r'class="s2r-dot s2r-dot-(ok|warning|error|unknown)"', li.split("<ul", 1)[0]) or "<svg" not in li.split("<ul", 1)[0]
+               or not re.search(r'<span class="s2r-etree-line"[^>]*>[^<]{3,}', li.split("<ul", 1)[0]) for li in lis):
+            bad["dots"].append(f"{where}: a node without its dot, icon or line")
+        panes = [(attrs(m.group(1)), bool(re.search(r"\shidden(\s|$)", m.group(1)))) for m in PANE.finditer(html)]
+        if sorted(p.get("data-entity") for p, _h in panes) != sorted(n["id"] for n in tree) or panes[0][0].get("data-entity") != station["id"] \
+                or any(h != (p.get("data-entity") != station["id"]) for p, h in panes):
+            bad["panes"].append(where)
+        # each level drops in its own components and dashboards: a camera that filmed this run its clip (camera-clip, scoped to it), a
+        # part its captured data (views/levels/<type>.base, scoped to the run's device); the station's are the Playback's (joint-3d,
+        # joint-render)
+        clip_camera = str(((media_runs.get(r["run"]) or {}).get("camera") or "")) if (media_runs.get(r["run"]) or {}).get("media") else ""
+        for n in tree:
+            at = html.find(f'<section class="s2r-level" data-entity="{n["id"]}"')
+            part = html[at:html.find("</section>", at)] if at >= 0 else ""
+            kind = n.get("entity_type") or ""
+            # each level links its node's own page, over every run of it (the deployments lane's /deployments/<node id>/)
+            if f'href="/deployments/{n["id"]}/"' not in part or not (out / "deployments" / n["id"] / "index.html").is_file():
+                bad["panes"].append(f"{where}: {n['id']} does not link its page /deployments/{n['id']}/")
+            if kind.endswith("camera"):
+                mounted = re.search(r'data-component="camera-clip" data-src="([^"]+)"', part)
+                serial = n["id"].rsplit("camera-", 1)[-1]
+                if bool(mounted) != (serial == clip_camera) or (mounted and f"camera={serial}" not in unquote(mounted.group(1))):
+                    bad["panes"].append(f"{where}: camera {serial} clip {bool(mounted)} vs {clip_camera}")
+            elif kind in LEVEL_VIEWS:
+                src_ = re.search(r'class="s2r-dash" data-src="(/views/levels/([a-z_]+)\.base\?[^"]+)"', part)
+                if not src_ or src_.group(2) != kind or f"device={r['device']}" not in unquote(src_.group(1)).replace("+", " "):
+                    bad["panes"].append(f"{where}: {n['id']} has no {kind} dashboard")
+        tags = {k: v for k, v in re.findall(r'data-tag="(\w+)" data-value="([^"]*)"', html)}
+        loop = {True: "true", False: "false", None: "unknown"}[r.get("closed_loop")]
+        want_tags = {"excitation": r.get("excitation") or "unknown", "closed_loop": loop, "offline_scope": r.get("offline_scope") or "unknown",
+                     "config": r.get("config_sha256") if r.get("config") == "full" else "not recorded"}
+        if tags != want_tags:
+            bad["tags"].append(f"{where}: {tags}")
+        caveat = re.search(r'<p class="s2r-caveat"[^>]*>(.*?)</p>', html, re.S)
+        if not caveat or "offline" not in caveat.group(1).lower() or (r.get("offline_scope") == "its own config" and "own config" not in caveat.group(1)):
+            bad["caveat"].append(where)
+        sec = html[html.find(f'<section class="s2r-level" data-entity="{station["id"]}"'):]
+        sec = sec[:sec.find("</section>")]
+        m = re.search(r'data-metric="servo.tracking_rms" data-value="([^"]*)"', sec)
+        tracking = r.get("tracking_mrad")
+        if not m or (isinstance(tracking, (int, float)) and math.isfinite(tracking) and abs(float(m.group(1) or "nan") - tracking) > 1e-9) \
+                or (not isinstance(tracking, (int, float)) and m.group(1) != ""):
+            bad["metrics"].append(where)
+        c = re.search(r'data-coverage-pct="([^"]*)"', sec)
+        reach = cells["reachable_cells"].get(r["device"])
+        want_pct = sel.coverage_from_cells(cells_of.get(r["run"], []), [r["run"]], cells["reachable_cells"]).get(r["device"], 0.0) if reach else None
+        if not c or (want_pct is None) != (c.group(1) == "") or (want_pct is not None and abs(float(c.group(1)) - want_pct) > 0.005):
+            bad["coverage"].append(f"{where}: {c.group(1) if c else None} vs {want_pct}")
+        models = [s for s in r.get("situations", []) if s not in ("real", "target")]
+        rows_m = [attrs(x) for x in re.findall(r'<tr (data-model="[^>]*)>', sec)]
+        got = {a_["data-model"]: a_ for a_ in rows_m}
+        if set(got) != set(models):
+            bad["models"].append(f"{where}: {sorted(got)} vs {models}")
+        else:
+            for name in models:
+                err = (errors_of.get(r["run"]) or {}).get(name)
+                fid = err / t1[r["device"]] if err is not None and t1.get(r["device"]) else None
+                g = got[name]
+                if (fid is None) != (g.get("data-fidelity") == "") or (fid is not None and abs(float(g["data-fidelity"]) - fid) > 1e-9) \
+                        or g.get("data-level") != dm.level(spec, fid):
+                    bad["models"].append(f"{where}: {name} {g.get('data-fidelity')} {g.get('data-level')} vs {fid} {dm.level(spec, fid)}")
+                    break
+    # the run page computes each run's selection over that run's own rows: the same result as over the deployment's whole tables
+    sample = runs[::150]
+    same = [sel.compute([r["run"]], tables) == sel.compute([r["run"]], dataclasses.replace(tables, runs=[r], run_diagnostics=by_d.get(r["run"], []),
+                                                                                            coverage_points=by_p.get(r["run"], []))) for r in sample]
+    check(all(same), f"a run's selection of one over its own rows is the one over the deployment's whole tables ({sum(same)} of {len(sample)} sampled runs)")
+    n = len(runs)
+    check(not bad["aside"], f"every run page is two panes, the entity tree on the left (aside 'Entities', resizable) and the run on the right "
+                            f"({n - len(bad['aside'])} of {n}; {bad['aside'][:2]})")
+    check(not bad["tree"], f"each run's tree is the contract's: its deployment, adapter, station and the station's parts, and the cameras that see the "
+                           f"station, nested in order, the station selected ({n - len(bad['tree'])} of {n}; {bad['tree'][:2]})")
+    check(not bad["dots"], f"each node shows its icon, its dot at its level in this run (sel.compute([run]): the worst model-independent diagnostic, "
+                           f"rolled up the tree) and a one-line summary ({bad['dots'][:2]})")
+    check(not bad["links"], f"each node deep-links its own dashboard (?entity=<node id>) ({bad['links'][:2]})")
+    check(not bad["panes"], f"one level section per node, the station's first and shown, the rest hidden until picked; a camera's holds its clip of "
+                            f"this run where it filmed it, a part's its captured data; each links its node's own page ({bad['panes'][:2]})")
+    check(not bad["tags"], f"each run's tags are in its header: excitation, closed loop, offline scope and the config sha256 (or 'not recorded'), as "
+                           f"runs.json holds them ({bad['tags'][:2]})")
+    check(not bad["caveat"], f"each run says Zach's caveat in plain words: offline evaluation judges models, not tracking under changed feedback "
+                             f"({bad['caveat'][:2]})")
+    check(not bad["metrics"], f"each station's pinned tracking error is the run's own (runs.json tracking_mrad, empty where none) ({bad['metrics'][:2]})")
+    check(not bad["coverage"], f"each station's coverage for this run is the browser rule's over coverage_cells (empty with a why where the station has "
+                               f"no joint description) ({bad['coverage'][:2]})")
+    check(not bad["models"], f"each run's models are their own section, one row per model: its error ÷ the station's T1 floor and that value's level "
+                             f"(domain.level on servo.twin_fidelity.dx) ({bad['models'][:2]})")
+    return {"nodes": nodes, "runs": runs}
+
+
+LEVEL_JS = """() => { const sel = [...document.querySelectorAll('[role=tree] [role=treeitem][aria-selected=true]')].map((li) => li.dataset.entity);
+  const shown = [...document.querySelectorAll('section.s2r-level')].filter((s) => s.getClientRects().length > 0).map((s) => s.dataset.entity);
+  const tabs = document.querySelector('nav.tabs'); const a = document.querySelector('aside#entities').getBoundingClientRect();
+  const pane = document.querySelector('.mpane').getBoundingClientRect();
+  return { selected: sel, shown, tabs: !!tabs && tabs.getClientRects().length > 0, url: decodeURIComponent(location.search),
+           aside: [a.left, a.right, a.width], pane: [pane.left, pane.right] }; }"""
+ROWS_SHOWN_JS = """() => [...document.querySelectorAll('[role=tree] [role=treeitem]')].filter((li) => li.querySelector(':scope > .s2r-etree-row').getClientRects().length > 0)
+  .map((li) => li.dataset.entity)"""
+
+
+def run_page_browser_checks(page, base: str, data: Path, media: dict, served: dict, still) -> None:
+    """In the browser: the tree sits left of the run, a click shows that level's dashboard (its captured data drawn by data-ui, its media
+    component), the URL names it and Back restores the run's station, a deep link opens a level, the tree searches, collapses and expands, and
+    its boundary drags and is remembered."""
+    from urllib.parse import quote  # noqa: PLC0415
+
+    nodes, runs = served["nodes"], served["runs"]
+    t2 = next(r for r in runs if "t2~heldout_can12~runs~s18" in r["run"])
+    tree = run_tree_of(nodes, t2)
+    station = next(n for n in tree if n.get("structural") == "station")
+    driver = next(n for n in tree if n.get("entity_type") == "foc_controller")
+    url = f"{base}/{DEP}/runs/{t2['run']}/"
+    page.goto(url)
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(1200)
+    s0 = page.evaluate(LEVEL_JS)
+    check(s0["selected"] == [station["id"]] and s0["shown"] == [station["id"]] and s0["tabs"] and s0["aside"][1] <= s0["pane"][0] + 1 and s0["aside"][2] >= 180,
+          f"a run opens on its station: the tree on the left (ends {s0['aside'][1]:.0f} px, the run starts {s0['pane'][0]:.0f} px), the station selected, its "
+          f"dashboard and the Playback tabs shown ({s0['selected']}, {s0['shown']})")
+    dots = page.evaluate("""() => [...document.querySelectorAll('[role=tree] .s2r-dot')].map((d) => { const r = d.getBoundingClientRect(); const cs = getComputedStyle(d);
+        return [r.width, r.height, cs.borderTopWidth, cs.backgroundColor]; })""")
+    check(len(dots) == len(tree) and all(w >= 6 and h >= 6 for w, h, _b, _bg in dots), f"every node's status dot is drawn ({len(dots)} of {len(tree)}: {dots[:2]})")
+    still("50-run-tree-station")
+    # a click on the driver: its dashboard, the URL names it, the Playback tabs (the station's) step aside
+    page.locator(f"[role=tree] [role=treeitem][data-entity='{driver['id']}'] > .s2r-etree-row a").first.click()
+    page.wait_for_timeout(600)
+    s1 = page.evaluate(LEVEL_JS)
+    name = "q-axis current i_q · the board"
+    drawn = wait_view(page, name, "!!s.querySelector(':scope > data-views').model && s.querySelector(':scope > data-views').model.rows.length > 0", timeout=30000)
+    rows = page.evaluate("""(name) => { const s = (%s)(name); const m = s && s.querySelector(':scope > data-views').model;
+        return m ? m.rows.map((r) => [r.run, r.device, r.situation]) : null; }""" % VIEW_JS, name) or []
+    check(s1["selected"] == [driver["id"]] and s1["shown"] == [driver["id"]] and not s1["tabs"] and f"entity={driver['id']}" in s1["url"],
+          f"a click on the driver shows its level alone, and the URL names it ({s1['url'][:120]}; shown {s1['shown']}, tabs {s1['tabs']})")
+    check(drawn and rows and all(r_[0] == t2["run"] and r_[1] == t2["device"] and r_[2] == "real" for r_ in rows),
+          f"the driver's dashboard draws the board's own current from this run's samples, its device only ({len(rows)} rows)")
+    still("51-run-tree-driver")
+    page.go_back()
+    page.wait_for_timeout(1200)
+    s2 = page.evaluate(LEVEL_JS)
+    check(s2["selected"] == [station["id"]] and s2["shown"] == [station["id"]] and s2["tabs"] and "entity=" not in s2["url"],
+          f"Back gives the station and its Playback tabs back ({s2['selected']}, url {s2['url']!r})")
+    # search, collapse, expand
+    search = page.locator("[data-etree-search]").first
+    search.fill("encoder")
+    page.wait_for_timeout(400)
+    found = page.evaluate(ROWS_SHOWN_JS)
+    enc = next(n for n in tree if n.get("entity_type") == "encoder")
+    chain = []
+    n_ = enc
+    while n_:
+        chain.insert(0, n_["id"])
+        n_ = next((x for x in tree if x["id"] == n_.get("parent")), None)
+    check(found == chain, f"the tree's search shows the matches and their ancestors only ('encoder': {found})")
+    search.fill("")
+    page.wait_for_timeout(300)
+    page.locator("[data-etree-collapse]").first.click()
+    page.wait_for_timeout(300)
+    collapsed = page.evaluate(ROWS_SHOWN_JS)
+    page.locator("[data-etree-expand]").first.click()
+    page.wait_for_timeout(300)
+    expanded = page.evaluate(ROWS_SHOWN_JS)
+    check(collapsed == [tree[0]["id"]] and expanded == [n["id"] for n in tree],
+          f"Collapse all leaves the deployment, Expand all shows every node again ({collapsed}; {len(expanded)} of {len(tree)})")
+    # the boundary drags and is remembered
+    aside = page.locator("aside#entities")
+    w0 = aside.evaluate("el => el.getBoundingClientRect().width")
+    p0 = page.evaluate("document.querySelector('.mpane').getBoundingClientRect().left")
+    box = aside.bounding_box()
+    page.mouse.move(box["x"] + box["width"] - 1, box["y"] + 200)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] + 119, box["y"] + 200, steps=8)
+    page.mouse.up()
+    w1 = aside.evaluate("el => el.getBoundingClientRect().width")
+    p1 = page.evaluate("document.querySelector('.mpane').getBoundingClientRect().left")
+    page.reload()
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(1000)
+    w2 = page.locator("aside#entities").evaluate("el => el.getBoundingClientRect().width")
+    check(abs((w1 - w0) - 120) < 4 and abs((p1 - p0) - 120) < 4 and abs(w2 - w1) < 2,
+          f"the tree's boundary drags 120 px wider, the run moving with it, and is remembered ({w0:.0f} -> {w1:.0f} px, run {p0:.0f} -> {p1:.0f}; after a reload {w2:.0f})")
+    page.evaluate("localStorage.clear()")
+    # deep links: the deployment (its render and every node of the run), a camera that filmed a run (its clip on its own clock)
+    dep_node = tree[0]
+    page.goto(f"{url}?entity={quote(dep_node['id'], safe='')}")
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(1500)
+    s3 = page.evaluate(LEVEL_JS)
+    roll = page.evaluate(f"""async () => {{ const s = document.querySelector('section.s2r-level[data-entity="{dep_node['id']}"]'); const img = s && s.querySelector('img');
+        if (img) {{ img.loading = 'eager'; try {{ await img.decode(); }} catch (e) {{}} }}
+        return {{ ids: s ? [...s.querySelectorAll('tr[data-entity]')].map((t) => t.dataset.entity) : [], natural: img ? img.naturalWidth : 0 }}; }}""")
+    check(s3["selected"] == [dep_node["id"]] and s3["shown"] == [dep_node["id"]] and roll["ids"] == [n["id"] for n in tree] and roll["natural"] >= MIN_RENDER[0],
+          f"a deep link opens the deployment's level: its render and every entity of this run in one roll-up ({len(roll['ids'])} of {len(tree)}, render {roll['natural']} px)")
+    still("53-run-tree-deployment")
+    expected = {k: v for k, v in (media.get("camera_runs") or {}).items() if k not in set(media.get("refused") or [])}
+    filmed = next((r for r in sorted(runs, key=lambda r: -r["duration_s"]) if r["run"] in expected and r.get("models")), None) or \
+        next((r for r in runs if r["run"] in expected), None)
+    if not filmed:
+        check(False, "a filmed run to open a camera level on")
+        return
+    camera = next((n for n in run_tree_of(nodes, filmed) if (n.get("entity_type") or "").endswith("camera")
+                   and n["id"].endswith(str((media.get("index") or {}).get("runs", {}).get(filmed["run"], {}).get("camera")))), None)
+    page.goto(f"{base}/{DEP}/runs/{filmed['run']}/?entity={quote(camera['id'], safe='') if camera else ''}")
+    page.wait_for_load_state("load")
+    sel_v = f"section.s2r-level[data-entity='{camera['id'] if camera else ''}'] video[data-t0]"
+    ok = soft_wait(page, f"() => {{ const v = document.querySelector(\"{sel_v}\"); return !!v && v.readyState >= 2; }}", timeout=30000)
+    t = None
+    if ok:
+        t = page.evaluate(f"""() => {{ const d = document.querySelector("section.s2r-level[data-entity='{camera['id']}'] data-dashboard"); const c = d.clock;
+            c.pause(); const t = Math.round((c.start + 0.4 * (c.end - c.start)) * 1000) / 1000; c.seek(t); return t; }}""")
+        page.wait_for_timeout(1500)
+        v = page.evaluate(f"""() => {{ const v = document.querySelector("{sel_v}"); return [v.currentTime, Number(v.dataset.t0)]; }}""")
+        ok = abs(v[0] - (t - v[1])) <= 1 / 30 + 0.02
+    s4 = page.evaluate(LEVEL_JS)
+    check(bool(camera) and ok and s4["shown"] == [camera["id"]],
+          f"a deep link opens a camera's level on a filmed run: its clip (the camera-clip component, scoped to it) loads and follows its own clock "
+          f"({filmed['run'][:50]}, {camera['id'] if camera else None}, seek {t})")
+    still("52-run-tree-camera")
+    # the right pane scrolls on its own: a dashboard's rail splitter scrolls and clips with it, never drawn over the trail above the pane
+    page.goto(f"{base}/{DEP}/runs/{filmed['run']}/")
+    page.wait_for_load_state("load")
+    soft_wait(page, "() => document.querySelectorAll('#pane .dv-splitter').length > 0", timeout=20000)
+    page.evaluate("document.getElementById('pane').scrollTop = 1400")
+    page.wait_for_timeout(1200)
+    over = page.evaluate("""() => { const trail = document.querySelector('.trail').getBoundingClientRect(); const y = (trail.top + trail.bottom) / 2;
+        return [...document.querySelectorAll('.dv-splitter')].filter((s) => !s.hidden && !s.closest('aside')).map((s) => {
+          const r = s.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, y);
+          return { left: Math.round(r.left), over: !!hit && (hit === s || s.contains(hit)) }; }); }""")
+    check(bool(over) and not any(x["over"] for x in over),
+          f"with the run's pane scrolled, no dashboard splitter shows over the trail ({over})")
+    # a phone: the deep-linked levels have no sideways scroll
+    page.set_viewport_size({"width": 390, "height": 844})
+    for u in (f"{url}?entity={quote(driver['id'], safe='')}", f"{base}/{DEP}/runs/{filmed['run']}/?entity={quote(camera['id'], safe='') if camera else ''}"):
+        page.goto(u)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(1500)
+        ok390, detail = no_sideways_scroll(page)
+        check(ok390, f"at 390 px a deep-linked level has no sideways scroll ({u.split('?', 1)[1][:80]}: {detail})")
+    page.set_viewport_size({"width": 1280, "height": 900})
+
+
 # ---- the deployments index and every deployment's page (2026-11-07, Domain model v3; written before site/deployments_pages.py) ---------
 # Zach (PROJECT - Sim2Real, 2026-11-06): "Ok I like organizing this around Deployments. The orcale examples are also deployments its just
 # they are 'Virtual' ... Each sub componet of the deployment could basically be its own deployment (in fact it almost is) ... the first
@@ -2273,6 +2632,8 @@ def main() -> int:
     media = media_checks(out, data)
     media_page_checks(out, data, media)
     component_checks(out, data, media)
+    # the run page: the entity tree on the left, the selected level's dashboard on the right (Zach, 2026-11-06)
+    served_tree = run_page_checks(out, data)
     # the deployment tree, the run tags and the configuration snapshot (Zach, PROJECT - Sim2Real, Nov 5 2026)
     layout = deploy_tree_checks(data, out, doc)
     import tempfile  # noqa: PLC0415
@@ -2913,6 +3274,8 @@ def main() -> int:
                 media_browser_checks(page, base, data, media, still)
             with guard("the media components"):
                 component_browser_checks(page, base, still)
+            with guard("the run page's entity tree and levels"):
+                run_page_browser_checks(page, base, data, media, served_tree, still)
 
             # 13. the deployment tree in the rail, every run flat, a run's configuration (Zach, PROJECT - Sim2Real, Nov 5 2026)
             with guard("the deployment tree in the rail"):

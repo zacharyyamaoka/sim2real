@@ -19,6 +19,7 @@ from catalog_workbench.contract import Account, AnalysisArea, Area, Brand, Catal
 from catalog_workbench.html import e
 
 import pages
+import run_pages
 import types_pages
 from adapter import Station, deployment_url, run_url, station_url
 
@@ -129,10 +130,11 @@ RUN = Kind(
           Tab("why", "Why it fails", body=pages.run_why),
           Tab("diagnostics", "Diagnostics", body=pages.run_diagnostics, has=lambda site, r: bool(pages.run_diagnostics_rows(site, r))),
           Tab("evidence", "Evidence", body=pages.run_evidence)),
-    header=pages.run_header, crumbs=_run_crumbs,
+    # WHY its own header (site/run_pages.py): the run's tags, then one section per level of its entity tree, the station's first
+    header=run_pages.run_header, crumbs=_run_crumbs,
     back=lambda site, r: ["/", "/runs/", "/search/", deployment_url(r["deployment"]), station_url(r["deployment"], r["device"])],
     description=lambda site, r: f"{pages.run_title(r)}: real vs every model, played back on one clock, with its gates and diagnostics.",
-    scripts=("site", "sim2real"), data_ui=True,
+    scripts=run_pages.SCRIPTS, data_ui=True,
 )
 
 
@@ -173,7 +175,11 @@ ANALYSIS = AnalysisArea(
 
 def site_pages(site):
     from build import site_files  # noqa: PLC0415  (the build writes the home, the lists, the views, the static files and the kit)
-    return site_files(site)
+    yield from site_files(site)
+    # WHY the run pages here and not the workbench's record writer (RUN is not in CATALOG.kinds): a run's page is the workbench's record in
+    # its two panes, the run's entity tree in the left column (Zach, 2026-11-06: "On the left should be like an entity tree"), and the
+    # workbench's record page has no left column (site/ui_shared.py record_page)
+    yield from run_pages.pages_of(site)
 
 
 CATALOG = Catalog(
@@ -181,7 +187,7 @@ CATALOG = Catalog(
                 styles=("/static/sim2real.css",)),
     words=Words(item="run", items="runs", an_item="a run", groups="Deployments", subgroups="Stations"),
     menu=menu,
-    kinds=(DEPLOYMENT, STATION, RUN, TYPE),
+    kinds=(DEPLOYMENT, STATION, TYPE),  # RUN's pages: site_pages (run_pages.pages_of), in two panes
     areas=AREAS,
     quick=(("Why it fails", "/analysis/why-it-fails/"), ("Analysis", "/analysis/")),
     account=Account(lists=tuple((f"/analysis/{slug}/", title) for slug, title, _w in REPORTS), pill="standard",
