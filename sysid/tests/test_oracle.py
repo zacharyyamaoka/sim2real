@@ -167,21 +167,84 @@ def test_the_servo_ladder_selects_the_truths_rung():
     assert below and all(r["held_out_ratio"] > r["limit"] for r in doc["rungs"] if r["key"] in below)
 
 
+def as_written(doc: dict) -> dict:
+    """A fresh result as sysid.result.write puts it in the results file (its JSON: tuples as lists, numbers as JSON's)."""
+    from sysid import result as written  # noqa: PLC0415
+
+    return json.loads(json.dumps(doc, default=written.plain, allow_nan=False))
+
+
+def assert_same_result(committed: dict, fresh: dict, example: str) -> None:
+    """A fresh oracle result is the committed one: every field as the results file holds it, numbers to 1e-9 relative, only the declared
+    volatile provenance left out (where and when it ran: test_noise_ladder.VOLATILE_PROVENANCE, the ladder's same rule). WHY every field
+    (the v3 audit, 2026-11-07, finding 6, its sibling here): read for nominal, true, recovered and the metrics' before and after only, a
+    moved interval, verdict, held-out factor or selected rung still matched what the site shows."""
+    from test_noise_ladder import _same_value  # noqa: PLC0415  (the one rule for every fresh-result comparison)
+
+    _same_value(committed, as_written(fresh), (example,))
+
+
+def assert_same_drift(committed: dict, fresh: dict, name: str) -> None:
+    """A fresh drift demo is the committed one, by the same rule: every check, the forecast, the alarms and the recalibration."""
+    from test_noise_ladder import _same_value  # noqa: PLC0415
+
+    _same_value(committed, as_written(fresh), (name,))
+
+
 @pytest.mark.parametrize("example", EXAMPLES)
 def test_the_committed_result_is_this_code(example):
     """sysid/results/<id>.json (what the site shows) is what this code computes now."""
     committed = json.loads((SYSID / "results" / f"{example}.json").read_text())
-    fresh = result(example)
-    a, b = by_key(committed["parameters"]), by_key(fresh["parameters"])
-    assert a.keys() == b.keys()
-    for key in a:
-        for field in ("nominal", "true", "recovered"):
-            x, y = a[key][field], b[key][field]
-            assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-12), f"{example} {key} {field}: committed {x}, now {y}"
-    ma, mb = {m["id"]: m for m in committed["metrics"]}, {m["id"]: m for m in fresh["metrics"]}
-    assert ma.keys() == mb.keys()
-    for mid in ma:
-        assert math.isclose(ma[mid]["before"], mb[mid]["before"], rel_tol=1e-9) and math.isclose(ma[mid]["after"], mb[mid]["after"], rel_tol=1e-9), mid
+    assert_same_result(committed, result(example), example)
+
+
+def test_the_committed_comparisons_see_every_substantive_field():
+    """The v3 audit (2026-11-07, finding 6) found the noise ladder's fresh-result comparison blind to intervals and outcomes; these two,
+    its siblings, read each parameter's nominal, true and recovered and each metric's before and after (a drift demo: its headline hours),
+    so a moved interval, verdict, held-out factor, selected rung or check still matched what the site shows. Each edit below leaves those
+    as committed and must turn the comparison red; one that touches only where and when it ran (the declared volatile provenance) must not."""
+    import copy  # noqa: PLC0415
+
+    def load(name: str) -> dict:
+        return json.loads((SYSID / "results" / f"{name}.json").read_text())
+
+    can11, belt, wear, knock = load("pendulum_can11"), load("conveyor"), load("drift_backlash_wear"), load("drift_camera_knock")
+    results = {
+        "a parameter's 95 % interval": (belt, lambda d: d["parameters"][0]["ci95"].__setitem__(1, d["parameters"][0]["ci95"][1] * 1.01)),
+        "a parameter's verdict": (belt, lambda d: d["parameters"][0].__setitem__("pass", not d["parameters"][0]["pass"])),
+        "a metric's factor": (belt, lambda d: d["metrics"][0].__setitem__("factor", d["metrics"][0]["factor"] * 2)),
+        "a metric's verdict": (belt, lambda d: d["metrics"][0].__setitem__("pass", not d["metrics"][0]["pass"])),
+        "the example's verdict": (belt, lambda d: d["verdict"].__setitem__("status", "fail")),
+        "the selected rung": (can11, lambda d: d.__setitem__("selected_rung", "M3")),
+        "identification having run sealed": (belt, lambda d: d["provenance"].__setitem__("identify_sealed", False)),
+    }
+    drifts = {
+        "a wear check's gap": ("backlash_wear", wear, lambda d: d["checks"][0].__setitem__("gap_growth_rad", d["checks"][0]["gap_growth_rad"] + 1e-4)),
+        "the check that warned": ("backlash_wear", wear, lambda d: d.__setitem__("alarm_by", list(reversed(d["alarm_by"])) + ["none"])),
+        "the rate's interval": ("backlash_wear", wear, lambda d: d.__setitem__("rate_ci95", [0.0, 1.0])),
+        "the knock's recovered shift": ("camera_knock", knock, lambda d: d["shift_recovered"].__setitem__(next(iter(d["shift_recovered"])), 1.0)),
+    }
+    kept = lambda d: ([(p["key"], p["nominal"], p["true"], p["recovered"]) for p in d["parameters"]]  # noqa: E731
+                      + [(m["id"], m["before"], m["after"]) for m in d["metrics"]])
+    for what, (doc, edit) in results.items():
+        assert_same_result(doc, copy.deepcopy(doc), doc["example"])
+        bad = copy.deepcopy(doc)
+        edit(bad)
+        assert bad != doc and kept(bad) == kept(doc), what
+        with pytest.raises(AssertionError):
+            assert_same_result(doc, bad, doc["example"])
+            pytest.fail(f"the result comparison did not see {what}")
+    for what, (name, doc, edit) in drifts.items():
+        assert_same_drift(doc, copy.deepcopy(doc), name)
+        bad = copy.deepcopy(doc)
+        edit(bad)
+        assert bad != doc, what
+        with pytest.raises(AssertionError):
+            assert_same_drift(doc, bad, name)
+            pytest.fail(f"the drift comparison did not see {what}")
+    moved = copy.deepcopy(can11)
+    moved["provenance"].update(code="0000000", imports=[], seconds=0.1, twin_of_record_digest="0" * 64)
+    assert_same_result(can11, moved, "pendulum_can11")
 
 
 # --- drift ------------------------------------------------------------------------------------------------------------------
@@ -317,13 +380,7 @@ def test_a_knocked_camera_is_detected_and_recalibrated():
 @pytest.mark.parametrize("name", ("backlash_wear", "camera_knock"))
 def test_the_committed_drift_result_is_this_code(name):
     committed = json.loads((SYSID / "results" / f"drift_{name}.json").read_text())
-    fresh = drift_result(name)
-    keys = (("rate_recovered", "predicted_crossing_h", "plan_by_h", "actual_crossing_h", "detector_alarm_h", "commissioned_gap_rad", "allowance_rad",
-             "gap_alarm_h", "ratio_alarm_h", "ratio_crossing_h") if name == "backlash_wear" else ("alarm_h",))
-    for key in keys:
-        x, y = committed[key], fresh[key]
-        assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9), f"{name} {key}: committed {x}, now {y}"
-    assert math.isclose(committed["recalibrated"]["ratio"], fresh["recalibrated"]["ratio"], rel_tol=1e-9)
+    assert_same_drift(committed, drift_result(name), name)
 
 
 def test_the_committed_can11_results_are_on_bam_ws_current_twin_of_record():

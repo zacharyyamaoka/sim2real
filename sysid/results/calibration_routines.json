@@ -53,7 +53,7 @@
   },
   {
    "key": "recovery",
-   "what": "per summary level: the worst |error| / tolerance over the recovered parameters of every check, the missing ones, all pass"
+   "what": "per level the ladder runs (0x 1x 3x 10x): over the checks that ran there, the worst |error| / tolerance over the recovered parameters, all pass, the missing and failing ones; the checks not run there and why"
   },
   {
    "key": "parameters_covered",
@@ -515,19 +515,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 0.000358375961960998,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 14,
+     "checks": 2,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.26962682034647156,
      "missing": 0,
-     "parameters": 14
+     "failing": 0,
+     "parameters": 14,
+     "checks": 2,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.809139667427185,
      "missing": 0,
-     "parameters": 14
+     "failing": 0,
+     "parameters": 14,
+     "checks": 2,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": true,
+     "usable": false,
+     "worst_error_over_tolerance": 2.6976480538211858,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 14,
+     "checks": 2,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -1002,19 +1028,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": false,
+     "usable": true,
+     "worst_error_over_tolerance": 0.16505094265818576,
+     "missing": 0,
+     "failing": 3,
+     "parameters": 7,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.19481085347399543,
      "missing": 0,
-     "parameters": 7
+     "failing": 0,
+     "parameters": 7,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.43864794667778606,
      "missing": 0,
-     "parameters": 7
+     "failing": 0,
+     "parameters": 7,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": null,
+     "missing": 7,
+     "failing": 7,
+     "parameters": 7,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -1223,19 +1275,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 12.525847960835238,
+     "missing": 0,
+     "failing": 5,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": false,
      "usable": false,
      "worst_error_over_tolerance": 12.452662411693986,
      "missing": 0,
-     "parameters": 5
+     "failing": 4,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": false,
      "usable": false,
      "worst_error_over_tolerance": 12.341025568442436,
      "missing": 0,
-     "parameters": 5
+     "failing": 3,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 12.70474374154139,
+     "missing": 0,
+     "failing": 2,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -1437,19 +1515,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 2.41371439811182,
+     "missing": 0,
+     "failing": 5,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": false,
      "usable": false,
      "worst_error_over_tolerance": 2.395278394482661,
      "missing": 0,
-     "parameters": 5
+     "failing": 3,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": false,
      "worst_error_over_tolerance": 2.4275465131918605,
      "missing": 0,
-     "parameters": 5
+     "failing": 0,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": true,
+     "usable": false,
+     "worst_error_over_tolerance": 2.4927312328246543,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 5,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -1947,19 +2051,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 0.013826236127676209,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.21458724449001895,
      "missing": 0,
-     "parameters": 1
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.3678297971987463,
      "missing": 0,
-     "parameters": 1
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 13.40240523293277,
+     "missing": 0,
+     "failing": 1,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -2228,19 +2358,47 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": null,
+     "usable": null,
+     "worst_error_over_tolerance": null,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 0,
+     "checks": 0,
+     "not_run": {
+      "pendulum_can11:servo.gap_check_forecast": "not run: the servo's drift alarm warns on either check, the gap check or the fidelity ratio, and the ratio's denominator is the camera's floor (two draws of one run), which is zero without noise, so the alarm as deployed is undefined here; the gap check alone would run"
+     }
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.42251387719190187,
      "missing": 0,
-     "parameters": 1
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": false,
      "worst_error_over_tolerance": 1.5790724087291212,
      "missing": 0,
-     "parameters": 1
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": true,
+     "usable": false,
+     "worst_error_over_tolerance": 6.104355395254116,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [],
@@ -2585,19 +2743,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 0.019097495059867565,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 38,
+     "checks": 2,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.04480679378518673,
      "missing": 0,
-     "parameters": 38
+     "failing": 0,
+     "parameters": 38,
+     "checks": 2,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.3880649343117913,
      "missing": 0,
-     "parameters": 38
+     "failing": 0,
+     "parameters": 38,
+     "checks": 2,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 4.3922903654327525,
+     "missing": 0,
+     "failing": 3,
+     "parameters": 38,
+     "checks": 2,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -2812,19 +2996,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 1.0326278759806133,
+     "missing": 2,
+     "failing": 4,
+     "parameters": 4,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": false,
      "usable": false,
      "worst_error_over_tolerance": 1.2316880537407067,
      "missing": 2,
-     "parameters": 4
+     "failing": 3,
+     "parameters": 4,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": false,
      "usable": false,
      "worst_error_over_tolerance": 1.8831717722606005,
      "missing": 2,
-     "parameters": 4
+     "failing": 2,
+     "parameters": 4,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 7.478104440255111,
+     "missing": 2,
+     "failing": 3,
+     "parameters": 4,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -3045,19 +3255,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 9.273389463733869e-08,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 2,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 8.554108297229735e-05,
      "missing": 0,
-     "parameters": 2
+     "failing": 0,
+     "parameters": 2,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.0002571686057913058,
      "missing": 0,
-     "parameters": 2
+     "failing": 0,
+     "parameters": 2,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 0.0008366593047797762,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 2,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [],
@@ -3213,19 +3449,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 0.0002806804836155965,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.006326894632642208,
      "missing": 0,
-     "parameters": 1
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.01954177565971695,
      "missing": 0,
-     "parameters": 1
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 0.06579103244010512,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 1,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [],
@@ -3381,19 +3643,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 5.704563270647611e-06,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 3,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.0008569355007201099,
      "missing": 0,
-     "parameters": 3
+     "failing": 0,
+     "parameters": 3,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.0025764208645607696,
      "missing": 0,
-     "parameters": 3
+     "failing": 0,
+     "parameters": 3,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 0.00859460140382366,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 3,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [],
@@ -3593,19 +3881,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 7.112366251504909e-14,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 22,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.8241226366709955,
      "missing": 0,
-     "parameters": 22
+     "failing": 0,
+     "parameters": 22,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": false,
      "worst_error_over_tolerance": 2.4832099615739125,
      "missing": 0,
-     "parameters": 22
+     "failing": 0,
+     "parameters": 22,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 8.409194696608289,
+     "missing": 0,
+     "failing": 2,
+     "parameters": 22,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [
@@ -3844,19 +4158,47 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": null,
+     "usable": null,
+     "worst_error_over_tolerance": null,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 0,
+     "checks": 0,
+     "not_run": {
+      "dual_arm_cell:camera.pose_recal_belt_tags": "not applicable: the recalibration runs at the drift alarm, and the alarm is a ratio to the commissioned reprojection error, which is round-off without noise"
+     }
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.14802489513666076,
      "missing": 0,
-     "parameters": 6
+     "failing": 0,
+     "parameters": 6,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.44439988172094885,
      "missing": 0,
-     "parameters": 6
+     "failing": 0,
+     "parameters": 6,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 1.4851497511446374,
+     "missing": 0,
+     "failing": 1,
+     "parameters": 6,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [],
@@ -4109,19 +4451,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 3.3306690738754696e-13,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 6,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.8689225853334795,
      "missing": 0,
-     "parameters": 6
+     "failing": 0,
+     "parameters": 6,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": false,
      "worst_error_over_tolerance": 2.589288739795285,
      "missing": 0,
-     "parameters": 6
+     "failing": 0,
+     "parameters": 6,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 8.43307497566718,
+     "missing": 0,
+     "failing": 2,
+     "parameters": 6,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [],
@@ -4310,19 +4678,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 2.6290081223123707e-13,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 32,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.5207956352085787,
      "missing": 0,
-     "parameters": 32
+     "failing": 0,
+     "parameters": 32,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": false,
      "worst_error_over_tolerance": 1.5623869056255089,
      "missing": 0,
-     "parameters": 32
+     "failing": 0,
+     "parameters": 32,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": true,
+     "usable": false,
+     "worst_error_over_tolerance": 5.207956352084601,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 32,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [],
@@ -4509,19 +4903,45 @@
     "note": ""
    },
    "recovery": {
+    "0x": {
+     "pass": true,
+     "usable": true,
+     "worst_error_over_tolerance": 1.6523241108679088e-13,
+     "missing": 0,
+     "failing": 0,
+     "parameters": 12,
+     "checks": 1,
+     "not_run": {}
+    },
     "1x": {
      "pass": true,
      "usable": true,
      "worst_error_over_tolerance": 0.4362863906927285,
      "missing": 0,
-     "parameters": 12
+     "failing": 0,
+     "parameters": 12,
+     "checks": 1,
+     "not_run": {}
     },
     "3x": {
      "pass": true,
      "usable": false,
      "worst_error_over_tolerance": 1.3606940060966037,
      "missing": 0,
-     "parameters": 12
+     "failing": 0,
+     "parameters": 12,
+     "checks": 1,
+     "not_run": {}
+    },
+    "10x": {
+     "pass": false,
+     "usable": false,
+     "worst_error_over_tolerance": 5.137293540515669,
+     "missing": 0,
+     "failing": 1,
+     "parameters": 12,
+     "checks": 1,
+     "not_run": {}
     }
    },
    "alternatives": [

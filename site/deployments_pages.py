@@ -67,11 +67,12 @@ def node_url(node_id: str) -> str:
 @dataclass
 class Domain:
     nodes: list[dict]
-    results: dict                      # oracle example -> its committed sysid result
+    results: dict                      # oracle example -> its committed sysid result (the six on the landing page)
     runs: dict                         # physical deployment -> its runs.json rows (the site's, tagged)
     tables: dict                       # physical deployment -> sel.Tables
     parameters: list[dict]
     media: object = None
+    scenarios: dict = field(default_factory=dict)  # noise-ladder scenario -> its committed sysid result (its tree; the ladder grades it)
     by_id: dict = field(init=False)
     kids: dict = field(init=False)
     _selections: dict = field(default_factory=dict)
@@ -142,9 +143,31 @@ def load(site) -> Domain:
         if n["parent"] is None and n["kind"] == "physical" and n["id"] in have:
             runs[n["id"]] = have[n["id"]].runs
             tables[n["id"]] = sel.load_tables(site.data, n["id"], nodes=[x for x in nodes if x["root"] == n["id"]])
-    site._domain_v3 = Domain(nodes=nodes, results=inst.load_results(), runs=runs, tables=tables, parameters=parameters,
-                             media=getattr(site, "media", None))
+    results = inst.load_results()
+    site._domain_v3 = Domain(nodes=nodes, results={k: v for k, v in results.items() if k in inst.EXAMPLES}, runs=runs, tables=tables,
+                             parameters=parameters, media=getattr(site, "media", None),
+                             scenarios={k: v for k, v in results.items() if k in inst.SCENARIOS})
     return site._domain_v3
+
+
+# --- a noise-ladder scenario (sysid/oracle.py SCENARIOS): a virtual deployment with no oracle example page ---------------------------
+
+def is_scenario(d: Domain, node: dict) -> bool:
+    return node["kind"] == "virtual" and node["root"] in d.scenarios
+
+
+def scenario_links(root: str) -> list[str]:
+    """Where a scenario's numbers are: its values on Parameters (the rail on its deployment), every level of its routine on Routines."""
+    return [pages.a(f"/parameters/?{urlencode({'deployment': root})}", "Its values on Parameters: true, nominal and what the ladder's routine recovered"),
+            pages.a("/routines/", "Its routine on Routines: its recovery at 0x, 1x, 3x and 10x the sensor noise")]
+
+
+def ladder_graded(d: Domain, node: dict) -> tuple[int, int]:
+    """(values under the node the noise ladder graded, those within tolerance at 1x) from the parameters table's column groups."""
+    mine = {n["id"] for n in d.subtree(node["id"])}
+    rows = [r for r in d.parameters if r["deployment"] == node["root"] and r["node"] in mine and r.get("key")]
+    within = sum(1 for r in rows if any(v is True for k, v in r.items() if k.startswith("within@")))
+    return len(rows), within
 
 
 # --- small words --------------------------------------------------------------------------------------------------------------------
@@ -260,6 +283,12 @@ def fidelity_head(entry: dict) -> tuple[dict | None, dict | None]:
 def answer(d: Domain, node: dict) -> str:
     """One calm sentence or three: what the node is and how close its twins are, before any detail (plain text)."""
     root = d.by_id[node["root"]]
+    if is_scenario(d, node):
+        n, within = ladder_graded(d, node)
+        what = (f"the noise ladder grades {n} of its values against the hidden truth at 0x, 1x, 3x and 10x its sensor noise, {within} within "
+                "tolerance at 1x" if n else "the noise ladder grades none of its values")
+        head = "A noise-ladder scenario" if node["parent"] is None else f"{level_word(node)} in {root['title']}, a noise-ladder scenario"
+        return f"{head}: {what}. It keeps no runs: sysid simulates them and keeps the results."
     if node["kind"] == "virtual":
         doc = d.results.get(node["root"]) or {}
         if node["parent"] is None and doc:
@@ -320,6 +349,9 @@ def card_line(d: Domain, node: dict) -> str:
     """A card's one line under its title and chips: what it is and how much of it there is."""
     parts = len(d.subtree(node["id"])) - 1
     rows = d.run_rows(node)
+    if is_scenario(d, node):
+        n, _within = ladder_graded(d, node)
+        return f"{node.get('machine') or ''} · {plural(parts, 'part')} · {plural(n, 'value')} graded by the noise ladder".lstrip(" ·")
     if node["kind"] == "virtual":
         doc = d.results.get(node["id"]) or {}
         v = doc.get("verdict") or {}
@@ -632,6 +664,11 @@ def models_section(d: Domain, node: dict) -> str:
         elif reps:
             use = ('<small class="mut">the producer\'s models that replayed its runs, and the ladder model each is:</small> '
                    + ", ".join(label_words(node, tid, k, v) for k, v in sorted(reps.items(), key=lambda kv: (-kv[1], kv[0]))))
+        elif is_scenario(d, node) and (graded := sum(1 for r in d.parameters if r["deployment"] == node["root"] and r["entity_type"] == tid
+                                                     and r.get("key") and r["node"] in {n["id"] for n in sub})):
+            # WHY not "nothing fitted": the ladder's routine fits values of this type here; it keeps no model of its own (no selection rule)
+            use = (f'<span class="mut">— no fitted model kept: the noise ladder grades {graded} of its values here, each routine\'s model in its own '
+                   f'column on </span>{pages.a("/parameters/?" + urlencode({"deployment": node["root"]}), "Parameters")}')
         else:
             use = '<span class="mut">— nothing fitted or replayed for it here</span>'
         rows.append(f'<tr data-type="{e(tid)}" data-current="{e(" ".join(m.id for m in current))}" data-used="{e(" ".join(used))}" data-basis="{e(basis)}"'
@@ -658,6 +695,10 @@ def runs_scope(node: dict) -> tuple[str, str]:
 
 def runs_section(d: Domain, node: dict) -> str:
     rows = d.run_rows(node)
+    if is_scenario(d, node):
+        return (f'<section id="runs" data-runs="0" aria-labelledby="runs-h"><h2 id="runs-h">Runs</h2><p class="mut">None kept: sysid\'s noise ladder '
+                f'simulates the runs of its schedule at every noise level and keeps their results (sysid/results/noise_ladder.json), not the runs. '
+                f'{" · ".join(scenario_links(node["root"]))}.</p></section>')
     if node["kind"] == "virtual":
         doc = d.results.get(node["root"]) or {}
         sched = f" Its schedule: {e(landing.schedule_line(doc))}." if doc and node["parent"] is None else ""
@@ -686,7 +727,9 @@ def runs_section(d: Domain, node: dict) -> str:
 
 def elsewhere(d: Domain, node: dict) -> str:
     links = []
-    if node["kind"] == "virtual":
+    if is_scenario(d, node):
+        links += scenario_links(node["root"])
+    elif node["kind"] == "virtual":
         links.append(pages.a(landing.url(node["root"]), "The oracle example: every parameter, its schedule and the drift demos"))
     elif node.get("page") and node["parent"] is None:
         links.append(pages.a(node["page"], f"{node['title']}'s record page: its gates T1-T11, why each fails, coverage plots and evidence"))

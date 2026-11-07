@@ -200,7 +200,9 @@ that join by `sysid/tests/test_noise_ladder.py`; the site build serves it at `/d
    equipment[{id title cost{value unit source note}}]
    identifies[{card rung parameters[]}]  parameters_covered (the count)
    excitation coverage repeats how tests[] code[{repo path ref note}] alternatives[] references[titles] note
-   recovery{ "1x"|"3x": {pass usable worst_error_over_tolerance missing parameters} }   (over every check; absent when not checked)
+   recovery{ "0x"|"1x"|"3x"|"10x": {pass usable worst_error_over_tolerance missing failing parameters checks not_run{check id: why}} }
+            (every level the ladder runs, over the checks that ran there; pass null where none ran; {} when not checked. Since
+             2026-11-07, the v3 audit's finding 5: 1x and 3x only hid 0x's bias and 10x's breakdown; summary_levels stays the headline)
    oracle{ status: "checked"|"not checked", note,
            checks[{ id example owner(sysid|bam_ws) structure(matches|mismatch: why) parameters[keys] unclaimed{key: why} not_at{level: why}
                     realism verdict(one line)
@@ -386,6 +388,9 @@ row  id root parent depth title kind(virtual|physical) tags[] structural entity_
   carry their station's `device`. `runs`: the runs whose device is under the node (a camera's: null, it is not known which it filmed).
 - **Virtual** (`inst.virtual_nodes(results)`): each oracle example's sysid typed tree, node for node; a v2-typed node gets its v3 type; an
   "arm + gripper" is `structural: assembly` (a chain and a gripper composed); `runs` 0 (sysid does not persist its simulated runs).
+  Since 2026-11-07 (the v3 audit's finding 5) also each noise-ladder scenario (`inst.SCENARIOS`, sysid/oracle.py's: `ur5e_backlash`), from
+  its committed result (`python -m sysid run <id> --write`; sysid's test holds its values to the ladder's 1x row), tagged `noise-ladder
+  scenario`, `page` null (no landing page); its parameter rows are its ladder entries, each on the node its tree gives the key.
 - **Producer model labels** (2026-11-07, additive): `PhysicalDeployment.models`, a tuple of `dm.ModelLabel(label type model fit friction
   differs source)`, is which ladder model each model a producer replays is (the words before " vs real" in RobotDx's stock.model_error rows,
   `sel.model_label`). `inst.label_model(deployment, label)` -> the record or None (exact words; a label nobody mapped maps to nothing);
@@ -422,7 +427,7 @@ response under any config. Virtual deployments have no run rows yet.
  result_columns[{id ("<routine>:<model id>"), routine, routine_title, model, entity_type, family, fit, label, properties[]}],
  column_groups{label: [properties]}                        (data-ui §16 columnGroups: "each model ... its own Recovered error tolerance")
  presets{all | winning model | with results | errors only: {filter, columns, what, color_by?}},
- rows[ id deployment node entity_type parameter family introduced_in unit winning winning_basis(selected|current) key element true nominal
+ rows[ id deployment node owner entity_type parameter family introduced_in unit winning winning_basis(selected|current) key element true nominal
        nominal_source tolerance_kind tolerance recovered ci95_lo ci95_hi pass method best has_results
        + per result column C: recovered@C ci95_lo@C ci95_hi@C interval@C error@C tolerance@C error_over_tolerance@C within@C ]}
 ```
@@ -430,9 +435,22 @@ response under any config. Virtual deployments have no run rows yet.
 - Rows: every value the oracle graded (`<example>/<key>`: the example's own fit in `recovered`, `ci95_*`, `pass`), the 8 only the noise
   ladder grades, and one row per parameter of every typed node no graded value binds (`<node id>#<parameter>`, values null; `nominal`
   null too, the type card's value apart in `type_nominal`: a v2 card's nominal is the instance it was written around, the servo's CAN 11's).
+- **Binding is per instance** (2026-11-07, the v3 audit's finding 4: keyed by deployment and type, one measured servo hid every unmeasured
+  servo's rows beside it). `node` is where the value sits (the sysid tree's node; a ladder-only value, its deployment's one node of its type,
+  else the deployment); `owner` (`inst.owner`) is the typed node it belongs to: `node` when that is of the value's type, else the one node of
+  the type in the smallest subtree around `node` that holds one (a joint's zero offset is its chain's `joint_zero_offsets`; the 2F-85 tool's
+  mass its arm's, its TCP its gripper's), null when that subtree holds two or more or the tree none (a component that is no node: the dual-arm
+  cell's mounts, the line-scan cell's depth camera's colour stream). A value binds `(owner, parameter)` only; a listed row's `owner` is its
+  node. So every typed node has each parameter of its type once: values it owns, or one row saying none is recorded, never both.
 - **Presets**: all = every row; winning model = `winning == true` (the parameters of the selection rule's pick where the example ran one,
   else the type's current model: `winning_basis`); with results = `has_results == true`; errors only = with results, `error_over_tolerance@*`
   columns, each row coloured by `best` (the column with the least |error over tolerance|).
+- **Their columns** (2026-11-07, the v3 audit's finding 8: the page showed only the example's own fit in all and winning model, while
+  `presets.*.columns` said every column group): a preset is a set of rows; the models shown are the reader's pick in any of them. all and
+  winning model show the example's own fit (`recovered`, `ci95_*`, `pass`), then every column group; with results every column group; a group
+  no shown row holds a value of is left out (data-ui `emptyGroups: hide`), so a rail pick of a deployment, a type or a model draws exactly the
+  models that graded those rows in every preset, and Properties hides or shows any group whole. errors only shows each group's error alone.
+  Decision: `docs/decision-models-routines-parameters-2026-11-07.md`, its addendum.
 - `recovered` is a single value with its 95 % interval (`dm.Estimate`); other forms are reserved. Tolerance is per column (today the
   parameter's, the same in every column). Physical deployments' recovered values arrive when a producer writes them (the same columns).
 
@@ -480,8 +498,15 @@ run_diagnostics, coverage_points, floors, descriptions)` (`sel.load_tables(data,
 ```
 Report    id title question runs[run ids] models["<type>/<model>"] parameters[parameters-table row ids] deployment note
 snapshot  {schema "sim2real.domain/3#report", report{...}, frozen_at, code, inputs{runs_sha256 runs},
-           results{selection (sel.compute), models[Model], parameters[rows as the table held them]}, digest}
+           results{selection (sel.compute), models[Model], parameters[rows as the table held them]},
+           annotations{titles{node id: title}, model_labels{label: {type model model_title} | null}}, digest}
 ```
+
+`annotations` (2026-11-07, the v3 audit's finding 7) is what the page names beside the numbers, as it was at freeze: the title of the
+report's deployment and of every node it computed, and the ladder model each model label in its results named (`rep.model_label_records`:
+the deployment's record, `inst.label_model`; null for a label nobody mapped). Read from today's records, renaming a station or remapping a
+label changed what a verified report said. A snapshot frozen before it (the first three) has none: its page reads those from today's
+records and says so where they show, and claims only what is frozen (re-freezing them would be a new decision with new numbers).
 
 `rep.freeze(report, tables, parameter_rows=, frozen_at=, code=)` is pure; `python3 -m type_cards.report freeze <id>` writes the snapshot
 once, `rep.verify(snapshot)` checks its digest (over everything but the digest). A page reads the snapshot and never recomputes it, so a
@@ -490,7 +515,7 @@ report does not change as data grows; re-freezing is a new decision and a new co
 Since 2026-11-07 (additive): a report from a selection, `python3 -m type_cards.report freeze --id <id> --title ... --question ... --deployment
 <dep> (--runs a,b | --select col=v[,v] ... | --preset "<name>") [--models ...] [--parameters ...] [--note ...] [--doc ...]`: `rep.select_runs`
 names the runs one way (ids; runs.json columns, every one holding one of its values; a `sel.presets` name), refusing a column or preset that is
-none; `rep.definition_text` writes the definition (`frozen_reports/<id with _>.py`, one keyword per line), then it freezes; a report that exists
+none and a run id the data does not hold (the whole selection, before anything is written: the v3 audit's finding 9); `rep.definition_text` writes the definition (`frozen_reports/<id with _>.py`, one keyword per line), then it freezes; a report that exists
 is never overwritten. A snapshot keeps the rows it froze: `inputs.rows`, each run's `rep.ROW_FIELDS` (covered by the digest). `list` and `verify
 <id>` read them. The site shows every report at `/reports/<id>/` (`site/reports_pages.py`); 2026-11-07's: `ident-sessions-1106`,
 `otherday-sessions-1107`.

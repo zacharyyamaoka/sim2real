@@ -185,11 +185,14 @@ def labels(d: dpages.Domain, dep: str) -> dict[str, dict]:
     return out
 
 
-def model_words(label: str, mapped: dict) -> str:
-    """A producer's label and, where it maps to one, the ladder model it is, linked (the models lane's rows: /models/<type>/#<model>)."""
+def model_words(label: str, mapped: dict, as_: str = "", mark: str = "") -> str:
+    """A producer's label and, where it maps to one, the ladder model it is, linked (the models lane's rows: /models/<type>/#<model>).
+    `as_` says whose map that is (a report's: frozen, or today's) as data-as; `mark` is a word shown after the model (a report's "today")."""
     m = mapped.get(label)
     to = (f' <span class="mut">→</span> <a data-model-link="{e(m["model"])}" href="{e(m["url"])}"><code>{e(m["model"])}</code></a>' if m else "")
-    return f'<span data-label="{e(label)}" data-ladder="{e(m["model"] if m else "")}">{e(label)}{to}</span>'
+    if mark:
+        to += f' <small class="mut">{e(mark)}</small>'
+    return f'<span data-label="{e(label)}" data-ladder="{e(m["model"] if m else "")}"{f" data-as={chr(34)}{e(as_)}{chr(34)}" if as_ else ""}>{e(label)}{to}</span>'
 
 
 def spec(d: dpages.Domain, dep: str, presets: dict) -> dict:
@@ -381,9 +384,11 @@ def index_body(d: dpages.Domain) -> str:
             items.append(f'<li><a href="{e(page_url(n["id"]))}"><b>{e(n["title"])}</b></a> {ui_shared.chip(n["kind"], dpages.KIND_TONE.get(n["kind"], ""))} '
                          f'<small>{plural(len(runs), "run")} over {plural(len({r["device"] for r in runs}), "station")}</small></li>')
     virtual = [n for n in d.roots() if n["kind"] == "virtual"]
+    # WHY a scenario links its deployment page: it has no oracle example page (sysid keeps the noise ladder's scenarios off the landing page)
+    linked = ", ".join(pages.a(dpages.node_url(v["id"]) if dpages.is_scenario(d, v) else dpages.landing.url(v["id"]), v["title"]) for v in virtual)
     return f"""<h1>Metrics over a selection</h1>
 <p class="lede">Each physical deployment's runs, with the metrics, diagnostics and coverage of whichever of them you pick. A virtual deployment
-keeps no runs (sysid simulates them and keeps their results: {", ".join(pages.a(dpages.landing.url(v["id"]), v["title"]) for v in virtual)}).</p>
+keeps no runs (sysid simulates them and keeps their results: {linked}).</p>
 <ul class="s2r-mindex">{"".join(items)}</ul>"""
 
 

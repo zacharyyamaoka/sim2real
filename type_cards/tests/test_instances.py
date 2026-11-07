@@ -43,8 +43,11 @@ def nodes():
 
 def test_six_virtual_deployments_from_the_oracle(nodes):
     roots = [n for n in nodes if n["parent"] is None]
-    assert [r["id"] for r in roots] == list(EXAMPLES)
+    # the six landing examples, then (2026-11-07, the v3 audit's finding 5) the noise ladder's scenarios, held by their own test below
+    assert [r["id"] for r in roots] == list(EXAMPLES) + list(inst.SCENARIOS)
     for r in roots:
+        if r["id"] in inst.SCENARIOS:
+            continue
         assert r["kind"] == "virtual" and "oracle example" in r["tags"]
         assert r["page"] == f"/sysid/{r['id']}/" and r["depth"] == 0 and r["root"] == r["id"]
         assert r["title"] == RESULTS[r["id"]]["title"]
@@ -142,6 +145,97 @@ def test_every_graded_value_is_a_row_as_the_oracle_wrote_it(table):
             assert r["node"].startswith(p["example"])
     assert rows["dual_arm_cell/camera_knock.dx_m"]["node"] == "dual_arm_cell/torso/head_camera"
     assert rows["pendulum_can11/can11.backlash_wear_rad_per_h"]["parameter"] == "backlash_wear_rad_per_nm_rev"
+
+
+def _with_unmeasured_siblings() -> dict:
+    """The UR5e example with parts nobody measured beside the measured ones: a seventh joint on its arm, and a second arm with one joint
+    (a v2-typed sysid tree, as describe.tree writes it, each holding no value)."""
+    import copy  # noqa: PLC0415
+
+    doc = copy.deepcopy(RESULTS["ur5e"])
+    joint = next(r for r in doc["tree"] if r["id"] == "shoulder_pan")
+    arm = next(r for r in doc["tree"] if r["id"] == "ur5e")
+    doc["tree"] += [{**joint, "id": "wrist_4", "title": "wrist 4 joint (unmeasured)", "parameters": []},
+                    {**arm, "id": "ur5e_b", "title": "a second UR5e (unmeasured)", "parameters": []},
+                    {**joint, "id": "b_joint", "title": "its one joint (unmeasured)", "parent": "ur5e_b", "parameters": []}]
+    return {"ur5e": doc}
+
+
+def test_a_part_nobody_measured_keeps_every_row_beside_measured_siblings():
+    """The v3 audit (2026-11-07, finding 4): completeness was keyed by (deployment, type, parameter), so an unmeasured servo beside the
+    UR5e's measured ones lost its armature, damping and friction rows (19 of its type's 22). The contract (CONTRACT.md, the parameters
+    table): one row per parameter of every typed node no graded value binds, and a value binds the part it belongs to, never its type."""
+    routines = json.loads((REPO / "sysid" / "results" / "calibration_routines.json").read_text())
+    plain = {r["id"]: r for r in inst.parameter_table(inst.virtual_nodes({"ur5e": RESULTS["ur5e"]}), {"ur5e": RESULTS["ur5e"]}, routines)["rows"]}
+    results = _with_unmeasured_siblings()
+    nodes = inst.virtual_nodes(results)
+    rows = {r["id"]: r for r in inst.parameter_table(nodes, results, routines)["rows"]}
+    servo = [p.name for p in dm.TYPES["integrated_servo"].parameters]
+    chain = [p.name for p in dm.TYPES["rigid_body_chain"].parameters]
+    assert len(servo) == 22
+    for nid, names in (("ur5e/ur5e/wrist_4", servo), ("ur5e/ur5e_b/b_joint", servo), ("ur5e/ur5e_b", chain)):
+        mine = sorted(r["parameter"] for r in rows.values() if r["node"] == nid)
+        assert mine == sorted(names), f"{nid}: one row per parameter of its type ({len(mine)} of {len(names)}; missing {sorted(set(names) - set(mine))})"
+        assert all(rows[f"{nid}#{n}"]["key"] is None and rows[f"{nid}#{n}"]["owner"] == nid for n in names), nid
+    # the measured parts keep exactly what they had: the new siblings take nothing from them, nor add to them
+    assert {k: v for k, v in rows.items() if k in plain} == {k: {**v, "owner": rows[k]["owner"]} for k, v in plain.items()}
+    assert len(rows) == len(plain) + 2 * len(servo) + len(chain)
+    # a joint's zero offset is its chain's value (rigid_body_chain joint_zero_offsets): it binds the arm it is on, and only that arm
+    zero = rows["ur5e/shoulder_pan.zero_offset_rad"]
+    assert (zero["node"], zero["entity_type"], zero["owner"]) == ("ur5e/ur5e/shoulder_pan", "rigid_body_chain", "ur5e/ur5e")
+    assert "ur5e/ur5e#joint_zero_offsets" not in rows and "ur5e/ur5e_b#joint_zero_offsets" in rows
+
+
+def test_every_typed_part_has_each_parameter_once_bound_or_listed(nodes, table):
+    """Per instance, on every virtual deployment: for each typed node and each parameter of its type, either graded values it owns or
+    exactly one row saying none is recorded, never both; and a value's owner is a node of the value's own type (or none: a component the
+    tree has no node for, such as a depth camera's colour stream or an assembly's arm)."""
+    by_id = {n["id"]: n for n in nodes}
+    owned: dict = {}
+    for r in table["rows"]:
+        assert "owner" in r, r["id"]
+        if r["owner"] is not None:
+            assert by_id[r["owner"]]["entity_type"] == r["entity_type"] and by_id[r["owner"]]["root"] == r["deployment"], r["id"]
+            owned.setdefault((r["owner"], r["parameter"]), []).append(r)
+    for n in nodes:
+        if not n["entity_type"]:
+            continue
+        for spec in dm.TYPES[n["entity_type"]].parameters:
+            mine = owned.get((n["id"], spec.name), [])
+            listed = [r["id"] for r in mine if r["key"] is None]
+            graded = [r["id"] for r in mine if r["key"] is not None]
+            assert (graded and not listed) or (not graded and listed == [f"{n['id']}#{spec.name}"]), (n["id"], spec.name, graded, listed)
+
+
+def test_the_noise_ladders_scenario_is_a_virtual_deployment_whose_values_are_rows():
+    """The v3 audit (2026-11-07, finding 5): the parameters table dropped every ladder value whose example is not one of the six landing
+    examples, so the ur5e_backlash scenario's joint gaps (gear_backlash's gravity sweep on the UR's joints) reached no page. sysid's
+    noise-ladder scenarios (sysid/oracle.py SCENARIOS: an oracle world graded by the ladder only, never on the landing page) are virtual
+    deployments too, their trees from their committed sysid result; every value the ladder grades is a row, on the part the tree puts it."""
+    results = inst.load_results(REPO / "sysid" / "results")
+    assert inst.SCENARIOS == ("ur5e_backlash",) and set(results) == set(EXAMPLES) | set(inst.SCENARIOS)
+    nodes = inst.virtual_nodes(results)
+    root = next(n for n in nodes if n["id"] == "ur5e_backlash")
+    assert (root["kind"], root["parent"], root["page"]) == ("virtual", None, None)
+    assert "noise-ladder scenario" in root["tags"] and "oracle example" not in root["tags"] and "noise-ladder scenario" in dm.TAGS
+    assert [n["sysid_id"] for n in nodes if n["root"] == "ur5e_backlash"] == [r["id"] for r in results["ur5e_backlash"]["tree"]]
+    routines = json.loads((REPO / "sysid" / "results" / "calibration_routines.json").read_text())
+    rows = {r["id"]: r for r in inst.parameter_table(nodes, results, routines)["rows"]}
+    ladder = {f"{p['example']}/{p['key']}" for p in routines["parameters"]}
+    assert ladder <= set(rows), f"ladder values with no row: {sorted(ladder - set(rows))[:5]}"
+    sweep = [c for c in {k.split("@", 1)[1] for r in rows.values() for k in r if k.startswith("recovered@")} if c.startswith("arm.backlash_gravity_sweep:")]
+    assert sweep, "the gravity sweep has its column group"
+    entries = {p["key"]: p for p in routines["parameters"] if p["example"] == "ur5e_backlash"}
+    for key, entry in entries.items():
+        r = rows[f"ur5e_backlash/{key}"]
+        joint = f"ur5e_backlash/ur5e/{key.split('.')[0]}"
+        assert (r["deployment"], r["node"], r["owner"], r["entity_type"], r["parameter"]) == ("ur5e_backlash", joint, joint, "integrated_servo", "backlash_rad")
+        assert (r["true"], r["nominal"], r["tolerance"]) == (entry["true"], entry["nominal"], entry["tolerance"]["value"]), key
+        fit = [m for m in entry["models"] if "1x" in m["levels"]]
+        assert [r.get(f"recovered@{c}") for c in sweep] == [m["levels"]["1x"]["recovered"]["mean"] for m in fit] if fit else all(r.get(f"recovered@{c}") is None for c in sweep)
+    assert rows["ur5e_backlash/shoulder_lift.backlash_rad"]["has_results"] and not rows["ur5e_backlash/wrist_1.backlash_rad"]["has_results"]
+    # the joints the sweep cannot load keep their own row, saying nothing is recorded
+    assert "ur5e_backlash/ur5e/shoulder_pan#backlash_rad" in rows and "ur5e_backlash/ur5e/shoulder_lift#backlash_rad" not in rows
 
 
 def test_one_column_group_per_routine_and_model(table):

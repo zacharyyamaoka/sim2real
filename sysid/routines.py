@@ -22,6 +22,8 @@ import dataclasses
 
 SCHEMA = "sysid.calibration_routines/1"
 SUMMARY_LEVELS = ("1x", "3x")  # the table's headline columns (the coordinator, 2026-11-07: recovery accuracy at 1x and 3x noise)
+# WHY recovery holds every level and not the headline two (the v3 audit, 2026-11-07, finding 5): 0x is the bias a routine keeps
+# with no noise, 10x where it breaks; a routines page that showed 1x and 3x only hid both, and a level a check skips
 COLUMNS = (
     ("routine", "the type_cards routine id"),
     ("setting", "bench | deployed | both"),
@@ -29,7 +31,8 @@ COLUMNS = (
     ("operator_time", "s, a person's hands-on share (value, unit, source)"),
     ("equipment_cost", "USD, the sum of its equipment (value, unit, source)"),
     ("equipment", "what it needs beyond the robot's own sensors"),
-    ("recovery", "per summary level: the worst |error| / tolerance over the recovered parameters of every check, the missing ones, all pass"),
+    ("recovery", "per level the ladder runs (0x 1x 3x 10x): over the checks that ran there, the worst |error| / tolerance over the recovered "
+                 "parameters, all pass, the missing and failing ones; the checks not run there and why"),
     ("parameters_covered", "card parameters it identifies (identifies[].parameters, counted)"),
 )
 
@@ -72,17 +75,22 @@ def verdict(levels: dict) -> str:
     return "; ".join(parts) if parts else "not run"
 
 
-def recovery(checks: list[dict]) -> dict:
-    """The headline cells: per summary level, the worst |error| / tolerance over all the routine's checks, and whether all pass."""
+def recovery(checks: list[dict], levels) -> dict:
+    """Per level the ladder runs, over the routine's checks that ran there: the worst |error| / tolerance, whether all pass (and are
+    usable), the parameters missing and failing; with the checks that did not run there and the ruler's reason (not_at). A level no check
+    ran is kept, pass null, so a reader sees the gap; a routine with no check has none ({}: not checked)."""
     out = {}
-    for level in SUMMARY_LEVELS:
-        cells = [c["levels"][level] for c in checks if level in c["levels"]]
-        if not cells:
-            continue
+    if not checks:
+        return out
+    for level in levels:
+        ran = [c for c in checks if level in c["levels"]]
+        cells = [c["levels"][level] for c in ran]
         worsts = [cell["worst_error_over_tolerance"] for cell in cells if cell["worst_error_over_tolerance"] is not None]
-        out[level] = {"pass": all(cell["pass"] for cell in cells), "usable": all(cell["usable"] for cell in cells),
+        out[level] = {"pass": all(cell["pass"] for cell in cells) if cells else None, "usable": all(cell["usable"] for cell in cells) if cells else None,
                       "worst_error_over_tolerance": max(worsts) if worsts else None,
-                      "missing": sum(len(cell["missing"]) for cell in cells), "parameters": sum(cell["parameters"] for cell in cells)}
+                      "missing": sum(len(cell["missing"]) for cell in cells), "failing": sum(len(cell["failing"]) for cell in cells),
+                      "parameters": sum(cell["parameters"] for cell in cells), "checks": len(cells),
+                      "not_run": {c["id"]: (c.get("not_at") or {}).get(level, "not run at this level") for c in checks if level not in c["levels"]}}
     return out
 
 
@@ -146,7 +154,7 @@ def table(ladder_doc: dict) -> dict:
             "excitation": r.excitation, "coverage": r.coverage, "repeats": r.repeats, "how": r.how, "tests": list(r.tests),
             "code": [_plain(h) for h in r.code],
             "oracle": {"status": "checked" if r.oracle else "not checked", "checks": graded, "note": r.oracle_note},
-            "recovery": recovery([g for g in graded if g.get("levels")]),
+            "recovery": recovery([g for g in graded if g.get("levels")], [level["id"] for level in ladder_doc["levels"]]),
             "alternatives": list(r.alternatives), "references": [ref.title for ref in r.references], "note": r.note})
     return {"schema": SCHEMA,
             "generated_from": {"records": "type_cards/calibration.py ROUTINES and EQUIPMENT", "ladder": "sysid/results/noise_ladder.json",

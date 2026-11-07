@@ -223,6 +223,23 @@ def test_the_1x_rows_are_the_committed_oracle_results():
                 assert math.isclose(p["recovered"], knock["shift_recovered"][p["key"].split(".", 1)[1]], rel_tol=1e-9, abs_tol=1e-12), p["key"]
 
 
+def test_the_scenarios_committed_result_is_its_ladder_1x_row():
+    """The noise ladder's scenarios (sysid/oracle.py SCENARIOS) are virtual deployments since 2026-11-07 (the v3 audit, finding 5): a
+    committed result (python -m sysid run ur5e_backlash --write) gives the site the scenario's typed tree, and the values it recovered are
+    its ladder 1x row's (the same code at the same noise gives the same numbers), never a second 1x."""
+    from sysid import oracle
+
+    for example in oracle.SCENARIOS:
+        doc = json.loads((SYSID / "results" / f"{example}.json").read_text())
+        assert doc["example"] == example and doc["tree"] and doc["provenance"]["identify_sealed"] is True, example
+        ladder = {p["key"]: p["recovered"] for check, row in rows() if example_of(check["id"]) == example and row["level"] == "1x"
+                  and row["variant"] is None for p in row["parameters"]}
+        own = {p["key"]: p["recovered"] for p in doc["parameters"]}
+        assert own and own.keys() == {k for k, v in ladder.items() if v is not None}, (example, sorted(own), sorted(ladder))
+        for key, value in own.items():
+            assert math.isclose(value, ladder[key], rel_tol=1e-9, abs_tol=1e-12), (example, key, value, ladder[key])
+
+
 def test_backlash_is_hidden_and_graded_on_every_geared_joint():
     """Zach's brief: backlash a first-class oracle parameter wherever a joint has gears (the pendulum, the UR joints)."""
     by_check = {c["id"]: c for c in committed()["checks"]}
@@ -274,40 +291,125 @@ def test_the_ur_backlash_fit_never_reads_the_world():
 
 # --- this code ------------------------------------------------------------------------------------------------------------------
 
+# WHY declared, and the only fields left out (the v3 audit, finding 6): where and when a ladder ran, never what it found. The commit it ran
+# from, the checkouts it imported (their commits, dates and dirt), how long it took and the bytes of the twin record it read move with
+# every commit anywhere; everything else in a check (its claims, each level's verdicts, every parameter's recovered value, interval,
+# error, bound and flags, each model's numbers, the held-out scores and alarms, the notes, identify_sealed) is the result and is compared.
+VOLATILE_PROVENANCE = ("code", "imports", "seconds", "twin_of_record_digest")
+
+
+def _same_value(a, b, where: tuple) -> None:
+    if isinstance(a, dict) or isinstance(b, dict):
+        assert isinstance(a, dict) and isinstance(b, dict), (where, a, b)
+        skip = VOLATILE_PROVENANCE if where and where[-1] == "provenance" else ()
+        ka, kb = set(a) - set(skip), set(b) - set(skip)
+        assert ka == kb, (where, sorted(ka ^ kb))
+        for k in sorted(ka):
+            _same_value(a[k], b[k], where + (k,))
+    elif isinstance(a, (list, tuple)) or isinstance(b, (list, tuple)):
+        assert isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)) and len(a) == len(b), (where, a, b)
+        for i, (x, y) in enumerate(zip(a, b)):
+            _same_value(x, y, where + (i,))
+    elif isinstance(a, bool) or isinstance(b, bool) or a is None or b is None or isinstance(a, str) or isinstance(b, str):
+        assert type(a) is type(b) and a == b, (where, a, b)
+    else:
+        assert isinstance(a, (int, float)) and isinstance(b, (int, float)) and math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12), (where, a, b)
+
+
 def same(a: dict, b: dict, check_id: str) -> None:
+    """A fresh check is the committed one: every field compared (numbers to 1e-9 relative), rows by level and variant, parameters by key,
+    the declared volatile provenance left out. Both sides are taken as the results file holds them (fresh() round-trips a fresh run)."""
     ra = {(r["level"], r["variant"]): r for r in a["rows"]}
     rb = {(r["level"], r["variant"]): r for r in b["rows"]}
     assert ra.keys() == rb.keys(), check_id
+    _same_value({k: v for k, v in a.items() if k != "rows"}, {k: v for k, v in b.items() if k != "rows"}, (check_id,))
     for key in ra:
         pa = {p["key"]: p for p in ra[key]["parameters"]}
         pb = {p["key"]: p for p in rb[key]["parameters"]}
         assert pa.keys() == pb.keys(), (check_id, key)
+        _same_value({k: v for k, v in ra[key].items() if k != "parameters"}, {k: v for k, v in rb[key].items() if k != "parameters"}, (check_id, key))
         for k in pa:
-            x, y = pa[k]["recovered"], pb[k]["recovered"]
-            assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-12), (check_id, key, k, x, y)
+            _same_value(pa[k], pb[k], (check_id, key, k))
+
+
+def fresh(example: str) -> dict[str, dict]:
+    """A fresh run's checks as the results file would hold them (sysid.result.write's own JSON: tuples as lists, numbers as JSON's)."""
+    from sysid import ladder, result  # noqa: PLC0415
+
+    return {c["id"]: c for c in json.loads(json.dumps(ladder.run_example(example), default=result.plain, allow_nan=False))}
+
+
+def test_the_fresh_result_comparator_sees_every_substantive_field():
+    """The v3 audit (2026-11-07, finding 6): same() compared the recovered scalars only, so a fresh ladder result whose intervals, alarms
+    or held-out scores had moved still matched the committed one. Every edit below leaves every recovered value as committed and must turn
+    the comparison red; one that touches only where and when it ran (the declared volatile provenance) must not, and identification having
+    run sealed is compared like any other result."""
+    import copy  # noqa: PLC0415
+
+    checks = {c["id"]: c for c in committed()["checks"]}
+    regression = checks["pendulum_can11:servo.dynamics_regression"]
+    gap = checks["pendulum_can11:servo.gap_check_forecast"]
+    sweep = checks["ur5e_backlash:arm.backlash_gravity_sweep"]
+
+    def row(check: dict, level: str = "1x") -> dict:
+        return next(r for r in check["rows"] if r["level"] == level and r["variant"] is None)
+
+    def recovered(check: dict) -> list:
+        return [(r["level"], r["variant"], p["key"], p["recovered"], [m["recovered"]["mean"] for m in p["models"]])
+                for r in check["rows"] for p in r["parameters"]]
+
+    def scaled(cell: dict, key: str, factor: float) -> None:
+        cell[key] = cell[key] * factor
+
+    edits = {
+        "a parameter's 95 % interval": (regression, lambda c: row(c)["parameters"][0]["ci95"].__setitem__(1, row(c)["parameters"][0]["ci95"][1] * 1.01)),
+        "a model's 95 % interval": (regression, lambda c: row(c)["parameters"][0]["models"][0]["recovered"]["ci95"].__setitem__(0, 0.0)),
+        "the words of a model's interval": (regression, lambda c: row(c)["parameters"][0]["models"][0]["recovered"].__setitem__("interval", "another bootstrap")),
+        "the alarm hour": (gap, lambda c: scaled(row(c)["held_out"], "detector_alarm_h", 1.5)),
+        "the gap check's own alarm": (gap, lambda c: row(c)["held_out"].__setitem__("gap_alarm_h", None)),
+        "a held-out score (the link's error)": (regression, lambda c: scaled(row(c)["held_out"], "link_mrad", 1.5)),
+        "a held-out score (the forecast's error)": (gap, lambda c: scaled(row(c)["held_out"], "forecast_error_pct", 2.0)),
+        "a level's verdict": (regression, lambda c: row(c).__setitem__("pass", not row(c)["pass"])),
+        "a parameter's within-tolerance": (regression, lambda c: row(c)["parameters"][0].__setitem__("within_tolerance", not row(c)["parameters"][0]["within_tolerance"])),
+        "a parameter's bound": (regression, lambda c: scaled(row(c)["parameters"][0], "bound", 2.0)),
+        "the graded model": (regression, lambda c: row(c).__setitem__("graded_model", "M3")),
+        "a note": (sweep, lambda c: row(c)["notes"].append("a note the code does not write")),
+        "the claimed parameters": (sweep, lambda c: c["parameters"].append("wrist_3.backlash_rad")),
+        "identification having run sealed": (regression, lambda c: row(c)["provenance"].__setitem__("identify_sealed", False)),
+    }
+    same(regression, copy.deepcopy(regression), regression["id"])
+    for what, (check, edit) in edits.items():
+        bad = copy.deepcopy(check)
+        edit(bad)
+        assert bad != check and recovered(bad) == recovered(check), f"{what}: the edit must leave every recovered value as committed"
+        with pytest.raises(AssertionError):
+            same(check, bad, check["id"])
+            pytest.fail(f"same() did not see {what}")
+    # where and when it ran is not a result: the commit, the imported checkouts, the seconds, the twin record's bytes
+    moved = copy.deepcopy(regression)
+    moved["provenance"]["code"] = ["0000000"]
+    for r in moved["rows"]:
+        r["provenance"].update(code="0000000", imports=[], seconds=0.1, twin_of_record_digest="0" * 64)
+    same(regression, moved, regression["id"])
 
 
 @pytest.mark.parametrize("example", FAST_EXAMPLES)
 def test_the_fast_checks_are_this_code(example):
-    from sysid import ladder
-
-    fresh = {c["id"]: c for c in ladder.run_example(example)}
+    new = fresh(example)
     old = {c["id"]: c for c in committed()["checks"] if example_of(c["id"]) == example}
-    assert fresh.keys() == old.keys() and fresh
-    for check_id in fresh:
-        same(old[check_id], fresh[check_id], check_id)
+    assert new.keys() == old.keys() and new
+    for check_id in new:
+        same(old[check_id], new[check_id], check_id)
 
 
 @pytest.mark.skipif(not SLOW, reason="the CAN 11, UR arm and wear checks take most of an hour: SYSID_LADDER_SLOW=1 runs them")
 @pytest.mark.parametrize("example", ("pendulum_can11", "ur5e", "ur5e_2f85"))
 def test_the_slow_checks_are_this_code(example):
-    from sysid import ladder
-
-    fresh = {c["id"]: c for c in ladder.run_example(example)}
+    new = fresh(example)
     old = {c["id"]: c for c in committed()["checks"] if example_of(c["id"]) == example}
-    assert fresh.keys() == old.keys() and fresh
-    for check_id in fresh:
-        same(old[check_id], fresh[check_id], check_id)
+    assert new.keys() == old.keys() and new
+    for check_id in new:
+        same(old[check_id], new[check_id], check_id)
 
 
 # --- the comparison table -------------------------------------------------------------------------------------------------------
@@ -316,6 +418,45 @@ def test_the_comparison_table_is_the_join_of_the_records_and_the_ladder():
     from sysid import routines
 
     assert json.loads(TABLE.read_text()) == routines.table(committed())
+
+
+def test_the_table_recovery_is_every_level_with_what_did_not_run():
+    """The v3 audit (2026-11-07, finding 5): the routine table's headline was 1x and 3x only, so neither 0x's bias nor 10x's breakdown,
+    nor a level a check skipped, reached the routines page. A checked routine's recovery is every level the ladder runs (0x, 1x, 3x, 10x),
+    each over the checks that ran there (the worst |error| / tolerance, all pass, the missing and failing parameters counted), and names
+    the checks that did not run there with the ruler's reason; a level no check ran says so (pass null), never by being absent."""
+    doc = json.loads(TABLE.read_text())
+    levels = [level["id"] for level in RULER["levels"]]
+    seen_not_run = seen_missing = 0
+    for row in doc["rows"]:
+        graded = [c for c in row["oracle"]["checks"] if c.get("levels")]
+        rec = row["recovery"]
+        if not graded:
+            assert rec == {}, row["routine"]
+            continue
+        assert list(rec) == levels, (row["routine"], list(rec))
+        for level in levels:
+            ran = [c for c in graded if level in c["levels"]]
+            cell = rec[level]
+            want_not_run = {c["id"]: c["not_at"].get(level, "not run at this level") for c in graded if level not in c["levels"]}
+            assert cell["checks"] == len(ran) and cell["not_run"] == want_not_run, (row["routine"], level, cell)
+            if not ran:
+                assert cell["pass"] is None and cell["worst_error_over_tolerance"] is None and cell["parameters"] == 0, (row["routine"], level)
+                seen_not_run += 1
+                continue
+            cells = [c["levels"][level] for c in ran]
+            worsts = [x["worst_error_over_tolerance"] for x in cells if x["worst_error_over_tolerance"] is not None]
+            assert cell["pass"] is all(x["pass"] for x in cells) and cell["usable"] is all(x["usable"] for x in cells), (row["routine"], level)
+            assert cell["worst_error_over_tolerance"] == (max(worsts) if worsts else None), (row["routine"], level)
+            assert cell["missing"] == sum(len(x["missing"]) for x in cells) and cell["failing"] == sum(len(x["failing"]) for x in cells), (row["routine"], level)
+            assert cell["parameters"] == sum(x["parameters"] for x in cells), (row["routine"], level)
+            seen_missing += cell["missing"] > 0
+    rows = {r["routine"]: r for r in doc["rows"]}
+    gap = rows["servo.gap_check_forecast"]["recovery"]
+    assert gap["0x"]["checks"] == 0 and "not run" in gap["0x"]["not_run"]["pendulum_can11:servo.gap_check_forecast"], gap["0x"]
+    sweep = rows["arm.backlash_gravity_sweep"]["recovery"]
+    assert all(sweep[level]["missing"] == 2 and sweep[level]["pass"] is False for level in levels), sweep
+    assert seen_not_run and seen_missing
 
 
 def test_the_table_has_the_contracts_shape():

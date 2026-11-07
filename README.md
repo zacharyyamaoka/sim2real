@@ -95,7 +95,8 @@ adapter its bam_rack_twin record wires its boards to (`adapter_serial`), each st
 ## Domain model v3
 
 `type_cards/CONTRACT.md`, "Domain model v3" (decision: `docs/decision-domain-model-v3-2026-11-07.md`) is the contract the pages build
-against: deployments (`virtual`: the six oracle examples; `physical`: the rack), every node of their trees a deployment of its own, eleven
+against: deployments (`virtual`: the six oracle examples and the noise ladder's scenario `ur5e_backlash`; `physical`: the rack), every node of
+their trees a deployment of its own, eleven
 generic entity types with one model ladder each in families (`M2.kinematics.geometric`, `M4.dynamics.twin`), pinned metrics, diagnostics,
 coverage over any selection of runs (`type_cards/selection.py`), the parameters table with a column group per routine and model, and
 frozen reports (`type_cards/frozen_reports/`). The type level is committed (`type_cards/domain_v3.json`, `python3 -m type_cards.domain
@@ -104,7 +105,7 @@ frozen reports (`type_cards/frozen_reports/`). The type level is committed (`typ
 (below).
 
 **Deployments pages** (`site/deployments_pages.py`, decision: `docs/decision-deployments-pages-2026-11-07.md`): `/deployments/` is the index,
-a left filter bar (kind, tags; data-ui's rail) over data-ui cards of the seven deployments, each with its render; every node of every tree has
+a left filter bar (kind, tags; data-ui's rail) over data-ui cards of the eight deployments, each with its render; every node of every tree has
 its page at `/deployments/<node id>/`: its tree on the left (`site/ui_shared.py` `entity_tree`; the run page's is `status_tree`, beside it), its
 sub-deployments, its runs, the models per entity type, and its pinned metrics and coverage over all of its runs (`sel.compute`). The rack's
 record page (`/one-dof-test-rack/`: gates, why it fails, evidence) and each oracle example's page (`/sysid/<id>/`) stay, linked both ways.
@@ -123,10 +124,11 @@ A level is a link: `/<deployment>/runs/<run>/?entity=<node id>`.
 `/models/<type>/` is a type's model ladder, one table per family, with Zach's columns (rung, model, parameters, adds, identified here) and where each
 model is used (the oracle examples' fits, and the rack's stations by the producer's model labels, which `type_cards/deployments/one_dof_test_rack.py`
 maps to the ladder: every one is the servo's `M4.dynamics.twin`); every deployment page's models link to their ladder rows. `/routines/` is every
-calibration routine both ways (routine -> parameters, parameter -> routines), each routine's setting, time, cost, equipment, recovery at 1x and 3x and
-status. `/parameters/` is the contract's parameters table in data-ui: four presets (all, winning model, with results, errors only), a column group per
-(routine, model), each row's least error marked, a model's group shown or hidden from Properties (data-ui CONTRACT §49, vendored as a backport onto
-d5ede93: `vendor/data-ui/VENDOR.md`).
+calibration routine both ways (routine -> parameters, parameter -> routines), each routine's setting, time, cost, equipment, its recovery and verdict
+at every level of the noise ladder (0x, 1x, 3x, 10x: pass, fail, or not run and why) and status. `/parameters/` is the contract's parameters table in
+data-ui: four presets (all, winning model, with results, errors only; each a set of rows showing every model's column group, the example's own fit
+first in all and winning model), a column group per (routine, model), each row's least error marked, a model's group shown or hidden from
+Properties (data-ui CONTRACT §49, vendored as a backport onto d5ede93: `vendor/data-ui/VENDOR.md`).
 
 ## Metrics over a selection, and reports
 
@@ -143,7 +145,8 @@ every number to `selection.compute` for three selections made in headless Chrome
 runs links its metrics page with its stations picked.
 
 **`/reports/`** (`site/reports_pages.py`): every frozen report and its page, read from its snapshot (metrics, diagnostics with their levels,
-gates, coverage, models, parameter rows, its rows), never recomputed. Make one from a selection (it writes `type_cards/frozen_reports/<id>.py` and
+gates, coverage, models, parameter rows, its rows, and since 2026-11-07 its parts' titles and the ladder model each label named), never
+recomputed; the three reports frozen before snapshots kept titles and labels say on their page that those are today's. Make one from a selection (it writes `type_cards/frozen_reports/<id>.py` and
 `<id>.json`; commit both):
 
     PYTHONPATH=/home/bam/sim2real python3 -m type_cards.report freeze --id my-report --title "…" --question "…" --deployment one-dof-test-rack --select "device=CAN 11" --select "split=held_out"

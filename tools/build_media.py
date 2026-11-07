@@ -15,7 +15,7 @@ what changed (each output keeps a stamp of its inputs). Reads, never writes: the
 MEDIA (--out, else $SIM2REAL_MEDIA, else ~/.cache/sim2real/media); site/build.py serves it at /media/:
 
     index.json                                 schema sim2real.media/1: what is here, from what, and why a run has no clip
-    scenes/<id>.jpg                            a render per card: the six sysid examples and every deployment
+    scenes/<id>.jpg                            a render per card: the six sysid examples, the noise ladder's scenarios and every deployment
     <dep>/stations/<station>.glb               the station's link (glTF 2.0 binary, one node "link") for the 3D card
     <dep>/runs/<run>/links.json                the link's pose per situation and t (data-ui's robotics contract links table)
     <dep>/runs/<run>/media.json                where the session recorded the station's camera: that clip and the twin's render
@@ -73,6 +73,9 @@ RACK_TWIN = Path(os.environ.get("RACK_TWIN_PACKAGE") or "/home/bam/bam_ws/src/de
 CAMERA_MAP = RACK_TWIN / "docs" / "dataset_clips.py"
 SCHEDULES = adapter.SCHEDULES
 EXAMPLES = ("pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell")
+# WHY rendered too (2026-11-07, the v3 audit's finding 5): sysid's noise-ladder scenarios are virtual deployments (type_cards.instances
+# SCENARIOS), each a card on /deployments/ that shows its render like every other
+SCENARIOS = ("ur5e_backlash",)
 CONTRACT = "data-ui gallery/robotics/CONTRACT.md v1"
 
 FPS = 30
@@ -344,7 +347,7 @@ def save_jpeg(image: np.ndarray, path: Path, quality: int = 88) -> int:
 
 # Each card's view: azimuth, elevation (degrees) and how full the frame is; the arms at their keyframe ("home"), the cell's cameras shown
 # (fill < 1 brings the camera in: the distance is the visible box's radius / sin(fovy / 2) x fill)
-SCENE_VIEW = {"pendulum_can11": (58, -8, 1.35), "ur5e": (140, -14, 0.82), "ur5e_2f85": (140, -14, 0.82), "conveyor": (128, -24, 0.8),
+SCENE_VIEW = {"pendulum_can11": (58, -8, 1.35), "ur5e": (140, -14, 0.82), "ur5e_2f85": (140, -14, 0.82), "ur5e_backlash": (140, -14, 0.82), "conveyor": (128, -24, 0.8),
               "dual_arm_cell": (150, -16, 0.7), "linescan_cell": (122, -24, 0.74), "one-dof-test-rack": (148, -16, 0.5)}
 EXAMPLE_WHAT = {
     "pendulum_can11": "CAN 11's twin hinge, the link drawn from the twin's own load (its MJCF has no visual geometry): the joint sysid calibrates.",
@@ -353,6 +356,7 @@ EXAMPLE_WHAT = {
     "conveyor": "sysid's conveyor.xml: the belt whose drum radius, moving mass and drag sysid calibrates.",
     "dual_arm_cell": "Two UR5e + 2F-85 on a torso over the conveyor, the head camera's frustum drawn: the cell sysid calibrates.",
     "linescan_cell": "The conveyor under a SWIR line-scan camera and a D435 (their frustums drawn): the sensors sysid calibrates.",
+    "ur5e_backlash": "MuJoCo Menagerie's UR5e, the noise ladder's backlash scenario: each joint a QDD drivetrain with a gear gap the gravity sweep finds.",
 }
 
 
@@ -433,7 +437,7 @@ def build_scenes(media: Path, index: dict, deployments: list[dict], only: set[st
 
     done = {s["id"]: s for s in index.get("scenes", [])}
     out = []
-    jobs = [(x, "example") for x in EXAMPLES] + [(d["id"], "deployment") for d in deployments]
+    jobs = [(x, "example") for x in EXAMPLES + SCENARIOS] + [(d["id"], "deployment") for d in deployments]
     for sid, kind in jobs:
         if only and sid not in only:
             if sid in done:

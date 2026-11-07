@@ -9,7 +9,10 @@ is a great way to just see an overview fixed."
 breakdown, read from the snapshot and never recomputed: what it answers, when and from which code it was frozen and that its digest verifies,
 every entity's metrics (pinned first), diagnostics with their levels, gates and coverage, the models it names, its parameter rows, and its
 rows (the snapshot's own, inputs.rows; a snapshot frozen before it kept them lists the rows runs.json holds today and says whether they
-still hash to what it froze). A report's runs open live on the metrics page (/metrics/<dep>/?report=<id>), beside its frozen numbers.
+still hash to what it froze). The parts' titles and the ladder model beside each producer's label are the snapshot's own (annotations); a
+snapshot frozen before it kept them (the first three) reads them from today's records and says so, and the page claims to stay as it is
+only for what its snapshot froze (the v3 audit, 2026-11-07, finding 7). A report's runs open live on the metrics page
+(/metrics/<dep>/?report=<id>), beside its frozen numbers.
 
 Make one from a selection: `python3 -m type_cards.report freeze --id ... --title ... --question ... --deployment ... --runs | --select |
 --preset` (the metrics page writes the command for its selection). Stdlib only. Decision: docs/decision-metrics-reports-2026-11-07.md.
@@ -72,8 +75,10 @@ def index_body(snaps: dict) -> str:
                      f'{e((s.get("frozen_at") or "")[:16].replace("T", " "))} UTC from code {e(s.get("code") or "?")}</small></li>')
     return f"""<h1>Reports <span class="n">({len(snaps)})</span></h1>
 <p class="lede">A report is a named, frozen set of runs with everything computed over them when it was frozen: each entity's metrics,
-diagnostics with their levels, coverage, the models it names and its parameter rows. It never changes as runs are added; freezing it again is a
-new decision. Make one from any selection on a <a href="{e(metrics_pages.URL)}">metrics page</a>, which writes the command, or from the repo:
+diagnostics with their levels, coverage, the models it names and its parameter rows. Those never change as runs are added; freezing it again is a
+new decision. Each report's page says what its snapshot froze and what it reads from today's records (the reports frozen before snapshots kept
+their parts' titles and label map read those today). Make one from any selection on a <a href="{e(metrics_pages.URL)}">metrics page</a>, which
+writes the command, or from the repo:
 <code>python3 -m type_cards.report freeze --id &lt;id&gt; --title "…" --question "…" --deployment one-dof-test-rack --select device="CAN 11"</code>.</p>
 <ul class="s2r-reports">{"".join(items)}</ul>"""
 
@@ -88,15 +93,20 @@ def _limits(d: dict) -> str:
     return " · ".join(parts) or "set per unit (no value then)"
 
 
-def label_words(dep: str, label: str) -> str:
-    """A model label as the snapshot froze it and, where type_cards maps it today (inst.label_model), the ladder model it is, linked."""
+def label_words(dep: str, label: str, frozen: dict | None = None) -> str:
+    """A model label as the snapshot froze it and the ladder model it named: the snapshot's own map (annotations.model_labels), else, for a
+    snapshot frozen before it kept one, what type_cards maps it to today (inst.label_model), marked "today"."""
     if not label:
         return "—"
+    if frozen is not None:
+        m = frozen.get(label)
+        return metrics_pages.model_words(label, {label: {"model": m["model"], "url": f"/models/{m['type']}/#{m['model']}"}} if m else {}, as_="frozen")
     m = inst.label_model(dep, label)
-    return metrics_pages.model_words(label, {label: {"model": m.model, "url": f"/models/{m.type}/#{m.model}"}} if m else {})
+    return metrics_pages.model_words(label, {label: {"model": m.model, "url": f"/models/{m.type}/#{m.model}"}} if m else {}, as_="today",
+                                     mark="today" if m else "")
 
 
-def node_block(node: dict, title: str, dep: str = "") -> str:
+def node_block(node: dict, title: str, dep: str = "", frozen_labels: dict | None = None) -> str:
     tid = node["entity_type"]
     t = dm.TYPES.get(tid)
     order = {m.id: i for i, m in enumerate(t.metrics)} if t else {}
@@ -111,10 +121,10 @@ def node_block(node: dict, title: str, dep: str = "") -> str:
             cell = (f'<span data-node="{e(node["node"])}" data-metric="{e(m["metric"])}" data-model="{e(model)}" data-value="{raw(m["value"])}">'
                     f'{e(fmt(m["value"], m["unit"]))}</span> <small class="mut">{e(fmt(m["low"], ""))}–{e(fmt(m["high"], m["unit"]))}, {plural(m["n"], "run")}{e(side)}</small>')
         pin = ' <span class="s2r-pin">pinned</span>' if m["pinned"] else ""
-        mrows.append(f'<tr><th scope="row">{e(m["title"])}{pin}</th><td>{label_words(dep, model)}</td><td>{cell}</td></tr>')
+        mrows.append(f'<tr><th scope="row">{e(m["title"])}{pin}</th><td>{label_words(dep, model, frozen_labels)}</td><td>{cell}</td></tr>')
     drows = "".join(
         f'<tr data-node="{e(node["node"])}" data-diagnostic="{e(d["diagnostic"])}" data-model="{e(d.get("model") or "")}" data-level="{e(d["level"])}">'
-        f'<td>{metrics_pages.level_chip(d["level"])}</td><th scope="row">{e(d["title"])}</th><td>{label_words(dep, d.get("model") or "")}</td>'
+        f'<td>{metrics_pages.level_chip(d["level"])}</td><th scope="row">{e(d["title"])}</th><td>{label_words(dep, d.get("model") or "", frozen_labels)}</td>'
         f'<td>{e(fmt(d["value"], d.get("unit") or ""))}</td><td>{e(_limits(d))}</td></tr>' for d in node["diagnostics"])
     gates = " · ".join(f'<span data-gate="{e(g["gate"])}">{e(g.get("acceptance") or g["gate"])}{f" ({e(g.get("model"))})" if g.get("model") else ""} '
                        f'{pages.chip(g["verdict"])}</span>' for g in node["gates"])
@@ -199,34 +209,56 @@ def rows_block(snap: dict, current: list[dict], dep: str) -> str:
             f'<tbody>{"".join(body)}</tbody></table></div>')
 
 
+def frozen_words(snap: dict) -> tuple[str, list[str]]:
+    """What the page may say stays as it is (what the snapshot froze), what it reads from today's records instead, and those as data-today
+    words. WHY (the v3 audit, 2026-11-07, finding 7): the page said it "stays as it is" while its titles and label map were today's."""
+    ann, kept_rows = snap.get("annotations"), (snap.get("inputs") or {}).get("rows") is not None
+    frozen = ["its numbers (every metric, diagnostic level, gate and coverage)", "its models", "its parameter rows"]
+    today, words = [], []
+    (frozen if kept_rows else today).append("its rows" if kept_rows else "its rows (runs.json's today, checked against the hash it froze)")
+    words += [] if kept_rows else ["rows"]
+    (frozen if ann else today).append("the parts' titles and the ladder model each producer's label names")
+    words += [] if ann else ["titles", "model_labels"]
+    text = f"It reads its snapshot and never recomputes: as runs are added, {', '.join(frozen[:-1])} and {frozen[-1]} stay as they are."
+    if today:
+        text += (f" Read from today's records, not frozen (it was frozen before snapshots kept them): {' and '.join(today)}, each marked today "
+                 "where it shows.")
+    return text, words
+
+
 def report_body(d: dpages.Domain, snap: dict) -> str:
     r = snap["report"]
     ok = rep.verify(snap)
     dep = r.get("deployment") or ""
-    titles = {n["id"]: n["title"] for n in d.nodes}
+    ann = snap.get("annotations")
+    # WHY the snapshot's titles and label map (the v3 audit, finding 7): today's would change what a verified report says
+    titles = ann["titles"] if ann else {n["id"]: n["title"] for n in d.nodes}
+    labels = ann["model_labels"] if ann else None
     nodes = snap["results"]["selection"]["nodes"]
     stations = [n for n in nodes if n["entity_type"] == "integrated_servo"]
     blocks = []
     for st in stations:
-        blocks.append(node_block(st, titles.get(st["node"], st["node"]), dep))
+        blocks.append(node_block(st, titles.get(st["node"]) or st["node"], dep, labels))
         for p in nodes:
             if p is not st and p.get("device") == st.get("device"):
-                blocks.append(node_block(p, titles.get(p["node"], p["node"]), dep))
-    blocks += [node_block(n, titles.get(n["node"], n["node"]), dep) for n in nodes if n.get("device") is None]
+                blocks.append(node_block(p, titles.get(p["node"]) or p["node"], dep, labels))
+    blocks += [node_block(n, titles.get(n["node"]) or n["node"], dep, labels) for n in nodes if n.get("device") is None]
+    claim, today = frozen_words(snap)
     current = d.runs.get(dep, [])
     live = (f' · <a href="{e(metrics_pages.page_url(dep))}?report={e(r["id"])}">its runs on the metrics page, live</a>' if dep in d.runs else "")
     sel = snap["results"]["selection"]
     unknown = f' {plural(len(sel.get("unknown_runs") or []), "run")} it named were not in the data then.' if sel.get("unknown_runs") else ""
-    return f"""<article class="s2r-rep" data-report="{e(r["id"])}" data-digest="{e(snap["digest"])}" data-verified="{"true" if ok else "false"}" data-frozen-at="{e(snap.get("frozen_at") or "")}">
+    return f"""<article class="s2r-rep" data-report="{e(r["id"])}" data-digest="{e(snap["digest"])}" data-verified="{"true" if ok else "false"}" data-frozen-at="{e(snap.get("frozen_at") or "")}" data-today="{e(" ".join(today))}">
 <h1>{e(r["title"])}</h1>
 <p class="s2r-question">{e(r["question"])}</p>
 <p class="s2r-frozen">Frozen {e((snap.get("frozen_at") or "")[:16].replace("T", " "))} UTC from code {e(snap.get("code") or "?")} over {plural(sel["runs"], "run")} of
 {e(titles.get(dep, dep) or "no deployment")} · {pages.chip("pass" if ok else "fail", "digest verifies" if ok else "digest does not verify")}
-<small>sha256 {e(snap["digest"][:16])}…</small>{live}. It reads its snapshot and never recomputes: as runs are added it stays as it is.{e(unknown)}</p>
+<small>sha256 {e(snap["digest"][:16])}…</small>{live}. {e(claim)}{e(unknown)}</p>
 {f'<p class="mut">{e(r["note"])}</p>' if r.get("note") else ""}
 <section id="results" aria-labelledby="results-h"><h2 id="results-h">What it found, entity by entity</h2>
 <p class="mut">Each metric is its median over the report's runs (min–max and the count beside it); each diagnostic its limits on that value; each
-gate its target on it (not bam_rack_twin's acceptance statistic); coverage the type card's own function over the runs' points.</p>
+gate its target on it (not bam_rack_twin's acceptance statistic); coverage the type card's own function over the runs' points.{"" if ann else
+" Each part's title and the ladder model beside each label are today's (marked today): this snapshot was frozen before snapshots kept them."}</p>
 {"".join(blocks)}</section>
 <section id="models" aria-labelledby="models-h"><h2 id="models-h">Models <small>({len(snap["results"]["models"])})</small></h2>
 {"".join(model_block(m) for m in snap["results"]["models"]) or '<p class="mut">It names no model.</p>'}</section>
