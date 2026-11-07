@@ -445,6 +445,12 @@ response under any config. Virtual deployments have no run rows yet.
 - **Presets**: all = every row; winning model = `winning == true` (the parameters of the selection rule's pick where the example ran one,
   else the type's current model: `winning_basis`); with results = `has_results == true`; errors only = with results, `error_over_tolerance@*`
   columns, each row coloured by `best` (the column with the least |error over tolerance|).
+- **Their columns** (2026-11-07, the v3 audit's finding 8: the page showed only the example's own fit in all and winning model, while
+  `presets.*.columns` said every column group): a preset is a set of rows; the models shown are the reader's pick in any of them. all and
+  winning model show the example's own fit (`recovered`, `ci95_*`, `pass`), then every column group; with results every column group; a group
+  no shown row holds a value of is left out (data-ui `emptyGroups: hide`), so a rail pick of a deployment, a type or a model draws exactly the
+  models that graded those rows in every preset, and Properties hides or shows any group whole. errors only shows each group's error alone.
+  Decision: `docs/decision-models-routines-parameters-2026-11-07.md`, its addendum.
 - `recovered` is a single value with its 95 % interval (`dm.Estimate`); other forms are reserved. Tolerance is per column (today the
   parameter's, the same in every column). Physical deployments' recovered values arrive when a producer writes them (the same columns).
 

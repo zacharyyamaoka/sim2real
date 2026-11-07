@@ -74,6 +74,33 @@ The kit (weights: must, should):
 - **The kit:** the lane that moves sim2real to data-ui main (its chrome locators in the site test, the pages' toolbars, the old app's flow test)
   re-vendors main and drops the backport branch.
 - **The parameters view:** Zach wants every model's group in All parameters too, or one preset per model: a `.base` edit in `site/models_pages.py`.
+  (Taken by the addendum below.)
+
+## Addendum (2026-11-07, the v3 audit's finding 8): every model's group in every preset
+
+- **Status:** accepted on merge (lane `claude/audit-fixes`). Decided for Zach by the lane, at the coordinator's ask ("pick the one that best
+  serves Zach's ask that each model gets its own recovered/error/tolerance column and that he can choose which models show"); his to overrule.
+- **The finding:** decision 4 above showed only the example's own fit in *All parameters* and *Winning model*, while the contract's exported
+  preset metadata (`parameters.json presets.*.columns`) said "every column group" for both. Choosing *Winning model* removed the comparison
+  the projection promised.
+- **Decided:** implement the declared groups. *All parameters* and *Winning model* show the example's own fit, then every (routine, model)
+  group; *With results* every group; a group no shown row holds a value of is left out (`emptyGroups: hide`); *Errors only* unchanged. The
+  contract's metadata now says exactly that (`type_cards/instances.py`), and `type_cards/CONTRACT.md` ("Their columns") with it.
+
+Criteria (weights: must, should), options scored:
+
+| criterion | **every group in every preset (chosen)** | amend the contract: the fit only in All and Winning, each group one click away |
+|---|---|---|
+| each model shown has its own recovered / error / tolerance / ✓ group, Zach's 185842 and 190132 (must) | yes, in every preset | in With results and Errors only; in All and Winning only after a click per model |
+| he picks which models show, the same way in every preset (must) | yes: the rail's *Models with a result* narrows the rows and so the groups; Properties hides or shows any group whole | Properties, one group at a time; a rail pick of a model in All or Winning keeps its rows but still shows only the fit, so the pick shows rows without the model's values |
+| the page, the contract's words and the exported metadata agree (must) | yes | yes |
+| a preset is a set of rows, as Zach defined his three ("all of the paramteres", "the Winning model(s)", "at least some model run and rpocuded datata"); compactness is its own preset ("in a preset view you just so the error") (should) | yes: Errors only is the compact one | no: two presets also differ by columns |
+| the default view reads at 1280 px without a sideways scroll (should) | no: All parameters is wide (the fit, then 23 groups of four columns; most cells empty outside the rows' own deployment) until a rail pick or Properties narrows it | yes |
+
+The two musts it alone meets outweigh the one should it loses. **What would change this:** Zach finds the wide default worse than the
+missing comparison: then the first view becomes *Errors only* or *With results* (a `.base` order in `site/models_pages.py`, the presets
+unchanged), not a return to fit-only presets. **Undo:** `git revert` the lane's commit that set the groups (its subject starts
+"site.models_pages: every preset shows").
 
 ## Undo
 

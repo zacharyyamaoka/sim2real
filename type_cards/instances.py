@@ -433,11 +433,15 @@ def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
             "source": "type_cards/instances.py: sysid/results/<example>.json (the oracle's own values), sysid/results/calibration_routines.json "
                       f"(one column group per routine and model at {LEVEL}), every typed node's type parameters (type_cards/domain_v3.json)",
             "result_columns": list(columns.values()), "column_groups": {c["label"]: c["properties"] for c in columns.values()},
+            # WHY every column group in every preset but errors only (the v3 audit, 2026-11-07, finding 8: the pages showed only the example's
+            # own fit in all and winning model): a preset is a set of rows, Zach's three; the models shown are his pick in any of them
             "presets": {
-                "all": {"filter": None, "columns": "every column group", "what": "every parameter of every typed part of every deployment, with or without a value"},
-                "winning model": {"filter": "winning == true", "columns": "every column group",
+                "all": {"filter": None, "columns": "the example's own fit, then every column group (a group no shown row holds a value of left out)",
+                        "what": "every parameter of every typed part of every deployment, with or without a value"},
+                "winning model": {"filter": "winning == true", "columns": "the example's own fit, then every column group (a group no shown row holds a value of left out)",
                                   "what": "the parameters of the winning model (winning_basis: the selection rule's pick, else the type's current model)"},
-                "with results": {"filter": "has_results == true", "columns": "every column group", "what": "only parameters some routine produced a value for"},
+                "with results": {"filter": "has_results == true", "columns": "every column group (a group no shown row holds a value of left out)",
+                                 "what": "only parameters some routine produced a value for"},
                 "errors only": {"filter": "has_results == true", "columns": "error_over_tolerance@* (and error@*)", "color_by": "best",
                                 "what": "the errors side by side, each row coloured by the column whose error over tolerance is least"},
             },

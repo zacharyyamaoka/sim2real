@@ -544,6 +544,7 @@ def parameters_base(d: Data) -> dict:
     # WHY a typographic apostrophe: the .base writer emits a plain key with a straight one that its own reader takes for a quote (found here)
     fit_group = {"Oracle fit (the example’s own)": fit}
     groups = {column_label(c): [f"{p}__{keys[c['id']]}" for p in ("rec", "err", "tol", "ok")] for c in cols}
+    every = [x for ids in groups.values() for x in ids]
     errs = [f"err__{keys[c['id']]}" for c in cols]
     # WHY 250 px for recovered: its 95 % interval is drawn beside the value (data-ui's range slot) and a narrower column clips it away
     size = {"name": 240, "deployment": 120, "entity_type": 130, "introduced_in": 190, "fit_rec": 250, "fit_err": 130, "fit_tol": 130,
@@ -562,11 +563,17 @@ def parameters_base(d: Data) -> dict:
                    {"property": "family", "label": "Family"}, {"property": "models", "label": "Models with a result",
                                                                "info": "a (routine, model) column group: keeps the rows it graded; With results then draws its group and every other model that graded them"},
                    {"property": "winning", "label": "Winning model"}, {"property": "has_results", "label": "Has a result"}],
+        # WHY every model's group in All and Winning too (the v3 audit, 2026-11-07, finding 8; docs/decision-models-routines-parameters-2026-11-07.md,
+        # its addendum): Zach's presets are row sets ("all of the paramteres", "the Winning model(s)", "at least some model run"), and "each
+        # model ... its own Recovered error toerlance colum ... filter what model results we are showing" holds in each of them; a group no
+        # shown row holds a value of is left out, so the rail's Models with a result narrows every preset alike, and Properties hides any group;
+        # the first screen stays as it was (the values, the fit, the type and where it enters), the models' groups to its right
         "views": [
-            {"type": "table", "name": "All parameters", "units": "inline", "display": ranges, "order": base + ["true", "nominal"] + fit + after, "columnGroups": fit_group, "columnSize": size},
-            {"type": "table", "name": "Winning model", "units": "inline", "display": ranges, "filters": "winning == true", "order": base + ["true", "nominal"] + fit + after,
-             "columnGroups": fit_group, "columnSize": size},
-            {"type": "table", "name": "With results", "units": "inline", "display": ranges, "filters": "has_results == true", "order": base + ["true", "nominal"] + [x for ids in groups.values() for x in ids],
+            {"type": "table", "name": "All parameters", "units": "inline", "display": ranges, "order": base + ["true", "nominal"] + fit + after + every,
+             "columnGroups": {**fit_group, **groups}, "emptyGroups": "hide", "columnSize": size},
+            {"type": "table", "name": "Winning model", "units": "inline", "display": ranges, "filters": "winning == true", "order": base + ["true", "nominal"] + fit + after + every,
+             "columnGroups": {**fit_group, **groups}, "emptyGroups": "hide", "columnSize": size},
+            {"type": "table", "name": "With results", "units": "inline", "display": ranges, "filters": "has_results == true", "order": base + ["true", "nominal"] + every,
              "columnGroups": groups, "emptyGroups": "hide", "columnSize": size},
             {"type": "table", "name": "Errors only", "units": "inline", "filters": "has_results == true", "order": ["name", "deployment", "true"] + errs,
              "columnGroups": {column_label(c): [f"err__{keys[c['id']]}"] for c in cols}, "best": {"among": errs, "by": "absmin"},
@@ -593,8 +600,9 @@ def parameters_body(d: Data) -> str:
 <p class="lede">Every parameter of every typed part of every deployment: its true value where an oracle hid one, its nominal, and what each
 model recovered. A model's results are its own column group: recovered with its 95 % interval, the error, the tolerance and ✓ when the error is
 within it. {plural(len(cols), "model")} (a routine and the model it fits) have results on {n_res:,} rows; {n_win:,} rows are parameters of a winning model.
-Errors only puts every model's error side by side and marks each row's least. Pick a deployment, a type or a model on the left to compare the
-models that graded those rows; Properties shows or hides a model's whole group.</p>
+Every preset shows each model's group beside the example's own fit (With results the groups alone), leaving out a model no row shown has a
+value of; Errors only puts every model's error side by side and marks each row's least. Pick a deployment, a type or a model on the left to
+compare the models that graded those rows; Properties shows or hides a model's whole group.</p>
 {views_element(PARAMS_ID, "/" + PARAMS_BASE, "Parameters", fallback, frame="page", attrs='toolbar="bar" promote="properties"')}
 </div>"""
 
