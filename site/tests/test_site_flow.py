@@ -1161,6 +1161,7 @@ MEDIA_SCHEMA = "sim2real.media/1"
 # the camera that sees each station: the deployment record's camera map as bam_rack_twin keeps it (docs/dataset_clips.py VIEW, read here)
 CAMERA_MAP = Path("/home/bam/bam_ws/src/dev/bam_rack_twin/docs/dataset_clips.py")
 CLIP_BYTES_PER_S = 150_000  # a "small video" (Zach): at most 1.2 Mbit/s for a clip, real or rendered
+CLIP_MIN_NEW = 0.5  # a clip at least half of whose frames are new pictures; below, a slideshow (data-ui gallery's CAN 14 sine: 53 for 195)
 MIN_RENDER = (640, 360)
 
 
@@ -1256,9 +1257,9 @@ def camera_runs(data: Path) -> dict[str, tuple[dict, str, Path]]:
 
 
 def quat_angle(q) -> float:
-    """The rotation angle of a unit quaternion (w, x, y, z), in [0, pi]."""
-    w = max(-1.0, min(1.0, abs(q[0])))
-    return 2 * math.acos(w)
+    """The rotation angle of a quaternion (w, x, y, z), in [0, pi]. WHY atan2 and not 2 acos|w| (ruler refined before landing): acos is
+    ill-conditioned at w ~ 1, so a quaternion written to 7 decimals (|q| = 1 +- 1e-7) read as 3e-4 rad off a pose it matched to 1e-7."""
+    return 2 * math.atan2(math.sqrt(q[1] ** 2 + q[2] ** 2 + q[3] ** 2), abs(q[0]))
 
 
 def qmul(a, b):
@@ -1380,7 +1381,9 @@ def media_checks(out: Path, data: Path) -> dict:
         if not e.get("links"):
             pose_bad.append(f"{r['run']}: none")
             continue
-        links = json.loads((out / "media" / e["links"]).read_text())["rows"]
+        links_doc = json.loads((out / "media" / e["links"]).read_text())
+        links = links_doc["rows"]
+        stack = links_doc.get("stack_mm") or {}
         samples = json.loads((data / "runs" / r["run"] / "samples.json").read_text())["rows"]
         q_at = {(s["situation"], round(s["t"], 6)): s["q_deg"] for s in samples if s.get("q_deg") is not None}
         if {x["situation"] for x in links} != set(r["situations"]):
@@ -1393,19 +1396,38 @@ def media_checks(out: Path, data: Path) -> dict:
             quat = (x["link_qw"], x["link_qx"], x["link_qy"], x["link_qz"])
             want_q = (math.cos(math.radians(q) / 2), 0.0, 0.0, math.sin(math.radians(q) / 2))
             err = quat_angle(qmul(qinv(want_q), quat))
-            if err > 2e-5 or max(abs(x["link_x"]), abs(x["link_y"]), abs(x["link_z"])) > 1e-9:
-                pose_bad.append(f"{r['run']}: {x['situation']} at t {x['t']}: {err:.2e} rad off")
+            # ruler refined before landing (intent stands: the link sits on the joint axis, turned by its own q): each series sits at its declared
+            # offset along the axis, real at 0 and every other within 12 mm behind it (coplanar links z-fought on the 3D card)
+            on_axis = max(abs(x["link_x"]), abs(x["link_y"])) <= 1e-9 and abs(x["link_z"] - stack.get(x["situation"], 99)) <= 1e-9
+            stacked = stack.get("real") == 0.0 and all(-12.0 <= v <= 0.0 for v in stack.values())
+            if err > 2e-5 or not on_axis or not stacked:
+                pose_bad.append(f"{r['run']}: {x['situation']} at t {x['t']}: {err:.2e} rad off, at ({x['link_x']}, {x['link_y']}, {x['link_z']}) mm, stack {stack}")
                 break
             compared += 1
     check(not pose_bad and compared > 1000, f"the link poses turn about the joint axis by each situation's own q at the same t ({compared} rows of {len(picks)} runs; {pose_bad[:3]})")
     # 4. the clips: every run whose session recorded its station's camera has that clip and the twin's render of the same instants
     expected = camera_runs(data)
-    clip_bad, probed, stamp_cache = [], 0, {}
+    clip_bad, probed, stamp_cache, refused = [], 0, {}, []
     for i, (run, (row, serial, session)) in enumerate(sorted(expected.items())):
         e = entries.get(run) or {}
         media_path = out / "media" / e["media"] if e.get("media") else None
         if not media_path or not media_path.is_file():
-            clip_bad.append(f"{run}: no media.json ({e.get('why_none')})")
+            # ruler refined (2026-11-07, before landing; intent stands): a filmed run may show no clip only for a reason the archive shows,
+            # recomputed here: its camera's stamps cannot be read, or fewer than half of its clip's frames would be new pictures
+            try:
+                stamps = npz_array(session / "cameras" / f"cam_{serial}.npz", "wall")
+            except Exception:  # noqa: BLE001
+                stamps = None
+            why = e.get("why_none") or ""
+            if stamps is None:
+                ok = "stamps" in why
+            elif e.get("grid"):
+                samples = json.loads((data / "runs" / run / "samples.json").read_text())["rows"]
+                got = clip_frames(e["grid"], Path(row["npz"]), stamps, samples)
+                ok = 1 - got["repeats"] / e["grid"]["frames"] < CLIP_MIN_NEW and "too sparse" in why
+            else:
+                ok = False
+            refused.append(run) if ok else clip_bad.append(f"{run}: no media.json ({why})")
             continue
         clips = json.loads(media_path.read_text())["rows"]
         real = [c for c in clips if c.get("basis") == "real-camera" and c.get("camera") == serial]
@@ -1420,6 +1442,8 @@ def media_checks(out: Path, data: Path) -> dict:
             continue
         if any((media_path.parent / c["src"]).stat().st_size > CLIP_BYTES_PER_S * max(1.0, c["frames"] / c["fps"]) for c in (real, sim)):
             clip_bad.append(f"{run}: over {CLIP_BYTES_PER_S:,} bytes/s")
+        if 1 - real.get("repeats", 0) / real["frames"] < CLIP_MIN_NEW:
+            clip_bad.append(f"{run}: a slideshow ({real.get('repeats')} of {real['frames']} frames repeat)")
         if i % 12 == 0:  # the cut, recomputed from the archive's stamps, and the files as ffprobe reads them, on a spread of runs
             if serial + str(session) not in stamp_cache:
                 stamp_cache[serial + str(session)] = npz_array(session / "cameras" / f"cam_{serial}.npz", "wall")
@@ -1432,12 +1456,13 @@ def media_checks(out: Path, data: Path) -> dict:
                 if p.get("codec_name") != "h264" or abs(p.get("duration", 0) - c["frames"] / c["fps"]) > 1.5 / c["fps"] or int(p.get("width", 0)) > 960:
                     clip_bad.append(f"{run}: {c['src']} probes {p}")
             probed += 1
-    check(len(expected) > 100 and not clip_bad and probed >= 10,
+    check(len(expected) > 100 and not clip_bad and probed >= 10 and len(refused) <= 0.05 * len(expected),
           f"every run whose session recorded its station's camera has the camera's clip and the twin's render on one clock, small "
-          f"(≤ {CLIP_BYTES_PER_S // 1000} kB/s), the cut's camera frames recomputed from the archive's stamps ({len(expected)} runs, {probed} probed; {clip_bad[:3]})")
+          f"(≤ {CLIP_BYTES_PER_S // 1000} kB/s), the cut's camera frames recomputed from the archive's stamps; a refusal only for unreadable stamps "
+          f"or a slideshow, recomputed ({len(expected)} runs, {len(refused)} refused: {refused[:3]}; {probed} probed; {clip_bad[:3]})")
     no_clip = [r["run"] for r in runs if r["run"] not in expected and (entries.get(r["run"]) or {}).get("media")]
     check(not no_clip, f"a run whose session recorded no camera for it shows no clip ({len(no_clip)}: {no_clip[:2]})")
-    return {"index": index, "camera_runs": expected}
+    return {"index": index, "camera_runs": expected, "refused": refused}
 
 
 def media_page_checks(out: Path, data: Path, media: dict) -> None:
@@ -1472,7 +1497,8 @@ def media_page_checks(out: Path, data: Path, media: dict) -> None:
                    f"deployment's tile and page show its render ({bad[:4]})")
     # every run page: the line, the dashboard that plays its clips when it has them, the station's link model for the 3D card
     entries = index.get("runs", {})
-    expected = media.get("camera_runs") or {}
+    # the filmed runs, less the refusals media_checks held to the archive (unreadable stamps, a slideshow): those say why instead
+    expected = {k: v for k, v in (media.get("camera_runs") or {}).items() if k not in set(media.get("refused") or [])}
     run_bad, n = [], 0
     for r in json.loads((data / "runs.json").read_text())["rows"]:
         html = (out / DEP / "runs" / r["run"] / "index.html").read_text()
@@ -1534,12 +1560,16 @@ CLOCK_JS = """() => { const d = document.querySelector('[role=tabpanel][data-tab
   return c ? {t: c.t, start: c.start, end: c.end, playing: c.playing} : null; }"""
 ROBOT_JS = """(name) => { const s = (%s)(name); const el = s && s.querySelector('.dv-scene3d'); const h = el && el.scene3d; if (!h) return null;
   return { robot: h.robot(), robots: h.robots(), renders: h.renders() }; }""" % VIEW_JS
-VIDEOS_JS = """() => [...document.querySelectorAll('[role=tabpanel][data-tab=playback] video[data-t0]')].map((v) => {
+# WHY the clock read in the same task as the videos (ruler refined before landing): read apart, the clock ran on for the ~0.2 s between
+# two evaluate calls and a playing video that followed it within a frame read 0.25 s behind
+VIDEOS_JS = """() => { const d = document.querySelector('[role=tabpanel][data-tab=playback] data-dashboard'); const clockT = d && d.clock ? d.clock.t : null;
+  const times = [...document.querySelectorAll('[role=tabpanel][data-tab=playback] video[data-t0]')].map((v) => v.currentTime);
+  return [...document.querySelectorAll('[role=tabpanel][data-tab=playback] video[data-t0]')].map((v, i) => {
   let lum = null; try { const c = document.createElement('canvas'); c.width = 64; c.height = 36; const g = c.getContext('2d'); g.drawImage(v, 0, 0, 64, 36);
     const d = g.getImageData(0, 0, 64, 36).data; let s = 0, s2 = 0, n = 0; for (let i = 0; i < d.length; i += 4) { const y = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; s += y; s2 += y * y; n++; }
     lum = Math.sqrt(Math.max(0, s2 / n - (s / n) ** 2)); } catch (e) { lum = String(e); }
-  const r = v.getBoundingClientRect(); return { t0: Number(v.dataset.t0), time: v.currentTime, ready: v.readyState, src: v.currentSrc || v.dataset.src || '', std: lum,
-    box: [r.left, r.top, r.width, r.height] }; })"""
+  const r = v.getBoundingClientRect(); return { t0: Number(v.dataset.t0), time: times[i], clock: clockT, ready: v.readyState, src: v.currentSrc || v.dataset.src || '', std: lum,
+    box: [r.left, r.top, r.width, r.height] }; }); }"""
 
 
 def media_browser_checks(page, base: str, data: Path, media: dict, still) -> None:
@@ -1589,9 +1619,11 @@ def media_browser_checks(page, base: str, data: Path, media: dict, still) -> Non
             by.setdefault(s["situation"], []).append((s["t"], math.radians(s["q_deg"])))
 
     def q_of(situation, t):
+        """The situation's q at clock t, linear between its two samples (a 1-DOF turn interpolates as its angle does)."""
         rows = by[situation]
-        i = min(range(len(rows)), key=lambda k: abs(rows[k][0] - t))
-        return rows[i][1]
+        i = max(0, min(len(rows) - 2, max(k for k in range(len(rows)) if rows[k][0] <= t) if rows[0][0] <= t else 0))
+        (t0, q0), (t1, q1) = rows[i], rows[i + 1]
+        return q0 + (q1 - q0) * min(1.0, max(0.0, (t - t0) / (t1 - t0))) if t1 > t0 else q0
 
     clock = page.evaluate(CLOCK_JS) or {}
     span = (clock.get("start") or 0, clock.get("end") or 1)
@@ -1627,7 +1659,7 @@ def media_browser_checks(page, base: str, data: Path, media: dict, still) -> Non
           f"the 3D card poses the station's link model for real, the command and every model at the clock's t, and a seek turns each by its own q "
           f"(seeks {times}; {bad[:3]}; robots {meshes})")
     # a run with a camera clip: the camera and the twin's render follow the clock, paused and playing
-    expected = media.get("camera_runs") or {}
+    expected = {k: v for k, v in (media.get("camera_runs") or {}).items() if k not in set(media.get("refused") or [])}
     with_models = sorted((r for r, (row, _s, _p) in expected.items() if row["models"]), key=lambda r: -expected[r][0]["duration_s"])
     pick = (with_models or sorted(expected, key=lambda r: -expected[r][0]["duration_s"]) or [None])[0]
     if not pick:
@@ -1649,7 +1681,7 @@ def media_browser_checks(page, base: str, data: Path, media: dict, still) -> Non
     page.locator("button[aria-label*='Play' i]").first.click()
     page.wait_for_timeout(2000)
     playing = page.evaluate(VIDEOS_JS) or []
-    now = (page.evaluate(CLOCK_JS) or {}).get("t") or 0
+    now = (playing[0].get("clock") if playing else None) or 0
     page.locator("button[aria-label*='Pause' i]").first.click()
     moved_ok = len(playing) == 2 and all(p["time"] - v["time"] > 0.5 and abs(p["time"] - (now - p["t0"])) < 0.2 for p, v in zip(playing, vids))
     check(paused_ok and side and moved_ok,
@@ -2338,7 +2370,7 @@ def main() -> int:
             for url in ("/", f"/{DEP}/", f"/{DEP}/runs/{run_slug}/", f"/{DEP}/can12/", f"/{DEP}/can11/#schedule", "/analysis/why-it-fails/",
                         f"/{DEP}/#gates", f"/{DEP}/can12/#gates", "/types/", "/types/servo/#coverage", "/types/servo/#model", "/types/servo/#tests",
                         "/types/servo/#metrics", "/types/conveyor/#model", "/runs/", "/sysid/pendulum_can11/", "/sysid/linescan_cell/",
-                        *[f"/{DEP}/runs/{r}/" for r in sorted(media.get("camera_runs") or {})[:1]]):
+                        *[f"/{DEP}/runs/{r}/" for r in sorted(set(media.get("camera_runs") or {}) - set(media.get("refused") or []))[:1]]):
                 page.goto(base + url)
                 page.wait_for_load_state("load")
                 page.wait_for_timeout(1500)
