@@ -191,3 +191,13 @@ def test_on_the_rack_a_selection_agrees_with_the_rows_it_reads():
     assert c["pct"] is not None and 0.0 < c["pct"] <= 100.0 and c["reachable"] > 0
     cells = sel.coverage_cells(tables)
     assert sel.coverage_from_cells(cells["rows"], ids, cells["reachable_cells"])["CAN 11"] == c["pct"]
+
+
+def test_a_value_that_is_not_a_number_is_skipped_never_propagated(tables):
+    """A producer that writes NaN (Python's json allows it) must not turn a median into NaN, nor stop the site build's JSON (no NaN in JSON)."""
+    runs = RUNS + [{"run": "r5", "device": "A", "kind": "sine", "samples": 100, "tracking_mrad": float("nan"), "rate_hz": float("inf"),
+                    "split": "held_out"}]
+    t = sel.Tables(nodes=NODES, runs=runs, run_diagnostics=DIAGNOSTICS, coverage_points=COVERAGE, floors={"A": 2.0}, descriptions={"A": DESC_A})
+    a = node(sel.compute(["r1", "r2", "r3", "r5"], t), "rig/a")
+    assert metric(a, "servo.tracking_rms")["value"] == 4.0 and metric(a, "servo.tracking_rms")["n"] == 3
+    json.dumps(sel.compute(["r1", "r2", "r3", "r5"], t), allow_nan=False)

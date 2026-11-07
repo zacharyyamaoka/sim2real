@@ -73,14 +73,14 @@ def _metric_entries(spec: dm.MetricSpec, runs: list[dict], diags: dict, floor: f
     if src is None:
         return [{**base, "model": None, "value": None, "low": None, "high": None, "n": 0, "source": "", "why": spec.why_not}]
     if src.table == "runs":
-        values = [float(r[src.column]) for r in runs if r.get(src.column) is not None]
+        values = [float(r[src.column]) for r in runs if _number(r.get(src.column))]
         return [{**base, "model": None, **_summary(values, spec.aggregate), "source": f"runs.json {src.column}",
                  "why": "" if values else f"no selected run has {src.column}"}]
     by_model: dict[str | None, list[float]] = {}
     why = ""
     for r in runs:
         for d in diags.get(r["run"], ()):
-            if d.get("diagnostic") != src.diagnostic or d.get("value") is None:
+            if d.get("diagnostic") != src.diagnostic or not _number(d.get("value")):
                 continue
             value = float(d["value"])
             if src.divide_by == "floor":
@@ -94,6 +94,12 @@ def _metric_entries(spec: dm.MetricSpec, runs: list[dict], diags: dict, floor: f
                  "why": why or ("no model replayed the selected runs" if src.per_model else f"no selected run has {src.diagnostic}")}]
     return [{**base, "model": m, **_summary(v, spec.aggregate), "source": f"run_gates.json {src.diagnostic}" + (" ÷ T1 floor" if src.divide_by else ""),
              "why": ""} for m, v in sorted(by_model.items(), key=lambda kv: kv[0] or "")]
+
+
+def _number(value) -> bool:
+    """A finite number. WHY: a producer may write NaN (Python's json allows it); skipped, it can neither turn a median into NaN nor stop
+    the site build's JSON, which refuses NaN (browsers cannot parse it)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _summary(values: list[float], how: str) -> dict:
