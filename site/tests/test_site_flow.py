@@ -77,10 +77,10 @@ def check(ok: bool, what: str) -> None:
         FAILS.append(what)
 
 
-def free_port() -> int:
+def free_port(lo: int = 4711, hi: int = 4799) -> int:
     busy = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True).stdout
     taken = {int(m) for m in re.findall(r":(\d+)\s", busy)}
-    for port in range(4711, 4800):
+    for port in range(lo, hi + 1):
         if port in taken:
             continue
         with socket.socket() as probe:
@@ -89,7 +89,7 @@ def free_port() -> int:
             except OSError:
                 continue
         return port
-    raise SystemExit("no free port in 4711-4799")
+    raise SystemExit(f"no free port in {lo}-{hi}")
 
 
 def hue(css: str) -> tuple[float, float]:
@@ -2215,6 +2215,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=site_build.DEFAULT_OUT, help="the built site (site/build.py --out)")
     parser.add_argument("--record", type=Path, help="write the click-through video and stills here")
+    # WHY a range of one's own: parallel lanes each run this test, and a lane is given its ports (the w2b brief: 4740-4749)
+    parser.add_argument("--ports", default="4711-4799", help="the port range the test server may take (default 4711-4799; never 4700)")
     args = parser.parse_args()
     out = args.out.resolve()
     data = out / "data" / DEP
@@ -2271,7 +2273,7 @@ def main() -> int:
     check(header in home_html and shell.site_header(catalog.CATALOG, site, adapter.run_url(run_row)) in run_html,
           "the home's and a run page's bar are exactly catalog_workbench.shell.site_header (the same bar, search and Account menu)")
 
-    port = free_port()
+    port = free_port(*(int(x) for x in args.ports.split("-")))
     server = subprocess.Popen([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1", "--directory", str(out)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     base = f"http://127.0.0.1:{port}"
