@@ -27,6 +27,8 @@ held-out run per station played by its "full" twin, dashboards/source/rack_repla
   schemas before they are written; tools/trajectory.py computes difference(a, b), pinned to data-ui's fixture)
   <dep>/runs/<slug>/diagnostics.json     that run's diagnostic rows
   <dep>/runs/<slug>/run.json             that run's one runs.json row (the run page's header)
+  <dep>/run_metrics.json                 the model-independent metrics per run (tools/run_metrics.py, called last: RobotDx's catalog
+                                         entries servo.stop_error and driver.saturation on each run's npz; type_cards reads them)
 """
 
 from __future__ import annotations
@@ -1272,6 +1274,9 @@ def main() -> int:
     replays = replays_by_path()
     summaries = [build_deployment(archive_roots.expanded(entry), replays) for entry in registry["deployments"]]
     write(DATA / "deployments.json", "Deployments", f"app/registry.json; built {now()}", DEP_PROPS, summaries)
+    # WHY here (2026-11-07): build_deployment clears each deployment's folder, so the per-run metrics are written again after it
+    import run_metrics  # noqa: PLC0415  (tools/run_metrics.py, the same environment: io-diagnostics)
+    run_metrics.write_all(DATA)
     return 0
 
 

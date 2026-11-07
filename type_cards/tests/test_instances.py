@@ -357,13 +357,18 @@ def test_the_limits_reach_the_nodes_they_bind():
     nodes = inst.physical_nodes(DATA)
     assert "limits" in inst.NODE_FIELDS
     rack = [n for n in nodes if n["root"] == "one-dof-test-rack"]
+    from type_cards import selection as sel  # noqa: PLC0415
+
     can11 = next(n for n in rack if n["structural"] == "station" and n["device"] == "CAN 11")
-    assert can11["limits"]["servo.stop_error.dx"]["warn"] == 3.6 and can11["limits"]["servo.stop_error.dx"]["source"]
+    assert sel.node_limits(can11)["servo.stop_error.dx"]["warn"] == 3.6 and sel.node_limits(can11)["servo.stop_error.dx"]["source"]
     driver = next(n for n in rack if n["entity_type"] == "foc_controller" and n["device"] == "CAN 11")
-    assert driver["limits"] == {"driver.loop_rate.dx": {"warn": 90.0, "source": driver["limits"]["driver.loop_rate.dx"]["source"]}}
+    assert [(x["diagnostic"], x["warn"]) for x in driver["limits"]] == [("driver.loop_rate.dx", 90.0)] and driver["limits"][0]["source"]
+    assert set(driver["limits"][0]) == {"diagnostic", "warn", "source"}, "a side the unit does not set is left out, never null-filled"
     motor = next(n for n in rack if n["entity_type"] == "bldc_motor" and n["device"] == "CAN 11")
-    assert motor["limits"] == {}, "a limit binds only the node whose type holds that diagnostic"
-    assert all(n["limits"] == {} for n in nodes if n["kind"] == "virtual")
+    assert motor["limits"] == [], "a limit binds only the node whose type holds that diagnostic"
+    virtual = inst.virtual_nodes(RESULTS)
+    assert all(n["limits"] == [] for n in virtual)
+    assert {f["name"]: f["type"] for f in inst.deployments_dataset(nodes + virtual)["schema"]["fields"]}["limits"] == "array"
 
 
 def test_a_limit_on_a_diagnostic_no_node_holds_is_refused(tmp_path):

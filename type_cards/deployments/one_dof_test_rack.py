@@ -1,6 +1,6 @@
 """The One Dof Test Rack's v3 record: its declared tags, its cameras and its producer's model labels (app/registry.json holds the rest)."""
 
-from type_cards.domain import CameraDecl, ModelLabel, PhysicalDeployment
+from type_cards.domain import CameraDecl, ModelLabel, PhysicalDeployment, UnitLimit
 
 VIEW = "bam_ws src/dev/bam_rack_twin/docs/dataset_clips.py VIEW (the camera and the tag that see each CAN id); bam_rack_twin/trajectory_dataset.py CAMERAS"
 RT = "bam_ws src/dev/bam_rack_twin"
@@ -12,6 +12,25 @@ RT = "bam_ws src/dev/bam_rack_twin"
 # record is the M4.dynamics twin") and the servo card's own today's model (its nominals are CAN 11's twin lugre-d-M1-e37b0e7d) agree.
 LUGRE = "LuGre (Canudas de Wit, Olsson, Astrom & Lischinsky 1995): bristle stiffness and damping, Coulomb and static levels, a Stribeck speed; plus viscous damping"
 CEILING = "it holds the board's current ceiling (M5's kt_out and max_current, a config read) and no heat term (thermal_r_c)"
+# Each station's limits its type leaves per unit (2026-11-07, the metrics lane), copied from where the producer keeps them; type_cards/tests/
+# test_instances.py reads both constants from bam_rack_twin's source and holds this copy to them.
+# WHY the stop allocation: the joint's share of the 5 mm tool gate (T4's limit), bam_rack_twin acceptance.py STOP_ALLOCATION_MRAD (an
+# agent's default there, "Zach to confirm"); it is both the stop error diagnostic's warn limit and the T4 gate's target.
+STOP_ALLOCATION_MRAD = {11: 3.6, 12: 3.6, 13: 3.6, 4: 6.7, 21: 6.7, 1: 10.0, 14: 10.0, 15: 10.0}
+STOP_SOURCE = f"{RT}/bam_rack_twin/acceptance.py STOP_ALLOCATION_MRAD (each joint's share of the 5 mm tool gate, T4)"
+# WHY 90 Hz: the runner commands at bam_rack_twin hardware/experiments.py RATE_HZ = 100.0, and the loop rate's warn limit is the expected
+# rate less RobotDx's tolerance (RateConfig tolerance 0.1, ROS FrequencyStatus)
+RATE_HZ = 100.0
+RATE_TOLERANCE = 0.1
+RATE_SOURCE = f"{RT}/bam_rack_twin/hardware/experiments.py RATE_HZ = 100.0 less RobotDx RateConfig's tolerance 0.1"
+LIMITS = tuple(
+    limit
+    for can, allocation in STOP_ALLOCATION_MRAD.items()
+    for limit in (
+        UnitLimit(device=f"CAN {can}", diagnostic="servo.stop_error.dx", warn=allocation, target=allocation, source=STOP_SOURCE),
+        UnitLimit(device=f"CAN {can}", diagnostic="driver.loop_rate.dx", warn=round(RATE_HZ * (1 - RATE_TOLERANCE), 9), source=RATE_SOURCE),
+    )
+)
 
 record = PhysicalDeployment(
     id="one-dof-test-rack",
@@ -33,6 +52,7 @@ record = PhysicalDeployment(
         ),
     ),
     note="The D435 044322072026 RobotDx lists on the same host is not here: no bam_rack_twin map ties it to a station.",
+    limits=LIMITS,
     models=(
         ModelLabel(
             label="twin of record",

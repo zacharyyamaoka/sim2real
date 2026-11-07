@@ -252,12 +252,14 @@ RUN_METRICS = [
     {"run": "r3", "device": "A", "metric": "driver.saturation", "value": 1.0, "unit": "%", "n": 100},
     {"run": "r4", "device": "B", "metric": "servo.stop_error", "value": 9.0, "unit": "mrad", "n": 2},
 ]
-LIMITS = {"rig/a": {"servo.stop_error.dx": {"warn": 3.6, "target": 3.6, "source": "the fixture"}},
-          "rig/a/driver": {"driver.loop_rate.dx": {"warn": 90.0, "source": "the fixture"}}}
+# WHY a list of records on a node (deployments.json `limits`): the house table's column types are the robotics contract's words (string,
+# number, integer, boolean, array), so a node's limits are an array, one record per diagnostic it sets (sel.node_limits reads them by id)
+LIMITS = {"rig/a": [{"diagnostic": "servo.stop_error.dx", "warn": 3.6, "target": 3.6, "source": "the fixture"}],
+          "rig/a/driver": [{"diagnostic": "driver.loop_rate.dx", "warn": 90.0, "source": "the fixture"}]}
 
 
 def with_limits(nodes=NODES, limits=LIMITS):
-    return [{**n, "limits": limits.get(n["id"], {})} for n in nodes]
+    return [{**n, "limits": limits.get(n["id"], [])} for n in nodes]
 
 
 @pytest.fixture()
