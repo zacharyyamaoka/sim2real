@@ -1,0 +1,40 @@
+/* sim2real's shared UI pieces (site/ui_shared.py): the entity tree in the workbench's left column, and small word chips. After
+   robotparts' site.css and sim2real.css; tokens only, so it reads in both themes. */
+
+/* the entity tree: a deployment's tree, RobotDx's device tree in the left column (Zach, 2026-11-06: "On the left should be like an
+   entity tree. so you can see basically the results at different levels") */
+.s2r-etree { font-size: 13.5px; margin: 6px 0 18px; }
+.s2r-etree-box > summary.s2r-etree-h { list-style: none; cursor: default; pointer-events: none; font-size: 11.5px; font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--ink3); padding: 6px 6px 4px; }
+.s2r-etree-box > summary.s2r-etree-h::-webkit-details-marker { display: none; }
+.s2r-etree ul { list-style: none; margin: 0; padding: 0; }
+.s2r-etree ul ul { padding-left: 14px; }
+.s2r-etree li > details > summary { list-style: none; display: flex; align-items: center; min-width: 0; cursor: pointer; }
+.s2r-etree li > details > summary::-webkit-details-marker { display: none; }
+.s2r-etree li > details > summary::before { content: "▸"; flex: none; width: 14px; text-align: center; font-size: 10px; color: var(--ink3); }
+.s2r-etree li > details[open] > summary::before { content: "▾"; }
+.s2r-erow { display: flex; align-items: center; min-width: 0; }
+.s2r-erow::before { content: ""; flex: none; width: 14px; }
+.s2r-etree a { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; padding: 3px 6px; border-radius: 4px; color: var(--ink);
+  text-decoration: none; line-height: 1.35; }
+.s2r-etree a:hover { background: var(--hover); text-decoration: none; }
+.s2r-etree a:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.s2r-etree a[aria-current="page"] { background: var(--accent-bg); font-weight: 650; }
+.s2r-et { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s2r-ei { flex: none; display: inline-flex; width: 16px; height: 16px; color: var(--ink3); }
+.s2r-ei svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.s2r-en { flex: none; padding: 0 6px 0 4px; font-size: 12px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) {
+  .s2r-etree { margin: 2px 0 6px; }
+  .s2r-etree-box > summary.s2r-etree-h { pointer-events: auto; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .s2r-etree-box > summary.s2r-etree-h::before { content: "▸"; font-size: 10px; }
+  .s2r-etree-box[open] > summary.s2r-etree-h::before { content: "▾"; }
+}
+
+/* a small word: a kind, a tag. "real" and "sim" are data-ui's series 1 (blue) and 2 (orange), the site's real and model colours
+   (Zach, 2026-10-28: "train the eye to know what is real and what is sim"): a physical deployment is real hardware, a virtual one a sim */
+.s2r-chip { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 12px; font-weight: 550; line-height: 19px; white-space: nowrap;
+  color: var(--ink2, var(--ink)); background: var(--s2r-none-bg, #eef0f2); }
+.s2r-chip-real { color: var(--data-series-1); background: color-mix(in srgb, var(--data-series-1) 13%, transparent); }
+.s2r-chip-sim { color: var(--data-series-2); background: color-mix(in srgb, var(--data-series-2) 13%, transparent); }
+.s2r-chip-tag { color: var(--ink2, var(--ink)); background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
