@@ -17,7 +17,8 @@ What a page reads, never a new number:
   deployments pages' own rule); data/domain/model_labels.json and run_gates.json: which ladder model each producer's model is and how many of
   a station's runs it replayed (a physical deployment);
 - reg.ROUTINES and sysid/results/calibration_routines.json: each routine's setting, time, cost, equipment, what it identifies (dm.routine_
-  parameters, the contract's routine -> parameters) and its recovery at 1x and 3x; dm.parameter_routines() the other direction.
+  parameters, the contract's routine -> parameters) and its recovery at every level of the noise ladder (0x, 1x, 3x, 10x: the worst error
+  over tolerance, the verdict, what was not recovered or not run and why); dm.parameter_routines() the other direction.
 The parameters view's cells are the contract's values; the only arithmetic here is a display unit (mrad for rad, mm for m, the same per row,
 so a row's errors compare in one unit) and the oracle's own error (recovered - true).
 
@@ -59,6 +60,8 @@ FAMILY_TITLE = {"kinematics": "Kinematics", "dynamics": "Dynamics", "measurement
 # a row is in one unit and compares; the site test converts back with its own copy of this table
 DISPLAY = {("rad", "mrad"): 1e3, ("m", "mm"): 1e3, ("rad/h", "mrad/h"): 1e3}
 SETTING_WORD = {"bench": "bench", "deployed": "deployed", "both": "bench or deployed"}
+# the noise ladder's levels (sysid/noise_ladder.json), each in words; the routine table shows every one (the v3 audit, finding 5)
+LEVEL_WORDS = {"0x": "with no sensor noise", "1x": "at the oracle's own sensor noise", "3x": "at three times it", "10x": "at ten times it"}
 
 
 def model_url(type_id: str, model_id: str | None = None) -> str:
@@ -81,7 +84,9 @@ class Data:
         path = folder / "model_labels.json"
         self.labels = {(r["deployment"], r["label"]): r for r in json.loads(path.read_text(encoding="utf-8"))["rows"]} if path.is_file() else {}
         path = site.data / "sysid" / "calibration_routines.json"
-        self.routines = {r["routine"]: r for r in json.loads(path.read_text(encoding="utf-8"))["rows"]} if path.is_file() else {}
+        doc = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        self.routines = {r["routine"]: r for r in doc.get("rows", [])}
+        self.levels = list(doc.get("levels") or LEVEL_WORDS)
         self.used = self._used()
 
     def _replayed(self, dep: str) -> Counter:
@@ -282,20 +287,45 @@ def _quantity(q, text: str) -> dict:
     return cell
 
 
+def level_cells(cell: dict | None, level: str) -> dict:
+    """A routine's recovery at one level of the noise ladder as its table shows it (the producer's numbers, calibration_routines.json):
+    recovery_<L>, the worst |error| / tolerance with what was not recovered in its words; state_<L>, the verdict as a status (pass, fail,
+    or not run where no check ran there, the ruler's reason beside it); pass_<L>, pass as the ladder wrote it. A routine nobody checked
+    against a hidden truth has none (its Oracle column says so)."""
+    if cell is None:
+        return {f"recovery_{level}": None, f"state_{level}": None, f"pass_{level}": None}
+    where = LEVEL_WORDS.get(level, level)
+    skipped = "; ".join(f"{cid.split(':', 1)[1]}: {why}" for cid, why in (cell.get("not_run") or {}).items())
+    if not cell.get("checks"):
+        why = f"not run {where}: {skipped}"
+        return {f"recovery_{level}": {"value": None, "text": "not run", "why": why},
+                f"state_{level}": {"value": "not run", "note": why}, f"pass_{level}": None}
+    worst, missing, n = cell.get("worst_error_over_tolerance"), cell.get("missing") or 0, cell.get("parameters") or 0
+    lost = f"{missing} of {n} not recovered" if missing else ""
+    text = " · ".join(x for x in (f"{worst:.3g}×" if worst is not None else "", lost) if x) or "—"
+    detail = [f"the worst |recovered − true| ÷ tolerance {where}, over the {n - missing} of {n} parameters it recovered" if worst is not None
+              else f"nothing recovered {where}", lost, f"{cell.get('failing') or 0} of {n} outside the ladder's bound" if cell.get("failing") else "",
+              "" if cell.get("usable") or not cell.get("pass") else "within the ladder's bound, not within the tolerance itself",
+              f"not run there: {skipped}" if skipped else ""]
+    note = "; ".join(x for x in detail if x)
+    return {f"recovery_{level}": {"value": worst, "text": text, "note": note} if worst is not None else {"value": None, "text": text, "why": note},
+            f"state_{level}": {"value": "pass" if cell.get("pass") else "fail", "note": note}, f"pass_{level}": cell.get("pass")}
+
+
 def routine_rows(d: Data) -> list[dict]:
     rows = []
     for r in reg.ROUTINES:
         cost = reg.equipment_cost(r)
         rec = (d.routines.get(r.id) or {}).get("recovery") or {}
         ident = [f"{t} · {p}" for t, _m, p in dm.routine_parameters(r.id)]
-        one, three = rec.get("1x") or {}, rec.get("3x") or {}
+        levels = {}
+        for level in d.levels:
+            levels.update(level_cells(rec.get(level) if rec else None, level))
         rows.append({"id": r.id, "title": r.title, "package": r.package, "kind": r.kind, "setting": r.setting, "status": r.status,
                      "wall_time_s": _quantity(r.wall_time, _seconds(r.wall_time)),
                      "operator_time_s": _quantity(r.operator_time, _seconds(r.operator_time)),
                      "cost_usd": _quantity(cost, f"${cost.value:,.0f}"), "equipment": [reg.EQUIPMENT[x].title for x in r.equipment],
-                     "identifies": ident, "n_parameters": len(ident),
-                     "recovery_1x": one.get("worst_error_over_tolerance"), "pass_1x": one.get("pass"),
-                     "recovery_3x": three.get("worst_error_over_tolerance"), "pass_3x": three.get("pass"),
+                     "identifies": ident, "n_parameters": len(ident), **levels,
                      "oracle": (d.routines.get(r.id) or {}).get("oracle", {}).get("status") or "not checked"})
     return rows
 
@@ -325,13 +355,21 @@ def routines_dataset(d: Data) -> dict:
                            "cost_usd": {"type": "number", "label": "Equipment $", "note": "the equipment's cost beyond the robot, in USD"},
                            "equipment": {"type": "list", "label": "Equipment"}, "identifies": {"type": "list", "label": "Identifies (type · parameter)"},
                            "n_parameters": {"type": "number", "label": "Parameters"},
-                           "recovery_1x": {"type": "number", "label": "Recovery 1x", "note": "the worst |recovered − true| ÷ tolerance over its parameters at the "
-                                           "oracle's own noise (sysid's noise ladder); empty: not checked against a hidden truth"},
-                           "pass_1x": {"type": "boolean", "label": "1x ok"},
-                           "recovery_3x": {"type": "number", "label": "Recovery 3x", "note": "the same at three times the noise"},
-                           "pass_3x": {"type": "boolean", "label": "3x ok"},
+                           **{k: v for level in d.levels for k, v in level_properties(level).items()},
                            "oracle": {"type": "text", "label": "Oracle"}},
             "rows": routine_rows(d)}
+
+
+def level_properties(level: str) -> dict:
+    where = LEVEL_WORDS.get(level, level)
+    # WHY "error/tol" and "verdict": they sit under their level's header ("Recovery at 1x"), in a column 78 px wide
+    return {f"recovery_{level}": {"type": "number", "label": "error/tol",
+                                  "note": f"the worst |recovered − true| ÷ tolerance over its parameters {where} (sysid's noise ladder; 1 is at the "
+                                          "tolerance); empty: not checked against a hidden truth"},
+            f"state_{level}": {"type": "text", "label": "verdict", "display": "status",
+                               "note": f"its verdict {where}: pass (every parameter within the ladder's bound), fail (one is not, or was not "
+                                       "recovered) or not run (no check ran there, and why)"},
+            f"pass_{level}": {"type": "boolean", "label": f"{level} ok"}}
 
 
 def parameter_routines_dataset() -> dict:
@@ -346,18 +384,24 @@ def parameter_routines_dataset() -> dict:
             "rows": parameter_routine_rows()}
 
 
-def routines_base_properties() -> dict:
-    return {"recovery_1x": {"digits": 3}, "recovery_3x": {"digits": 3}}
+def routines_base_properties(levels) -> dict:
+    return {f"recovery_{level}": {"digits": 3} for level in levels}
 
 
-def routines_base() -> dict:
-    # WHY this order (Zach's list: where it runs, its time, its $ cost, its equipment, its recovery at 1x and 3x, its status): the short answers
-    # first, the long lists (equipment, what it identifies) after them, so a 1280 px pane shows the verdicts without a sideways scroll
-    order = ["title", "setting", "status", "wall_time_s", "cost_usd", "recovery_1x", "pass_1x", "recovery_3x", "pass_3x", "equipment", "operator_time_s",
-             "identifies", "n_parameters", "kind", "package"]
-    return {"data": "/data/routines.json", "properties": routines_base_properties(),
-            "views": [{"type": "table", "name": "Routine → parameters", "order": order,
-                       "columnSize": {"title": 300, "equipment": 220, "identifies": 360}}]}
+def routines_base(levels=tuple(LEVEL_WORDS)) -> dict:
+    # WHY this order (Zach's list: where it runs, its time, its $ cost, its equipment, its recovery, its status): the short answers first, the
+    # long lists (equipment, what it identifies) after them. WHY every level, each its recovery and verdict under one header (the v3 audit,
+    # 2026-11-07, finding 5): 1x and 3x alone hid 0x's bias and 10x's breakdown, and a level a check skips
+    by_level = [x for level in levels for x in (f"recovery_{level}", f"state_{level}")]
+    order = ["title", "setting", "status", "wall_time_s", "cost_usd", *by_level, "equipment", "operator_time_s", "identifies", "n_parameters", "kind", "package"]
+    groups = {f"Recovery at {level}": [f"recovery_{level}", f"state_{level}"] for level in levels}
+    return {"data": "/data/routines.json", "properties": routines_base_properties(levels),
+            "views": [{"type": "table", "name": "Routine → parameters", "order": order, "columnGroups": groups,
+                       # WHY these widths: at 1280 px the four levels' verdicts sit beside the routine without a sideways scroll; a cell
+                       # cut short ends in an ellipsis and its whole text (what was not recovered, what did not run and why) is its hover
+                       "columnSize": {"title": 184, "setting": 76, "status": 130, "wall_time_s": 106, "cost_usd": 92, "equipment": 220, "identifies": 360,
+                                      **{f"recovery_{level}": 78 for level in levels},
+                                      **{f"state_{level}": 78 for level in levels}}}]}
 
 
 def parameter_routines_base() -> dict:
@@ -378,14 +422,15 @@ def routines_body(d: Data) -> str:
            f'<tbody>{fall_r}</tbody></table>')
     t_p = f'<table class="s2r-table"><thead><tr><th>Parameter</th><th>Type</th><th>Routines</th></tr></thead><tbody>{fall_p}</tbody></table>'
     none = sum(1 for r in prows if not r["routine_ids"])
-    checked = sum(1 for r in rrows if r["recovery_1x"] is not None)
+    checked = sum(1 for r in rrows if any(r.get(f"state_{level}") for level in d.levels))
     return f"""<article class="s2r-routines" data-page="routines">
 <h1>Calibration routines <span class="n">({len(rrows)})</span></h1>
 <p class="lede">A routine is one way to identify parameters: where it runs (on the bench or in a deployment), how long it takes and how much of a
-person, what its equipment costs, and how well it recovers a hidden truth in simulation (sysid's noise ladder: the worst error over tolerance
-among its parameters at the oracle's own noise, 1x, and at three times it). {checked} of {len(rrows)} are checked against a hidden truth;
-{none} of {len(prows)} parameters have no routine yet. Two ways in: a routine and what it identifies, or a parameter and every routine that can
-identify it.</p>
+person, what its equipment costs, and how well it recovers a hidden truth in simulation (sysid's noise ladder, at each level of sensor noise:
+{e(", ".join(f"{level} {LEVEL_WORDS.get(level, '')}" for level in d.levels))}): the worst error over tolerance among its parameters and the
+verdict, fail where a parameter falls outside the ladder's bound or is not recovered, not run where no check ran at that level (each cell says
+why). {checked} of {len(rrows)} are checked against a hidden truth; {none} of {len(prows)} parameters have no routine yet. Two ways in: a routine
+and what it identifies, or a parameter and every routine that can identify it.</p>
 <nav class="tabs" aria-label="Routines, both ways"><div role="tablist" aria-label="Routines, both ways"><a role="tab" id="t-by-routine" href="#by-routine" aria-controls="tab-by-routine">Routine → parameters</a><a role="tab" id="t-by-parameter" href="#by-parameter" aria-controls="tab-by-parameter">Parameter → routines</a></div></nav>
 <div class="panels">
 <div class="panel" role="tabpanel" id="tab-by-routine" data-tab="by-routine" aria-label="Routine → parameters">
@@ -575,7 +620,7 @@ def files(site):
 
     d = load(site)
     root = [s2r.ROOT_CRUMB]
-    yield ROUTINES_BASE, base_text(routines_base(), "the calibration routines, routine -> parameters")
+    yield ROUTINES_BASE, base_text(routines_base(d.levels), "the calibration routines, routine -> parameters")
     yield PARAM_ROUTINES_BASE, base_text(parameter_routines_base(), "every parameter and the routines that can identify it")
     yield PARAMS_BASE, base_text(parameters_base(d), "every parameter: true, nominal and recovered, a column group per model; four presets")
     yield "models/index.html", s2r.page(site, "Models: sim2real", MODELS_URL, index_body(d), "models", extra_head=STYLES,

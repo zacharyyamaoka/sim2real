@@ -27,7 +27,8 @@
    whose runs a producer's model replayed (its label through the map, with the run count). Each row is anchored by its model id, and every
    deployment page's "models used here" links to it (the rack's labels name their ladder model).
 3. **The routines, both ways, at `/routines/`:** two tabs, each a data-ui table: a routine per row (where it runs, time and hands-on time, the
-   equipment and its cost, what it identifies, its recovery at 1x and 3x noise from sysid's noise ladder, its status), and a parameter of every type
+   equipment and its cost, what it identifies, its recovery at 1x and 3x noise from sysid's noise ladder, its status; since the v3 audit's
+   finding 5, at every level, 0x 1x 3x 10x, each with its verdict, what was not recovered and what did not run and why), and a parameter of every type
    per row with every routine that can identify it. The rows are `reg.ROUTINES` with `dm.routine_parameters` and `dm.parameter_routines()`, the
    contract's two directions, tested to be each other's inverse.
 4. **The parameters view at `/parameters/`, in data-ui:** the contract's parameters table, row for row, data-ui's rail on the left (deployment, type,
