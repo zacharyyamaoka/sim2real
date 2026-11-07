@@ -261,14 +261,22 @@ def _rows(path: Path) -> list:
     return json.loads(path.read_text(encoding="utf-8")).get("rows", []) if path.is_file() else []
 
 
+def gate_id(gate) -> str:
+    """"T1 floor" -> "T1", "T10 live re-identification" -> "T10": a gates.json row's gate id is its first word."""
+    words = str(gate or "").split()
+    return words[0] if words else ""
+
+
 def load_tables(data: Path, deployment: str, schedules: Path | None = None, nodes: list | None = None) -> Tables:
     """One deployment's tables from the app's data folder (app/data, or the site's OUT/data) and the test schedules' root."""
     from . import instances  # noqa: PLC0415  (instances.write calls this module: imported late, one way)
 
     folder = Path(data) / deployment
     schedules = Path(schedules) if schedules else instances.SCHEDULES
+    # WHY the gate's id word, never a prefix: "T1" is also the start of "T10 live re-identification" and "T11 provenance", and a prefix
+    # match read T10's value as 7 of the rack's 8 floors (tests/test_selection.py, the T1 floor tests)
     floors = {r["device"]: float(r["value"]) for r in _rows(folder / "gates.json")
-              if str(r.get("gate", "")).startswith("T1") and isinstance(r.get("value"), (int, float))}
+              if gate_id(r.get("gate")) == "T1" and isinstance(r.get("value"), (int, float))}
     devices = [r["device"] for r in _rows(folder / "devices.json")]
     descriptions = {}
     for device in devices:
