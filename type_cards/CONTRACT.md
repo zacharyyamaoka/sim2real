@@ -200,7 +200,9 @@ that join by `sysid/tests/test_noise_ladder.py`; the site build serves it at `/d
    equipment[{id title cost{value unit source note}}]
    identifies[{card rung parameters[]}]  parameters_covered (the count)
    excitation coverage repeats how tests[] code[{repo path ref note}] alternatives[] references[titles] note
-   recovery{ "1x"|"3x": {pass usable worst_error_over_tolerance missing parameters} }   (over every check; absent when not checked)
+   recovery{ "0x"|"1x"|"3x"|"10x": {pass usable worst_error_over_tolerance missing failing parameters checks not_run{check id: why}} }
+            (every level the ladder runs, over the checks that ran there; pass null where none ran; {} when not checked. Since
+             2026-11-07, the v3 audit's finding 5: 1x and 3x only hid 0x's bias and 10x's breakdown; summary_levels stays the headline)
    oracle{ status: "checked"|"not checked", note,
            checks[{ id example owner(sysid|bam_ws) structure(matches|mismatch: why) parameters[keys] unclaimed{key: why} not_at{level: why}
                     realism verdict(one line)

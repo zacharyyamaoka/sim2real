@@ -65,7 +65,8 @@ def main(argv=None) -> int:
 
         doc = routines_module.table(json.loads(ladder_module.RESULT_PATH.read_text(encoding="utf-8")))
         for row in doc["rows"]:
-            cells = ", ".join(f"{k} {'pass' if v['pass'] else 'FAIL'} {v['worst_error_over_tolerance'] if v['worst_error_over_tolerance'] is None else round(v['worst_error_over_tolerance'], 3)}"
+            cells = ", ".join(f"{k} not run" if not v["checks"] else
+                              f"{k} {'pass' if v['pass'] else 'FAIL'} {v['worst_error_over_tolerance'] if v['worst_error_over_tolerance'] is None else round(v['worst_error_over_tolerance'], 3)}"
                               for k, v in row["recovery"].items())
             print(f"{row['routine']:38s} {row['setting']:8s} {row['status']:16s} {cells or row['oracle']['status']}")
         if args.write:
