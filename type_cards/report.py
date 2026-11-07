@@ -104,12 +104,18 @@ def read_snapshot(path: Path) -> dict:
 
 def select_runs(rows: list[dict], *, runs=(), select=(), preset: str | None = None) -> list[str]:
     """The run ids a new report names, one way: `runs` (ids), `select` (["col=v1,v2", ...]: a run keeps when every column holds one of its
-    values; a list column when any item does) or `preset` (a selection.presets name). Sorted, deduplicated. A column no run has, or a preset
-    that is none, is refused: a typo must never freeze an empty report."""
+    values; a list column when any item does) or `preset` (a selection.presets name). Sorted, deduplicated. A column no run has, a preset
+    that is none, or a run id the rows do not hold is refused: a typo must never freeze an empty report."""
     ways = [w for w in (bool(runs), bool(select), preset is not None) if w]
     if len(ways) != 1:
         raise ValueError("name the runs one way: --runs, --select or --preset")
     if runs:
+        # WHY the whole selection refused, not the typo dropped (the v3 audit, finding 9): `--runs typo` froze one declared run, none
+        # evaluated, under a digest that verifies; a report must name runs that exist when it is made
+        unknown = sorted(set(runs) - {r["run"] for r in rows})
+        if unknown:
+            raise ValueError(f"--runs names {len(unknown)} run id(s) the data does not hold: {', '.join(unknown[:5])}"
+                             f"{' ...' if len(unknown) > 5 else ''} (ids are runs.json `run`)")
         return sorted(set(runs))
     if preset is not None:
         found = sel.presets(rows)

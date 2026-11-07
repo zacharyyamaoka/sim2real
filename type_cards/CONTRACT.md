@@ -490,7 +490,7 @@ report does not change as data grows; re-freezing is a new decision and a new co
 Since 2026-11-07 (additive): a report from a selection, `python3 -m type_cards.report freeze --id <id> --title ... --question ... --deployment
 <dep> (--runs a,b | --select col=v[,v] ... | --preset "<name>") [--models ...] [--parameters ...] [--note ...] [--doc ...]`: `rep.select_runs`
 names the runs one way (ids; runs.json columns, every one holding one of its values; a `sel.presets` name), refusing a column or preset that is
-none; `rep.definition_text` writes the definition (`frozen_reports/<id with _>.py`, one keyword per line), then it freezes; a report that exists
+none and a run id the data does not hold (the whole selection, before anything is written: the v3 audit's finding 9); `rep.definition_text` writes the definition (`frozen_reports/<id with _>.py`, one keyword per line), then it freezes; a report that exists
 is never overwritten. A snapshot keeps the rows it froze: `inputs.rows`, each run's `rep.ROW_FIELDS` (covered by the digest). `list` and `verify
 <id>` read them. The site shows every report at `/reports/<id>/` (`site/reports_pages.py`); 2026-11-07's: `ident-sessions-1106`,
 `otherday-sessions-1107`.
