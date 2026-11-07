@@ -97,8 +97,9 @@ an alarm on the gap's growth fires at the same gap whatever the camera.
 - `python3 -m type_cards.domain --write` after any card change (the test fails on a stale projection); `python3 -m type_cards.report freeze
   <id>` only on purpose.
 - Today a selection can compute three metrics (tracking, twin fidelity per model, the board's rate) and the servo's coverage; every other
-  metric says why not. The coverage table is ~4 Hz, so recorded coverage reads lower than a plan's (CAN 11's frozen schedule: 57.98 % over
-  its 104 runs against the plan's 66.15 % of its train targets).
+  metric says why not. Recorded coverage reads lower than a plan's own number: the coverage table is ~4 Hz and real motion is not its
+  targets (CAN 11's frozen schedule 2f32ddbc: 57.98 % over its 104 recorded runs; the plan's targets visit 71.35 % over all its runs,
+  66.15 % over its train split).
 - A selection's gate verdict is the gate's target on the selection's median, not bam_rack_twin's acceptance statistic (CAN 11's twin of
   record: 2.44x floor over the frozen schedule's runs here; T2 pools its held-out set its own way and reads 1.39x overall). The acceptance
   verdicts stay gates.json's.
