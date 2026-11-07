@@ -107,6 +107,26 @@ def test_runs_are_selected_by_id_by_column_or_by_preset():
         rep.select_runs(RUNS, runs=["r1"], select=["device=A"])   # one way to name the rows
 
 
+def test_a_new_report_refuses_a_run_id_the_data_does_not_hold(tmp_path, monkeypatch):
+    """The v3 audit (2026-11-07, finding 9): `--runs typo` passed the empty-selection check and froze a report of one declared run, none
+    evaluated, whose digest verified. A new report's runs are runs the data holds: an id it does not hold is refused, the whole selection
+    (never the typo silently dropped), before anything is written. Re-freezing an existing definition still freezes and names its lost runs
+    (test_a_frozen_report_does_not_change_as_data_grows)."""
+    with pytest.raises(ValueError, match="typo"):
+        rep.select_runs(RUNS, runs=["typo"])
+    with pytest.raises(ValueError, match="typo"):
+        rep.select_runs(RUNS, runs=["r1", "typo"])
+    out = tmp_path / "frozen_reports"
+    out.mkdir()
+    monkeypatch.setattr(rep, "REPORTS_DIR", out)
+    monkeypatch.setattr(rep, "_context", lambda data_dir, deployment: (NODES, [], tables()))
+    for runs in ("typo", "r1,typo"):
+        code = rep.main(["freeze", "--id", "a-typo", "--title", "A typo", "--question", "Does a typo freeze?", "--deployment", "rig",
+                         "--runs", runs, "--data", str(tmp_path)])
+        assert code != 0, runs
+        assert sorted(p.name for p in out.iterdir()) == [], f"--runs {runs}: nothing is written"
+
+
 def test_a_definition_is_written_as_python_and_reads_back():
     text = rep.definition_text(DEFINITION, doc="Station A over its three runs.")
     space: dict = {}
