@@ -21,6 +21,12 @@ posed at the clock's t, every run whose session recorded its station's camera wi
 (the cut's camera frames recomputed here from the archive's stamps, the two videos following the clock in the browser), a "what you're
 looking at" line on every card and run page, and each model's sentence and parameters. The media live outside git (a cache folder).
 
+Since 2026-11-07 also the deployments (Domain model v3, type_cards/CONTRACT.md; Zach: "Ok I like organizing this around Deployments ...
+The orcale examples are also deployments its just they are 'Virtual'"), written before site/deployments_pages.py: /deployments/ is a left
+filter bar (kind, tags) over data-ui cards of the contract's deployments, each with its render; every node of every deployment's tree has
+its page (its tree on the left, its sub-deployments, its runs, the models per entity type, its pinned metrics and coverage over all of its
+runs, sel.compute's), measured in the browser and against the contract's own functions.
+
 Since 2026-10-29 also a station's Schedule tab (bam_rack_twin.schedule's plan, before anything runs), its checks written before
 the tab. A port of app/tests/test_app_flow.py's 25 checks onto the migrated site (every one keeps its meaning; where a step moved,
 the check says where to), plus the checks that the shell IS the workbench's: the same bar (wordmark, one centred search,
@@ -71,10 +77,10 @@ def check(ok: bool, what: str) -> None:
         FAILS.append(what)
 
 
-def free_port() -> int:
+def free_port(lo: int = 4711, hi: int = 4799) -> int:
     busy = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True).stdout
     taken = {int(m) for m in re.findall(r":(\d+)\s", busy)}
-    for port in range(4711, 4800):
+    for port in range(lo, hi + 1):
         if port in taken:
             continue
         with socket.socket() as probe:
@@ -83,7 +89,7 @@ def free_port() -> int:
             except OSError:
                 continue
         return port
-    raise SystemExit("no free port in 4711-4799")
+    raise SystemExit(f"no free port in {lo}-{hi}")
 
 
 def hue(css: str) -> tuple[float, float]:
@@ -1781,6 +1787,457 @@ def component_browser_checks(page, base: str, still) -> None:
     check(all(v is True for v in got.values()) and len(got) == len(COMPONENTS), f"/components/: each component mounted alone for its entity draws and plays ({got})")
 
 
+# ---- the deployments index and every deployment's page (2026-11-07, Domain model v3; written before site/deployments_pages.py) ---------
+# Zach (PROJECT - Sim2Real, 2026-11-06): "Ok I like organizing this around Deployments. The orcale examples are also deployments its just
+# they are 'Virtual' ... Each sub componet of the deployment could basically be its own deployment (in fact it almost is) ... the first
+# level of filtering I think is for the type of dpeloyment... deployments tagged with orcale example. Or perhaps only deployments that use
+# a camera". The contract: type_cards/CONTRACT.md, "Domain model v3" (deployments and their trees; metrics, diagnostics and coverage over
+# selected runs, sel.compute). The ruler reads the contract's projection and the app's runs.json; every number a page prints is
+# sel.compute's over the runs this file finds under the node by itself (and, for a station, the build's own preset of it).
+CARDS_JS = """() => { const v = document.getElementById('deployments-views'); if (!v || !v.model) return null;
+  const cards = [...v.querySelectorAll('article.dv-cards-card')].filter((c) => c.getClientRects().length > 0);
+  return { matched: v.model.matched ?? (v.model.rows ? v.model.rows.length : null),
+           cards: cards.map((c) => { const img = c.querySelector('img'); const r = c.getBoundingClientRect();
+             return { id: c.dataset.id, title: ((c.querySelector('.dv-cards-title') || {}).textContent || '').trim(), src: img ? new URL(img.getAttribute('src'), location.href).pathname : null,
+                      loaded: !!img && img.complete && img.naturalWidth > 0, box: [r.left, r.right, r.top, r.bottom] }; }) }; }"""
+# the runs table a deployment page mounts (#runs): the rows its data-views holds after the page's own scope
+NODE_RUNS_JS = """() => { const e = [...document.querySelectorAll('#runs data-dashboard data-views')].find((x) => x.getClientRects().length > 0);
+  return e && e.model ? (e.model.matched ?? (e.model.rows ? e.model.rows.length : null)) : null; }"""
+
+
+def start_tags(text: str, tag: str, must: str = "") -> list[dict]:
+    """Every <tag …> start tag's attributes, unescaped, in document order (those carrying attribute `must`, when given)."""
+    import html as html_lib  # noqa: PLC0415
+
+    out = []
+    for m in re.finditer(rf"<{tag}\b([^>]*)>", text):
+        attrs = {k: html_lib.unescape(v) for k, v in re.findall(r'([\w:-]+)="([^"]*)"', m.group(1))}
+        if not must or must in attrs:
+            out.append(attrs)
+    return out
+
+
+def section_of(text: str, section_id: str) -> str:
+    """One <section id=…>'s HTML (the page's sections do not nest)."""
+    m = re.search(rf'<section\b[^>]*\bid="{re.escape(section_id)}"[^>]*>.*?</section>', text, re.S)
+    return m.group(0) if m else ""
+
+
+def node_url(node_id: str) -> str:
+    return f"/deployments/{node_id}/"
+
+
+def subtree_ids(nodes: list[dict], node_id: str) -> list[str]:
+    """The node and every node under it: the test's own walk over `parent` (not type_cards.instances.subtree)."""
+    kids: dict = {}
+    for n in nodes:
+        kids.setdefault(n["parent"], []).append(n["id"])
+    out, todo = [], [node_id]
+    while todo:
+        out.append(todo.pop(0))
+        todo[0:0] = kids.get(out[-1], [])
+    return out
+
+
+def runs_under(nodes: list[dict], node: dict, rows: list[dict]) -> list[str] | None:
+    """The contract's runs of a node (the runs whose device is under it), as sorted ids: a virtual node keeps none (sysid persists no run);
+    a physical node with no device under it (a camera) does not know its runs (None)."""
+    if node["kind"] == "virtual":
+        return []
+    by_id = {n["id"]: n for n in nodes}
+    devices = {by_id[i]["device"] for i in subtree_ids(nodes, node["id"]) if by_id[i].get("device")}
+    return sorted(r["run"] for r in rows if r["device"] in devices) if devices else None
+
+
+def fitted_models(doc: dict) -> dict[str, tuple[tuple[str, ...], str]]:
+    """{v3 type: (its model ids, basis)} an oracle example used, from its committed result: on its first card ladder the selection rule's
+    pick where sysid ran one (selected_rung, "selected"), else each ladder's highest rung with an identified parameter ("fitted")."""
+    from type_cards import domain as dm  # noqa: PLC0415
+
+    out = {}
+    for i, lad in enumerate(doc.get("card_ladders", [])):
+        keys = [r["key"] for r in lad["rungs"] if r.get("identified")]
+        if i == 0 and doc.get("selected_rung"):
+            key, basis = doc["selected_rung"], "selected"
+        elif keys:
+            key, basis = keys[-1], "fitted"
+        else:
+            continue
+        out[dm.CARD_TYPE[lad["card"]]] = (tuple(dm.legacy_models(lad["card"], key)), basis)
+    return out
+
+
+def headline(metrics: list[dict]) -> dict | None:
+    """Of one metric's entries (one per model for a fidelity metric), the one a page shows first: the model that replayed the most of the
+    runs, then by its name; None when no entry has a value."""
+    valued = [m for m in metrics if m["value"] is not None]
+    return sorted(valued, key=lambda m: (-m["n"], m["model"] or ""))[0] if valued else None
+
+
+def deployments_data_checks(out: Path, data: Path) -> dict:
+    """No browser: the index (a left filter bar over data-ui cards of the contract's deployments, each with its render) and one page per
+    node of every deployment's tree (its tree, its sub-deployments, its runs, the models per entity type, its pinned metrics and its
+    coverage over all of its runs). Returns what the browser checks click."""
+    if str(REPO) not in sys.path:
+        sys.path.append(str(REPO))  # appended, as types_checks does: the repo's site/ folder never shadows the stdlib's `site`
+    sys.path.insert(0, str(REPO / "vendor" / "data-ui" / "dist" / "python"))
+    import data_ui_base  # noqa: PLC0415
+    from type_cards import domain as dm  # noqa: PLC0415
+    from type_cards import selection as sel  # noqa: PLC0415
+
+    domain = out / "data" / "domain" / "deployments.json"
+    nodes = json.loads(domain.read_text())["rows"]
+    by_id = {n["id"]: n for n in nodes}
+    roots = [n for n in nodes if n["parent"] is None]
+    media_index = out / "media" / "index.json"
+    scenes = {s["id"]: s for s in json.loads(media_index.read_text()).get("scenes", [])} if media_index.is_file() else {}
+
+    # 1. the index: the two panes' left column is the filter bar (data-ui's rail), the results a data-ui cards view
+    path = out / "deployments" / "index.html"
+    html = path.read_text() if path.is_file() else ""
+    aside = re.search(r'<aside class="fcol" id="filter"[^>]*>(.*?)</aside>', html, re.S)
+    check(bool(aside) and '<data-facets for="deployments-views"' in aside.group(1) and '<data-views id="deployments-views" src="/views/deployments.base"' in html,
+          "/deployments/ is two panes: the filter bar (data-ui's rail) in the left column, the deployments a data-ui view beside it")
+    base_path = out / "views" / "deployments.base"
+    base = data_ui_base.loads(base_path.read_text()) if base_path.is_file() else {}
+    facets = [f if isinstance(f, str) else f.get("property") for f in base.get("facets") or []]
+    first = (base.get("views") or [{}])[0]
+    check({"kind", "tags"} <= set(facets) and first.get("type") == "cards" and first.get("image") == "image"
+          and (first.get("open") or {}).get("mode") == "link" and (first.get("open") or {}).get("url") == "url",
+          f"/views/deployments.base: its rail filters by kind and tags, its first view is cards with the render on top, a card opens its page "
+          f"(facets {facets}; first view {first.get('type')}, image {first.get('image')}, open {first.get('open')})")
+    cards_path = out / str(base.get("data") or "/data/deployment-cards.json").lstrip("/")
+    rows = json.loads(cards_path.read_text())["rows"] if cards_path.is_file() else []
+    want = [(n["id"], n["title"], n["kind"], list(n["tags"]), node_url(n["id"]), "/media/" + scenes[n["id"]]["src"] if n["id"] in scenes else None) for n in roots]
+    got = [(r.get("id"), r.get("title"), r.get("kind"), list(r.get("tags") or []), r.get("url"), r.get("image")) for r in rows]
+    check(got == want and len(roots) == 7 and {n["kind"] for n in roots} == {"virtual", "physical"},
+          f"the index's cards are the contract's deployments (parent null) in its order, each with its kind, tags, page and render "
+          f"({len(rows)} of {len(roots)}; differ {[g for g, w in zip(got, want) if g != w][:2] or (got[len(want):] if len(got) > len(want) else want[len(got):])[:2]})")
+    fallback = [a.get("data-deployment") for a in start_tags(html, "li", "data-deployment")]
+    check(fallback == [n["id"] for n in roots], f"without JavaScript the index reads the same cards, server-drawn inside the view ({fallback})")
+
+    # 2. one page per node of every deployment's tree
+    runs = json.loads((data / "runs.json").read_text())["rows"]
+    results = oracle_results()
+    tables = sel.load_tables(out / "data", DEP, nodes=[n for n in nodes if n["root"] == DEP])
+    presets = json.loads((out / "data" / "domain" / "selections" / f"{DEP}.json").read_text())["presets"]
+    computed: dict = {}
+    bad: dict[str, list] = {k: [] for k in ("page", "tree", "sub", "runs", "table", "metrics", "coverage", "preset", "models")}
+    for n in nodes:
+        page_path = out / "deployments" / n["id"] / "index.html"
+        if not page_path.is_file():
+            for key in bad:  # WHY every check: a page that is not there passes none of them (never vacuously)
+                bad[key].append(f"{n['id']}: no page")
+            continue
+        text = page_path.read_text()
+        article = start_tags(text, "article", "data-node")
+        h1 = re.search(r"<h1[^>]*>(.*?)</h1>", text, re.S)
+        if not article or article[0]["data-node"] != n["id"] or article[0].get("data-kind") != n["kind"] or not h1 or n["title"] not in html_text(h1.group(1)):
+            bad["page"].append(f"{n['id']}: article {article[:1]}, h1 {h1.group(1)[:60] if h1 else None!r}")
+        # its tree: every node of its deployment's tree once, each opening its own page, this one current
+        tree = re.search(r'<nav class="s2r-etree"[^>]*>(.*?)</nav>', text, re.S)
+        links = start_tags(tree.group(1), "a", "data-node") if tree else []
+        same_tree = sorted(x["id"] for x in nodes if x["root"] == n["root"])
+        if (sorted(a["data-node"] for a in links) != same_tree or any(a.get("href") != node_url(a["data-node"]) for a in links)
+                or [a["data-node"] for a in links if a.get("aria-current") == "page"] != [n["id"]]):
+            bad["tree"].append(n["id"])
+        # its sub-deployments: its children in the contract's order, each opening its page
+        kids = [(x["id"], node_url(x["id"])) for x in nodes if x["parent"] == n["id"]]
+        shown = [(a["data-node"], a.get("href")) for a in start_tags(section_of(text, "sub-deployments"), "a", "data-node")]
+        if shown != kids:
+            bad["sub"].append(f"{n['id']}: {shown[:2]} vs {kids[:2]}")
+        # its runs: the count under it (unknown for a camera, none kept for a virtual node), and a table scoped to exactly those runs
+        ids = runs_under(nodes, n, runs)
+        sec = start_tags(section_of(text, "runs"), "section", "data-runs")
+        if not sec or sec[0]["data-runs"] != ("" if ids is None else str(len(ids))):
+            bad["runs"].append(f"{n['id']}: {sec[0].get('data-runs') if sec else None} vs {None if ids is None else len(ids)}")
+        if ids:
+            from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+            dash = start_tags(section_of(text, "runs"), "div", "data-src")
+            q = parse_qs(urlparse(dash[0]["data-src"]).query) if dash else {}
+            scope, value = (q.get("scope") or [""])[0], (q.get("node") or [""])[0]
+            kept = sorted(r["run"] for r in runs if scope and str(r.get(scope)) == value)
+            if not dash or not dash[0]["data-src"].startswith("/views/deployment-node-runs.base?") or q.get("deployment") != [n["root"]] or kept != ids:
+                bad["table"].append(f"{n['id']}: {dash[0].get('data-src') if dash else None} keeps {len(kept)} of {len(ids)}")
+            # its pinned metrics and coverage over all of its runs: sel.compute's, for every typed entity under it
+            key = tuple(ids)
+            if key not in computed:
+                computed[key] = sel.compute(ids, tables)
+            result = computed[key]
+            mine = set(subtree_ids(nodes, n["id"]))
+            entries = [e for e in result["nodes"] if e["node"] in mine]
+            metrics_html = section_of(text, "metrics")
+            cells = {(a.get("data-entity"), a.get("data-metric")): a for a in start_tags(metrics_html, "td", "data-metric")}
+            quiet = " ".join(a.get("data-types", "") for a in start_tags(metrics_html, "p", "data-types")).split()
+            for tid in sorted({e["entity_type"] for e in entries}):
+                ents = [e for e in entries if e["entity_type"] == tid]
+                pinned = [m.id for m in dm.pinned(tid)]
+                if not any(m["value"] is not None for e in ents for m in e["metrics"] if m["metric"] in pinned):
+                    if tid not in quiet:
+                        bad["metrics"].append(f"{n['id']}: {tid} has no pinned value and is not named so")
+                    continue
+                for e in ents:
+                    for mid in pinned:
+                        head = headline([m for m in e["metrics"] if m["metric"] == mid])
+                        cell = cells.get((e["node"], mid))
+                        if cell is None:
+                            bad["metrics"].append(f"{n['id']}: no cell {e['node']} {mid}")
+                        elif head is None and cell.get("data-value") != "":
+                            bad["metrics"].append(f"{n['id']}: {e['node']} {mid} shows {cell.get('data-value')} with no value")
+                        elif head is not None and (not cell.get("data-value") or abs(float(cell["data-value"]) - head["value"]) > 1e-9 * max(1.0, abs(head["value"]))
+                                                   or cell.get("data-model", "") != (head["model"] or "") or cell.get("data-n") != str(head["n"])):
+                            bad["metrics"].append(f"{n['id']}: {e['node']} {mid} {cell.get('data-value')}/{cell.get('data-model')}/{cell.get('data-n')} vs "
+                                                  f"{head['value']}/{head['model']}/{head['n']}")
+            covs = {a.get("data-entity"): a for a in start_tags(section_of(text, "coverage"), "div", "data-coverage")}
+            for e in entries:
+                if not dm.TYPES[e["entity_type"]].coverage.from_runs:
+                    continue
+                c, a = e["coverage"], covs.get(e["node"])
+                said = lambda v: "" if v is None else str(v)  # noqa: E731  (unknown stays unknown: an empty value, and the page says why)
+                if (a is None or a.get("data-coverage") != said(c["pct"]) or a.get("data-visited") != said(c["visited"]) or a.get("data-reachable") != said(c["reachable"])
+                        or (c["pct"] is None and (c.get("why") or "?") not in html_text(section_of(text, "coverage")))):
+                    bad["coverage"].append(f"{n['id']}: {e['node']} {a and a.get('data-coverage')} vs {c['pct']}")
+            if n.get("structural") == "station":  # two paths, one number: the build's own preset of the station
+                pre = next((x for x in (presets.get(f"station: {n['device']}") or {}).get("nodes", []) if x["node"] == n["id"]), None)
+                me = next(x for x in result["nodes"] if x["node"] == n["id"])
+                if pre is None or pre["coverage"]["pct"] != me["coverage"]["pct"] or [m["value"] for m in pre["metrics"]] != [m["value"] for m in me["metrics"]]:
+                    bad["preset"].append(n["id"])
+        # the models, per entity type: the type's current model, and the ones used here (an oracle's fit, the models that replayed the runs)
+        here = {by_id[i]["entity_type"] for i in subtree_ids(nodes, n["id"]) if by_id[i]["entity_type"]}
+        fits = fitted_models(results.get(n["root"], {})) if n["kind"] == "virtual" else {}
+        want_types = here | (set(fits) if n["parent"] is None else set())
+        rows_m = {a["data-type"]: a for a in start_tags(section_of(text, "models"), "tr", "data-type")}
+        replayed = {}
+        if n["kind"] == "physical" and ids:
+            for e in computed[tuple(ids)]["nodes"]:
+                if e["node"] in set(subtree_ids(nodes, n["id"])):
+                    replayed.setdefault(e["entity_type"], set()).update(m["model"] for m in e["metrics"] if m["family"] == "fidelity" and m["model"] and m["value"] is not None)
+        for tid in want_types | set(rows_m):
+            a = rows_m.get(tid)
+            used, basis = fits.get(tid, ((), ""))
+            if (a is None or tid not in want_types or a.get("data-current") != " ".join(m.id for m in dm.current_models(tid))
+                    or a.get("data-used", "") != " ".join(used) or a.get("data-basis", "") != basis
+                    or sorted(x for x in a.get("data-replayed", "").split("|") if x) != sorted(replayed.get(tid, ()))):
+                bad["models"].append(f"{n['id']}: {tid} {a and {k: v for k, v in a.items() if k.startswith('data-')}}")
+    words = {"page": "a page with its title and kind", "tree": "its deployment's whole tree, every node opening its page, itself current",
+             "sub": "its sub-deployments, each opening its page", "runs": "its runs counted under it (unknown for a camera, none kept for a virtual node)",
+             "table": "a runs table scoped to exactly those runs", "metrics": "its pinned metrics over all of its runs, sel.compute's",
+             "coverage": "its coverage over all of its runs, sel.compute's", "preset": "a station's numbers equal to the build's own preset of it",
+             "models": "per entity type its current model and the ones used here (the oracle's fit, the models that replayed its runs)"}
+    for key, what in words.items():
+        check(not bad[key], f"every deployment node ({len(nodes)}) has {what} ({len(bad[key])} wrong: {bad[key][:3]})")
+    # a station's link in 3D: the media lane's joint-3d component (site/components.py), mounted for the newest run a model replayed
+    # (else its newest run with link poses), its entity and its link model in the mount's query
+    if media_index.is_file():
+        from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+        index = json.loads(media_index.read_text())
+        models_of = {(s["deployment"], s["station"]): "/media/" + s["glb"] for s in index.get("stations", []) if s.get("glb")}
+        wrong = []
+        for n in nodes:
+            if n["kind"] != "physical" or n.get("structural") != "station":
+                continue
+            page_path = out / "deployments" / n["id"] / "index.html"
+            text = page_path.read_text() if page_path.is_file() else ""
+            mine = sorted((r for r in runs if r["device"] == n["device"] and (index.get("runs", {}).get(r["run"]) or {}).get("links")),
+                          key=lambda r: r["started"], reverse=True)
+            want_run = next((r for r in mine if r.get("models")), mine[0] if mine else None)
+            mounts = [a for a in start_tags(section_of(text, "link-3d"), "div", "data-component") if a["data-component"] == "joint-3d"]
+            q = parse_qs(urlparse(mounts[0]["data-src"]).query) if mounts else {}
+            key = station_key_of(n["device"])
+            if not (want_run and mounts and mounts[0]["data-src"].startswith("/views/components/joint-3d.base?") and q.get("run") == [want_run["run"]]
+                    and q.get("device") == [n["device"]] and q.get("station") == [key] and q.get("deployment") == [n["root"]]
+                    and q.get("glb") == [models_of.get((n["root"], key))]):
+                wrong.append(f"{n['id']}: {mounts[0].get('data-src', '')[:120] if mounts else 'no mount'} vs {want_run['run'] if want_run else None}")
+        check(not wrong, f"every station's page shows its link in 3D, the media lane's joint-3d component on its newest replayed run ({wrong[:2]})")
+    rack = (out / DEP / "index.html").read_text()
+    oracle_pages = [x for x in ORACLE_EXAMPLES if f'href="{node_url(x)}"' not in (out / "sysid" / x / "index.html").read_text()]
+    check(f'href="{node_url(DEP)}"' in rack and not oracle_pages,
+          f"the rack's record page and every oracle example's page link their deployment page (examples without: {oracle_pages})")
+    adapter = next(n for n in nodes if n["root"] == DEP and n.get("structural") == "adapter" and any(
+        by_id[c].get("device") == "CAN 11" for c in subtree_ids(nodes, n["id"])))
+    return {"roots": roots, "nodes": nodes, "scenes": scenes, "adapter": adapter["id"],
+            "can11": next(n["id"] for n in nodes if n["root"] == DEP and n.get("structural") == "station" and n.get("device") == "CAN 11"),
+            "runs_under": {n["id"]: runs_under(nodes, n, runs) for n in nodes if n["root"] == DEP}}
+
+
+def html_text(fragment: str) -> str:
+    import html as html_lib  # noqa: PLC0415
+
+    return html_lib.unescape(re.sub(r"<[^>]+>", "", fragment)).strip()
+
+
+def drag_right_edge(page, selector: str, dx: int) -> tuple[float, float]:
+    """Drag a resizable panel's right edge by dx px (its data-ui handle sits on that edge); its width before and after, measured."""
+    box = page.locator(selector).first.bounding_box()
+    w0 = box["width"]
+    page.mouse.move(box["x"] + box["width"] - 1, box["y"] + 60)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] - 1 + dx, box["y"] + 60, steps=8)
+    page.mouse.up()
+    page.wait_for_timeout(300)
+    return w0, page.locator(selector).first.evaluate("el => el.getBoundingClientRect().width")
+
+
+def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
+    """In the browser, at 1280 then 390 px: the index's filter bar left of the cards, each card's render loaded, the rail narrowing by kind
+    and tags (and a reload keeping it), the bar dragged wider and remembered, a card opening its page; a physical and a virtual deployment's
+    page with its tree on the left, its sub-deployments opening theirs, its runs table holding exactly its runs, a coverage bar as long as
+    its number."""
+    roots = layout["roots"]
+    scenes = layout["scenes"]
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(f"{base}/deployments/")
+    page.wait_for_load_state("load")
+    soft_wait(page, "() => { const v = document.getElementById('deployments-views'); return !!v && !!v.model && v.querySelectorAll('article.dv-cards-card').length > 0; }")
+    soft_wait(page, "() => [...document.querySelectorAll('#deployments-views article.dv-cards-card img')].every((i) => i.complete && i.naturalWidth > 0)", timeout=15000)
+    c0 = page.evaluate(CARDS_JS) or {}
+    want_src = {n["id"]: "/media/" + scenes[n["id"]]["src"] for n in roots if n["id"] in scenes}
+    cards = c0.get("cards") or []
+    check(c0.get("matched") == len(roots) and sorted(c["id"] for c in cards) == sorted(n["id"] for n in roots) and len(want_src) == len(roots)
+          and all(c["loaded"] and c["src"] == want_src.get(c["id"]) for c in cards),
+          f"/deployments/ draws one card per deployment ({len(cards)} of {len(roots)}), each with its MuJoCo render loaded "
+          f"({[(c['id'], c['loaded']) for c in cards if not c['loaded'] or c['src'] != want_src.get(c['id'])][:3]} not)")
+    side = page.evaluate("""() => { const a = document.querySelector('aside#filter'); const f = a && a.querySelector('data-facets');
+        const card = document.querySelector('#deployments-views article.dv-cards-card'); if (!f || !card) return null;
+        const ar = a.getBoundingClientRect(), fr = f.getBoundingClientRect(), cr = card.getBoundingClientRect();
+        return { aside: [ar.left, ar.right], facets: [fr.width, fr.height], card: [cr.left, cr.right],
+                 heads: [...f.querySelectorAll('h3, h4, legend, summary, .df-h')].map((h) => h.textContent.trim()) }; }""") or {}
+    check(bool(side) and side["aside"][1] <= side["card"][0] + 1 and side["facets"][0] > 100 and side["facets"][1] > 60
+          and any(h.startswith("Kind") for h in side["heads"]) and any(h.startswith("Tags") for h in side["heads"]),
+          f"the filter bar sits left of the cards, by kind and by tags (bar ends {side.get('aside', [0, 0])[1]:.0f} px, cards start "
+          f"{side.get('card', [0, 0])[0]:.0f} px; {side.get('heads')})")
+    still("40-deployments-index")
+
+    def pick(word: str) -> None:
+        page.locator("aside data-facets label", has_text=re.compile(rf"^\s*{re.escape(word)}")).first.click()
+
+    def shown(n: int) -> list[str]:
+        soft_wait(page, f"() => {{ const v = document.getElementById('deployments-views'); return !!v && !!v.model && (v.model.matched ?? v.model.rows.length) === {n}"
+                        f" && v.querySelectorAll('article.dv-cards-card').length === {n}; }}", timeout=15000)
+        page.wait_for_timeout(400)
+        return sorted(c["id"] for c in (page.evaluate(CARDS_JS) or {}).get("cards", []))
+
+    virtual = sorted(n["id"] for n in roots if n["kind"] == "virtual")
+    pick("virtual")
+    got = shown(len(virtual))
+    check(got == virtual and len(virtual) == 6, f"Kind · virtual keeps the {len(virtual)} oracle examples ({got})")
+    camera = sorted(n["id"] for n in roots if n["kind"] == "virtual" and "uses camera" in n["tags"])
+    pick("uses camera")
+    got = shown(len(camera))
+    still("41-deployments-filtered")
+    check(got == camera and camera, f"Tags · uses camera with Kind · virtual keeps the virtual deployments that use a camera ({got} vs {camera})")
+    page.reload()
+    page.wait_for_load_state("load")
+    got = shown(len(camera))
+    check(got == camera, f"a reload keeps the picks, read back from the URL ({unquote(page.url).split('?', 1)[-1][:80]}: {got})")
+    page.goto(f"{base}/deployments/?kind=physical")
+    page.wait_for_load_state("load")
+    physical = sorted(n["id"] for n in roots if n["kind"] == "physical")
+    got = shown(len(physical))
+    check(got == physical == [DEP], f"a link to ?kind=physical opens on the physical deployments ({got})")
+    page.evaluate("localStorage.clear()")
+    page.goto(f"{base}/deployments/")
+    page.wait_for_load_state("load")
+    shown(len(roots))
+    w0, w1 = drag_right_edge(page, "aside#filter", 120)
+    page.reload()
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(800)
+    w2 = page.locator("aside#filter").evaluate("el => el.getBoundingClientRect().width")
+    check(abs((w1 - w0) - 120) < 4 and abs(w2 - w1) < 2, f"the filter bar drags 120 px wider and keeps its width on reload ({w0:.0f} -> {w1:.0f} -> {w2:.0f} px)")
+    page.evaluate("localStorage.clear()")
+    page.goto(f"{base}/deployments/")
+    page.wait_for_load_state("load")
+    shown(len(roots))
+    page.locator(f"#deployments-views article.dv-cards-card[data-id='{DEP}']").first.click()
+    try:
+        page.wait_for_url(re.compile(re.escape(node_url(DEP)) + "$"), timeout=15000)
+    except Exception:  # noqa: BLE001  (the check says where it went)
+        pass
+    check(page.url.endswith(node_url(DEP)), f"a card opens its deployment's page ({page.url})")
+
+    # a physical deployment: its tree on the left, its sub-deployments, its runs table holding all of its runs
+    page.wait_for_load_state("load")
+    tree_js = """() => { const nav = document.querySelector('nav.s2r-etree'); const art = document.querySelector('article.s2r-dep'); if (!nav || !art) return null;
+        const n = nav.getBoundingClientRect(), a = art.getBoundingClientRect();
+        return { nav: [n.left, n.right, n.width], art: [a.left, a.right], current: [...nav.querySelectorAll('a[aria-current=page]')].map((x) => x.dataset.node),
+                 shown: [...nav.querySelectorAll('a[data-node]')].filter((x) => x.getClientRects().length > 0).map((x) => x.dataset.node),
+                 subs: [...art.querySelectorAll('#sub-deployments a[data-node]')].filter((x) => x.getClientRects().length > 0).map((x) => x.dataset.node) }; }"""
+    t = page.evaluate(tree_js) or {}
+    kids = [n["id"] for n in layout["nodes"] if n["parent"] == DEP]
+    check(bool(t) and t["nav"][1] <= t["art"][0] + 1 and t["nav"][2] > 150 and t["current"] == [DEP] and set(kids) <= set(t["shown"]) and t["subs"] == kids,
+          f"the rack's page: its tree on the left (ends {t.get('nav', [0, 0])[1]:.0f} px, the page starts {t.get('art', [0])[0]:.0f} px), itself current, its "
+          f"{len(kids)} sub-deployments listed and in the tree ({t.get('subs')})")
+    n_all = len(layout["runs_under"][DEP])
+    page.locator("#runs").scroll_into_view_if_needed()
+    soft_wait(page, f"() => ({NODE_RUNS_JS})() === {n_all}", timeout=45000)
+    got = page.evaluate(NODE_RUNS_JS)
+    check(got == n_all, f"the rack's runs table holds every run under it ({got} of {n_all})")
+    page.evaluate("(document.getElementById('pane') || document.scrollingElement).scrollTo(0, 0)")
+    page.wait_for_timeout(300)
+    still("42-deployment-physical")
+    adapter = layout["adapter"]
+    page.locator(f"#sub-deployments a[data-node='{adapter}']").first.click()
+    page.wait_for_url(re.compile(re.escape(node_url(adapter)) + "$"), timeout=15000)
+    page.wait_for_load_state("load")
+    can11 = layout["can11"]
+    page.locator(f"nav.s2r-etree a[data-node='{can11}']").first.click()
+    page.wait_for_url(re.compile(re.escape(node_url(can11)) + "$"), timeout=15000)
+    page.wait_for_load_state("load")
+    bar = page.evaluate(f"""() => {{ const c = document.querySelector("#coverage [data-entity='{can11}'][data-coverage]"); if (!c) return null;
+        const track = c.querySelector('.s2r-bar'), fill = track && track.querySelector('span'); if (!fill) return null;
+        return [Number(c.dataset.coverage), fill.getBoundingClientRect().width, track.getBoundingClientRect().width]; }}""")
+    check(bool(bar) and bar[2] > 60 and abs(bar[1] / bar[2] - min(bar[0], 100) / 100) < 0.015,
+          f"CAN 11's coverage bar is as long as its number ({bar and f'{bar[0]} % drawn {bar[1]:.1f} of {bar[2]:.1f} px'})")
+    page.locator("#link-3d").scroll_into_view_if_needed()
+    drawn = soft_wait(page, """() => { const s = document.querySelector("#link-3d [data-component='joint-3d'] .dv-scene3d"); const h = s && s.scene3d;
+        return !!h && h.robot().state === 'ready' && Object.keys(h.robot().links || {}).length >= 2; }""", timeout=45000)
+    check(drawn, "CAN 11's page draws its link in 3D (the joint-3d component: its link model loaded, every series posed)")
+    n11 = len(layout["runs_under"][can11])
+    page.locator("#runs").scroll_into_view_if_needed()
+    soft_wait(page, f"() => ({NODE_RUNS_JS})() === {n11}", timeout=45000)
+    got = page.evaluate(NODE_RUNS_JS)
+    check(got == n11, f"CAN 11's page, opened from its adapter's tree, holds exactly its runs ({got} of {n11})")
+    page.evaluate("(document.getElementById('pane') || document.scrollingElement).scrollTo(0, 0)")
+    page.wait_for_timeout(300)
+    still("43-deployment-station")
+
+    # a virtual deployment: its tree, a sub-deployment opening its page, the model the selection rule picked, no runs kept
+    page.goto(f"{base}{node_url('pendulum_can11')}")
+    page.wait_for_load_state("load")
+    t = page.evaluate(tree_js) or {}
+    want_tree = [n["id"] for n in layout["nodes"] if n["root"] == "pendulum_can11"]
+    model = page.evaluate("""() => { const r = document.querySelector("#models tr[data-type='integrated_servo']"); return r ? [r.dataset.used, r.dataset.basis] : null; }""")
+    runs_said = page.evaluate("() => { const s = document.querySelector('#runs'); return s ? [s.dataset.runs, s.textContent.trim().slice(0, 160)] : null; }")
+    check(bool(t) and t["nav"][1] <= t["art"][0] + 1 and t["current"] == ["pendulum_can11"] and set(t["subs"]) == {n["id"] for n in layout["nodes"] if n["parent"] == "pendulum_can11"}
+          and set(want_tree) == set(t["shown"]) and model == ["M4.dynamics.twin", "selected"] and runs_said and runs_said[0] == "0",
+          f"the pendulum's page: its whole tree on the left, its sub-deployments, the servo's model the selection rule picked ({model}), no runs kept ({runs_said})")
+    still("44-deployment-virtual")
+    w0, w1 = drag_right_edge(page, "aside#filter", 100)
+    sub = next(n["id"] for n in layout["nodes"] if n["parent"] == "pendulum_can11" and n["entity_type"] == "integrated_servo")
+    page.locator(f"#sub-deployments a[data-node='{sub}']").first.click()
+    page.wait_for_url(re.compile(re.escape(node_url(sub)) + "$"), timeout=15000)
+    page.wait_for_load_state("load")
+    page.wait_for_timeout(600)
+    w2 = page.locator("aside#filter").evaluate("el => el.getBoundingClientRect().width")
+    h1 = page.locator("h1").first.inner_text()
+    check(abs((w1 - w0) - 100) < 4 and abs(w2 - w1) < 2 and next(n["title"] for n in layout["nodes"] if n["id"] == sub) in h1,
+          f"the tree's column drags 100 px wider and keeps its width on the sub-deployment it opens ({w0:.0f} -> {w1:.0f} -> {w2:.0f} px; {h1!r})")
+    page.evaluate("localStorage.clear()")
+
+    # a phone: no sideways scroll on the index and on a physical, a station's and a virtual page
+    page.set_viewport_size({"width": 390, "height": 844})
+    for url in ("/deployments/", node_url(DEP), node_url(can11), node_url("pendulum_can11")):
+        page.goto(base + url)
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(1200)
+        ok, detail = no_sideways_scroll(page)
+        check(ok, f"at 390 px {url} has no sideways scroll ({detail})")
+    page.set_viewport_size({"width": 1280, "height": 900})
+
+
 def main() -> int:
     import build as site_build  # noqa: PLC0415
     import adapter  # noqa: PLC0415
@@ -1788,6 +2245,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=site_build.DEFAULT_OUT, help="the built site (site/build.py --out)")
     parser.add_argument("--record", type=Path, help="write the click-through video and stills here")
+    # WHY a range of one's own: parallel lanes each run this test, and a lane is given its ports (the w2b brief: 4740-4749)
+    parser.add_argument("--ports", default="4711-4799", help="the port range the test server may take (default 4711-4799; never 4700)")
     args = parser.parse_args()
     out = args.out.resolve()
     data = out / "data" / DEP
@@ -1819,6 +2278,10 @@ def main() -> int:
     import tempfile  # noqa: PLC0415
     with tempfile.TemporaryDirectory() as scratch:
         config_snapshot_unit_checks(Path(scratch))
+    # the deployments index and every deployment's page (Domain model v3, 2026-11-07)
+    deployments: dict = {}
+    with guard("the deployments pages' data"):
+        deployments = deployments_data_checks(out, data)
 
     vendored = SITE / "vendor" / "catalog_workbench"
     manifest = json.loads((vendored / "MANIFEST.json").read_text())["files"]
@@ -1840,7 +2303,7 @@ def main() -> int:
     check(header in home_html and shell.site_header(catalog.CATALOG, site, adapter.run_url(run_row)) in run_html,
           "the home's and a run page's bar are exactly catalog_workbench.shell.site_header (the same bar, search and Account menu)")
 
-    port = free_port()
+    port = free_port(*(int(x) for x in args.ports.split("-")))
     server = subprocess.Popen([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1", "--directory", str(out)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     base = f"http://127.0.0.1:{port}"
@@ -2458,6 +2921,9 @@ def main() -> int:
                 flat_runs_checks(page, base, layout, still)
             with guard("a run's configuration snapshot"):
                 run_config_checks(page, base, data)
+            # 16. the deployments index and every deployment's page (Domain model v3, 2026-11-07)
+            with guard("the deployments index and pages"):
+                deployments_browser_checks(page, base, deployments, still)
 
             # 10. a phone: no sideways scroll anywhere on the click path, the search still in the bar
             page.set_viewport_size({"width": 390, "height": 844})

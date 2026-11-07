@@ -201,3 +201,36 @@ def test_a_value_that_is_not_a_number_is_skipped_never_propagated(tables):
     a = node(sel.compute(["r1", "r2", "r3", "r5"], t), "rig/a")
     assert metric(a, "servo.tracking_rms")["value"] == 4.0 and metric(a, "servo.tracking_rms")["n"] == 3
     json.dumps(sel.compute(["r1", "r2", "r3", "r5"], t), allow_nan=False)
+
+
+# --- the station's T1 floor is T1's row, never T10's or T11's (2026-11-07, found by the run page lane) ---------------------------------
+# load_tables matched gates.json rows with str(gate).startswith("T1"), so "T10 live re-identification" and "T11 provenance" matched too and
+# the last row won: 7 of the rack's 8 stations divided every model error by T10's value (CAN 12: 1.992 for its T1 floor 0.7459 mrad, so
+# twin D's 2.575 mrad read 1.29x floor, ok, where it is 3.45x). Only CAN 11 read right, its T10 value being null.
+
+def _gates_folder(tmp: Path, rows: list[dict]) -> Path:
+    folder = tmp / "rig"
+    folder.mkdir()
+    for name, table in (("gates.json", rows), ("devices.json", [{"device": "A"}]), ("runs.json", []), ("run_gates.json", []),
+                        ("coverage.json", [])):
+        (folder / name).write_text(json.dumps({"rows": table}))
+    return tmp
+
+
+def test_the_t1_floor_is_t1s_row_never_t10s_or_t11s(tmp_path):
+    data = _gates_folder(tmp_path, [{"device": "A", "gate": "T1 floor", "value": 0.7459},
+                                    {"device": "A", "gate": "T10 live re-identification", "value": 1.992},
+                                    {"device": "A", "gate": "T11 provenance", "value": None, "value_text": "12/24"}])
+    tables = sel.load_tables(data, "rig", schedules=tmp_path / "no-schedules", nodes=[])
+    assert tables.floors == {"A": pytest.approx(0.7459)}
+
+
+@pytest.mark.skipif(not (DATA / "one-dof-test-rack" / "gates.json").is_file(), reason="the app's data is not built (tools/build_app.py)")
+def test_on_the_rack_every_station_divides_by_its_own_t1_row():
+    """CAN 12's T10 holds a number (its live re-identification), so a prefix match on "T1" reads it: the floor must be the T1 row's."""
+    tables = sel.load_tables(DATA, "one-dof-test-rack")
+    gates = json.loads((DATA / "one-dof-test-rack" / "gates.json").read_text())["rows"]
+    t1 = {g["device"]: g["value"] for g in gates if g["gate"].split()[0] == "T1" and isinstance(g.get("value"), (int, float))}
+    t10 = {g["device"]: g["value"] for g in gates if g["gate"].split()[0] == "T10" and isinstance(g.get("value"), (int, float))}
+    assert "CAN 12" in t10 and t10["CAN 12"] != t1["CAN 12"], "the case that tells T1 from T10 is on the rack (CAN 12)"
+    assert tables.floors == pytest.approx(t1)
