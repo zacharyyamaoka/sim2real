@@ -144,6 +144,66 @@ def test_every_graded_value_is_a_row_as_the_oracle_wrote_it(table):
     assert rows["pendulum_can11/can11.backlash_wear_rad_per_h"]["parameter"] == "backlash_wear_rad_per_nm_rev"
 
 
+def _with_unmeasured_siblings() -> dict:
+    """The UR5e example with parts nobody measured beside the measured ones: a seventh joint on its arm, and a second arm with one joint
+    (a v2-typed sysid tree, as describe.tree writes it, each holding no value)."""
+    import copy  # noqa: PLC0415
+
+    doc = copy.deepcopy(RESULTS["ur5e"])
+    joint = next(r for r in doc["tree"] if r["id"] == "shoulder_pan")
+    arm = next(r for r in doc["tree"] if r["id"] == "ur5e")
+    doc["tree"] += [{**joint, "id": "wrist_4", "title": "wrist 4 joint (unmeasured)", "parameters": []},
+                    {**arm, "id": "ur5e_b", "title": "a second UR5e (unmeasured)", "parameters": []},
+                    {**joint, "id": "b_joint", "title": "its one joint (unmeasured)", "parent": "ur5e_b", "parameters": []}]
+    return {"ur5e": doc}
+
+
+def test_a_part_nobody_measured_keeps_every_row_beside_measured_siblings():
+    """The v3 audit (2026-11-07, finding 4): completeness was keyed by (deployment, type, parameter), so an unmeasured servo beside the
+    UR5e's measured ones lost its armature, damping and friction rows (19 of its type's 22). The contract (CONTRACT.md, the parameters
+    table): one row per parameter of every typed node no graded value binds, and a value binds the part it belongs to, never its type."""
+    routines = json.loads((REPO / "sysid" / "results" / "calibration_routines.json").read_text())
+    plain = {r["id"]: r for r in inst.parameter_table(inst.virtual_nodes({"ur5e": RESULTS["ur5e"]}), {"ur5e": RESULTS["ur5e"]}, routines)["rows"]}
+    results = _with_unmeasured_siblings()
+    nodes = inst.virtual_nodes(results)
+    rows = {r["id"]: r for r in inst.parameter_table(nodes, results, routines)["rows"]}
+    servo = [p.name for p in dm.TYPES["integrated_servo"].parameters]
+    chain = [p.name for p in dm.TYPES["rigid_body_chain"].parameters]
+    assert len(servo) == 22
+    for nid, names in (("ur5e/ur5e/wrist_4", servo), ("ur5e/ur5e_b/b_joint", servo), ("ur5e/ur5e_b", chain)):
+        mine = sorted(r["parameter"] for r in rows.values() if r["node"] == nid)
+        assert mine == sorted(names), f"{nid}: one row per parameter of its type ({len(mine)} of {len(names)}; missing {sorted(set(names) - set(mine))})"
+        assert all(rows[f"{nid}#{n}"]["key"] is None and rows[f"{nid}#{n}"]["owner"] == nid for n in names), nid
+    # the measured parts keep exactly what they had: the new siblings take nothing from them, nor add to them
+    assert {k: v for k, v in rows.items() if k in plain} == {k: {**v, "owner": rows[k]["owner"]} for k, v in plain.items()}
+    assert len(rows) == len(plain) + 2 * len(servo) + len(chain)
+    # a joint's zero offset is its chain's value (rigid_body_chain joint_zero_offsets): it binds the arm it is on, and only that arm
+    zero = rows["ur5e/shoulder_pan.zero_offset_rad"]
+    assert (zero["node"], zero["entity_type"], zero["owner"]) == ("ur5e/ur5e/shoulder_pan", "rigid_body_chain", "ur5e/ur5e")
+    assert "ur5e/ur5e#joint_zero_offsets" not in rows and "ur5e/ur5e_b#joint_zero_offsets" in rows
+
+
+def test_every_typed_part_has_each_parameter_once_bound_or_listed(nodes, table):
+    """Per instance, on every virtual deployment: for each typed node and each parameter of its type, either graded values it owns or
+    exactly one row saying none is recorded, never both; and a value's owner is a node of the value's own type (or none: a component the
+    tree has no node for, such as a depth camera's colour stream or an assembly's arm)."""
+    by_id = {n["id"]: n for n in nodes}
+    owned: dict = {}
+    for r in table["rows"]:
+        assert "owner" in r, r["id"]
+        if r["owner"] is not None:
+            assert by_id[r["owner"]]["entity_type"] == r["entity_type"] and by_id[r["owner"]]["root"] == r["deployment"], r["id"]
+            owned.setdefault((r["owner"], r["parameter"]), []).append(r)
+    for n in nodes:
+        if not n["entity_type"]:
+            continue
+        for spec in dm.TYPES[n["entity_type"]].parameters:
+            mine = owned.get((n["id"], spec.name), [])
+            listed = [r["id"] for r in mine if r["key"] is None]
+            graded = [r["id"] for r in mine if r["key"] is not None]
+            assert (graded and not listed) or (not graded and listed == [f"{n['id']}#{spec.name}"]), (n["id"], spec.name, graded, listed)
+
+
 def test_one_column_group_per_routine_and_model(table):
     cols = {c["id"]: c for c in table["result_columns"]}
     assert len(cols) == len(table["result_columns"])
