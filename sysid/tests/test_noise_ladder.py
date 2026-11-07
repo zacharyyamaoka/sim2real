@@ -274,17 +274,52 @@ def test_the_ur_backlash_fit_never_reads_the_world():
 
 # --- this code ------------------------------------------------------------------------------------------------------------------
 
+# WHY declared, and the only fields left out (the v3 audit, finding 6): where and when a ladder ran, never what it found. The commit it ran
+# from, the checkouts it imported (their commits, dates and dirt), how long it took and the bytes of the twin record it read move with
+# every commit anywhere; everything else in a check (its claims, each level's verdicts, every parameter's recovered value, interval,
+# error, bound and flags, each model's numbers, the held-out scores and alarms, the notes, identify_sealed) is the result and is compared.
+VOLATILE_PROVENANCE = ("code", "imports", "seconds", "twin_of_record_digest")
+
+
+def _same_value(a, b, where: tuple) -> None:
+    if isinstance(a, dict) or isinstance(b, dict):
+        assert isinstance(a, dict) and isinstance(b, dict), (where, a, b)
+        skip = VOLATILE_PROVENANCE if where and where[-1] == "provenance" else ()
+        ka, kb = set(a) - set(skip), set(b) - set(skip)
+        assert ka == kb, (where, sorted(ka ^ kb))
+        for k in sorted(ka):
+            _same_value(a[k], b[k], where + (k,))
+    elif isinstance(a, (list, tuple)) or isinstance(b, (list, tuple)):
+        assert isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)) and len(a) == len(b), (where, a, b)
+        for i, (x, y) in enumerate(zip(a, b)):
+            _same_value(x, y, where + (i,))
+    elif isinstance(a, bool) or isinstance(b, bool) or a is None or b is None or isinstance(a, str) or isinstance(b, str):
+        assert type(a) is type(b) and a == b, (where, a, b)
+    else:
+        assert isinstance(a, (int, float)) and isinstance(b, (int, float)) and math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12), (where, a, b)
+
+
 def same(a: dict, b: dict, check_id: str) -> None:
+    """A fresh check is the committed one: every field compared (numbers to 1e-9 relative), rows by level and variant, parameters by key,
+    the declared volatile provenance left out. Both sides are taken as the results file holds them (fresh() round-trips a fresh run)."""
     ra = {(r["level"], r["variant"]): r for r in a["rows"]}
     rb = {(r["level"], r["variant"]): r for r in b["rows"]}
     assert ra.keys() == rb.keys(), check_id
+    _same_value({k: v for k, v in a.items() if k != "rows"}, {k: v for k, v in b.items() if k != "rows"}, (check_id,))
     for key in ra:
         pa = {p["key"]: p for p in ra[key]["parameters"]}
         pb = {p["key"]: p for p in rb[key]["parameters"]}
         assert pa.keys() == pb.keys(), (check_id, key)
+        _same_value({k: v for k, v in ra[key].items() if k != "parameters"}, {k: v for k, v in rb[key].items() if k != "parameters"}, (check_id, key))
         for k in pa:
-            x, y = pa[k]["recovered"], pb[k]["recovered"]
-            assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-12), (check_id, key, k, x, y)
+            _same_value(pa[k], pb[k], (check_id, key, k))
+
+
+def fresh(example: str) -> dict[str, dict]:
+    """A fresh run's checks as the results file would hold them (sysid.result.write's own JSON: tuples as lists, numbers as JSON's)."""
+    from sysid import ladder, result  # noqa: PLC0415
+
+    return {c["id"]: c for c in json.loads(json.dumps(ladder.run_example(example), default=result.plain, allow_nan=False))}
 
 
 def test_the_fresh_result_comparator_sees_every_substantive_field():
@@ -343,25 +378,21 @@ def test_the_fresh_result_comparator_sees_every_substantive_field():
 
 @pytest.mark.parametrize("example", FAST_EXAMPLES)
 def test_the_fast_checks_are_this_code(example):
-    from sysid import ladder
-
-    fresh = {c["id"]: c for c in ladder.run_example(example)}
+    new = fresh(example)
     old = {c["id"]: c for c in committed()["checks"] if example_of(c["id"]) == example}
-    assert fresh.keys() == old.keys() and fresh
-    for check_id in fresh:
-        same(old[check_id], fresh[check_id], check_id)
+    assert new.keys() == old.keys() and new
+    for check_id in new:
+        same(old[check_id], new[check_id], check_id)
 
 
 @pytest.mark.skipif(not SLOW, reason="the CAN 11, UR arm and wear checks take most of an hour: SYSID_LADDER_SLOW=1 runs them")
 @pytest.mark.parametrize("example", ("pendulum_can11", "ur5e", "ur5e_2f85"))
 def test_the_slow_checks_are_this_code(example):
-    from sysid import ladder
-
-    fresh = {c["id"]: c for c in ladder.run_example(example)}
+    new = fresh(example)
     old = {c["id"]: c for c in committed()["checks"] if example_of(c["id"]) == example}
-    assert fresh.keys() == old.keys() and fresh
-    for check_id in fresh:
-        same(old[check_id], fresh[check_id], check_id)
+    assert new.keys() == old.keys() and new
+    for check_id in new:
+        same(old[check_id], new[check_id], check_id)
 
 
 # --- the comparison table -------------------------------------------------------------------------------------------------------
