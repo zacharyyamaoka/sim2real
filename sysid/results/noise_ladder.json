@@ -1288,14 +1288,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -1318,7 +1318,7 @@
         "paths": 6
        }
       ],
-      "seconds": 2316.5,
+      "seconds": 1486.0,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -1899,14 +1899,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 12
        },
@@ -1929,7 +1929,7 @@
         "paths": 6
        }
       ],
-      "seconds": 3127.2,
+      "seconds": 1468.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -2098,14 +2098,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -2128,7 +2128,7 @@
         "paths": 6
        }
       ],
-      "seconds": 435.7,
+      "seconds": 605.7,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3359,6 +3359,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
+     "19a3ac5",
      "8be20f5"
     ]
    }
@@ -3533,14 +3534,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -3563,7 +3564,7 @@
         "paths": 6
        }
       ],
-      "seconds": 2316.5,
+      "seconds": 1486.0,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3629,14 +3630,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 12
        },
@@ -3659,7 +3660,7 @@
         "paths": 6
        }
       ],
-      "seconds": 3127.2,
+      "seconds": 1468.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3717,14 +3718,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -3747,7 +3748,7 @@
         "paths": 6
        }
       ],
-      "seconds": 435.7,
+      "seconds": 605.7,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -3948,6 +3949,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
+     "19a3ac5",
      "8be20f5"
     ]
    }
@@ -4462,14 +4464,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -4492,7 +4494,7 @@
         "paths": 6
        }
       ],
-      "seconds": 2316.5,
+      "seconds": 1486.0,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -4726,14 +4728,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 12
        },
@@ -4756,7 +4758,7 @@
         "paths": 6
        }
       ],
-      "seconds": 3127.2,
+      "seconds": 1468.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -4990,14 +4992,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -5020,7 +5022,7 @@
         "paths": 6
        }
       ],
-      "seconds": 435.7,
+      "seconds": 605.7,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -5557,6 +5559,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
+     "19a3ac5",
      "8be20f5"
     ]
    }
@@ -6011,14 +6014,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -6041,7 +6044,7 @@
         "paths": 6
        }
       ],
-      "seconds": 2316.5,
+      "seconds": 1486.0,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6245,14 +6248,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 12
        },
@@ -6275,7 +6278,7 @@
         "paths": 6
        }
       ],
-      "seconds": 3127.2,
+      "seconds": 1468.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6479,14 +6482,14 @@
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -6509,7 +6512,7 @@
         "paths": 6
        }
       ],
-      "seconds": 435.7,
+      "seconds": 605.7,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -6986,6 +6989,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
+     "19a3ac5",
      "8be20f5"
     ]
    }
@@ -7023,13 +7027,13 @@
         "value": 0.1
        },
        "bound": 1.8e-07,
-       "recovered": 1.879612900089972e-06,
+       "recovered": 1.8760524978945423e-06,
        "ci95": [
-        1.5501414444386354e-06,
-        2.2090843557413087e-06
+        1.7106793688339917e-06,
+        2.041425626955093e-06
        ],
-       "error": 7.96129000899721e-08,
-       "error_over_tolerance": 0.4422938893887339,
+       "error": 7.605249789454234e-08,
+       "error_over_tolerance": 0.42251387719190187,
        "within_tolerance": true,
        "pass": true,
        "models": [
@@ -7038,15 +7042,15 @@
          "rung": "M5.wear",
          "graded": true,
          "recovered": {
-          "mean": 1.879612900089972e-06,
+          "mean": 1.8760524978945423e-06,
           "ci95": [
-           1.5501414444386354e-06,
-           2.2090843557413087e-06
+           1.7106793688339917e-06,
+           2.041425626955093e-06
           ],
           "interval": "the gap line's 95 % interval on the checks up to the forecast (drift.line_fit)"
          },
-         "error": 7.96129000899721e-08,
-         "error_over_tolerance": 0.4422938893887339,
+         "error": 7.605249789454234e-08,
+         "error_over_tolerance": 0.42251387719190187,
          "within_tolerance": true,
          "pass": true
         }
@@ -7055,15 +7059,19 @@
      ],
      "pass": true,
      "usable": true,
-     "worst_error_over_tolerance": 0.4422938893887339,
+     "worst_error_over_tolerance": 0.42251387719190187,
      "held_out": {
-      "forecast_error_pct": 2.18183338077883,
-      "lead_h": 77.29366853745597,
+      "forecast_error_pct": 2.0376525448537115,
+      "lead_h": 124.40136633778269,
       "gap_rms_mrad": 0.018842738328380508,
-      "recalibrated_ratio": 0.9337113394453105,
-      "predicted_crossing_h": 201.59828765576933,
-      "actual_crossing_h": 197.29366853745597,
-      "detector_alarm_h": 204.0
+      "recalibrated_ratio": 0.9702797518408391,
+      "predicted_crossing_h": 298.35949022015154,
+      "actual_crossing_h": 292.4013663377827,
+      "detector_alarm_h": 300.0,
+      "ratio_alarm_h": 204.0,
+      "ratio_crossing_h": 197.29366853745597,
+      "commissioned_gap_mrad": 1.9570825511019962,
+      "allowance_mrad": 0.5817764173314431
      },
      "graded_model": "wear",
      "models": [
@@ -7072,14 +7080,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -7102,7 +7110,7 @@
         "paths": 6
        }
       ],
-      "seconds": 2316.5,
+      "seconds": 1486.0,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -7159,13 +7167,17 @@
      "usable": false,
      "worst_error_over_tolerance": 1.5790724087291212,
      "held_out": {
-      "forecast_error_pct": null,
-      "lead_h": null,
+      "forecast_error_pct": 0.3108578100824138,
+      "lead_h": 191.15413556536384,
       "gap_rms_mrad": 0.05927435712280828,
-      "recalibrated_ratio": null,
-      "predicted_crossing_h": 605.2154504202525,
-      "actual_crossing_h": null,
-      "detector_alarm_h": null
+      "recalibrated_ratio": 0.9733294908271349,
+      "predicted_crossing_h": 360.27059424600276,
+      "actual_crossing_h": 359.15413556536384,
+      "detector_alarm_h": 360.0,
+      "ratio_alarm_h": null,
+      "ratio_crossing_h": null,
+      "commissioned_gap_mrad": 2.0735659594397493,
+      "allowance_mrad": 0.5817764173314431
      },
      "graded_model": "wear",
      "models": [
@@ -7174,14 +7186,14 @@
      "notes": [],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 12
        },
@@ -7204,7 +7216,7 @@
         "paths": 6
        }
       ],
-      "seconds": 3127.2,
+      "seconds": 1468.3,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -7227,34 +7239,69 @@
         "value": 0.1
        },
        "bound": 1.8e-06,
-       "recovered": null,
-       "ci95": null,
-       "error": null,
-       "error_over_tolerance": null,
+       "recovered": 7.01216028854259e-07,
+       "ci95": [
+        1.753882862035651e-07,
+        1.2270437715049527e-06
+       ],
+       "error": 1.0987839711457409e-06,
+       "error_over_tolerance": 6.104355395254116,
        "within_tolerance": false,
-       "pass": false,
-       "models": []
+       "pass": true,
+       "models": [
+        {
+         "model": "wear",
+         "rung": "M5.wear",
+         "graded": true,
+         "recovered": {
+          "mean": 7.01216028854259e-07,
+          "ci95": [
+           1.753882862035651e-07,
+           1.2270437715049527e-06
+          ],
+          "interval": "the gap line's 95 % interval on the checks up to the forecast (drift.line_fit)"
+         },
+         "error": 1.0987839711457409e-06,
+         "error_over_tolerance": 6.104355395254116,
+         "within_tolerance": false,
+         "pass": true
+        }
+       ]
       }
      ],
-     "pass": false,
+     "pass": true,
      "usable": false,
-     "worst_error_over_tolerance": null,
-     "held_out": {},
-     "graded_model": null,
-     "models": [],
+     "worst_error_over_tolerance": 6.104355395254116,
+     "held_out": {
+      "forecast_error_pct": null,
+      "lead_h": null,
+      "gap_rms_mrad": 2.3735668696100523,
+      "recalibrated_ratio": null,
+      "predicted_crossing_h": 878.0613028618552,
+      "actual_crossing_h": null,
+      "detector_alarm_h": null,
+      "ratio_alarm_h": null,
+      "ratio_crossing_h": null,
+      "commissioned_gap_mrad": 4.6804810465865545,
+      "allowance_mrad": 0.5817764173314431
+     },
+     "graded_model": "wear",
+     "models": [
+      "wear"
+     ],
      "notes": [
-      "not run: its commissioning (the regression's M4 fit) raised ValueError: can11_hinge twin refine-1: the Stribeck curve's steepest slope 55.9 N.m.s/rad gives dt*slope/I = 3.845 >= 1.0; use a larger Stribeck speed or a smaller physics_dt_s"
+      "no twin: the regression's M4 fit raised ValueError: can11_hinge twin refine-1: the Stribeck curve's steepest slope 55.9 N.m.s/rad gives dt*slope/I = 3.845 >= 1.0; use a larger Stribeck speed or a smaller physics_dt_s"
      ],
      "provenance": {
       "identify_sealed": true,
-      "code": "8be20f5",
+      "code": "19a3ac5",
       "imports": [
        {
         "repo": "/home/bam/bam_ws",
         "name": "bam_ws",
         "branch": "main",
-        "commit": "b41d91c5",
-        "date": "2026-11-06T19:06:21-07:00",
+        "commit": "fa7201ff",
+        "date": "2026-11-06T23:06:31-07:00",
         "dirty": false,
         "paths": 11
        },
@@ -7277,7 +7324,7 @@
         "paths": 6
        }
       ],
-      "seconds": 435.7,
+      "seconds": 605.7,
       "twin_of_record": "twin of record (followup C)",
       "twin_of_record_digest": "95198353"
      }
@@ -7286,7 +7333,7 @@
    "provenance": {
     "identify_sealed": true,
     "code": [
-     "8be20f5"
+     "19a3ac5"
     ]
    }
   },

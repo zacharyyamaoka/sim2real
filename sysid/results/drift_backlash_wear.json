@@ -1,5 +1,5 @@
 {
- "schema": "sysid.drift/1",
+ "schema": "sysid.drift/2",
  "name": "backlash_wear",
  "example": "pendulum_can11",
  "title": "Backlash wear on CAN 11: detected after the fact vs forecast ahead",
@@ -22,482 +22,577 @@
   "sweep-s5/fb"
  ],
  "check_seconds": 77.7,
- "calibrated_x_floor": 1.3430186345933586,
- "threshold": 1.25,
- "threshold_rule": "the servo card's drift diagnostic: live fidelity / calibrated <= 1.25 (reg.DRIFT_THRESHOLD; settable); calibrated 1.343 x floor at hour 0",
+ "station": 11,
+ "allowance_rad": 0.0005817764173314432,
+ "allowance": {
+  "value": 0.0005817764173314432,
+  "unit": "rad",
+  "arcmin": 2.0,
+  "rule": "T5",
+  "source": "bam_rack_twin acceptance.py GAP_CI_HALF_ARCMIN = 2.0 arcmin: T5, the rack's unit gate on a geared joint's gap (its 95 % interval's half-width, at the output); type_cards carries it on the gearbox card (gearbox.lost_motion <= 2 arcmin, T5); CAN 11 is geared (its board turns the rotor 10 times an output turn)",
+  "why": "the commissioned twin carries the gap commissioning measured, which T5 accepts to +-2 arcmin; once wear has grown the gap more than that past it, the twin's gap is off by more than the unit was accepted with, so the check warns and the gap is re-measured. A direct drive has no gear gap and no allowance."
+ },
+ "commissioned_gap_rad": 0.0019570825511019962,
+ "commissioned_from": "the commissioning fit's M4 gap: backlash_from_gaps over the train runs, the routine every check runs",
+ "threshold_rule": "the servo's gap drift (type_cards servo.gap_drift, dm.parameter_drift): a check's gap less the commissioned gap (1.957 mrad) <= 0.582 mrad, the station's allowance (T5, 2 arcmin); the camera's floor is not in it",
  "diagnostic": {
-  "id": "servo.drift",
+  "id": "servo.gap_drift",
+  "units": "parameter",
+  "parameter": "backlash_rad",
   "message": "model drift detected \u2014 recalibration required",
-  "forecast": "fit the drift ratio's history on deployment hours, solve for the threshold (backlash's torque-weighted revolutions convert at the station's duty)"
+  "forecast": "the gap's history on hours, solved for the commissioned gap plus the allowance (type_cards wear_usage_at)"
  },
  "checks": [
   {
    "h": 0.0,
    "b_true_rad": 0.001991169895766281,
    "b_hat_rad": 0.0019588068610537634,
-   "live_x_floor": 1.3430186345933586,
+   "gap_growth_rad": 1.7243099517672e-06,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4279613079798561,
+   "live_x_floor": 1.3430186345933586,
    "link_mrad": 0.5747600115018942,
    "ratio": 1.0,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 12.0,
    "b_true_rad": 0.0020518917725504135,
    "b_hat_rad": 0.002033885453366302,
-   "live_x_floor": 1.3673244330336216,
+   "gap_growth_rad": 7.680290226430575e-05,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.42153929681541047,
+   "live_x_floor": 1.3673244330336216,
    "link_mrad": 0.5763809800195228,
    "ratio": 1.0180978862200392,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 24.0,
    "b_true_rad": 0.0020471965373511296,
    "b_hat_rad": 0.002041238236079178,
-   "live_x_floor": 1.3685155741018173,
+   "gap_growth_rad": 8.415568497718157e-05,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.41976875059461044,
+   "live_x_floor": 1.3685155741018173,
    "link_mrad": 0.5744600727099859,
    "ratio": 1.018984799504423,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 36.0,
    "b_true_rad": 0.002055274403999688,
    "b_hat_rad": 0.0020276354165681687,
-   "live_x_floor": 1.337175175925184,
+   "gap_growth_rad": 7.055286546617245e-05,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.42649881850415566,
+   "live_x_floor": 1.337175175925184,
    "link_mrad": 0.5703036326651775,
    "ratio": 0.9956490114748527,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 48.0,
    "b_true_rad": 0.002093650536656875,
    "b_hat_rad": 0.0020685467876624675,
-   "live_x_floor": 1.3673506779117723,
+   "gap_growth_rad": 0.00011146423656047122,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4225205914898605,
+   "live_x_floor": 1.3673506779117723,
    "link_mrad": 0.5777338172053438,
    "ratio": 1.0181174279281546,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 60.0,
    "b_true_rad": 0.0021106779675061403,
    "b_hat_rad": 0.0020930207267296497,
-   "live_x_floor": 1.418196934575467,
+   "gap_growth_rad": 0.00013593817562765342,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.42573004326734115,
+   "live_x_floor": 1.418196934575467,
    "link_mrad": 0.6037690423184241,
    "ratio": 1.055977108616122,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 72.0,
    "b_true_rad": 0.0021280066685504546,
    "b_hat_rad": 0.0021034385595739696,
-   "live_x_floor": 1.4071746009565305,
+   "gap_growth_rad": 0.0001463560084719734,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4283006168071977,
+   "live_x_floor": 1.4071746009565305,
    "link_mrad": 0.6026937495451044,
    "ratio": 1.0477699748243605,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 84.0,
    "b_true_rad": 0.002153290391557262,
    "b_hat_rad": 0.0021193708699814295,
-   "live_x_floor": 1.4386742049159835,
+   "gap_growth_rad": 0.0001622883188794333,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4274628517734632,
+   "live_x_floor": 1.4386742049159835,
    "link_mrad": 0.6149797784063061,
    "ratio": 1.0712243060957882,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 96.0,
    "b_true_rad": 0.0021760335047599855,
    "b_hat_rad": 0.002158833666845633,
-   "live_x_floor": 1.4813648215195137,
+   "gap_growth_rad": 0.0002017511157436369,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.425270677925782,
+   "live_x_floor": 1.4813648215195137,
    "link_mrad": 0.6299810219030085,
    "ratio": 1.103011368094713,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 108.0,
    "b_true_rad": 0.0021991599362898464,
    "b_hat_rad": 0.0021772295744852954,
-   "live_x_floor": 1.4835946097803063,
+   "gap_growth_rad": 0.00022014702338329917,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4220133745472808,
+   "live_x_floor": 1.4835946097803063,
    "link_mrad": 0.6260967677335433,
    "ratio": 1.1046716490493906,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 120.0,
    "b_true_rad": 0.0022297892022256722,
    "b_hat_rad": 0.0022261195755748434,
-   "live_x_floor": 1.5206695453584436,
+   "gap_growth_rad": 0.0002690370244728471,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4220481498407427,
+   "live_x_floor": 1.5206695453584436,
    "link_mrad": 0.6417957681376945,
    "ratio": 1.1322773237758346,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 132.0,
    "b_true_rad": 0.0022460923982598304,
    "b_hat_rad": 0.002230304035999081,
-   "live_x_floor": 1.5316469105722137,
+   "gap_growth_rad": 0.00027322148489708487,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4255402204881014,
+   "live_x_floor": 1.5316469105722137,
    "link_mrad": 0.6517773640348192,
    "ratio": 1.1404509744840348,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 144.0,
    "b_true_rad": 0.002261049842931708,
    "b_hat_rad": 0.002250897102464844,
-   "live_x_floor": 1.5440195661773493,
+   "gap_growth_rad": 0.0002938145513628476,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.42887164518915283,
+   "live_x_floor": 1.5440195661773493,
    "link_mrad": 0.6621862115507218,
    "ratio": 1.1496635462879115,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 156.0,
    "b_true_rad": 0.0022879449193326062,
    "b_hat_rad": 0.002266192463624861,
-   "live_x_floor": 1.5764201232043817,
+   "gap_growth_rad": 0.0003091099125228647,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4267942889784724,
+   "live_x_floor": 1.5764201232043817,
    "link_mrad": 0.6728071056143698,
    "ratio": 1.173788719381167,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 168.0,
    "b_true_rad": 0.0023116299549813786,
    "b_hat_rad": 0.00229512034036837,
-   "live_x_floor": 1.6126714905046082,
+   "gap_growth_rad": 0.00033803778926637384,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.42228002525211383,
+   "live_x_floor": 1.6126714905046082,
    "link_mrad": 0.68099895773365,
    "ratio": 1.200781172327438,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 180.0,
    "b_true_rad": 0.0023224439454109643,
    "b_hat_rad": 0.0023105234811811592,
-   "live_x_floor": 1.6383539090978732,
+   "gap_growth_rad": 0.000353440930079163,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.42457906585655575,
+   "live_x_floor": 1.6383539090978732,
    "link_mrad": 0.6956107722672114,
    "ratio": 1.2199040779459749,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 192.0,
    "b_true_rad": 0.0023552142223030263,
    "b_hat_rad": 0.00234758787706682,
-   "live_x_floor": 1.6741310295540537,
+   "gap_growth_rad": 0.0003905053259648239,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4247750528453157,
+   "live_x_floor": 1.6741310295540537,
    "link_mrad": 0.711129096548806,
    "ratio": 1.2465434108149585,
-   "status": "ok",
-   "message": ""
+   "ratio_status": "ok"
   },
   {
    "h": 204.0,
    "b_true_rad": 0.00237597366613188,
    "b_hat_rad": 0.0023624730468334576,
-   "live_x_floor": 1.6846543866281836,
+   "gap_growth_rad": 0.00040539049573146135,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4278262182704172,
+   "live_x_floor": 1.6846543866281836,
    "link_mrad": 0.7207393153238051,
    "ratio": 1.2543790110092299,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 216.0,
    "b_true_rad": 0.002389444096544219,
    "b_hat_rad": 0.0023838089562756987,
-   "live_x_floor": 1.7136097597146671,
+   "gap_growth_rad": 0.0004267264051737024,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.41882900005532264,
+   "live_x_floor": 1.7136097597146671,
    "link_mrad": 0.7177094621463357,
    "ratio": 1.2759389300905097,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 228.0,
    "b_true_rad": 0.0024079153879622197,
    "b_hat_rad": 0.0024001108392433523,
-   "live_x_floor": 1.7017881260145176,
+   "gap_growth_rad": 0.0004430282881413561,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.42657857487316564,
+   "live_x_floor": 1.7017881260145176,
    "link_mrad": 0.7259463535313482,
    "ratio": 1.2671366444068648,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 240.0,
    "b_true_rad": 0.0024325630978009375,
    "b_hat_rad": 0.0024216407973788046,
-   "live_x_floor": 1.7675639320017347,
+   "gap_growth_rad": 0.0004645582462768083,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4287293839671472,
+   "live_x_floor": 1.7675639320017347,
    "link_mrad": 0.7578065956896523,
    "ratio": 1.316112737733472,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 252.0,
    "b_true_rad": 0.002456067399850534,
    "b_hat_rad": 0.0024435086427742614,
-   "live_x_floor": 1.796662935519942,
+   "gap_growth_rad": 0.00048642609167226514,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4247056645449623,
+   "live_x_floor": 1.796662935519942,
    "link_mrad": 0.7630529259932997,
    "ratio": 1.337779602785585,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 264.0,
    "b_true_rad": 0.002482181972821054,
    "b_hat_rad": 0.002467712777316937,
-   "live_x_floor": 1.8102468982721622,
+   "gap_growth_rad": 0.0005106302262149406,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.43103777046726083,
+   "live_x_floor": 1.8102468982721622,
    "link_mrad": 0.7802847870265072,
    "ratio": 1.3478941033608753,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 276.0,
    "b_true_rad": 0.002487798279120472,
    "b_hat_rad": 0.0024714557638637613,
-   "live_x_floor": 1.8647682256911113,
+   "gap_growth_rad": 0.0005143732127617651,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4248835591364421,
+   "live_x_floor": 1.8647682256911113,
    "link_mrad": 0.7923093606961875,
    "ratio": 1.3884902097845642,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 288.0,
    "b_true_rad": 0.002522809618053562,
    "b_hat_rad": 0.002496490861987069,
-   "live_x_floor": 1.904281092011262,
+   "gap_growth_rad": 0.0005394083108850728,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4176179023692331,
+   "live_x_floor": 1.904281092011262,
    "link_mrad": 0.7952618751671358,
    "ratio": 1.4179111465477494,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 300.0,
    "b_true_rad": 0.002566566985602193,
    "b_hat_rad": 0.002552638777691796,
-   "live_x_floor": 1.963769340782023,
+   "gap_growth_rad": 0.0005955562265897996,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42210769631557865,
+   "live_x_floor": 1.963769340782023,
    "link_mrad": 0.8289221525326622,
    "ratio": 1.462205579430859,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 312.0,
    "b_true_rad": 0.002548583414789803,
    "b_hat_rad": 0.002529693068048816,
-   "live_x_floor": 1.8988684356480603,
+   "gap_growth_rad": 0.0005726105169468199,
+   "status": "ok",
+   "message": "",
    "floor_mrad": 0.4266417709209586,
+   "live_x_floor": 1.8988684356480603,
    "link_mrad": 0.8101365921307988,
    "ratio": 1.413880929673774,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 324.0,
    "b_true_rad": 0.0025769951627272578,
    "b_hat_rad": 0.0025692431216178396,
-   "live_x_floor": 1.9237024214651364,
+   "gap_growth_rad": 0.0006121605705158434,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4297609602582688,
+   "live_x_floor": 1.9237024214651364,
    "link_mrad": 0.8267321999000139,
    "ratio": 1.4323720996228755,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 336.0,
    "b_true_rad": 0.002579604489366051,
    "b_hat_rad": 0.002555379956301007,
-   "live_x_floor": 1.961072374627501,
+   "gap_growth_rad": 0.0005982974051990109,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4267673368294349,
+   "live_x_floor": 1.961072374627501,
    "link_mrad": 0.8369216346495544,
    "ratio": 1.460197441877847,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 348.0,
    "b_true_rad": 0.0026281944086192994,
    "b_hat_rad": 0.002602553537672414,
-   "live_x_floor": 2.0309930505210985,
+   "gap_growth_rad": 0.0006454709865704178,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42265043436968847,
+   "live_x_floor": 2.0309930505210985,
    "link_mrad": 0.8584000950045609,
    "ratio": 1.5122597693039799,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 360.0,
    "b_true_rad": 0.00265740111996987,
    "b_hat_rad": 0.002640431971805718,
-   "live_x_floor": 2.0641209741791315,
+   "gap_growth_rad": 0.0006833494207037216,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42236832792786366,
+   "live_x_floor": 2.0641209741791315,
    "link_mrad": 0.8718193245048729,
    "ratio": 1.5369265332674327,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 372.0,
    "b_true_rad": 0.002671827368113705,
    "b_hat_rad": 0.0026570225594880204,
-   "live_x_floor": 2.0612500516069416,
+   "gap_growth_rad": 0.0006999400083860241,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42665559073970627,
+   "live_x_floor": 2.0612500516069416,
    "link_mrad": 0.8794438584306096,
    "ratio": 1.5347888692780873,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 384.0,
    "b_true_rad": 0.0026861056740558296,
    "b_hat_rad": 0.002666580300756352,
-   "live_x_floor": 2.11273440465034,
+   "gap_growth_rad": 0.0007094977496543559,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4256622291253771,
+   "live_x_floor": 2.11273440465034,
    "link_mrad": 0.8993112362333403,
    "ratio": 1.5731236709831933,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 396.0,
    "b_true_rad": 0.002711519954089077,
    "b_hat_rad": 0.002694288250144422,
-   "live_x_floor": 2.1402642485376617,
+   "gap_growth_rad": 0.0007372056990424258,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42339840268714685,
+   "live_x_floor": 2.1402642485376617,
    "link_mrad": 0.9061844641592526,
    "ratio": 1.5936221534153876,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 408.0,
    "b_true_rad": 0.002748564234187483,
    "b_hat_rad": 0.0027429923783060806,
-   "live_x_floor": 2.202366473498553,
+   "gap_growth_rad": 0.0007859098272040843,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4262961657228175,
+   "live_x_floor": 2.202366473498553,
    "link_mrad": 0.9388603831689162,
    "ratio": 1.6398629302454832,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 420.0,
    "b_true_rad": 0.0027497937102762882,
    "b_hat_rad": 0.0027272265499027337,
-   "live_x_floor": 2.2051853782058957,
+   "gap_growth_rad": 0.0007701439988007375,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4247945197390493,
+   "live_x_floor": 2.2051853782058957,
    "link_mrad": 0.9367506636705473,
    "ratio": 1.6419618621848724,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 432.0,
    "b_true_rad": 0.0027648555572396746,
    "b_hat_rad": 0.0027440750785870105,
-   "live_x_floor": 2.2332732916909057,
+   "gap_growth_rad": 0.0007869925274850142,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4246759003926244,
+   "live_x_floor": 2.2332732916909057,
    "link_mrad": 0.9484173459716354,
    "ratio": 1.6628758783880164,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 444.0,
    "b_true_rad": 0.002786440678495687,
    "b_hat_rad": 0.002762497350340287,
-   "live_x_floor": 2.260195334946213,
+   "gap_growth_rad": 0.000805414799238291,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4296377038314226,
+   "live_x_floor": 2.260195334946213,
    "link_mrad": 0.9710651339167841,
    "ratio": 1.6829217977534308,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 456.0,
    "b_true_rad": 0.0028349151084695397,
    "b_hat_rad": 0.002815949136817958,
-   "live_x_floor": 2.3511138279822577,
+   "gap_growth_rad": 0.0008588665857159616,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42698498408016416,
+   "live_x_floor": 2.3511138279822577,
    "link_mrad": 1.0038903004116582,
    "ratio": 1.750618917282657,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 468.0,
    "b_true_rad": 0.0028439588026358464,
    "b_hat_rad": 0.0028352277770921086,
-   "live_x_floor": 2.3509802563658773,
+   "gap_growth_rad": 0.0008781452259901124,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.4233731955206037,
+   "live_x_floor": 2.3509802563658773,
    "link_mrad": 0.9953420237434696,
    "ratio": 1.7505194610182837,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   },
   {
    "h": 480.0,
    "b_true_rad": 0.002873743025595886,
    "b_hat_rad": 0.0028444455306005784,
-   "live_x_floor": 2.43900819690888,
+   "gap_growth_rad": 0.0008873629794985821,
+   "status": "warning",
+   "message": "model drift detected \u2014 recalibration required",
    "floor_mrad": 0.42316664295856055,
+   "live_x_floor": 2.43900819690888,
    "link_mrad": 1.0321069108343426,
    "ratio": 1.8160643002897479,
-   "status": "warning",
-   "message": "model drift detected \u2014 recalibration required"
+   "ratio_status": "warning"
   }
  ],
- "detector_alarm_h": 204.0,
- "actual_crossing_h": 197.29366853745597,
- "rate_recovered": 1.879612900089972e-06,
+ "detector_alarm_h": 300.0,
+ "actual_crossing_h": 292.4013663377827,
+ "actual_rule": "the first hour the hidden gap (world.json's wear line and its process noise) is the allowance past the commissioned gap, interpolated between checks",
+ "rate_recovered": 1.8760524978945423e-06,
  "rate_ci95": [
-  1.5501414444386354e-06,
-  2.2090843557413087e-06
+  1.7106793688339917e-06,
+  2.041425626955093e-06
  ],
- "b0_recovered_rad": 0.001978871019441938,
+ "b0_recovered_rad": 0.001979120901535382,
  "rate_true": 1.8e-06,
  "b0_true_rad": 0.002,
- "predicted_at_h": 120.0,
- "predicted_crossing_h": 201.59828765576933,
- "remaining_h_at_prediction": 81.59828765576933,
- "plan_by_h": 179.6034610229744,
- "plan_by_rule": "the hour the wear line's upper 95 % confidence band (slope and intercept, Student's t) reaches the threshold gap: the early edge maintenance plans against",
+ "predicted_at_h": 168.0,
+ "predicted_crossing_h": 298.35949022015154,
+ "remaining_h_at_prediction": 130.35949022015154,
+ "plan_by_h": 280.4496296466265,
+ "plan_by_rule": "the hour the wear line's upper 95 % confidence band (slope and intercept, Student's t) reaches the commissioned gap plus the allowance: the early edge maintenance plans against",
  "forecast": {
   "checks_h": [
    0.0,
@@ -510,289 +605,80 @@
    84.0,
    96.0,
    108.0,
-   120.0
+   120.0,
+   132.0,
+   144.0,
+   156.0,
+   168.0
   ],
-  "gap_ratio_correlation": 0.15514411846521614,
   "horizon_h": 96.0,
   "rolling": [
    [
     48.0,
-    244.7998527274589
+    312.61052892100474
    ],
    [
     60.0,
-    222.00203657203502
+    306.7105935141073
    ],
    [
     72.0,
-    230.6160527811823
+    321.3986548035258
    ],
    [
     84.0,
-    232.0079069603189
+    333.95988057943936
    ],
    [
     96.0,
-    215.74708153666364
+    320.4728096506341
    ],
    [
     108.0,
-    211.72189940115334
+    315.8738338312124
    ],
    [
     120.0,
-    201.59828765576933
+    297.92727479402606
+   ],
+   [
+    132.0,
+    296.4735058949691
+   ],
+   [
+    144.0,
+    296.3804162638194
+   ],
+   [
+    156.0,
+    298.6566193552344
+   ],
+   [
+    168.0,
+    298.35949022015154
    ]
   ],
-  "curve_fit": {
-   "jitter": 0.22461130296476825,
-   "slope_per_rad": 1557.5830525500874,
-   "knee_rad": 0.001965693953486223,
-   "rms": 0.06374820406353834,
-   "cap": 1.5,
-   "fitted_to_rad": 0.002907082551101996
-  },
   "issue_rule": "re-made at every check from 5 on; issued at the first whose crossing is within 96 h, hour 168 at the latest",
-  "curve_rule": "ratio^2 = 1 + d^2 + 2 rho d, d = slope x (gap - knee)+, the systematic part of the gap's replayed link error / calibrated (fitted to the replays as jitter in quadrature with it; the jitter is dropped); rho least squares on the checks' (gap, ratio) up to the issue hour"
+  "rule": "the gap's history up to the issue hour fitted on hours (the servo card's M5.wear backlash term, linear at the check's fixed duty), solved for the hour it reaches the commissioned gap plus the allowance"
  },
- "gap_at_threshold_rad": 0.002357797761555771,
- "curve": [
-  {
-   "backlash_rad": 0.0017570825511019962,
-   "gap_x_calibrated": 0.3601932348908401,
-   "ratio": 1.0
-  },
-  {
-   "backlash_rad": 0.0018070825511019963,
-   "gap_x_calibrated": 0.28856017927504685,
-   "ratio": 1.0
-  },
-  {
-   "backlash_rad": 0.0018570825511019962,
-   "gap_x_calibrated": 0.27728698181009903,
-   "ratio": 1.0
-  },
-  {
-   "backlash_rad": 0.0019070825511019961,
-   "gap_x_calibrated": 0.1881827451969958,
-   "ratio": 1.0
-  },
-  {
-   "backlash_rad": 0.0019570825511019962,
-   "gap_x_calibrated": 0.0,
-   "ratio": 1.0
-  },
-  {
-   "backlash_rad": 0.0020070825511019964,
-   "gap_x_calibrated": 0.2374978854164659,
-   "ratio": 1.0120074035864
-  },
-  {
-   "backlash_rad": 0.002057082551101996,
-   "gap_x_calibrated": 0.2426483279119244,
-   "ratio": 1.0317123024153327
-  },
-  {
-   "backlash_rad": 0.002107082551101996,
-   "gap_x_calibrated": 0.35414324653171536,
-   "ratio": 1.0568026730778854
-  },
-  {
-   "backlash_rad": 0.0021570825511019963,
-   "gap_x_calibrated": 0.34777080190102355,
-   "ratio": 1.0869056212578612
-  },
-  {
-   "backlash_rad": 0.0022070825511019965,
-   "gap_x_calibrated": 0.4616364810587818,
-   "ratio": 1.1216176238127087
-  },
-  {
-   "backlash_rad": 0.002257082551101996,
-   "gap_x_calibrated": 0.5757808394141227,
-   "ratio": 1.160525175685798
-  },
-  {
-   "backlash_rad": 0.0023070825511019963,
-   "gap_x_calibrated": 0.5560329592352351,
-   "ratio": 1.2032213418909232
-  },
-  {
-   "backlash_rad": 0.0023570825511019964,
-   "gap_x_calibrated": 0.6357802591691175,
-   "ratio": 1.2493177484495257
-  },
-  {
-   "backlash_rad": 0.002407082551101996,
-   "gap_x_calibrated": 0.6928770230893471,
-   "ratio": 1.2984523096471992
-  },
-  {
-   "backlash_rad": 0.0024570825511019963,
-   "gap_x_calibrated": 0.7697986484662857,
-   "ratio": 1.3502934085202583
-  },
-  {
-   "backlash_rad": 0.0025070825511019964,
-   "gap_x_calibrated": 0.8342736554831699,
-   "ratio": 1.404541385145459
-  },
-  {
-   "backlash_rad": 0.002557082551101996,
-   "gap_x_calibrated": 0.9746212700068866,
-   "ratio": 1.460928143649559
-  },
-  {
-   "backlash_rad": 0.0026070825511019962,
-   "gap_x_calibrated": 1.0334232712897102,
-   "ratio": 1.519215555494455
-  },
-  {
-   "backlash_rad": 0.0026570825511019963,
-   "gap_x_calibrated": 1.0734749250233382,
-   "ratio": 1.5791931775540513
-  },
-  {
-   "backlash_rad": 0.002707082551101996,
-   "gap_x_calibrated": 1.1453901547007095,
-   "ratio": 1.6406756549782022
-  },
-  {
-   "backlash_rad": 0.002757082551101996,
-   "gap_x_calibrated": 1.2823788828599425,
-   "ratio": 1.7035000564928082
-  },
-  {
-   "backlash_rad": 0.0028070825511019963,
-   "gap_x_calibrated": 1.3939844187765122,
-   "ratio": 1.7675232968568777
-  },
-  {
-   "backlash_rad": 0.002857082551101996,
-   "gap_x_calibrated": 1.3745024520133444,
-   "ratio": 1.832619734756931
-  },
-  {
-   "backlash_rad": 0.002907082551101996,
-   "gap_x_calibrated": 1.4909881299831147,
-   "ratio": 1.8986789892810427
-  },
-  {
-   "backlash_rad": 0.0029570825511019963,
-   "gap_x_calibrated": 1.5518327831321799,
-   "ratio": 1.9656039889260388
-  },
-  {
-   "backlash_rad": 0.003007082551101996,
-   "gap_x_calibrated": 1.6229562771306054,
-   "ratio": 2.0333092492423734
-  },
-  {
-   "backlash_rad": 0.003057082551101996,
-   "gap_x_calibrated": 1.6531828674662765,
-   "ratio": 2.101719365104478
-  },
-  {
-   "backlash_rad": 0.0031070825511019962,
-   "gap_x_calibrated": 1.7381065447175876,
-   "ratio": 2.1707676985536044
-  },
-  {
-   "backlash_rad": 0.003157082551101996,
-   "gap_x_calibrated": 1.8497988298717125,
-   "ratio": 2.2403952413224344
-  },
-  {
-   "backlash_rad": 0.003207082551101996,
-   "gap_x_calibrated": 1.8789537243386154,
-   "ratio": 2.310549631240295
-  },
-  {
-   "backlash_rad": 0.003257082551101996,
-   "gap_x_calibrated": 1.94114434287455,
-   "ratio": 2.381184302891541
-  },
-  {
-   "backlash_rad": 0.003307082551101996,
-   "gap_x_calibrated": 2.021978526649301,
-   "ratio": 2.452257754616639
-  },
-  {
-   "backlash_rad": 0.003357082551101996,
-   "gap_x_calibrated": 2.093947082479402,
-   "ratio": 2.523732915870014
-  },
-  {
-   "backlash_rad": 0.003407082551101996,
-   "gap_x_calibrated": 2.1642478742790896,
-   "ratio": 2.5955766008812073
-  },
-  {
-   "backlash_rad": 0.003457082551101996,
-   "gap_x_calibrated": 2.24554268234307,
-   "ratio": 2.667759036394831
-  },
-  {
-   "backlash_rad": 0.003507082551101996,
-   "gap_x_calibrated": 2.2789850535474296,
-   "ratio": 2.7402534529343208
-  },
-  {
-   "backlash_rad": 0.003557082551101996,
-   "gap_x_calibrated": 2.352482808208228,
-   "ratio": 2.8130357305229197
-  },
-  {
-   "backlash_rad": 0.003607082551101996,
-   "gap_x_calibrated": 2.4032776344201903,
-   "ratio": 2.886084091101075
-  },
-  {
-   "backlash_rad": 0.003657082551101996,
-   "gap_x_calibrated": 2.4504554194128705,
-   "ratio": 2.95937883101214
-  },
-  {
-   "backlash_rad": 0.003707082551101996,
-   "gap_x_calibrated": 2.552756321228706,
-   "ratio": 3.0329020879030697
-  },
-  {
-   "backlash_rad": 0.003757082551101996,
-   "gap_x_calibrated": 2.5776585382043486,
-   "ratio": 3.106637637221112
-  },
-  {
-   "backlash_rad": 0.003807082551101996,
-   "gap_x_calibrated": 2.6372968919190183,
-   "ratio": 3.1805707141987423
-  },
-  {
-   "backlash_rad": 0.003857082551101996,
-   "gap_x_calibrated": 2.701824428920468,
-   "ratio": 3.2546878578239395
-  },
-  {
-   "backlash_rad": 0.003907082551101997,
-   "gap_x_calibrated": 2.763364461967586,
-   "ratio": 3.3289767738063945
-  },
-  {
-   "backlash_rad": 0.003957082551101996,
-   "gap_x_calibrated": 2.8606125266162308,
-   "ratio": 3.403426213985875
-  }
- ],
- "card_trend_remaining_h": 121.94693477966129,
+ "gap_at_threshold_rad": 0.0025388589684334395,
+ "threshold": 1.25,
+ "calibrated_x_floor": 1.3430186345933586,
+ "ratio_alarm_h": 204.0,
+ "ratio_crossing_h": 197.29366853745597,
+ "ratio_rule": "kept beside the gap check, never the alarm: live fidelity (twin vs camera) / the camera's floor, / its hour-0 value, against the servo card's drift diagnostic (servo.drift, 1.25); its sensitivity is the camera's",
+ "card_trend_remaining_h": 54.75846815538881,
  "card_trend_unit": "h",
  "recalibrated": {
-  "h": 204.0,
-  "backlash_rad": 0.0024374730468334576,
-  "measured_gap_rad": 0.0023624730468334576,
-  "scored_at_h": 216.0,
+  "h": 300.0,
+  "backlash_rad": 0.002452638777691796,
+  "measured_gap_rad": 0.002552638777691796,
+  "scored_at_h": 312.0,
   "rule": "the gap searched over the measured gap +-0.1 mrad (0.025 mrad steps) on the alarm check's link error, scored on the next check",
-  "live_x_floor": 1.2539917282061768,
-  "ratio": 0.9337113394453105,
+  "live_x_floor": 1.3031037874908666,
+  "ratio": 0.9702797518408391,
+  "ratio_status": "ok",
+  "gap_growth_rad": 7.705429035702012e-05,
   "status": "ok"
  },
  "wear": {
@@ -804,21 +690,21 @@
   "law": "archard",
   "rate": "backlash_wear_rad_per_nm_rev",
   "duty_nm_rev_per_h": 189.8741249877565,
-  "rate_recovered_per_nm_rev": 9.899257733043792e-09,
+  "rate_recovered_per_nm_rev": 9.880506351328884e-09,
   "rate_true_per_nm_rev": 9.47996468774283e-09,
   "note": "the card's law is Archard's (load x sliding distance); at the check's fixed duty it is linear in hours: rate per N.m.rev = rate per hour / duty"
  },
  "provenance": {
-  "code": "8abc452",
+  "code": "19a3ac5",
   "imports": [
    {
     "repo": "/home/bam/bam_ws",
     "name": "bam_ws",
     "branch": "main",
-    "commit": "1097f440",
-    "date": "2026-11-05T19:52:21-07:00",
+    "commit": "fa7201ff",
+    "date": "2026-11-06T23:06:31-07:00",
     "dirty": false,
-    "paths": 14
+    "paths": 12
    },
    {
     "repo": "/home/bam/io-diagnostics",
@@ -839,7 +725,7 @@
     "paths": 6
    }
   ],
-  "seconds": 356.6,
+  "seconds": 1298.7,
   "commissioned_twin": "1ca8ef60",
   "twin_of_record": "twin of record (followup C)",
   "twin_of_record_digest": "95198353",
