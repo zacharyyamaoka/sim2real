@@ -224,3 +224,15 @@ def test_a_row_no_graded_value_binds_never_borrows_another_parts_nominal(table):
     assert spec_rows and all(r["nominal"] is None for r in spec_rows)
     kp = next(r for r in spec_rows if r["entity_type"] == "integrated_servo" and r["parameter"] == "kp_nm_rad")  # CAN 11's 31.831 on the card
     assert kp["type_nominal"] == dm.parameter("integrated_servo", "kp_nm_rad").nominal == 31.831 and kp["nominal"] is None
+
+
+def test_both_datasets_are_house_tables_with_a_field_per_column(nodes, table):
+    """The house table shape the app's own tables have (runs.json: name, title, source, contract, schema.fields, rows), so a data-ui
+    view reads them as it reads the rest; every key a row has is a field, typed with the robotics contract's words."""
+    dep = inst.deployments_dataset(nodes)
+    for doc in (dep, table):
+        assert doc["contract"] == dm.SCHEMA and {"name", "title", "source", "rows"} <= set(doc)
+        fields = {f["name"]: f for f in doc["schema"]["fields"]}
+        assert {k for r in doc["rows"] for k in r} <= set(fields), doc["name"]
+        assert {f["type"] for f in fields.values()} <= {"string", "number", "integer", "boolean", "array"}
+    assert {f["name"]: f["type"] for f in dep["schema"]["fields"]}["tags"] == "array"

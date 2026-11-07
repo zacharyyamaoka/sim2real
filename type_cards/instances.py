@@ -206,15 +206,36 @@ def _member_word(part: dm.Part) -> str:
     return {"bldc_motor": "motor", "foc_controller": "driver", "gearbox": "gearbox", "encoder": "encoder"}.get(part.type, part.type)
 
 
+def field_type(values) -> str:
+    """The robotics contract's word for a column (string, number, integer, boolean, array) from the values it holds."""
+    seen = {type(v) for v in values if v is not None}
+    if seen <= {bool} and seen:
+        return "boolean"
+    if seen and seen <= {list, tuple}:
+        return "array"
+    if seen and seen <= {int}:
+        return "integer"
+    if seen and seen <= {int, float}:
+        return "number"
+    return "string"
+
+
+def fields_of(rows: list[dict], order=()) -> list[dict]:
+    names = list(dict.fromkeys(list(order) + [k for r in rows for k in r]))
+    return [{"name": n, "type": field_type(r.get(n) for r in rows)} for n in names]
+
+
 def deployments_dataset(nodes: list[dict]) -> dict:
-    """deployments.json: every node of every deployment, a data-ui dataset (its tree is `parent`; the index is `parent == null`)."""
-    words = {"string": ("id", "root", "parent", "title", "kind", "structural", "entity_type", "entity_title", "card", "device", "sysid_id", "page",
-                        "source", "machine", "where", "summary", "dashboard"),
-             "integer": ("depth", "runs", "children"), "list": ("tags", "sees", "dashboard_panels", "components", "current_models")}
-    kinds = {f: k for k, fs in words.items() for f in fs}
-    return {"name": "deployments", "title": "Deployments, and every part of each as a deployment of its own", "schema": dm.SCHEMA,
+    """deployments.json: every node of every deployment, in the house table shape (its tree is `parent`; the index is `parent == null`)."""
+    fields = fields_of(nodes, NODE_FIELDS)
+    for f in fields:
+        if f["name"] in ("tags", "sees", "dashboard_panels", "components", "current_models"):
+            f["type"] = "array"
+        if f["name"] in ("depth", "runs", "children"):
+            f["type"] = "integer"
+    return {"name": "deployments", "title": "Deployments, and every part of each as a deployment of its own", "contract": dm.SCHEMA,
             "source": "type_cards/instances.py over sysid/results (virtual) and app/registry.json + type_cards/deployments/ + the app's data (physical)",
-            "fields": [{"name": f, "type": kinds[f]} for f in NODE_FIELDS], "tree": {"parent": "parent"},
+            "schema": {"fields": fields}, "tree": {"parent": "parent"},
             "index": "rows whose parent is null are the deployments; the rest are their parts, each a deployment of its own (its subtree)",
             "rows": nodes}
 
@@ -328,7 +349,7 @@ def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
         r["best"] = min(scored, key=lambda cv: abs(cv[1]))[0] if scored else None
         r["has_results"] = r.get("recovered") is not None or any(r.get(f"recovered@{c}") is not None for c in order)
     return {"name": "parameters", "title": "Every parameter: true, nominal and recovered, one column group per routine and model",
-            "schema": dm.SCHEMA, "level": LEVEL,
+            "contract": dm.SCHEMA, "level": LEVEL, "schema": {"fields": fields_of(rows)},
             "source": "type_cards/instances.py: sysid/results/<example>.json (the oracle's own values), sysid/results/calibration_routines.json "
                       f"(one column group per routine and model at {LEVEL}), every typed node's type parameters (type_cards/domain_v3.json)",
             "result_columns": list(columns.values()), "column_groups": {c["label"]: c["properties"] for c in columns.values()},

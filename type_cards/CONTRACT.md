@@ -352,7 +352,8 @@ parameter's family holding every parameter the routine claims there); `dm.routin
 
 ### Deployments and their trees (`<site>/data/domain/deployments.json`, written at site build by `inst.write`)
 
-A dataset of every node of every deployment: `{name, title, schema, source, fields[{name type}], tree{parent: "parent"}, index, rows}`.
+A dataset of every node of every deployment, in the house table shape (runs.json's): `{name, title, contract, source, schema{fields[{name
+type}]}, tree{parent: "parent"}, index, rows}` (types are the robotics contract's words: string, number, integer, boolean, array).
 
 ```
 row  id root parent depth title kind(virtual|physical) tags[] structural entity_type entity_title card(v2) device sysid_id sees[] runs
@@ -395,7 +396,7 @@ response under any config. Virtual deployments have no run rows yet.
 ### The parameters table (`<site>/data/domain/parameters.json`, `inst.parameter_table(nodes, results, routines)`)
 
 ```
-{name, title, schema, level ("1x": the oracle's own noise), source,
+{name, title, contract, level ("1x": the oracle's own noise), schema{fields}, source,
  result_columns[{id ("<routine>:<model id>"), routine, routine_title, model, entity_type, family, fit, label, properties[]}],
  column_groups{label: [properties]}                        (data-ui §16 columnGroups: "each model ... its own Recovered error tolerance")
  presets{all | winning model | with results | errors only: {filter, columns, what, color_by?}},
