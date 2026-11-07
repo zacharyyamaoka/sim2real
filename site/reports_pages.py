@@ -98,8 +98,9 @@ def node_block(node: dict, title: str) -> str:
         if m["value"] is None:
             cell = f'<span class="mut" title="{e(m.get("why") or "")}">— {e(m.get("why") or "")}</span>'
         else:
+            side = f', {m["side"]} side' if m.get("side") else ""
             cell = (f'<span data-node="{e(node["node"])}" data-metric="{e(m["metric"])}" data-model="{e(model)}" data-value="{raw(m["value"])}">'
-                    f'{e(fmt(m["value"], m["unit"]))}</span> <small class="mut">{e(fmt(m["low"], ""))}–{e(fmt(m["high"], m["unit"]))}, {plural(m["n"], "run")}</small>')
+                    f'{e(fmt(m["value"], m["unit"]))}</span> <small class="mut">{e(fmt(m["low"], ""))}–{e(fmt(m["high"], m["unit"]))}, {plural(m["n"], "run")}{e(side)}</small>')
         pin = ' <span class="s2r-pin">pinned</span>' if m["pinned"] else ""
         mrows.append(f'<tr><th scope="row">{e(m["title"])}{pin}</th><td>{e(model or "—")}</td><td>{cell}</td></tr>')
     drows = "".join(

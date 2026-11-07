@@ -161,8 +161,18 @@ def _limit(lim) -> dict | None:
     return None if lim is None else {"op": lim.op, "value": lim.value, "unit": lim.unit, "note": lim.note}
 
 
+def sides(d: dpages.Domain, dep: str) -> dict[str, str]:
+    """{metric: side} where every valued row of the producer's table names one side (the stop error: the encoder's)."""
+    seen: dict[str, set] = {}
+    for r in d.tables[dep].run_metrics:
+        if r.get("value") is not None and r.get("side"):
+            seen.setdefault(r["metric"], set()).add(r["side"])
+    return {m: next(iter(v)) for m, v in seen.items() if len(v) == 1}
+
+
 def spec(d: dpages.Domain, dep: str, presets: dict) -> dict:
     nodes = [n for n in d.tree(dep) if n.get("device") and n.get("entity_type")]
+    side = sides(d, dep)
     station = {n["device"]: n["id"] for n in d.tree(dep) if n.get("structural") == "station"}
     types = {}
     for tid in sorted({n["entity_type"] for n in nodes}):
@@ -170,7 +180,8 @@ def spec(d: dpages.Domain, dep: str, presets: dict) -> dict:
         types[tid] = {"title": t.title,
                       "metrics": [{"id": m.id, "title": m.title, "unit": m.unit, "pinned": m.pinned, "family": m.family, "model_dependent": m.model_dependent,
                                    "aggregate": m.aggregate, "summary": SUMMARY_NAME[m.aggregate], "per_run": m.per_run is not None,
-                                   "per_model": bool(m.per_run and m.per_run.per_model), "why_not": m.why_not} for m in t.metrics],
+                                   "per_model": bool(m.per_run and m.per_run.per_model), "why_not": m.why_not, "side": side.get(m.id, "")}
+                                  for m in t.metrics],
                       "diagnostics": [{"id": x.id, "metric": x.metric, "title": x.title, "warn": _limit(x.warn), "error": _limit(x.error),
                                        "units": x.units, "kind": x.kind, "message": x.message} for x in t.diagnostics],
                       "gates": [{"id": g.id, "diagnostic": g.diagnostic, "target": _limit(g.target), "acceptance": g.acceptance} for g in t.gates],
@@ -261,7 +272,8 @@ def station_card(d: dpages.Domain, dep: str, result: dict, station: dict) -> str
         model = (entry or {}).get("model") or ""
         diag = next((x for x in dm.TYPES["integrated_servo"].diagnostics if x.metric == m.id and x.units == "metric"), None)
         lv = dx.get((diag.id, entry.get("model") if entry else None), {}).get("level") if diag else None
-        note = (f"median of {plural(entry['n'], 'run')}" if value is not None else ((entry or {}).get("why") or m.why_not or "no value"))
+        note = (f"median of {plural(entry['n'], 'run')}" + (f" · {entry['side']} side" if entry.get("side") else "") if value is not None
+                else ((entry or {}).get("why") or m.why_not or "no value"))
         model_tag = f" <small>{e(model)}</small>" if model else ""
         chip = " " + level_chip(lv) if lv else ""
         others = other_models(sn, m, model, dx, diag)

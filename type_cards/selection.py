@@ -81,7 +81,11 @@ def _metric_entries(spec: dm.MetricSpec, runs: list[dict], diags: dict, floor: f
         # WHY the producer's own words when no run has a value: "no dwell of 0.25 s or more" says why a sine has no stop error
         whys = Counter(m.get("why") for m in rows if not _number(m.get("value")) and m.get("why"))
         why = "" if values else (whys.most_common(1)[0][0] if whys else f"no selected run has a run_metrics.json row for {spec.id} (tools/run_metrics.py)")
-        return [{**base, "model": None, **_summary(values, spec.aggregate), "source": f"run_metrics.json {spec.id}", "why": why}]
+        # WHY the side beside the value: the stop error's title says "at the output", and the producer measures it on the encoder side (T4's
+        # partial); a page says which, never the title alone
+        sides = {m.get("side") for m in rows if _number(m.get("value")) and m.get("side")}
+        return [{**base, "model": None, **_summary(values, spec.aggregate), "source": f"run_metrics.json {spec.id}", "why": why,
+                 **({"side": sides.pop()} if len(sides) == 1 else {})}]
     if src.table == "runs":
         values = [float(r[src.column]) for r in runs if _number(r.get(src.column))]
         return [{**base, "model": None, **_summary(values, spec.aggregate), "source": f"runs.json {src.column}",

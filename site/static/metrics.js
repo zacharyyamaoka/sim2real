@@ -194,7 +194,9 @@ async function start() {
       const model = (e && e.model) || "";
       const d = t.diagnostics.find((x) => x.metric === m.id && x.units === "metric");
       const dx = d ? sn.diagnostics.find((x) => x.diagnostic === d.id && (x.model ?? null) === (e ? e.model ?? null : null)) : null;
-      const note = value !== null ? `median of ${plural(e.n, "run")} · ${fmt(e.low, "")}–${fmt(e.high, m.unit)}` : ((e && e.why) || m.why_not || "no value");
+      // the side that measured it, where the producer names one (the stop error: the encoder's, which T4 calls partial)
+      const note = value !== null ? `median of ${plural(e.n, "run")} · ${fmt(e.low, "")}–${fmt(e.high, m.unit)}${m.side ? ` · ${m.side} side` : ""}`
+        : ((e && e.why) || m.why_not || "no value");
       // beside a fidelity metric's headline model, every other model that replayed these runs (most runs first)
       let others = "";
       if (m.model_dependent) {

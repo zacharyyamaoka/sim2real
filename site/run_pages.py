@@ -345,6 +345,8 @@ def metric_kpis(sn: dict | None, type_id: str) -> str:
             whys.setdefault(m.get("why") or "not computed per run", []).append(m["title"])
         value = (f'<span data-metric="{e(m["metric"])}" data-value="{raw(m["value"])}">{e(fmt(m["value"], m["unit"]))}</span>' if m["value"] is not None
                  else f'<span data-metric="{e(m["metric"])}" data-value="" title="{e(m.get("why") or "")}">—</span>')
+        if m.get("side") and m["value"] is not None:  # the metrics lane (2026-11-07): which side measured it (the stop error: the encoder's)
+            value += f' <small class="s2r-side">{e(m["side"])} side</small>'
         items.append(f'<div{' class="s2r-none"' if m["value"] is None else ""}><dt>{e(m["title"])}{pin}</dt><dd>{value}</dd></div>')
     note = "".join(f'<p class="s2r-whynot">— {e(", ".join(titles))}: {e(why)}.</p>' for why, titles in whys.items())
     return f'<h3>Metrics <small>this run, no model needed</small></h3><dl class="s2r-kpis s2r-level-kpis">{"".join(items)}</dl>{note}'

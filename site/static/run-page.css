@@ -61,3 +61,6 @@ body[data-page="part"] .mpane { position: relative; }
 /* the station's Playback tabs are its own level's: any other level shows alone */
 body[data-entity-kind]:not([data-entity-kind="station"]) .mpane > nav.tabs,
 body[data-entity-kind]:not([data-entity-kind="station"]) .mpane > .panels { display: none; }
+
+/* the side that measured a run's metric (the metrics lane, 2026-11-07: the stop error is the encoder's, which T4 calls partial) */
+.s2r-side { font-size: 11px; font-weight: 450; color: var(--ink3); }

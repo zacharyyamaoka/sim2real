@@ -343,3 +343,14 @@ def test_the_coverage_grid_lists_each_devices_reachable_cells(unit_tables):
     assert len(grid["reachable"]) == cells["reachable_cells"]["A"]
     reach = set(grid["reachable"])
     assert all(r["reachable"] == (r["cell"] in reach) for r in cells["rows"] if r["device"] == "A")
+
+
+def test_a_run_metric_says_which_side_measured_it():
+    """The stop error's title says "at the output"; the producer measures it on the encoder side (T4 calls an encoder-side pass partial), and
+    the selection says so beside the value."""
+    rows = [{**r, "side": "encoder"} if r["metric"] == "servo.stop_error" else r for r in RUN_METRICS]
+    t = sel.Tables(nodes=with_limits(), runs=RUNS, run_diagnostics=DIAGNOSTICS, coverage_points=COVERAGE, floors={"A": 2.0}, descriptions={"A": DESC_A},
+                   run_metrics=rows)
+    stop = metric(node(sel.compute(["r1", "r2"], t), "rig/a"), "servo.stop_error")
+    assert stop["side"] == "encoder" and stop["value"] == 3.5
+    assert "side" not in metric(node(sel.compute(["r1", "r2"], t), "rig/a/driver"), "driver.saturation")
