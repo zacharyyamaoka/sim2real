@@ -14,7 +14,7 @@ between what the drive can see (handed to identify) and what only the simulator 
 
 WHY not inside the ur5e example (2026-11-07): its truth hides joint zeros and servo dynamics behind Menagerie's own servos with no gap;
 putting a gap there moves every committed ur5e number and the site's pages with them. The scenario hides the gap on the plant the house
-already studies backlash on, and the decision record (docs/decision-calibration-procedures-2026-11-07.md) names folding it into the arm
+already studies backlash on, and the decision record (docs/decision-calibration-routines-2026-11-07.md) names folding it into the arm
 examples as the next step.
 """
 
@@ -162,7 +162,7 @@ def identify(description, logs: dict) -> Fit:
 # --- held-out score and the result document --------------------------------------------------------------------------------------
 
 def score(description, p: Plan, fit: Fit, measured: Measured, *, workers: int = 6) -> dict:
-    """No held-out motion: the sweep is the whole procedure (its use, compensation, is gear_backlash's study, not re-run here)."""
+    """No held-out motion: the sweep is the whole routine (its use, compensation, is gear_backlash's study, not re-run here)."""
     return {"models": {}}
 
 

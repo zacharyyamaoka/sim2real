@@ -3,7 +3,7 @@
   "id": "ur5e_backlash",
   "title": "UR5e joint backlash",
   "subtitle": "gear_backlash's UR plant on QDD drivetrains",
-  "summary": "Menagerie's UR5e on QDD-style drivetrains (gear_backlash's UR study plant): each joint a motor hinge with its rotor as armature, a gear gap and a tuned mesh stop, then the link. The description takes each gap at a QDD planetary's datasheet value; the arm's gaps are larger. The procedure is gear_backlash's own gravity-crossing sweep: from the motor encoders and motor torques only, it finds each gravity-loadable joint's two flanks and so its gap.",
+  "summary": "Menagerie's UR5e on QDD-style drivetrains (gear_backlash's UR study plant): each joint a motor hinge with its rotor as armature, a gear gap and a tuned mesh stop, then the link. The description takes each gap at a QDD planetary's datasheet value; the arm's gaps are larger. The routine is gear_backlash's own gravity-crossing sweep: from the motor encoders and motor torques only, it finds each gravity-loadable joint's two flanks and so its gap.",
   "model": {
     "format": "mjcf",
     "path": "/home/bam/.cache/like_keras/mujoco_menagerie/universal_robots_ur5e/ur5e.xml",

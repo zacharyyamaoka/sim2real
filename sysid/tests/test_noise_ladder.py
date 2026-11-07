@@ -20,7 +20,7 @@ What it holds:
 - the oracle: a check's 1x row is the committed example result (the same code at the same noise gives the same numbers);
 - the code: the fast checks re-run here and equal the committed ladder; the slow ones (CAN 11, the UR arms, the wear demo) re-run when
   SYSID_LADDER_SLOW=1 (most of an hour);
-- the table: calibration_procedures.json is the join recomputed here, in the shape type_cards/CONTRACT.md documents.
+- the table: calibration_routines.json is the join recomputed here, in the shape type_cards/CONTRACT.md documents.
 
 Failures at a level are findings, not test failures: the ladder exists to say what breaks where (a routine that raises is a failed row
 with its message, never a crashed ladder). What this file fails on is a

@@ -154,7 +154,7 @@ ZHU_2025 = R("Zhu, Tanaka, Rafeedi, Hong (2025). Cycloidal quasi-direct drive ac
              "robotics. arXiv:2410.16591.", "https://arxiv.org/abs/2410.16591", kind="preprint",
              note="a longer history (a 30-step GRU) when ripple or backlash matter")
 
-# --- calibration procedures (2026-11-07) -----------------------------------------------------------------------------------------
+# --- calibration routines (2026-11-07) -------------------------------------------------------------------------------------------
 UR_CALIBRATION = R("Universal Robots, FZI (2026). ur_calibration: extract a UR's factory calibration and correct the URDF "
                    "(Universal_Robots_ROS_Driver).", "https://github.com/UniversalRobots/Universal_Robots_ROS_Driver/tree/master/ur_calibration",
                    kind="code", note="the robot's DH deltas, and calibration_correction's URDF correction: Zach's 'UR offset thing' (Nov 6)")
