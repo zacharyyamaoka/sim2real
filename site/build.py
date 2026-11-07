@@ -7,6 +7,8 @@ Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing her
 
     OUT/data/<dep>/schedule/<station>/   a station's test schedule (bam_rack_twin.schedule), copied from SIM2REAL_SCHEDULES
     OUT/data/<dep>/  + the deployment's tree and every run's place in it, its tags and its configuration snapshot (site/deploy_tree.py)
+    OUT/data/domain/ the domain model v3 (type_cards/instances.py): deployments.json, parameters.json, selections/<dep>.json,
+                     coverage_cells/<dep>.json, reports/<id>.json (type_cards/CONTRACT.md, "Domain model v3")
                      + the rows data-ui's gate views read (site/overlays.py): gate ranks and links, the tree's roll-up rows, the gate
                      history from the archive's acceptance files, each station's coverage cells
     OUT/data/        the app's tables: the ones holding links copied with every old /app/?d=… link rewritten to the
@@ -175,6 +177,11 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     import overlays  # noqa: PLC0415
     # WHY before the overlays: the roll-up rows (components.json) are the tree's nodes, and runs.json gains each run's place in it
     tree_counts = deploy_tree.write(out / "data")
+    # the domain model v3's projections, after the tree overlay (runs.json carries the run tags by then): deployments and their trees,
+    # the parameters table, the preset selections, the coverage cells the browser counts, the frozen reports (type_cards/CONTRACT.md,
+    # "Domain model v3"; data only, no page reads them yet)
+    from type_cards import instances as domain_v3  # noqa: PLC0415  (deploy_tree put the repo on sys.path)
+    domain_counts = domain_v3.write(out / "data")
     before = adapter.load(out / "data")
     overlay_counts = overlays.write(out / "data", lambda dep_id, row: pages.cell_href(before.deployment(dep_id), row))
     site = adapter.load(out / "data")
@@ -182,7 +189,7 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
     writer = workbench_build(s2r.CATALOG, site, Writer(out, s2r.CATALOG.data_dirs, s2r.CATALOG.data_files))
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
-              "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts,
+              "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts, "domain": domain_counts,
               "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments),
               "media": ({"root": str(media_root.resolve()), "scenes": len(site.media.scenes), "stations": len(site.media.stations),
                          "links": sum(1 for r in site.runs if (site.media.runs.get(r["run"]) or {}).get("links")),

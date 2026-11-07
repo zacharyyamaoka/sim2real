@@ -21,6 +21,9 @@ never a new number, each a lookup or a join of what the producers wrote.
                 + config: `full` when the run's session recorded its board's whole config (bam_rack_twin.hardware.session's
                   board_configs, its key lines hashing to the sha256 written beside them), else `not recorded`, with what IS
                   recorded (the code, the plan, the run's own commands, the record's gains) in config_detail.
+                + excitation (driven | free response | mixed | unknown), closed_loop and offline_scope: the v3 run tags
+                  (type_cards domain.run_tags, from the run's kind and the producer's own code, cited per kind), so a page can keep to
+                  the runs a model may be judged on offline under a given config (Zach, 2026-11-06).
 
 WHY a site overlay and not tools/build_app.py: the tags and the tree are lookups over the registry, the record and each run's
 session.json, which the producer's 3.8 GB rebuild does not need to repeat; the same layer already writes the rack's roll-up rows.
@@ -41,6 +44,7 @@ if str(adapter.REPO) not in sys.path:
     sys.path.append(str(adapter.REPO))  # appended, so the repo's own site/ folder never shadows the stdlib's `site`
 
 from type_cards import registry as reg  # noqa: E402  (CONTRACT.md: one import)
+from type_cards import domain as dm  # noqa: E402  (CONTRACT.md, "Domain model v3": the run tags)
 
 if str(adapter.REPO / "tools") not in sys.path:
     sys.path.append(str(adapter.REPO / "tools"))
@@ -264,7 +268,18 @@ FIELDS = {  # the run columns this overlay adds, as robotics-contract schema fie
     "card": {"type": "string", "title": "Type card"},
     "deployment_kind": {"type": "string", "title": "Deployment kind"},
     "deployment_title": {"type": "string", "title": "Deployment"},
+    # v3 (type_cards/CONTRACT.md, "Domain model v3": the run tags)
+    "excitation": {"type": "string", "title": "Excitation", "description": "What moved it: " + "; ".join(f"{k}: {v}" for k, v in dm.EXCITATIONS.items())},
+    "closed_loop": {"type": "boolean", "title": "Closed loop", "description": "Whether the board's feedback acted while the run was driven (null: unknown)"},
+    "offline_scope": {"type": "string", "title": "Offline evaluation", "description": "Which configs a model may be judged against this run under: "
+                      + "; ".join(f"{k}: {v}" for k, v in dm.OFFLINE_SCOPES.items())},
 }
+
+
+def run_tag_columns(kind: str | None) -> dict:
+    """excitation, closed_loop and offline_scope for one run (type_cards domain.run_tags: its kind, in the producer's words)."""
+    tags = dm.run_tags(kind)
+    return {"excitation": tags.excitation, "closed_loop": tags.closed_loop, "offline_scope": tags.offline_scope}
 
 
 def level_field(depth: int, labels: dict) -> dict:
@@ -300,6 +315,7 @@ def enrich_runs(folder: pathlib.Path, entry: dict, nodes: list[dict], devices: l
             row[f"node_{node['depth']}"] = node["id"]
             depth = max(depth, node["depth"])
         row.update(tags_of(entry, row))
+        row.update(run_tag_columns(row.get("kind")))
         can_id = int(row["device"].split()[-1]) if row["device"].split()[-1].isdigit() else None
         row.update(config_of(pathlib.Path(row["npz"]), can_id, cache) if row.get("npz") and can_id is not None
                    else {"config": NOT_RECORDED, "full_config_pct": 0, "config_detail": "Board config not recorded: the run names no recording."})
