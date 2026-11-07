@@ -236,7 +236,9 @@ class RealWorld:
         px = np.array([stock.project(p)[:2] for p in world])
         depth = pin.camera_points(world)[:, 2]
         ok = pin.visible(px, depth)
-        return px + rng.normal(0.0, self.noise["pixel_px"], px.shape), ok
+        measured = px + rng.normal(0.0, self.noise["pixel_px"], px.shape)
+        quantum = hidden.perturbation("pixel_integer")  # the noise ladder's whole-pixel variant (sysid/noise_ladder.json); None outside it
+        return (measured if quantum is None else np.round(measured / quantum) * quantum), ok
 
     def measure(self, p: Plan, *, camera_shift: dict | None = None, label: str = "") -> Measured:
         pin = self.camera(camera_shift)

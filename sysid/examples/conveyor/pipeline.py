@@ -169,7 +169,10 @@ class RealWorld:
                 theta, x = belt.run(command, nominal)
                 theta_meas = theta + rng.normal(0, self.noise["encoder_rad"], theta.size)
                 track = np.arange(0, theta.size, TRACKER_EVERY)
-                runs[split].append(Run(command, theta_meas, x[track] + rng.normal(0, self.noise["belt_tracker_m"], track.size), theta_meas[track]))
+                # the noise ladder's tracker_late variant (sysid/noise_ladder.json): the tracker reports the belt where it was; None outside it
+                late = hidden.perturbation("tracker_late")
+                seen = track if late is None else np.maximum(track - int(round(late / DT)), 0)
+                runs[split].append(Run(command, theta_meas, x[seen] + rng.normal(0, self.noise["belt_tracker_m"], track.size), theta_meas[track]))
         return Measured(runs["train"], runs["held_out"])
 
 

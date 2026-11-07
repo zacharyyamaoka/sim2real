@@ -5,6 +5,8 @@
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid drift all --write
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid list
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid all --write
+    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid ladder conveyor --write
+    env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sysid procedures --write
 """
 
 from __future__ import annotations
@@ -32,7 +34,43 @@ def main(argv=None) -> int:
     every.add_argument("--workers", type=int, default=6)
     every.add_argument("--write", action="store_true")
     sub.add_parser("list", help="the examples and their committed verdicts")
+    ladder = sub.add_parser("ladder", help="the noise ladder (sysid/noise_ladder.json) for examples (default: every one it has checks for)")
+    ladder.add_argument("examples", nargs="*")
+    ladder.add_argument("--levels", nargs="+", help="only these main levels (0x 1x 3x 10x)")
+    ladder.add_argument("--variants", nargs="+", help="only these variants (sysid/noise_ladder.json variants)")
+    ladder.add_argument("--workers", type=int, default=6)
+    ladder.add_argument("--write", action="store_true", help=f"merge the rows into {RESULTS_DIR}/noise_ladder.json")
+    procs = sub.add_parser("procedures", help="the procedure table: type_cards' records joined with the committed ladder")
+    procs.add_argument("--write", action="store_true", help=f"write {RESULTS_DIR}/calibration_procedures.json")
     args = parser.parse_args(argv)
+
+    if args.command == "ladder":
+        from . import ladder as ladder_module  # noqa: PLC0415
+
+        for example in tuple(args.examples) or tuple(ladder_module.examples()):
+            checks = ladder_module.run_example(example, levels=args.levels, variants=args.variants, workers=args.workers)
+            for check in checks:
+                for row in check["rows"]:
+                    worst = row["worst_error_over_tolerance"]
+                    failing = [p["key"] for p in row["parameters"] if not p["pass"]]
+                    print(f"{check['id']} {row['level']}{'+' + row['variant'] if row['variant'] else ''}: {'pass' if row['pass'] else 'FAIL'} "
+                          f"(worst {'—' if worst is None else f'{worst:.3g}'}x tolerance, {row['provenance']['seconds']} s)"
+                          f"{' failing ' + ', '.join(failing[:6]) if failing else ''}", flush=True)
+            if args.write and checks:
+                ladder_module.merge(checks)
+        return 0
+    if args.command == "procedures":
+        from . import ladder as ladder_module  # noqa: PLC0415
+        from . import procedures as procedures_module  # noqa: PLC0415
+
+        doc = procedures_module.table(json.loads(ladder_module.RESULT_PATH.read_text(encoding="utf-8")))
+        for row in doc["rows"]:
+            cells = ", ".join(f"{k} {'pass' if v['pass'] else 'FAIL'} {v['worst_error_over_tolerance'] if v['worst_error_over_tolerance'] is None else round(v['worst_error_over_tolerance'], 3)}"
+                              for k, v in row["recovery"].items())
+            print(f"{row['procedure']:38s} {row['setting']:8s} {row['status']:16s} {cells or row['oracle']['status']}")
+        if args.write:
+            result.write(doc, "calibration_procedures")
+        return 0
 
     if args.command == "list":
         for example in oracle.EXAMPLES:
