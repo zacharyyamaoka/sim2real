@@ -400,3 +400,17 @@ def test_the_export_is_json_and_the_committed_file_is_it():
     assert {m["key"] for m in data["models"]} == {m.key for t in dm.TYPES.values() for m in t.models}
     committed = dm.DOMAIN_JSON.read_text(encoding="utf-8")
     assert committed == text, "type_cards/domain_v3.json is stale: python3 -m type_cards.domain --write"
+
+
+def test_the_stop_error_and_the_saturation_are_computed_per_run_now():
+    """2026-11-07 (the metrics lane): tools/run_metrics.py writes RobotDx's catalog entries servo.stop_error and driver.saturation per run
+    (<dep>/run_metrics.json); the metric's own id keys its rows. The other model-independent metrics of the rack's parts say what they lack."""
+    stop = dm.metric("integrated_servo", "servo.stop_error")
+    sat = dm.metric("foc_controller", "driver.saturation")
+    assert (stop.per_run.table, sat.per_run.table) == ("run_metrics", "run_metrics")
+    assert stop.robotdx == "servo.stop_error" and sat.robotdx == "driver.saturation"
+    assert not stop.why_not and not sat.why_not
+    for tid in ("integrated_servo", "foc_controller", "bldc_motor", "gearbox", "encoder"):
+        for m in dm.TYPES[tid].metrics:
+            if m.per_run is None and not m.model_dependent:
+                assert m.why_not != dm.WHY_NOT_RUN, f"{m.id}: a model-independent metric of the rack's parts says what its runs lack"

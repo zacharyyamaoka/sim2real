@@ -86,3 +86,63 @@ def test_the_committed_reports_verify_and_match_their_definitions():
         assert {"runs", "nodes", "unknown_runs"} <= set(snap["results"]["selection"])
         assert len(snap["results"]["parameters"]) == len(d.parameters)
         json.dumps(snap)
+
+
+# --- a report from a selection, from the build CLI (2026-11-07, the metrics lane) --------------------------------------------------
+# The brief: "Create a report from the build CLI from a selection, for example python -m type_cards.report freeze --name ... --runs ...".
+# The definition stays a Python record, one per file (Zach's ground truth); the CLI writes it from the selection, then freezes it. The
+# snapshot also keeps the rows it froze (inputs.rows), so its page shows them as they were, whatever runs.json says later.
+
+def test_runs_are_selected_by_id_by_column_or_by_preset():
+    assert rep.select_runs(RUNS, runs=["r3", "r1"]) == ["r1", "r3"]
+    assert rep.select_runs(RUNS, select=["device=A"]) == ["r1", "r2", "r3"]
+    assert rep.select_runs(RUNS, select=["device=A", "split=held_out,train"]) == ["r1", "r2", "r3"]
+    assert rep.select_runs(RUNS, select=["device=A", "split=held_out"]) == ["r2", "r3"]
+    assert rep.select_runs(RUNS, preset="split: held_out") == ["r2", "r3", "r4"]
+    with pytest.raises(ValueError):
+        rep.select_runs(RUNS, select=["nope=1"])     # a column no run has is a typo, never an empty report
+    with pytest.raises(ValueError):
+        rep.select_runs(RUNS, preset="split: nope")
+    with pytest.raises(ValueError):
+        rep.select_runs(RUNS, runs=["r1"], select=["device=A"])   # one way to name the rows
+
+
+def test_a_definition_is_written_as_python_and_reads_back():
+    text = rep.definition_text(DEFINITION, doc="Station A over its three runs.")
+    space: dict = {}
+    exec(compile(text, "fixture_a.py", "exec"), space)  # noqa: S102  (the generated record, the way load_definitions imports it)
+    assert space["record"] == DEFINITION
+    assert text.count("\n    ") >= 5, "one keyword per line"
+
+
+def test_the_snapshot_keeps_the_rows_it_froze():
+    snap = rep.freeze(DEFINITION, tables(), parameter_rows=[], frozen_at="2026-11-07T00:00:00Z", code="abc1234")
+    rows = snap["inputs"]["rows"]
+    assert [r["run"] for r in rows] == ["r1", "r2", "r3"] and rows[0]["kind"] == "waypoints" and rows[0]["device"] == "A"
+    assert set(rows[0]) <= set(rep.ROW_FIELDS)
+    edited = copy.deepcopy(snap)
+    edited["inputs"]["rows"][0]["kind"] = "sine"
+    assert not rep.verify(edited), "the digest covers the frozen rows"
+
+
+def test_the_cli_creates_and_freezes_a_report_from_a_selection(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    (data / "rig").mkdir(parents=True)
+    for name, table in (("runs.json", RUNS), ("run_gates.json", DIAGNOSTICS), ("coverage.json", COVERAGE), ("gates.json", []),
+                        ("devices.json", [{"device": "A"}, {"device": "B"}])):
+        (data / "rig" / name).write_text(json.dumps({"rows": table}))
+    out = tmp_path / "frozen_reports"
+    out.mkdir()
+    monkeypatch.setattr(rep, "REPORTS_DIR", out)
+    monkeypatch.setattr(rep, "_context", lambda data_dir, deployment: (NODES, [], tables()))
+    code = rep.main(["freeze", "--id", "a-held-out", "--title", "A, held out", "--question", "How does A do held out?", "--deployment", "rig",
+                     "--select", "device=A", "--select", "split=held_out", "--models", "integrated_servo/M4.dynamics.twin", "--data", str(data)])
+    assert code == 0
+    snap = rep.read_snapshot(out / "a-held-out.json")
+    assert rep.verify(snap) and snap["report"]["runs"] == ["r2", "r3"] and snap["results"]["selection"]["runs"] == 2
+    definition = (out / "a_held_out.py").read_text()
+    assert 'id="a-held-out"' in definition and "r2" in definition and "record = Report(" in definition
+    # a definition already written is never overwritten: re-freezing is a new decision (freeze <id> re-freezes one on purpose)
+    assert rep.main(["freeze", "--id", "a-held-out", "--title", "x", "--question", "x", "--deployment", "rig", "--runs", "r1",
+                     "--data", str(data)]) != 0
+    assert rep.read_snapshot(out / "a-held-out.json") == snap
