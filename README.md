@@ -14,6 +14,11 @@ every page is a `.base` dashboard or an analysis over datasets the producers wri
 
 ## The app (home page)
 
+**Desktop app (Stable / Preview).** `stable-preview.json` adopts Zach's shared package (`/home/bam/stable_preview_switcher`, skill `stable-preview-switcher`); the dock icon is **sim2real** (click = Stable on :4820; right-click: Open Preview, Make Preview Stable, Roll Stable Back). Preview (:4821) rebuilds `site/build.py` into `dist/site` whenever `site/`, `type_cards/`, `sysid/`, `brand/`, `tools/` or `app/registry.json` change; Stable builds the same site from the pinned commit. Neither touches `~/.cache/sim2real/site` or the hand-started `serve.py`. WHY the data prefixes are proxied: the built site symlinks its 3.8 GB of run folders (`data/source`, `runs`, `why`, `dx`, `coverage.json`) into the main checkout's `app/data`, and the runtime refuses a file that resolves outside the site, so a small `http.server` process (:4822 Stable, :4823 Preview) answers those prefixes from `app/data`. Stable is therefore pinned in code and pages but reads the live `app/data`. Not in the channels: the old app at `/app/` and `/dashboards/` (run `serve.py` for those).
+
+    python3 /home/bam/.local/share/stable-preview-switcher/runtime/sps.py --root /home/bam/sim2real open
+    python3 /home/bam/.local/share/stable-preview-switcher/runtime/sps.py --root /home/bam/sim2real open --preview
+
 `python3 /home/bam/sim2real/serve.py` serves the catalog-workbench site at `/` (build it with `python3 /home/bam/sim2real/site/build.py`) and keeps the old app at `/app/`: **deployments → one deployment
 (its runs newest first, coverage) → one run (playback of real vs every model on one clock)**, each with a **Gates layer**
 switch in the header that adds the diagnostics computed from the same runs. The five proposals stay at `/dashboards/`.
