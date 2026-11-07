@@ -17,10 +17,10 @@ To update: rebuild data-ui (or a newer branch), then replace `dist/` and `galler
 sim2real's parameters view needed three things data-ui lacked (Zach, 2026-11-06: one column group per model, "color the models by row based on
 what has the lowest error", "filter what model results we are showing"). They are CONTRACT §49, landed on data-ui `main`. Vendoring `main` itself
 would also bring the 327 commits since d5ede93, and §47 among them changes a default: the one-row chrome folds a panel's tabs into a chip at
-390 px and draws the rail's facet headings differently, and sim2real's site test reaches the old chrome (measured on 2026-11-07: with main's kit
-the full site test failed "the filter bar sits left of the cards, by kind and by tags" and could not find the Why it fails panel by its tab at 390
-px). So this kit is d5ede93 with §49 alone; moving sim2real to data-ui `main` is its own lane (the site test's chrome locators, its pages' toolbars,
-the old app's flow test). Undo: re-vendor `d5ede93` and re-pin.
+390 px, and every page's toolbar becomes the bar (the old app's too). sim2real's site test reaches the old chrome: measured on 2026-11-07 with
+main's kit, the Why it fails panel can no longer be found by its tab at 390 px (its two presets fold into a chip there), and the run stopped. So this
+kit is d5ede93 with §49 alone, and nothing else on the site moves; moving sim2real to data-ui `main` is its own lane (the site test's chrome
+locators, every page's toolbar looked at, the old app's flow test). Undo: re-vendor `d5ede93` and re-pin.
 
 ## What changed since a0b229b, and what the catalog-workbench site adopts (2026-10-29)
 

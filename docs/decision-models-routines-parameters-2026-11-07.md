@@ -41,9 +41,10 @@
    in Property visibility, and `emptyGroups: hide`. Tested there (unit, and `tests/browser/table_best_checks.py` against an oracle over its own JSON,
    mutation-checked).
 6. **sim2real vendors d5ede93 + §49, not data-ui main.** §49 is on data-ui `main`; sim2real's kit is a branch of the commit it already vendored with
-   §49 backported. Vendoring `main` would also bring 327 commits, and §47 among them changes a default (the one-row chrome) that sim2real's site test
-   reaches: measured with main's kit, "the filter bar sits left of the cards, by kind and by tags" failed and the Why it fails panel could no longer be
-   found by its tab at 390 px. The backport's code is byte for byte the old kit's except §49's three files.
+   §49 backported. Vendoring `main` would also bring 327 commits, and §47 among them changes a default (the one-row chrome: every page's toolbar
+   becomes the bar, and a panel's presets fold into a chip when they do not fit) that sim2real's site test reaches: measured with main's kit, the Why
+   it fails panel can no longer be found by its tab at 390 px, and the run stops there. The backport's code is byte for byte the old kit's except
+   §49's three files.
 
 ## Criteria, and how the options scored
 
@@ -60,7 +61,7 @@ The kit (weights: must, should):
 
 | criterion | **d5ede93 + §49 (chosen)** | data-ui main |
 |---|---|---|
-| this lane lands with the full site test green and no existing check changed (must) | yes | no: two existing checks fail on main's chrome |
+| this lane lands with the full site test green and no existing assertion changed (must) | yes | no: the Why it fails panel is not found at 390 px |
 | nothing else on the site moves (must) | yes: three files differ | no: §47's chrome on every page, the old app included |
 | sim2real converges on the shared library (should) | no change (it was 327 commits behind; still is) | yes |
 | §49 lives in the shared library (must) | yes: data-ui main | yes |

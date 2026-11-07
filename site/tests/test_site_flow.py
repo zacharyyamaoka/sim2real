@@ -2455,6 +2455,10 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     page.wait_for_load_state("load")
     soft_wait(page, "() => { const v = document.getElementById('deployments-views'); return !!v && !!v.model && v.querySelectorAll('article.dv-cards-card').length > 0; }")
     soft_wait(page, "() => [...document.querySelectorAll('#deployments-views article.dv-cards-card img')].every((i) => i.complete && i.naturalWidth > 0)", timeout=15000)
+    # WHY a wait (w2c, 2026-11-07): on a cold first load the rail draws its facet headings after the cards (measured: none when the cards drew,
+    # Kind and Tags 1.5 s later), and the check below measures them; it failed 2 of 5 full runs on that race. Its assertion is unchanged.
+    soft_wait(page, "() => { const f = document.querySelector('aside#filter data-facets'); return !!f && [...f.querySelectorAll('h3, h4, legend, summary, .df-h')]"
+                    ".some((h) => h.textContent.trim().startsWith('Tags')); }", timeout=15000)
     c0 = page.evaluate(CARDS_JS) or {}
     want_src = {n["id"]: "/media/" + scenes[n["id"]]["src"] for n in roots if n["id"] in scenes}
     cards = c0.get("cards") or []
