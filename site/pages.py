@@ -225,6 +225,7 @@ def deployment_header(site: Site, dep: Deployment) -> str:
        ("Config snapshots", config_coverage(dep.runs))])}
 {standing_line(dep)}
 {tags_line(dep.runs)}
+<p class="s2r-asdep">{a(f"/deployments/{dep.id}/", "Its deployment page")}: its tree, every part a deployment of its own, the models in use, pinned metrics and coverage over all of its runs.</p>
 <p class="s2r-stations">{" ".join(station_badge(dep, d["device"]) for d in sorted(dep.devices, key=lambda d: d.get("order", 0)))}</p>"""
 
 
@@ -315,7 +316,9 @@ def tree_line(dep: Deployment, device: str) -> str:
             picks.append(f"node_{n['depth']}={quote(n['id'], safe='')}")
         href = deployment_url(dep.id) + (f"?{'&'.join(picks)}" if picks else "")
         steps.append(f'{a(href, n["label"])} <small>{n.get("passing", 0)}/{n.get("cells", 0)} pass</small>')
-    return f'<p class="s2r-tree">In the tree: {" › ".join(steps)}</p>'
+    # WHY the station's deployment page (Domain model v3: every node of the tree is a deployment of its own, its id the tree's path id)
+    page = a("/deployments/" + path[-1]["id"] + "/", "its deployment page")
+    return f'<p class="s2r-tree">In the tree: {" › ".join(steps)} · {page}</p>'
 
 
 def station_runs(site, st: Station) -> str:

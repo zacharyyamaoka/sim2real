@@ -110,14 +110,30 @@ def model_line(doc: dict) -> str:
     return " + ".join(f"<code>{e(n)}</code>" for n in names) + (f" + {len(cams)} camera{'s' if len(cams) != 1 else ''}" if cams else "")
 
 
+def deployment_ids(doc: dict) -> dict[str, str]:
+    """{sysid tree row id: its deployment's id}: an oracle example is a virtual deployment and every part of it one of its own, node for
+    node (type_cards/instances.py virtual_nodes, CONTRACT.md "Domain model v3"); its page is /deployments/<id>/ (site/deployments_pages.py)."""
+    from type_cards import instances as inst  # noqa: PLC0415
+
+    return {n["sysid_id"]: n["id"] for n in inst.virtual_nodes({doc["example"]: doc})}
+
+
+def deployment_url(node_id: str) -> str:
+    return f"/deployments/{node_id}/"
+
+
 def tree_list(doc: dict, limit: int | None = None) -> str:
     rows = [r for r in doc["tree"] if r["group"] != "structure" or r["depth"] > 0]
     shown = rows if limit is None else rows[:limit]
+    ids = deployment_ids(doc)
     items = []
     for r in shown:
         typed = (f'<a href="/types/{e(r["type"])}/">{e(r["type_title"])}</a>' if r["type_source"] == "type_cards" else
                  f'<span class="s2r-ex-adapter" title="{e(r["type_source"])}">{e(r["type_title"])}</span>')
-        items.append(f'<li style="--d:{r["depth"]}" data-type="{e(r["type"])}"><span class="s2r-ex-comp">{e(r["title"])}</span> <span class="s2r-ex-arrow">→</span> {typed}</li>')
+        # WHY a link (Zach, 2026-11-06: "Each sub componet of the deployment could basically be its own deployment"): each part opens its page
+        comp = (f'<a class="s2r-ex-comp" href="{e(deployment_url(ids[r["id"]]))}">{e(r["title"])}</a>' if r["id"] in ids
+                else f'<span class="s2r-ex-comp">{e(r["title"])}</span>')
+        items.append(f'<li style="--d:{r["depth"]}" data-type="{e(r["type"])}">{comp} <span class="s2r-ex-arrow">→</span> {typed}</li>')
     more = f'<li class="s2r-ex-more">+ {len(rows) - len(shown)} more</li>' if len(shown) < len(rows) else ""
     return f'<ul class="s2r-ex-tree">{"".join(items)}{more}</ul>'
 
@@ -307,7 +323,8 @@ def page_body(doc: dict, docs: dict, media=None) -> str:
                       f'<td>{num(m["factor"], 3)}×</td><td>{num(m["factor_needed"], 2) + "×" if m.get("factor_needed") else "observed"}</td><td>{mark(m["pass"])}</td>'
                       f'<td><small>{e(m.get("note", ""))}</small></td></tr>' for m in doc["metrics"])
     sensors = "".join(f"<li><b>{e(s['id'])}</b> ({e(s['kind'])}) on {e(s['on'])}: {e(s['measures'])}</li>" for s in doc["description"].get("sensors", []))
-    tree = "".join(f'<tr><td style="padding-left:{8 + 16 * r["depth"]}px">{e(r["title"])}</td><td>{e(r["word"])}</td>'
+    ids = deployment_ids(doc)
+    tree = "".join(f'<tr><td style="padding-left:{8 + 16 * r["depth"]}px">{pages_link(ids, r)}</td><td>{e(r["word"])}</td>'
                    f'<td>{(chr(60) + "a href=" + chr(34) + "/types/" + e(r["type"]) + "/" + chr(34) + ">" + e(r["type_title"]) + "</a>") if r["type_source"] == "type_cards" else e(r["type_title"])}</td>'
                    f'<td><small>{e(SOURCE_WORD.get(r["type_source"], r["type_source"]))}</small></td><td><small>{e(", ".join(r["parameters"])[:160])}</small></td></tr>' for r in doc["tree"])
     ladders = ladders_html(doc)
@@ -321,6 +338,7 @@ def page_body(doc: dict, docs: dict, media=None) -> str:
 <p class="lede">{e(doc.get('summary', ''))}</p>
 <p class="s2r-what">{e(site_media.example_what(doc, media))}</p>
 <p>{verdict_chip(doc)}</p>
+<p class="s2r-asdep">A virtual deployment: <a href="{deployment_url(ex)}">its tree, every part a deployment of its own, and the models it uses</a>.</p>
 <h2 id="description">Description in</h2>
 <p>Model: {model_line(doc)} · {e(doc['description']['model'].get('source', ''))}<br>Manifest: <code>{e(doc['description']['manifest'])}</code></p>
 <ul class="s2r-ex-sensors">{sensors}</ul>
@@ -354,6 +372,11 @@ def imports_line(prov: dict) -> str:
 
 
 SOURCE_WORD = {"type_cards": "type card", "sysid adapter (no card yet)": "sysid adapter", "structural": "structure"}
+
+
+def pages_link(ids: dict, row: dict) -> str:
+    """A typed tree row's title, opening the part's deployment page when it has one."""
+    return f'<a href="{e(deployment_url(ids[row["id"]]))}">{e(row["title"])}</a>' if row["id"] in ids else e(row["title"])
 
 
 def ladders_html(doc: dict) -> str:
