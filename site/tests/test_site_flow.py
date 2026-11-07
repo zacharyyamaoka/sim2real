@@ -2123,6 +2123,18 @@ def run_page_browser_checks(page, base: str, data: Path, media: dict, served: di
           f"a deep link opens a camera's level on a filmed run: its clip (the camera-clip component, scoped to it) loads and follows its own clock "
           f"({filmed['run'][:50]}, {camera['id'] if camera else None}, seek {t})")
     still("52-run-tree-camera")
+    # the right pane scrolls on its own: a dashboard's rail splitter scrolls and clips with it, never drawn over the trail above the pane
+    page.goto(f"{base}/{DEP}/runs/{filmed['run']}/")
+    page.wait_for_load_state("load")
+    soft_wait(page, "() => document.querySelectorAll('#pane .dv-splitter').length > 0", timeout=20000)
+    page.evaluate("document.getElementById('pane').scrollTop = 1400")
+    page.wait_for_timeout(1200)
+    over = page.evaluate("""() => { const trail = document.querySelector('.trail').getBoundingClientRect(); const y = (trail.top + trail.bottom) / 2;
+        return [...document.querySelectorAll('.dv-splitter')].filter((s) => !s.hidden && !s.closest('aside')).map((s) => {
+          const r = s.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, y);
+          return { left: Math.round(r.left), over: !!hit && (hit === s || s.contains(hit)) }; }); }""")
+    check(bool(over) and not any(x["over"] for x in over),
+          f"with the run's pane scrolled, no dashboard splitter shows over the trail ({over})")
     # a phone: the deep-linked levels have no sideways scroll
     page.set_viewport_size({"width": 390, "height": 844})
     for u in (f"{url}?entity={quote(driver['id'], safe='')}", f"{base}/{DEP}/runs/{filmed['run']}/?entity={quote(camera['id'], safe='') if camera else ''}"):
