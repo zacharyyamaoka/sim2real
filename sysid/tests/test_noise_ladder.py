@@ -403,6 +403,45 @@ def test_the_comparison_table_is_the_join_of_the_records_and_the_ladder():
     assert json.loads(TABLE.read_text()) == routines.table(committed())
 
 
+def test_the_table_recovery_is_every_level_with_what_did_not_run():
+    """The v3 audit (2026-11-07, finding 5): the routine table's headline was 1x and 3x only, so neither 0x's bias nor 10x's breakdown,
+    nor a level a check skipped, reached the routines page. A checked routine's recovery is every level the ladder runs (0x, 1x, 3x, 10x),
+    each over the checks that ran there (the worst |error| / tolerance, all pass, the missing and failing parameters counted), and names
+    the checks that did not run there with the ruler's reason; a level no check ran says so (pass null), never by being absent."""
+    doc = json.loads(TABLE.read_text())
+    levels = [level["id"] for level in RULER["levels"]]
+    seen_not_run = seen_missing = 0
+    for row in doc["rows"]:
+        graded = [c for c in row["oracle"]["checks"] if c.get("levels")]
+        rec = row["recovery"]
+        if not graded:
+            assert rec == {}, row["routine"]
+            continue
+        assert list(rec) == levels, (row["routine"], list(rec))
+        for level in levels:
+            ran = [c for c in graded if level in c["levels"]]
+            cell = rec[level]
+            want_not_run = {c["id"]: c["not_at"].get(level, "not run at this level") for c in graded if level not in c["levels"]}
+            assert cell["checks"] == len(ran) and cell["not_run"] == want_not_run, (row["routine"], level, cell)
+            if not ran:
+                assert cell["pass"] is None and cell["worst_error_over_tolerance"] is None and cell["parameters"] == 0, (row["routine"], level)
+                seen_not_run += 1
+                continue
+            cells = [c["levels"][level] for c in ran]
+            worsts = [x["worst_error_over_tolerance"] for x in cells if x["worst_error_over_tolerance"] is not None]
+            assert cell["pass"] is all(x["pass"] for x in cells) and cell["usable"] is all(x["usable"] for x in cells), (row["routine"], level)
+            assert cell["worst_error_over_tolerance"] == (max(worsts) if worsts else None), (row["routine"], level)
+            assert cell["missing"] == sum(len(x["missing"]) for x in cells) and cell["failing"] == sum(len(x["failing"]) for x in cells), (row["routine"], level)
+            assert cell["parameters"] == sum(x["parameters"] for x in cells), (row["routine"], level)
+            seen_missing += cell["missing"] > 0
+    rows = {r["routine"]: r for r in doc["rows"]}
+    gap = rows["servo.gap_check_forecast"]["recovery"]
+    assert gap["0x"]["checks"] == 0 and "not run" in gap["0x"]["not_run"]["pendulum_can11:servo.gap_check_forecast"], gap["0x"]
+    sweep = rows["arm.backlash_gravity_sweep"]["recovery"]
+    assert all(sweep[level]["missing"] == 2 and sweep[level]["pass"] is False for level in levels), sweep
+    assert seen_not_run and seen_missing
+
+
 def test_the_table_has_the_contracts_shape():
     from type_cards import registry as reg
 
