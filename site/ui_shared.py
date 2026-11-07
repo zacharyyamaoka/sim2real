@@ -11,6 +11,11 @@ stylesheet (static/ui-shared.css), one remembered width, so every page with a le
     filter_bar(views_id)                     data-ui's rail (<data-facets>) for a <data-views>, for the workbench's left column
     chip(text, tone, title)                  a small word: a kind, a tag (tone "real" is data-ui's series 1, blue; "sim" series 2, orange)
     head()                                   the stylesheet's <link>, for a page's extra_head
+    status_tree(nodes, selected, ...)        a tree that picks a level in place (the run page): RobotDx's device tree with a status dot,
+                                             a one-line summary and a muted end per node, search, collapse and expand all, ?entity= deep
+                                             links (static/ui-shared.js); a closed disclosure on a phone too
+    dot(level, why)                          a status dot: ok, warning, error filled, unknown a hollow ring, always with its word
+    record_page(catalog, kind, ..., aside)   a record's page in the two panes below: the workbench's record on the right, `aside` left
 
 Where they go: the workbench shell's two panes (catalog_workbench.shell.page(aside=...)). Its left column is resizable and its width
 remembered (data-resizable: data-ui's resize, CONTRACT §11), each pane scrolls on its own, and below 768 px the column stacks above
@@ -110,3 +115,95 @@ def entity_tree(nodes: list[dict], current: str, href: Callable[[dict], str], *,
             f'<ul class="s2r-etree-l">{tree}</ul></details>'
             "<script>(function(){var d=document.currentScript.previousElementSibling;try{if(d&&matchMedia('(max-width: 767px)').matches)d.open=false}"
             "catch(x){}})()</script></nav>")
+
+
+# --- the status tree and a record in two panes (the run-page lane, 2026-11-07) --------------------------------------------------------
+# WHY a second tree beside entity_tree's links: the run page shows every level of one run in place (the right pane switches to the picked
+# node's dashboard, the URL names it), and the brief for it (Zach, 2026-11-06, his RobotDx device tree as the picture: "On the left should be
+# like an entity tree ... and then on the page what shows is the standard dashboard for that level") asks for RobotDx's tree: icons, a status
+# dot per node, search, collapse and expand, a one-line summary per node. Its root is .s2r-tree, so entity_tree's .s2r-etree rules never
+# touch it; the icons are the same (icon()). Making the two one component is a follow-up. Its behaviour is static/ui-shared.js.
+
+RUN_STYLESHEET = "/static/run-page.css"
+LEVEL_WORDS = ("ok", "warning", "error", "unknown")  # type_cards domain v3's LEVELS
+TWISTY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>'
+COLLAPSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 13.5L8 10l3.5 3.5M4.5 2.5L8 6l3.5-3.5"/></svg>'
+EXPAND = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 10L8 13.5 11.5 10M4.5 6L8 2.5 11.5 6"/></svg>'
+FIND = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>'
+TREE = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="4.5" height="3.5" rx=".8"/><rect x="9.5" y="7" width="4.5" height="3" rx=".8"/><rect x="9.5" y="11.5" width="4.5" height="3" rx=".8"/><path d="M4.25 5.5v7h5.25M4.25 8.5h5.25"/></svg>'
+
+
+def dot(level: str | None, why: str = "") -> str:
+    """A node's status dot: ok, warning, error filled in their tones; unknown a hollow ring (RobotDx's "not heard"), never a guess."""
+    word = level if level in LEVEL_WORDS else "unknown"
+    tip = f"{word} in this run" + (f": {why}" if why else "")
+    return f'<span class="s2r-dot s2r-dot-{word}" role="img" aria-label="{e(word)}" title="{e(tip)}"></span>'
+
+
+def status_tree(nodes: list[dict], *, selected: str, href: Callable[[dict], str], name: Callable[[dict], str], line: Callable[[dict], str],
+                kind: Callable[[dict], str], level: Callable[[dict], str], why: Callable[[dict], str] | None = None,
+                meta: Callable[[dict], str] | None = None, find: Callable[[dict], str] | None = None, key: str = "",
+                heading: str = "Entities", section: str = "", summary: str = "", more: str = "") -> str:
+    """A tree of `nodes` (rows with id, parent, title; entity_type / structural pick the icon), in display order (a node's children in
+    the order they appear), as an ARIA tree: each node a row of its twisty, its dot (`level(node)`, `why(node)` its tooltip), its icon, its
+    name (`name(node)`, the full title one hover away), its one-line summary (`line(node)`) and a muted end (`meta(node)`); `selected` is
+    the node shown first, `href(node)` its deep link. The bar holds the tree's name, Collapse all and Expand all, then the search box (it
+    matches `find(node)`, default the name, title, id and type) and the `section` line with its `summary` on the right; `more` closes it
+    (what the tree leaves out). `key` names the tree's remembered open rows."""
+    ids = {n["id"] for n in nodes}
+    kids: dict = {}
+    for n in nodes:
+        kids.setdefault(n.get("parent") if n.get("parent") in ids else None, []).append(n)
+
+    def item(n: dict, depth: int) -> str:
+        children = kids.get(n["id"], [])
+        title, words, text = n.get("title") or n["id"], name(n), line(n)
+        haystack = find(n) if find else " ".join(str(x) for x in (words, title, n["id"], n.get("entity_title") or "", n.get("structural") or "") if x)
+        end = meta(n) if meta else ""
+        twisty = f'<span class="s2r-tree-tw" data-etree-toggle>{TWISTY}</span>' if children else '<span class="s2r-tree-tw"></span>'
+        row = (f'<div class="s2r-etree-row">{twisty}{dot(level(n), why(n) if why else "")}<span class="s2r-tree-ic">{icon(icon_word(n))}</span>'
+               f'<a class="s2r-tree-name" href="{e(href(n))}" title="{e(title)}">{e(words)}</a>'
+               f'<span class="s2r-etree-line" title="{e(text)}">{e(text)}</span>' + (f'<span class="s2r-tree-meta">{e(end)}</span>' if end else "") + "</div>")
+        expanded = ' aria-expanded="true"' if children else ""
+        group = f'<ul role="group">{"".join(item(c, depth + 1) for c in children)}</ul>' if children else ""
+        return (f'<li role="treeitem" data-entity="{e(n["id"])}" data-entity-kind="{e(kind(n))}" data-level="{e(level(n) if level(n) in LEVEL_WORDS else "unknown")}" '
+                f'aria-level="{depth}" aria-selected="{"true" if n["id"] == selected else "false"}"{expanded} data-find="{e(haystack.lower())}">{row}{group}</li>')
+
+    rows = "".join(item(n, 1) for n in kids.get(None, []))
+    # WHY a disclosure closed on a phone, as entity_tree's (the workbench stacks the column above the page under 768 px): the level's
+    # answer comes first, the tree one tap away; on a wider screen its summary is hidden and the tree always open
+    return f"""<div class="s2r-tree" data-etree="{e(key)}" data-default="{e(selected)}">
+<details class="s2r-tree-box" open><summary class="s2r-tree-phone">{TREE}{e(heading)} <small>{e(summary)}</small></summary>
+<div class="s2r-tree-bar"><span class="s2r-tree-title">{TREE}{e(heading)}</span><span class="s2r-tree-tools"><button type="button" class="s2r-tree-btn" data-etree-collapse title="Collapse all" aria-label="Collapse all">{COLLAPSE}</button><button type="button" class="s2r-tree-btn" data-etree-expand title="Expand all" aria-label="Expand all">{EXPAND}</button></span></div>
+<label class="s2r-tree-find">{FIND}<input type="search" data-etree-search placeholder="Search entities, ids, types…" aria-label="Search entities" autocomplete="off"></label>
+<p class="s2r-tree-sec"><span>{e(section)}</span><span class="s2r-tree-sum">{e(summary)}</span></p>
+<ul class="s2r-tree-list" role="tree" aria-label="{e(section or heading)}">{rows}</ul>
+<p class="s2r-tree-none" data-etree-none hidden>No entity matches.</p>
+{more}
+</details><script>(function(){{var d=document.currentScript.previousElementSibling;try{{if(d&&matchMedia('(max-width: 767px)').matches)d.open=false}}catch(x){{}}}})()</script>
+</div>"""
+
+
+# The workbench's left column as its shell writes it (catalog_workbench.shell.page(aside=...)): named here so a record's tree gets its own
+# name and its own remembered width (data-ui's resize keys the width by data-resizable-key, else the id), never the filter rail's.
+WORKBENCH_ASIDE = '<aside class="fcol" id="filter" aria-label="Filters" data-resizable="right"'
+
+
+def record_page(catalog, kind, site, record, aside: str, *, label: str = "Entities", aside_id: str = "entities", key: str = "s2r-entities",
+                extra_head: str = "") -> str:
+    """A record's page in the workbench's two panes: `aside` in the left column (resizable, its width remembered under `key`; on a phone
+    stacked above), the record itself (the workbench's record_body: header, tabs, panels) on the right, each pane its own scroll. The same
+    call the workbench's record_page makes, plus the column. WHY not the workbench's record writer: its record page has no left column, and
+    a run's entity tree sits left of every level of the run (Zach, 2026-11-06)."""
+    from catalog_workbench.html import breadcrumb  # noqa: PLC0415
+    from catalog_workbench.record import record_body  # noqa: PLC0415
+    from catalog_workbench.shell import page  # noqa: PLC0415
+
+    back = kind.back(site, record) if kind.back else None
+    html = page(catalog, site, f"{kind.title(record)}: {catalog.brand.name}", kind.url(record), record_body(kind, site, record), kind.key,
+                description=kind.description(site, record) if kind.description else "", scripts=kind.scripts,
+                trail=breadcrumb(kind.crumbs(site, record), back=back), aside=aside, data_ui=kind.data_ui, extra_head=head() + extra_head)
+    if html.count(WORKBENCH_ASIDE) != 1:
+        raise ValueError(f"the workbench's left column is no longer {WORKBENCH_ASIDE!r}: re-read catalog_workbench.shell.page")
+    return html.replace(WORKBENCH_ASIDE, f'<aside class="fcol s2r-aside" id="{e(aside_id)}" aria-label="{e(label)}" data-resizable="right" '
+                                         f'data-resizable-key="{e(key)}"', 1)

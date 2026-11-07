@@ -469,6 +469,73 @@ def station_schedule() -> dict:
     }
 
 
+# --- the run page's levels: a part's channels as this run captured them (site/run_pages.py) -----------------------------------------------
+# WHY components.standalone: a level's dashboard is a component scoped to its entity (the run's device), with its own clock over that
+# device's samples, the way the media components are mounted alone (docs/decision-media-components-2026-11-07.md); each reads only columns
+# the run's samples carry (tools/build_app.py), so a level never draws a channel nobody recorded.
+REAL_ONLY = 'situation == "real"'
+
+
+def _xy(name: str, x: str, y: str, x_title: str, y_title: str, *, path: bool = False, filters: str = REAL_ONLY) -> dict:
+    """A real-only x-y chart over the samples: points, or the path in time order (a loop reads as one)."""
+    mark = {"type": "line", "strokeWidth": 1, "opacity": 0.75} if path else {"type": "point", "filled": True, "size": 10, "opacity": 0.45}
+    # WHY linear, said: a value's sign is half the story here (current and torque change sign with the direction of motion)
+    enc = {"x": {"field": x, "type": "quantitative", "title": x_title, "scale": {"type": "linear", "zero": False}},
+           "y": {"field": y, "type": "quantitative", "title": y_title, "scale": {"type": "linear", "zero": False}}, "color": {"value": build_pages.REAL}}
+    if path:
+        enc["order"] = {"field": "t", "type": "quantitative"}
+    return {"type": "chart", "name": name, "from": "samples", "filters": filters, "chart": {"mark": mark, "encoding": enc}}
+
+
+def _level(name: str, views: list, sizes: list, datasets: dict | None = None, what: str = "") -> components.Fragment:
+    """A level's fragment: its views in a row of panels. WHY no text panel: the run page's section says what you are looking at above the
+    dashboard (run_pages.LEVEL_VIEWS), so a panel would say it twice."""
+    panels = [{"view": v["name"], "w": w, "h": h} for v, (w, h) in zip(views, sizes)]
+    return components.Fragment(name=name, datasets=datasets or {}, views=views, panels=panels, what=what)
+
+
+def level_foc_controller() -> components.Fragment:
+    return _level("level-foc-controller", [build_pages.ts("q-axis current i_q · the board", "samples", "i_q_a", "A", filters=REAL_ONLY),
+                   build_pages.ts("Bus voltage v_bus · the board", "samples", "v_bus_v", "V", filters=REAL_ONLY),
+                   build_pages.ts("Board temperature · the board", "samples", "temp_c", "°C", filters=REAL_ONLY),
+                   _xy("Operating map · i_q × speed", "qd_deg_s", "i_q_a", "speed (°/s)", "i_q (A)")],
+                  [(6, 3), (6, 3), (6, 3), (6, 3)], what="the board's own channels in this run")
+
+
+def level_bldc_motor() -> components.Fragment:
+    return _level("level-bldc-motor", [build_pages.ts("Torque at the output · real vs models", "samples", "tau_nm", "N·m", filters='source != "target"'),
+                   _xy("Torque × current · real", "i_q_a", "tau_nm", "i_q (A)", "torque (N·m)"),
+                   _xy("Operating map · torque × speed", "qd_deg_s", "tau_nm", "speed (°/s)", "torque (N·m)")],
+                  [(12, 3), (6, 4), (6, 4)], what="the motor's torque, its torque per amp and its operating map in this run")
+
+
+def level_encoder() -> components.Fragment:
+    hist = {"type": "chart", "name": "Angle histogram · the encoder", "from": "samples", "filters": REAL_ONLY,
+            "chart": {"mark": {"type": "bar"}, "encoding": {"x": {"field": "q_deg", "type": "quantitative", "bin": {"maxbins": 50}, "title": "q (°)"},
+                                                             "y": {"aggregate": "count", "type": "quantitative", "title": "samples"},
+                                                             "color": {"value": build_pages.REAL}}}}
+    return _level("level-encoder", [build_pages.ts("Measured angle · real vs target", "samples", "q_deg", "°", filters='source != "sim"'),
+                   build_pages.ts("Encoder error · target − real", "diff", "e_q_mrad", "mrad", filters='reference == "target" && situation == "real"'),
+                   hist],
+                  [(12, 3), (6, 3), (6, 3)],
+                  datasets={"diff": {"data": "data/{deployment}/runs/{run}/diff_samples.json", "label": "Errors", "filters": 'device == "{device}"'}},
+                  what="the angle the encoder measured, its error against the command and its histogram in this run")
+
+
+def level_gearbox() -> components.Fragment:
+    return _level("level-gearbox", [_xy("Torque × angle at the output · real", "q_deg", "tau_nm", "q (°)", "torque (N·m)", path=True),
+                   build_pages.ts("Output speed · real vs models", "samples", "qd_deg_s", "°/s")],
+                  [(6, 4), (6, 4)], what="torque against angle and the speed at the gearbox's output in this run")
+
+
+LEVELS = {"foc_controller": level_foc_controller, "bldc_motor": level_bldc_motor, "encoder": level_encoder, "gearbox": level_gearbox}
+
+
+def level_dashboard(type_id: str) -> dict:
+    """views/levels/<type>.base: the level's fragment alone on its own clock over the run's device's samples."""
+    return components.standalone(LEVELS[type_id](), style=copy.deepcopy(build_pages.STYLE))
+
+
 PAGES = {
     "deployment-runs.base": ("a deployment's Runs tab", deployment_runs),
     "deployment-gates.base": ("a deployment's Gates tab", deployment_gates),
@@ -482,6 +549,8 @@ PAGES = {
     "station-schedule.base": ("a station's Schedule tab: the test schedule before anything runs (bam_rack_twin.schedule)", station_schedule),
     "station-gates.base": ("a station's Gates tab: its gate history, every run's checks and their evidence", station_gates),
     "gate-matrix.base": ("the home's gate matrix: stations x T1-T11 of the deployment the URL names", home_gates),
+    # the run page's levels (site/run_pages.py): a part's channels in one run, its entity in the .base URL's query
+    **{f"levels/{tid}.base": (f"the run page's {tid} level: {make().what}", lambda tid=tid: level_dashboard(tid)) for tid, make in LEVELS.items()},
 }
 
 
