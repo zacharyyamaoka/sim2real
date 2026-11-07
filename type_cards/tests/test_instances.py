@@ -236,3 +236,61 @@ def test_both_datasets_are_house_tables_with_a_field_per_column(nodes, table):
         assert {k for r in doc["rows"] for k in r} <= set(fields), doc["name"]
         assert {f["type"] for f in fields.values()} <= {"string", "number", "integer", "boolean", "array"}
     assert {f["name"]: f["type"] for f in dep["schema"]["fields"]}["tags"] == "array"
+
+
+# --- the producer's model labels: which ladder model each twin it replays is (2026-11-07, w2c) ------------------------------------------
+# WHY (the coordinator, 2026-11-07: "the rack's producer labels ("twin of record", "twin A", "twin D"…) have no map to ladder models ...
+# Twin of record is the M4.dynamics twin; read the bam_rack_twin record to decide each label"): a page that names "twin of record" can
+# then name the ladder model it is, and a model's page can say which stations use it. The words stay the producer's: a label is looked
+# up exactly, never parsed, and a label nobody mapped maps to nothing (unknown stays unknown).
+
+RACK = "one-dof-test-rack"
+
+
+def test_every_producer_label_names_a_model_on_its_types_ladder():
+    for dep, record in inst.physical_records().items():
+        labels = [m.label for m in record.models]
+        assert len(labels) == len(set(labels)), f"{dep}: a label is mapped twice"
+        for m in record.models:
+            assert isinstance(m, dm.ModelLabel)
+            assert dm.model(m.type, m.model).family in dm.TYPES[m.type].families
+            assert m.fit and m.friction and m.source, f"{dep} {m.label}: say what set its values, its friction law and where it is built"
+
+
+def test_the_twin_of_record_is_the_rack_twin_m4():
+    m = inst.label_model(RACK, "twin of record")
+    assert m is not None and (m.type, m.model) == ("integrated_servo", "M4.dynamics.twin")
+    assert dm.model("integrated_servo", "M4.dynamics.twin").current, "the rack's twin of record is the servo ladder's current model"
+
+
+def test_a_label_is_looked_up_exactly_and_an_unknown_one_maps_to_nothing():
+    assert inst.label_model(RACK, "twin A · deployed") is not None
+    assert inst.label_model(RACK, "twin A") is None, "a label is the producer's whole words, never a prefix"
+    assert inst.label_model(RACK, "twin Z · not written yet") is None
+    assert inst.label_model("no-such-deployment", "twin of record") is None
+    assert inst.label_model(RACK, None) is None
+
+
+@pytest.mark.skipif(not (DATA / RACK / "run_gates.json").is_file(), reason="the app's data is not built")
+def test_every_label_the_rack_replays_is_mapped():
+    """Every model the producer replayed a rack run with (RobotDx's stock.model_error rows, titled "<label> vs real") has its ladder
+    model: a new label fails here until someone reads its twin and maps it, never a guess."""
+    from type_cards import selection as sel  # noqa: PLC0415
+
+    rows = json.loads((DATA / RACK / "run_gates.json").read_text())["rows"]
+    written = {sel.model_label(r.get("title", "")) for r in rows if r.get("diagnostic") == "stock.model_error"}
+    assert written, "the rack's run_gates.json has model_error rows"
+    missing = sorted(label for label in written if inst.label_model(RACK, label) is None)
+    assert not missing, f"labels with no ladder model: {missing}"
+
+
+def test_the_label_map_is_a_house_table_the_site_serves(tmp_path):
+    doc = inst.model_labels_dataset()
+    assert doc["contract"] == dm.SCHEMA and {"name", "title", "source", "rows"} <= set(doc)
+    fields = {f["name"] for f in doc["schema"]["fields"]}
+    assert {k for r in doc["rows"] for k in r} <= fields
+    want = [(dep, m.label, m.type, m.model) for dep, rec in inst.physical_records().items() for m in rec.models]
+    assert [(r["deployment"], r["label"], r["type"], r["model"]) for r in doc["rows"]] == want
+    for r in doc["rows"]:
+        spec = dm.model(r["type"], r["model"])
+        assert (r["model_key"], r["model_title"], r["family"], r["k"]) == (spec.key, spec.title, spec.family, spec.k)

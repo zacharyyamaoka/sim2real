@@ -13,6 +13,7 @@ Pure functions over what the producers wrote, never a new number:
   calls "none" is absent) and the cameras its v3 record declares (type_cards/deployments/);
 - parameter_table(nodes, results, routines): one row per parameter of every typed node, the oracle's values where it graded one, one
   column group per (routine, model) from sysid/results/calibration_routines.json at the oracle's own noise ("1x");
+- label_model(deployment, label): the ladder model a producer's model label is (type_cards/deployments/<id>.py `models`), exact words;
 - write(data): the site's projections under <data>/domain/ (site/build.py calls it after deploy_tree.write).
 A node is a deployment of its own: its subtree (subtree) and its children (sub_deployments). Stdlib only.
 """
@@ -202,6 +203,26 @@ def physical_nodes(data: Path, registry: Path = REGISTRY) -> list[dict]:
     return out
 
 
+def label_model(deployment: str, label: str | None) -> dm.ModelLabel | None:
+    """The ladder model a producer's label names on a physical deployment (type_cards/deployments/<id>.py `models`), looked up by the
+    label's exact words (never a prefix, never parsed); None for a label nobody mapped (unknown stays unknown)."""
+    record = physical_records().get(deployment)
+    return next((m for m in record.models if m.label == label), None) if record and label else None
+
+
+def model_labels_dataset() -> dict:
+    """model_labels.json: every physical deployment's producer labels and the ladder model each is, in the house table shape."""
+    rows = []
+    for dep, record in physical_records().items():
+        for m in record.models:
+            spec = dm.model(m.type, m.model)
+            rows.append({"deployment": dep, "label": m.label, "type": m.type, "model": m.model, "model_key": spec.key, "model_title": spec.title,
+                         "family": spec.family, "k": spec.k, "fit": m.fit, "friction": m.friction, "differs": m.differs, "source": m.source})
+    return {"name": "model_labels", "title": "The producers' model labels and the ladder model each one is", "contract": dm.SCHEMA,
+            "source": "type_cards/deployments/<id>.py models (read off the producer's own twin builds)", "schema": {"fields": fields_of(rows)},
+            "rows": rows}
+
+
 def _member_word(part: dm.Part) -> str:
     return {"bldc_motor": "motor", "foc_controller": "driver", "gearbox": "gearbox", "encoder": "encoder"}.get(part.type, part.type)
 
@@ -372,8 +393,8 @@ def _dump(path: Path, doc) -> None:
 
 
 def write(data: Path, out: Path | None = None, schedules: Path | None = None) -> dict:
-    """<data>/domain/: deployments.json, parameters.json, selections/<deployment>.json (the presets, computed), coverage_cells/<deployment>.json
-    (the browser's coverage table) and reports/<id>.json (the frozen reports, copied). Returns counts."""
+    """<data>/domain/: deployments.json, parameters.json, model_labels.json, selections/<deployment>.json (the presets, computed),
+    coverage_cells/<deployment>.json (the browser's coverage table) and reports/<id>.json (the frozen reports, copied). Returns counts."""
     from . import report as rep  # noqa: PLC0415
     from . import selection as sel  # noqa: PLC0415
 
@@ -386,6 +407,7 @@ def write(data: Path, out: Path | None = None, schedules: Path | None = None) ->
     routines = json.loads((RESULTS / "calibration_routines.json").read_text(encoding="utf-8"))
     table = parameter_table(nodes, results, routines)
     _dump(out / "parameters.json", table)
+    _dump(out / "model_labels.json", model_labels_dataset())
     counts = {"nodes": len(nodes), "deployments": sum(1 for n in nodes if n["parent"] is None), "parameter_rows": len(table["rows"]),
               "result_columns": len(table["result_columns"]), "selections": {}}
     for dep in [n["id"] for n in nodes if n["parent"] is None and n["kind"] == "physical"]:

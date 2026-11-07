@@ -300,6 +300,21 @@ class CameraDecl:
 
 
 @dataclass(**KW)
+class ModelLabel:
+    """A producer's name for a model it replays on a physical deployment (the words before " vs real" in RobotDx's stock.model_error rows:
+    selection.model_label) and the ladder model it instantiates. WHY a record and not a parse (Rules of the road: never parse an id): the
+    words are the producer's; which model a twin is was read off the producer's own builds and is written here once, with where its terms
+    depart from the ladder model's (`differs`), so a page can name the model and never claim more than the twin holds."""
+    label: str                                 # exactly as the producer writes it ("twin of record", "twin A · deployed")
+    type: str                                  # the v3 entity type it models
+    model: str                                 # the model id on that type's ladder (model(type, model) exists)
+    fit: str                                   # what set its values: the round and the runs
+    friction: str                              # its friction law in words (the ladder's M3 form is Stribeck, weakening and capture)
+    differs: str = ""                          # where its terms depart from the ladder model's, as the producer's builds show
+    source: str = ""                           # where the producer builds it (bam_ws file and function)
+
+
+@dataclass(**KW)
 class PhysicalDeployment:
     """The v3 part of a physical deployment's record (type_cards/deployments/<id>.py, one per file). Its producer fields (archive days,
     the bam_rack_twin record, the schedule index) stay in app/registry.json, where the producer lanes keep them."""
@@ -307,6 +322,7 @@ class PhysicalDeployment:
     tags: tuple[str, ...] = ()
     cameras: tuple[CameraDecl, ...] = ()
     note: str = ""
+    models: tuple[ModelLabel, ...] = ()        # its producer's model labels and the ladder model each is (2026-11-07, additive)
 
 
 # --- the migration from the v2 cards --------------------------------------------------------------------------------------------------
