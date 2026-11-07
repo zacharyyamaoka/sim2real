@@ -500,11 +500,15 @@ def parameters_base(d: Data) -> dict:
     fit_group = {"Oracle fit (the example’s own)": fit}
     groups = {column_label(c): [f"{p}__{keys[c['id']]}" for p in ("rec", "err", "tol", "ok")] for c in cols}
     errs = [f"err__{keys[c['id']]}" for c in cols]
-    size = {"name": 240, "deployment": 120, "entity_type": 130, "introduced_in": 190, "fit_rec": 170, "fit_err": 120, "fit_tol": 100,
-            **{f"rec__{keys[c['id']]}": 170 for c in cols}, **{f"err__{keys[c['id']]}": 120 for c in cols}}
+    # WHY 250 px for recovered: its 95 % interval is drawn beside the value (data-ui's range slot) and a narrower column clips it away
+    size = {"name": 240, "deployment": 120, "entity_type": 130, "introduced_in": 190, "fit_rec": 250, "fit_err": 130, "fit_tol": 130,
+            **{f"rec__{keys[c['id']]}": 250 for c in cols}, **{f"err__{keys[c['id']]}": 130 for c in cols}, **{f"tol__{keys[c['id']]}": 130 for c in cols}}
     # WHY declared digits (data-ui §17 addendum): the stored numbers are exact (4.6611971558188605); a person reads 4 significant figures,
     # as Zach's own table did ("4.205 mrad"), and the exact value stays one hover away
     numbers = ["true", "nominal", "fit_rec", "fit_err"] + [f"{p}__{keys[c['id']]}" for c in cols for p in ("rec", "err")]
+    # WHY range declared: the kit sizes a column's interval slot from the view's display, so a recovered value's [95 %] is only drawn
+    # beside it when the view says range (the cell alone would pick range, in a slot of no width)
+    ranges = {"fit_rec": "range", **{f"rec__{keys[c['id']]}": "range" for c in cols}}
     return {
         "data": f"/data/{DATA_FILE}",
         "properties": {pid: {"digits": 4} for pid in numbers},
@@ -514,10 +518,10 @@ def parameters_base(d: Data) -> dict:
                                                                "info": "a (routine, model) column group: keeps the rows it graded; With results then draws its group and every other model that graded them"},
                    {"property": "winning", "label": "Winning model"}, {"property": "has_results", "label": "Has a result"}],
         "views": [
-            {"type": "table", "name": "All parameters", "units": "inline", "order": base + ["true", "nominal"] + fit + after, "columnGroups": fit_group, "columnSize": size},
-            {"type": "table", "name": "Winning model", "units": "inline", "filters": "winning == true", "order": base + ["true", "nominal"] + fit + after,
+            {"type": "table", "name": "All parameters", "units": "inline", "display": ranges, "order": base + ["true", "nominal"] + fit + after, "columnGroups": fit_group, "columnSize": size},
+            {"type": "table", "name": "Winning model", "units": "inline", "display": ranges, "filters": "winning == true", "order": base + ["true", "nominal"] + fit + after,
              "columnGroups": fit_group, "columnSize": size},
-            {"type": "table", "name": "With results", "units": "inline", "filters": "has_results == true", "order": base + ["true", "nominal"] + [x for ids in groups.values() for x in ids],
+            {"type": "table", "name": "With results", "units": "inline", "display": ranges, "filters": "has_results == true", "order": base + ["true", "nominal"] + [x for ids in groups.values() for x in ids],
              "columnGroups": groups, "emptyGroups": "hide", "columnSize": size},
             {"type": "table", "name": "Errors only", "units": "inline", "filters": "has_results == true", "order": ["name", "deployment", "true"] + errs,
              "columnGroups": {column_label(c): [f"err__{keys[c['id']]}"] for c in cols}, "best": {"among": errs, "by": "absmin"},
