@@ -43,7 +43,7 @@ SYSID = Path(__file__).resolve().parents[1]
 REPO = SYSID.parent
 RULER_PATH = SYSID / "noise_ladder.json"
 # WHY pinned: the bounds are data the ladder reads; a digest here makes any edit to them an edit of this file, reviewed as a ruler change
-RULER_SHA256 = "f65eb22a20ccebbd1f7e0fe5ea603e5067d7942d5f7ffc57e1b85316faf73cf7"
+RULER_SHA256 = "5f9f32a73292c901f691874f83d355fc44b08754c00bde0a6b4af2f4b664678e"
 RULER = json.loads(RULER_PATH.read_text())
 ACCEPTANCE = json.loads((SYSID / "acceptance.json").read_text())
 RESULTS = SYSID / "results" / "noise_ladder.json"

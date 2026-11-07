@@ -175,6 +175,8 @@
       "procedure": "camera.pose_recal_belt_tags", "owner": "sysid",
       "structure": "matches: the camera's six pose numbers re-fitted from the belt's and the arms' tags at the alarm (drift.run_camera)",
       "parameters": ["camera_knock.d?_m", "camera_knock.r?_rad"],
+      "levels": ["1x", "3x", "10x"],
+      "not_at": {"0x": "not applicable: the recalibration runs at the drift alarm, and the alarm is a ratio to the commissioned reprojection error, which is round-off without noise"},
       "held_out": ["alarm_h", "recalibrated_ratio"],
       "variants": ["pixel_integer"]
     },
