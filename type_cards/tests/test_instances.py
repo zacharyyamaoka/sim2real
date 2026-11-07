@@ -215,3 +215,12 @@ def test_run_tags_are_additive_columns_of_runs_json(tmp_path):
     assert (r["excitation"], r["closed_loop"], r["offline_scope"]) == ("mixed", True, "split")
     names = [f["name"] for f in out["schema"]["fields"]]
     assert {"excitation", "closed_loop", "offline_scope", "run", "kind"} <= set(names)
+
+
+def test_a_row_no_graded_value_binds_never_borrows_another_parts_nominal(table):
+    """The v2 servo card's nominal values are CAN 11's (its armature, its gravity); a CAN 4 or a UR joint row must not show them as its
+    own. A row with no graded value has nominal null and the type card's value apart, labelled."""
+    spec_rows = [r for r in table["rows"] if r["key"] is None]
+    assert spec_rows and all(r["nominal"] is None for r in spec_rows)
+    armature = next(r for r in spec_rows if r["entity_type"] == "integrated_servo" and r["parameter"] == "armature_kg_m2")
+    assert armature["type_nominal"] == dm.parameter("integrated_servo", "armature_kg_m2").nominal

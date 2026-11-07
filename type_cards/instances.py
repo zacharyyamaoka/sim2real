@@ -316,8 +316,11 @@ def parameter_table(nodes: list[dict], results: dict, routines: dict) -> dict:
         for spec in dm.TYPES[n["entity_type"]].parameters:
             if (n["root"], n["entity_type"], spec.name) in bound:
                 continue
+            # WHY nominal null and the card's value apart: a v2 card's nominal is the instance it was written around (the servo card's
+            # are CAN 11's), so on any other part it would read as that part's own
             rows.append({"id": f"{n['id']}#{spec.name}", **base(n, n["entity_type"], spec.name), "key": None, "element": None, "true": None,
-                         "nominal": spec.nominal if isinstance(spec.nominal, (int, float)) else None, "nominal_source": spec.source,
+                         "nominal": None, "type_nominal": spec.nominal if isinstance(spec.nominal, (int, float)) else None,
+                         "nominal_source": f"not recorded for this part; type_nominal is the type card's ({spec.source})",
                          "tolerance_kind": None, "tolerance": None, "recovered": None, "ci95_lo": None, "ci95_hi": None, "pass": None, "method": None})
     order = list(columns)
     for r in rows:
