@@ -600,9 +600,9 @@ def parameters_body(d: Data) -> str:
 <p class="lede">Every parameter of every typed part of every deployment: its true value where an oracle hid one, its nominal, and what each
 model recovered. A model's results are its own column group: recovered with its 95 % interval, the error, the tolerance and ✓ when the error is
 within it. {plural(len(cols), "model")} (a routine and the model it fits) have results on {n_res:,} rows; {n_win:,} rows are parameters of a winning model.
-Every preset shows each model's group beside the example's own fit (With results the groups alone), leaving out a model no row shown has a
-value of; Errors only puts every model's error side by side and marks each row's least. Pick a deployment, a type or a model on the left to
-compare the models that graded those rows; Properties shows or hides a model's whole group.</p>
+All parameters and Winning model show each model's group beside the example's own fit, With results the groups alone, each leaving out a
+model no row shown has a value of; Errors only puts every model's error side by side and marks each row's least. Pick a deployment, a type or a
+model on the left to compare the models that graded those rows; Properties shows or hides a model's whole group.</p>
 {views_element(PARAMS_ID, "/" + PARAMS_BASE, "Parameters", fallback, frame="page", attrs='toolbar="bar" promote="properties"')}
 </div>"""
 
