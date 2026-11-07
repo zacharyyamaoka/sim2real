@@ -100,7 +100,13 @@ generic entity types with one model ladder each in families (`M2.kinematics.geom
 coverage over any selection of runs (`type_cards/selection.py`), the parameters table with a column group per routine and model, and
 frozen reports (`type_cards/frozen_reports/`). The type level is committed (`type_cards/domain_v3.json`, `python3 -m type_cards.domain
 --write`); the site build writes the rest to `OUT/data/domain/` (`deployments.json`, `parameters.json`, `selections/<dep>.json`,
-`coverage_cells/<dep>.json`, `reports/<id>.json`). No page reads them yet.
+`coverage_cells/<dep>.json`, `reports/<id>.json`).
+
+**Deployments pages** (`site/deployments_pages.py`, decision: `docs/decision-deployments-pages-2026-11-07.md`): `/deployments/` is the index,
+a left filter bar (kind, tags; data-ui's rail) over data-ui cards of the seven deployments, each with its render; every node of every tree has
+its page at `/deployments/<node id>/`: its tree on the left (`site/ui_shared.py` `entity_tree`, shared with the run page), its
+sub-deployments, its runs, the models per entity type, and its pinned metrics and coverage over all of its runs (`sel.compute`). The rack's
+record page (`/one-dof-test-rack/`: gates, why it fails, evidence) and each oracle example's page (`/sysid/<id>/`) stay, linked both ways.
 
 ## Diagnostics
 

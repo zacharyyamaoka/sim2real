@@ -1,0 +1,68 @@
+/* The deployments index and every deployment's page (site/deployments_pages.py). After robotparts' site.css, sim2real.css and
+   ui-shared.css; tokens only, so it reads in both themes. Calm: one answer first, the detail in sections and closed disclosures. */
+
+/* the index */
+.s2r-dindex h1 .n, .s2r-dep h2 .n, .s2r-dep h3 .n { color: var(--ink3); font-weight: 400; }
+.s2r-dindex .lede { max-width: 62rem; margin: 4px 0 10px; }
+.s2r-dindex data-views { margin-top: 6px; }
+/* without JavaScript (and before the kit upgrades the element): the same cards, server-drawn */
+.s2r-dcards { list-style: none; margin: 10px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.s2r-dcard { border: 1px solid var(--rule2); border-radius: 6px; padding: 8px; min-width: 0; }
+.s2r-dcard a { display: block; color: var(--ink); text-decoration: none; }
+.s2r-dcard img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 4px; margin-bottom: 6px; background: var(--bg2, #eef0f2); }
+.s2r-dcard small { display: block; margin-top: 4px; color: var(--ink3); }
+
+/* a deployment's page */
+.s2r-dep { max-width: 1120px; padding-bottom: 12px; }
+/* WHY underlined (as sim2real.css does in its record pages): the accent is a neutral ink here, so a link in running text needs its line */
+.s2r-dep :is(p, td, th, small, li) a:not(.s2r-subdep) { text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px; }
+.s2r-dep h1 { margin: 6px 0 4px; overflow-wrap: anywhere; }
+.s2r-dsub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 4px; color: var(--ink2, var(--ink)); }
+.s2r-dtags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.s2r-answer { font-size: 15.5px; line-height: 1.5; max-width: 62rem; margin: 10px 0 8px; }
+.s2r-dep section { margin: 26px 0 8px; }
+.s2r-dep h2 { font-size: 17px; margin: 0 0 6px; }
+.s2r-dep h3 { font-size: 14px; margin: 12px 0 4px; display: flex; align-items: center; gap: 6px; }
+.s2r-dep .lede { max-width: 62rem; margin: 2px 0 8px; font-size: 13.5px; color: var(--ink2, var(--ink)); }
+.s2r-dep .mut { color: var(--ink3); max-width: 62rem; }
+
+/* sub-deployments: each a small card that opens its page */
+.s2r-subs { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.s2r-subdep { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 2px 8px; padding: 8px 10px; border: 1px solid var(--rule2);
+  border-radius: 6px; color: var(--ink); text-decoration: none !important; min-width: 0; height: 100%; box-sizing: border-box; }
+.s2r-subdep:hover { border-color: var(--ink3); background: var(--hover); }
+.s2r-subdep .s2r-ei { color: var(--ink3); width: 16px; height: 16px; display: inline-flex; }
+.s2r-subdep .s2r-ei svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.s2r-subdep .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s2r-subdep small { grid-column: 2; color: var(--ink3); font-size: 12px; }
+
+/* coverage over all of its runs: one bar per joint, the gate a tick */
+.s2r-covs { display: grid; gap: 7px; max-width: 820px; margin: 4px 0 6px; }
+.s2r-cov { display: grid; grid-template-columns: minmax(70px, 9rem) minmax(120px, 1fr) minmax(0, auto); align-items: center; gap: 12px; font-size: 13px; }
+.s2r-cov > a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s2r-bar { position: relative; display: block; height: 10px; border-radius: 5px; background: var(--s2r-none-bg, #eef0f2); }
+.s2r-bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--ink3); }
+.s2r-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink); }
+.s2r-covn { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.s2r-covn.mut { white-space: normal; }
+@media (max-width: 640px) {
+  .s2r-cov { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
+  .s2r-cov .s2r-covn { grid-column: 1 / -1; white-space: normal; }
+}
+
+/* pinned metrics, per entity type */
+.s2r-pins td, .s2r-pins th { font-variant-numeric: tabular-nums; }
+.s2r-pins td small { display: block; color: var(--ink3); font-size: 11.5px; }
+.s2r-pins td .s2r-v { margin-left: 4px; font-weight: 600; }
+.s2r-novalue { color: var(--ink3); font-size: 13px; max-width: 62rem; }
+.s2r-mods td small, .s2r-mods th small { color: var(--ink3); }
+.s2r-mods th .s2r-ei { display: inline-flex; vertical-align: -3px; width: 16px; height: 16px; color: var(--ink3); }
+.s2r-mods th .s2r-ei svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+details.s2r-more { margin: 10px 0 4px; }
+details.s2r-more > summary { cursor: pointer; color: var(--ink2, var(--ink)); font-size: 13px; }
+details.s2r-more[open] > summary { margin-bottom: 6px; }
+
+/* runs */
+.s2r-runtags { font-size: 13px; color: var(--ink2, var(--ink)); margin: 2px 0 6px; }
+.s2r-else { margin: 26px 0 6px; font-size: 13px; color: var(--ink2, var(--ink)); max-width: 62rem; }
