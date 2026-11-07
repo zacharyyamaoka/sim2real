@@ -1,0 +1,299 @@
+"""The noise ladder: every calibration procedure the sysid oracle can run, graded on the same hidden truth at 0, 1x, 3x and 10x its
+sensor noise, and with a delay or a quantisation where one matters (2026-11-07), written before the ladder code.
+
+Zach, 2026-11-07 (via the coordinator): any twin error is the models' fidelity or the parameters' accuracy, so the procedures that
+calibrate the parameters are first-class, and they are compared "on the same amount of noise". His note of Nov 6 on kinematic
+calibration: "Definetily test this in simluation where you have access to the ground truth to see what like perfect would be type
+thing. Also see if you can recover the perfect values... (you can change the amount of noise you add to the sensor measurements...)".
+
+The ruler is sysid/noise_ladder.json, pinned below by digest and committed before any ladder result; the results are
+sysid/results/noise_ladder.json (python -m sysid ladder --write); the comparison table is sysid/results/calibration_procedures.json
+(python -m sysid procedures --write), the join of the ladder and type_cards' procedure records.
+
+What it holds:
+- the ruler: pinned, and committed before the first ladder result; levels 0 < 1 < 3 < 10; the bound's arithmetic on worked numbers;
+  every check names a type-card procedure that names it back; every parameter a check claims has a tolerance and a truth;
+- the results: every check at every level and variant the ruler declares (a level not run says why); every verdict is the ruler's
+  arithmetic on the row's own numbers; every truth is the world's; backlash hidden and graded on every geared joint the oracle has;
+- the oracle: a check's 1x row is the committed example result (the same code at the same noise gives the same numbers);
+- the code: the fast checks re-run here and equal the committed ladder; the slow ones (CAN 11, the UR arms, the wear demo) re-run when
+  SYSID_LADDER_SLOW=1 (most of an hour);
+- the table: calibration_procedures.json is the join recomputed here, in the shape type_cards/CONTRACT.md documents.
+
+Failures at a level are findings, not test failures: the ladder exists to say what breaks where. What this file fails on is a
+verdict that is not the ruler's, a number that is not the code's, or a row the ruler asked for and nobody ran.
+
+    env -u VIRTUAL_ENV /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -p no:cacheprovider /home/bam/sim2real/sysid/tests/test_noise_ladder.py
+"""
+
+from __future__ import annotations
+
+import fnmatch
+import hashlib
+import inspect
+import json
+import math
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+
+SYSID = Path(__file__).resolve().parents[1]
+REPO = SYSID.parent
+RULER_PATH = SYSID / "noise_ladder.json"
+# WHY pinned: the bounds are data the ladder reads; a digest here makes any edit to them an edit of this file, reviewed as a ruler change
+RULER_SHA256 = "f65eb22a20ccebbd1f7e0fe5ea603e5067d7942d5f7ffc57e1b85316faf73cf7"
+RULER = json.loads(RULER_PATH.read_text())
+ACCEPTANCE = json.loads((SYSID / "acceptance.json").read_text())
+RESULTS = SYSID / "results" / "noise_ladder.json"
+TABLE = SYSID / "results" / "calibration_procedures.json"
+SLOW = os.environ.get("SYSID_LADDER_SLOW") == "1"
+FAST_EXAMPLES = ("conveyor", "dual_arm_cell", "linescan_cell", "ur5e_backlash")
+GEARED = {"pendulum_can11": ["can11.backlash_rad"],
+          "ur5e_backlash": ["shoulder_lift.backlash_rad", "elbow.backlash_rad", "wrist_1.backlash_rad", "wrist_2.backlash_rad"]}
+TABLE_ROW_KEYS = ("procedure", "title", "package", "kind", "setting", "status", "wall_time", "operator_time", "equipment", "equipment_cost",
+                  "identifies", "parameters_covered", "excitation", "coverage", "repeats", "oracle", "alternatives", "note")
+
+
+def committed() -> dict:
+    return json.loads(RESULTS.read_text())
+
+
+def world(example: str) -> dict:
+    return json.loads((SYSID / "examples" / example / "world.json").read_text())
+
+
+def example_of(check_id: str) -> str:
+    return check_id.split(":", 1)[0]
+
+
+def rows(doc: dict | None = None):
+    for check in (doc or committed())["checks"]:
+        for row in check["rows"]:
+            yield check, row
+
+
+# --- the ruler -------------------------------------------------------------------------------------------------------------------
+
+def test_the_ladder_ruler_is_pinned():
+    assert hashlib.sha256(RULER_PATH.read_bytes()).hexdigest() == RULER_SHA256
+
+
+def test_the_ruler_was_committed_before_any_ladder_result():
+    """Declared before any run (the brief): the first commit that adds the ruler precedes the first that adds a ladder result."""
+    def first(path: str) -> str | None:
+        out = subprocess.run(["git", "-C", str(REPO), "log", "--diff-filter=A", "--format=%H", "--", path], capture_output=True, text=True)
+        shas = out.stdout.split()
+        return shas[-1] if out.returncode == 0 and shas else None
+
+    ruler, result = first("sysid/noise_ladder.json"), first("sysid/results/noise_ladder.json")
+    if ruler is None:
+        pytest.skip("not a git checkout with the ruler committed")
+    assert result is not None, "no ladder result committed"
+    assert ruler != result and subprocess.run(["git", "-C", str(REPO), "merge-base", "--is-ancestor", ruler, result]).returncode == 0, (
+        f"the ruler ({ruler[:8]}) must be committed before the first ladder result ({result[:8]})")
+
+
+def test_the_levels_and_the_bound_rule():
+    from sysid import ladder
+
+    scales = [level["scale"] for level in RULER["levels"]]
+    assert scales == [0.0, 1.0, 3.0, 10.0] and [level["id"] for level in RULER["levels"]] == ["0x", "1x", "3x", "10x"]
+    f = RULER["exact_fraction"]
+    assert 0 < f < 1
+    # worked by hand: tol 0.1 (rel) on a truth of 1.0, nominal 1.5 (its error 0.5)
+    tol = ("rel", 0.1)
+    assert ladder.bound(tol, truth=1.0, nominal=1.5, scale=0.0) == pytest.approx(0.1 * f)
+    assert [ladder.bound(tol, truth=1.0, nominal=1.5, scale=k) for k in (1.0, 3.0, 10.0)] == pytest.approx([0.1, 0.3, 0.5])
+    # a nominal already inside the tolerance never shrinks the bound below it
+    assert ladder.bound(("abs", 0.001), truth=0.0, nominal=0.0, scale=10.0) == pytest.approx(0.001)
+    assert ladder.bound(("abs", 0.001), truth=0.0, nominal=None, scale=3.0) == pytest.approx(0.003)
+    for name, variant in RULER["variants"].items():
+        assert variant["examples"] and variant["unit"] and variant["source"] and variant["value"] > 0, name
+
+
+def test_every_check_is_a_type_card_procedure_and_back():
+    from type_cards import registry as reg
+
+    named = {name: p.id for p in reg.PROCEDURES for name in p.oracle}
+    assert set(named) == set(RULER["checks"]), (sorted(set(named) - set(RULER["checks"])), sorted(set(RULER["checks"]) - set(named)))
+    for check_id, check in RULER["checks"].items():
+        assert named[check_id] == check["procedure"] == check_id.split(":", 1)[1], check_id
+        assert check["owner"] in ("sysid", "bam_ws") and check["structure"].split(":")[0] in ("matches", "mismatch"), check_id
+        assert set(check.get("variants", [])) <= set(RULER["variants"]), check_id
+        assert all(example_of(check_id) in RULER["variants"][v]["examples"] for v in check.get("variants", [])), check_id
+
+
+def test_every_claimed_parameter_has_a_tolerance_and_a_truth():
+    from sysid import ladder
+
+    for check_id, check in RULER["checks"].items():
+        example = example_of(check_id)
+        keys = ladder.claimed(check_id)
+        assert keys, check_id
+        for key in keys:
+            assert ladder.tolerance(example, key) is not None, (check_id, key)
+            assert ladder.truth_of(example, key, world(example)) is not None, (check_id, key)
+    # the ladder's own new truths are ones not calibrating fails (acceptance.json's own rule, for what it does not hold)
+    from sysid import describe
+
+    nominal = describe.load("ur5e_backlash").nominal
+    for key in ladder.claimed("ur5e_backlash:arm.backlash_gravity_sweep"):
+        tol = ladder.tolerance("ur5e_backlash", key)
+        assert abs(nominal[key].value - world("ur5e_backlash")["truth"][key]) > tol[1], key
+    derived = RULER["derived_truth"]["can11.coulomb_sliding_nm"]
+    truth = ladder.truth_of("pendulum_can11", "can11.coulomb_sliding_nm", world("pendulum_can11"))
+    nominal_value = describe.load("pendulum_can11").nominal[derived["nominal_of"]].value
+    assert abs(nominal_value - truth) > derived["tolerance"][1] * abs(truth)
+
+
+# --- the committed results ---------------------------------------------------------------------------------------------------------
+
+def test_the_committed_ladder_has_every_row_the_ruler_declares():
+    doc = committed()
+    assert doc["schema"] == "sysid.noise_ladder_result/1" and doc["ruler"]["sha256"] == RULER_SHA256
+    checks = {c["id"]: c for c in doc["checks"]}
+    assert set(checks) == set(RULER["checks"])
+    for check_id, check in RULER["checks"].items():
+        levels = check.get("levels", [level["id"] for level in RULER["levels"]])
+        got = {(r["level"], r["variant"]) for r in checks[check_id]["rows"]}
+        want = {(level, None) for level in levels} | {("1x", v) for v in check.get("variants", [])}
+        assert got == want, (check_id, sorted(want - got), sorted(got - want))
+        assert set(checks[check_id].get("not_at", {})) == set(check.get("not_at", {})), check_id
+
+
+def test_every_verdict_is_the_rulers_arithmetic():
+    from sysid import ladder
+
+    for check, row in rows():
+        example = example_of(check["id"])
+        for p in row["parameters"]:
+            tol = ladder.tolerance(example, p["key"])
+            assert p["tolerance"] == {"kind": tol[0], "value": tol[1]}, (check["id"], p["key"])
+            want_bound = ladder.bound(tol, truth=p["true"], nominal=p["nominal"], scale=row["scale"])
+            assert p["bound"] == pytest.approx(want_bound, rel=1e-12), (check["id"], row["level"], p["key"])
+            if p["recovered"] is None:
+                assert p["pass"] is False and p["within_tolerance"] is False and p["error"] is None, (check["id"], p["key"])
+                continue
+            error = abs(p["recovered"] - p["true"])
+            assert p["error"] == pytest.approx(error, rel=1e-12, abs=1e-15), (check["id"], p["key"])
+            limit = tol[1] if tol[0] == "abs" else tol[1] * abs(p["true"])
+            assert p["pass"] is (error <= want_bound) and p["within_tolerance"] is (error <= limit), (check["id"], row["level"], p["key"])
+        assert row["pass"] is all(p["pass"] for p in row["parameters"]), (check["id"], row["level"])
+
+
+def test_every_rows_truth_is_the_worlds():
+    from sysid import ladder
+
+    for check, row in rows():
+        example = example_of(check["id"])
+        w = world(example)
+        for p in row["parameters"]:
+            assert p["true"] == ladder.truth_of(example, p["key"], w), (check["id"], p["key"])
+        assert {p["key"] for p in row["parameters"]} == set(ladder.claimed(check["id"])), check["id"]
+
+
+def test_the_1x_rows_are_the_committed_oracle_results():
+    """A check's 1x row, no variant, is the oracle's committed result for its example: the ladder adds levels, never a second 1x."""
+    for check, row in rows():
+        example = example_of(check["id"])
+        if row["level"] != "1x" or row["variant"] is not None:
+            continue
+        if example in ("pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell") and check["id"].split(":", 1)[1] in (
+                "servo.dynamics_regression", "servo.backlash_reversals_camera", "kinematics.zero_offsets_tracker", "arm.dynamics_excitation",
+                "gripper.drive_traces", "conveyor.radius_tracker", "conveyor.dynamics_profiles", "cell.tags_bundle_adjustment",
+                "linescan.geometry_dot_card", "linescan.radiometry_refs", "rgbd.dot_card"):
+            oracle = {r["key"]: r for r in json.loads((SYSID / "results" / f"{example}.json").read_text())["parameters"]}
+            for p in row["parameters"]:
+                assert math.isclose(p["recovered"], oracle[p["key"]]["recovered"], rel_tol=1e-9, abs_tol=1e-12), (check["id"], p["key"])
+        if check["id"] == "pendulum_can11:servo.gap_check_forecast":
+            wear = json.loads((SYSID / "results" / "drift_backlash_wear.json").read_text())
+            assert math.isclose(row["parameters"][0]["recovered"], wear["rate_recovered"], rel_tol=1e-9)
+        if check["id"] == "dual_arm_cell:camera.pose_recal_belt_tags":
+            knock = json.loads((SYSID / "results" / "drift_camera_knock.json").read_text())
+            for p in row["parameters"]:
+                assert math.isclose(p["recovered"], knock["shift_recovered"][p["key"].split(".", 1)[1]], rel_tol=1e-9, abs_tol=1e-12), p["key"]
+
+
+def test_backlash_is_hidden_and_graded_on_every_geared_joint():
+    """Zach's brief: backlash a first-class oracle parameter wherever a joint has gears (the pendulum, the UR joints)."""
+    by_check = {c["id"]: c for c in committed()["checks"]}
+    for example, keys in GEARED.items():
+        assert set(keys) <= set(world(example)["truth"]), example
+        graded = {p["key"] for c in by_check.values() if example_of(c["id"]) == example for r in c["rows"] for p in r["parameters"]}
+        assert set(keys) <= graded, (example, sorted(set(keys) - graded))
+
+
+def test_the_ur_backlash_fit_never_reads_the_world():
+    from sysid import oracle
+
+    module = oracle.example_module("ur5e_backlash")
+    source = inspect.getsource(module.identify)
+    assert "world" not in source.lower() and "truth" not in source.lower()
+    for check in committed()["checks"]:
+        assert check["provenance"]["identify_sealed"] is True, check["id"]
+
+
+# --- this code ------------------------------------------------------------------------------------------------------------------
+
+def same(a: dict, b: dict, check_id: str) -> None:
+    ra = {(r["level"], r["variant"]): r for r in a["rows"]}
+    rb = {(r["level"], r["variant"]): r for r in b["rows"]}
+    assert ra.keys() == rb.keys(), check_id
+    for key in ra:
+        pa = {p["key"]: p for p in ra[key]["parameters"]}
+        pb = {p["key"]: p for p in rb[key]["parameters"]}
+        assert pa.keys() == pb.keys(), (check_id, key)
+        for k in pa:
+            x, y = pa[k]["recovered"], pb[k]["recovered"]
+            assert (x is None and y is None) or math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-12), (check_id, key, k, x, y)
+
+
+@pytest.mark.parametrize("example", FAST_EXAMPLES)
+def test_the_fast_checks_are_this_code(example):
+    from sysid import ladder
+
+    fresh = {c["id"]: c for c in ladder.run_example(example)}
+    old = {c["id"]: c for c in committed()["checks"] if example_of(c["id"]) == example}
+    assert fresh.keys() == old.keys() and fresh
+    for check_id in fresh:
+        same(old[check_id], fresh[check_id], check_id)
+
+
+@pytest.mark.skipif(not SLOW, reason="the CAN 11, UR arm and wear checks take most of an hour: SYSID_LADDER_SLOW=1 runs them")
+@pytest.mark.parametrize("example", ("pendulum_can11", "ur5e", "ur5e_2f85"))
+def test_the_slow_checks_are_this_code(example):
+    from sysid import ladder
+
+    fresh = {c["id"]: c for c in ladder.run_example(example)}
+    old = {c["id"]: c for c in committed()["checks"] if example_of(c["id"]) == example}
+    assert fresh.keys() == old.keys() and fresh
+    for check_id in fresh:
+        same(old[check_id], fresh[check_id], check_id)
+
+
+# --- the comparison table -------------------------------------------------------------------------------------------------------
+
+def test_the_comparison_table_is_the_join_of_the_records_and_the_ladder():
+    from sysid import procedures
+
+    assert json.loads(TABLE.read_text()) == procedures.table(committed())
+
+
+def test_the_table_has_the_contracts_shape():
+    from type_cards import registry as reg
+
+    doc = json.loads(TABLE.read_text())
+    assert doc["schema"] == "sysid.calibration_procedures/1" and doc["levels"] == [level["id"] for level in RULER["levels"]]
+    assert [r["procedure"] for r in doc["rows"]] == [p.id for p in reg.PROCEDURES]
+    for row in doc["rows"]:
+        assert all(k in row for k in TABLE_ROW_KEYS), (row["procedure"], [k for k in TABLE_ROW_KEYS if k not in row])
+        oracle = row["oracle"]
+        assert oracle["status"] in ("checked", "not checked") and (oracle["status"] == "checked") == bool(oracle["checks"]), row["procedure"]
+        for c in oracle["checks"]:
+            for level in ("1x", "3x"):
+                cell = c["levels"].get(level)
+                assert cell is None or {"pass", "worst_error_over_tolerance", "within_tolerance", "parameters"} <= set(cell), (row["procedure"], level)
+    text = (REPO / "type_cards" / "CONTRACT.md").read_text()
+    assert "sysid.calibration_procedures/1" in text and "calibration_procedures.json" in text
