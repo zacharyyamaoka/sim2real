@@ -2,7 +2,7 @@
 
 - **Status:** accepted on merge (the models lane, `claude/w2c-models`): `site/models_pages.py`, `site/static/models.css`, the rack's model labels in
   `type_cards/deployments/one_dof_test_rack.py` (`dm.ModelLabel`, `inst.label_model`, landed first, alone, as sim2real 7bed016), data-ui CONTRACT §49
-  (data-ui `main`) and the kit sim2real vendors (data-ui branch `vendor/sim2real-d5ede93-s49`). Decided for Zach by the lane; his to overrule.
+  (data-ui `main` @ `998a2d93`) and the kit sim2real vendors (data-ui branch `vendor/sim2real-d5ede93-s49` @ `190eba14`). Decided for Zach by the lane; his to overrule.
 - **Asked by:** Zach, `PROJECT - Sim2Real`, 2026-11-06 (his images 20261106185110, 185314, 185842, 190132): "We organize all of the models related to a
   particular part type into a ladder. of icnreasing paramters ... the type here is more generic ... MO.kinematics.X MO.dynamics.X"; "a table of
   calibration routines in the first column and then the parameters that they identify. Another way to see it is with the parameters in the first
@@ -77,4 +77,4 @@ The kit (weights: must, should):
 
 `git revert` the lane's merge commit (the pages, the links, the nav, the decision) and re-vendor data-ui `d5ede93` into `vendor/data-ui` (VENDOR.md's
 recipe) with `python3 site/build.py --repin`; the old kit's files are also kept at `~/.cache/sim2real/vendor-backups/`. The label map landed alone
-(sim2real 7bed016): `git revert -m 1 7bed016`. On data-ui, `git revert -m 1` its merge of `lane/table-best-groups`.
+(sim2real 7bed016): `git revert -m 1 7bed016`. On data-ui, `git -C /home/bam/data-ui revert -m 1 998a2d93`.

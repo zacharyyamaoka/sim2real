@@ -1,6 +1,6 @@
 {
  "what": "the data-ui kit sim2real already vendors (vendor/data-ui/dist, VENDOR.md), served at /static/data-ui/; never edited, never re-vendored by the site",
- "source": "`/home/bam/data-ui` branch `vendor/sim2real-d5ede93-s49` @ `190eba14` (2026-11-07): `main` @ `d5ede93` (the kit before, below) plus CONTRACT §49 backported (a table's `best`, column groups shown or hidden whole in Property visibility, `emptyGroups: hide`; on data-ui `main` as `69e6d5c4`). Before: `main` @ `d5ede93` (2026-10-30, \"test(perf oracle)\": `integrate/packet` merged, the table `digits` fix cd5efe5, CONTRACT §36).",
+ "source": "`/home/bam/data-ui` branch `vendor/sim2real-d5ede93-s49` @ `190eba14` (2026-11-07): `main` @ `d5ede93` (the kit before, below) plus CONTRACT §49 backported (a table's `best`, column groups shown or hidden whole in Property visibility, `emptyGroups: hide`; on data-ui `main` as `69e6d5c4` + `14883a0f`, merged at `998a2d93`). Before: `main` @ `d5ede93` (2026-10-30, \"test(perf oracle)\": `integrate/packet` merged, the table `digits` fix cd5efe5, CONTRACT §36).",
  "manifest_sha256": "89aef31a08776c3afe0c5e51f3865dfc0162835c272021c3e15b7922be18df01",
  "files": 140
 }
