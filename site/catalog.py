@@ -36,6 +36,9 @@ AREAS = (
     Area("sources", "Stations", "/stations/", "Every station's gates T1-T11 in one matrix"),
     Area("guides", "Deployments", "/deployments/", "Every deployment, virtual and physical, and each of its parts"),
     Area("programs", "Types", "/types/", "One card per part type: metrics, model, coverage, view and procedure"),
+    # the metrics lane (2026-11-07): metrics, diagnostics and coverage over any selection of runs, and the frozen reports
+    Area("analysis", "Metrics", "/metrics/", "Metrics, diagnostics and coverage over the runs you pick, live"),
+    Area("guides", "Reports", "/reports/", "Named, frozen sets of runs with their results as they were"),
 )
 REPORTS = (("why-it-fails", "Why it fails", "Every gate cell that does not pass, in words: the number against its limit, why, and the next step."),
            ("gate-standing", "Gate standing", "The stations × gates matrix, passing per gate, and the caveats on the numbers."))

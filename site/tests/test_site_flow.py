@@ -2744,7 +2744,7 @@ def metrics_data_checks(out: Path, data: Path) -> dict:
     checked = 0
     for r in runs[:: max(1, len(runs) // 120)]:
         text = (out / adapter_run_path(r)).read_text()
-        items = {a.get("data-entity"): a.get("data-level") for a in start_tags(text, "li", 'role="treeitem"')}
+        items = {a.get("data-entity"): a.get("data-level") for a in start_tags(text, "li", "data-entity") if a.get("role") == "treeitem"}
         st, dr = station_of[r["device"]]["id"], driver_of[r["device"]]["id"]
         stop = vals.get((r["run"], "servo.stop_error", None))
         known["station"] += items.get(st) in ("ok", "warning", "error")
@@ -2787,7 +2787,7 @@ def metrics_browser_checks(page, base: str, ctx: dict, still) -> None:
           and (side["results"][0] >= side["runs"][1] - 1 or side["results"][2] >= side["runs"][3] - 1),
           f"the runs' filter rail sits left of the runs table, and the results beside or under it, never over it ({side})")
     # 1. a rail pick: Station CAN 12
-    page.locator("aside data-facets label", has_text=re.compile(r"^\s*CAN 12\b")).first.click()
+    page.locator('aside data-facets input[data-p="device"][data-value="CAN 12"]').first.click()
     soft_wait(page, "() => { const s = window.s2rMetrics && window.s2rMetrics.snapshot(); return s && s.ids.length > 0 && s.ids.length < %d; }" % len(tables.runs))
     page.wait_for_timeout(800)
     one = page.evaluate(RESULT_JS) or {}
@@ -2809,6 +2809,8 @@ def metrics_browser_checks(page, base: str, ctx: dict, still) -> None:
     check(got_heat == want_heat and bool(pix) and pix[2] > 500,
           f"the coverage heatmap is the selection's cells: per (q, qd) cell the reachable qdd bands and those visited ({sum(1 for k in want_heat if got_heat.get(k) == want_heat[k])} "
           f"of {len(want_heat)} cells; canvas {pix})")
+    page.evaluate("document.getElementById('s2r-metrics-coverage').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(600)
     words = page.evaluate("() => (document.querySelector('.s2r-trust') || {}).textContent || ''")
     check("only" in words and "coverage" in words.lower() and "trust" in words.lower(),
           f"the page says the point in words: a model is good only where the runs went, so coverage is how far to trust the numbers ({words[:120]!r})")
