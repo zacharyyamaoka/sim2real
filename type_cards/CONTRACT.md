@@ -371,6 +371,13 @@ row  id root parent depth title kind(virtual|physical) tags[] structural entity_
   carry their station's `device`. `runs`: the runs whose device is under the node (a camera's: null, it is not known which it filmed).
 - **Virtual** (`inst.virtual_nodes(results)`): each oracle example's sysid typed tree, node for node; a v2-typed node gets its v3 type; an
   "arm + gripper" is `structural: assembly` (a chain and a gripper composed); `runs` 0 (sysid does not persist its simulated runs).
+- **Producer model labels** (2026-11-07, additive): `PhysicalDeployment.models`, a tuple of `dm.ModelLabel(label type model fit friction
+  differs source)`, is which ladder model each model a producer replays is (the words before " vs real" in RobotDx's stock.model_error rows,
+  `sel.model_label`). `inst.label_model(deployment, label)` -> the record or None (exact words; a label nobody mapped maps to nothing);
+  `<site>/data/domain/model_labels.json` (`inst.model_labels_dataset()`, house table shape: `deployment label type model model_key model_title
+  family k fit friction differs source`). Every rack label is the servo's `M4.dynamics.twin` (each a bam_rack_twin TwinParameters hinge with
+  the drive's terms); `differs` says where its terms depart from the model's (LuGre in place of M3's form, the board's current ceiling, no
+  heat). `tests/test_instances.py` fails on a label the rack's run_gates.json writes that has no entry.
 
 ### The run page: entity tree and the standard dashboard per level
 
