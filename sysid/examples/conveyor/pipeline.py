@@ -18,6 +18,8 @@ import zlib
 from dataclasses import dataclass
 
 import numpy as np
+from robot_msgs.std import Header
+from robot_msgs.trajectory import JointTrajectory
 
 from sysid import cards, result
 from sysid import world as hidden
@@ -140,10 +142,34 @@ def coverage(description, p: Plan) -> dict:
 
 @dataclass
 class Run:
-    command: np.ndarray
-    theta: np.ndarray       # encoder, every step
-    x_tracked: np.ndarray   # tracker, every TRACKER_EVERY steps
-    theta_at_track: np.ndarray
+    encoder: JointTrajectory  # the drive roller's encoder (rad) at every step; the belt-speed command (m/s) a channel
+    tracker: JointTrajectory  # the belt tracker's travel (m) every TRACKER_EVERY steps, on the belt's own (prismatic) joint
+
+    @property
+    def command(self) -> np.ndarray:
+        return self.encoder.channels["command"]
+
+    @property
+    def theta(self) -> np.ndarray:
+        return self.encoder.positions[:, 0]
+
+    @property
+    def x_tracked(self) -> np.ndarray:
+        return self.tracker.positions[:, 0]
+
+    @property
+    def theta_at_track(self) -> np.ndarray:
+        """The encoder at the tracker's rows (0, TRACKER_EVERY, ...): the same samples, no interpolation."""
+        return self.encoder.positions[::TRACKER_EVERY, 0]
+
+
+def measured_run(command: np.ndarray, theta: np.ndarray, x_tracked: np.ndarray) -> Run:
+    steps = np.arange(theta.size)
+    encoder = JointTrajectory(t=DT * steps, joint_names=("drive_roller",), positions=theta.reshape(-1, 1), channels={"command": command},
+                              header=Header(frame_id="encoder", meta={"units": "t s; positions rad; command m/s (belt speed)"}))
+    tracker = JointTrajectory(t=DT * steps[::TRACKER_EVERY], joint_names=("belt",), positions=x_tracked.reshape(-1, 1),
+                              header=Header(frame_id="tracker", meta={"units": "t s; positions m (belt travel from the tracker's own zero)"}))
+    return Run(encoder, tracker)
 
 
 @dataclass
@@ -172,7 +198,7 @@ class RealWorld:
                 # the noise ladder's tracker_late variant (sysid/noise_ladder.json): the tracker reports the belt where it was; None outside it
                 late = hidden.perturbation("tracker_late")
                 seen = track if late is None else np.maximum(track - int(round(late / DT)), 0)
-                runs[split].append(Run(command, theta_meas, x[seen] + rng.normal(0, self.noise["belt_tracker_m"], track.size), theta_meas[track]))
+                runs[split].append(measured_run(command, theta_meas, x[seen] + rng.normal(0, self.noise["belt_tracker_m"], track.size)))
         return Measured(runs["train"], runs["held_out"])
 
 
