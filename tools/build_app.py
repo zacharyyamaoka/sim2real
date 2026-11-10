@@ -1,6 +1,6 @@
 """The sim2real app's data: deployments -> runs -> one run, every file the pages in app/ read.
 
-    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/build_app.py
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" --with-editable /home/bam/robot_msgs python /home/bam/sim2real/tools/build_app.py
 
 Zach (2026-10-28): "At the top level we have deployments ... On any given deployment you will have a number of runs ... a
 table organized from recent to oldest ... statistics over the coverage of the runs ... make a really great robotic data
@@ -9,9 +9,10 @@ separate: the pages draw the first, and the gates layer adds the second on top, 
 robotdx.diagnostics (io-diagnostics), never by the pages.
 
 Reads (never writes): app/registry.json, each deployment's record (bam_rack_twin deployment.json), every real run under its
-archive days (<name>.npz + <name>.json, recorder bam_rack_twin.hardware), app/data/source/twin_replays.json (the 10-28 CAN
-12/13 held-out runs played by four friction models, tools/twin_replays.py) and dashboards/source/rack_replays.json (one
-held-out run per station played by its "full" twin, dashboards/source/rack_replays.py). Writes app/data/ (gitignored):
+archive days (<name>.npz + <name>.json, recorder bam_rack_twin.hardware; each read as a robot_msgs JointTrajectory through
+tools/run_files.py), app/data/source/twin_replays.json (the 10-28 CAN 12/13 held-out runs played by four friction models,
+tools/twin_replays.py) and dashboards/source/rack_replays.json (one held-out run per station played by its "full" twin,
+dashboards/source/rack_replays.py). Writes app/data/ (gitignored):
 
   deployments.json                       one row per deployment, with roll-up KPIs
   <dep>/runs.json                        one row per run, newest first: time, station, kind, duration, gains, situations
@@ -53,6 +54,7 @@ from robotdx.diagnostics.data import Trajectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import archive_roots  # noqa: E402  (the folders a deployment's runs lie under: one rule, shared with site/deploy_tree.py)
+import run_files  # noqa: E402  (a recorded run as robot_msgs' JointTrajectory: the one door to the rack's run files)
 import trajectory as traj  # noqa: E402  (sim2real's difference(a, b) and the robotics contract tables; pinned to data-ui's fixture)
 from robotdx.diagnostics.rows import result_row
 from robotdx.diagnostics.stock import BoxConfig, FaultCodesConfig, ModelErrorConfig, RateConfig, TrackingErrorConfig
@@ -163,31 +165,22 @@ def accel(t: np.ndarray, qd: np.ndarray) -> np.ndarray:
 
 
 def load_run(path: Path) -> dict | None:
-    meta_path = path.with_suffix(".json")
-    if not meta_path.is_file():
+    """The run's meta and its robot_msgs JointTrajectory (tools/run_files.py), or None for a file that is not a run."""
+
+    loaded = run_files.load_run(path)
+    if loaded is None:
         return None
-    meta = json.loads(meta_path.read_text())
-    if meta.get("can_id") is None:
-        return None
-    try:
-        with np.load(path) as archive:
-            files = set(archive.files)
-            if not {"t", "q"} <= files:
-                return None
-            arrays = {name: np.asarray(archive[name], float) for name in files if archive[name].ndim == 1 and archive[name].size == archive["t"].size}
-    except Exception:  # a truncated npz: not a run (one camera file on 10-23 is not a zip)
-        return None
-    if arrays["t"].size < 2:
-        return None
-    return {"meta": meta, "arrays": arrays}
+    meta, trajectory = loaded
+    return {"meta": meta, "trajectory": trajectory}
 
 
-def trajectory(arrays: dict, *, run: str, device: str, situation: str, source: str, t: np.ndarray | None = None, q=None, qd=None, tau=None) -> Trajectory:
-    t = arrays["t"] - arrays["t"][0] if t is None else t
-    return Trajectory(t=t, q_rad=arrays["q"] if q is None else q, q_target_rad=arrays.get("q_target"), qd_rad_s=arrays.get("qd") if qd is None else qd,
-                      qd_target_rad_s=arrays.get("qd_target"), tau_nm=arrays.get("tau") if tau is None else tau, i_q_a=arrays.get("i_q"),
-                      mode=arrays.get("mode"), fault=arrays.get("fault"), temp_c=arrays.get("temp_c"), v_bus_v=arrays.get("voltage"),
-                      run=run, device=device, situation=situation, source=source)
+def diagnostics_trajectory(run, *, slug: str, device: str, situation: str, source: str) -> Trajectory:
+    """The whole recorded run (a JointTrajectory) as robotdx.diagnostics' input, on the run's own clock from 0."""
+
+    col = lambda name: run_files.column(run, name)  # noqa: E731
+    return Trajectory(t=run.t - run.t[0], q_rad=col("q"), q_target_rad=col("q_target"), qd_rad_s=col("qd"), qd_target_rad_s=col("qd_target"),
+                      tau_nm=col("tau"), i_q_a=col("i_q"), mode=col("mode"), fault=col("fault"), temp_c=col("temp_c"), v_bus_v=col("voltage"),
+                      run=slug, device=device, situation=situation, source=source)
 
 
 # ---------------------------------------------------------------------------------------------------- situations
@@ -196,12 +189,13 @@ def trajectory(arrays: dict, *, run: str, device: str, situation: str, source: s
 def situations_for(record: dict) -> list[dict]:
     """Every series a run plays: real, the target (when the run commanded positions) and each model, on one clock."""
 
-    a = record["arrays"]
-    t = a["t"] - a["t"][0]
-    out = [{"situation": REAL, "source": "real", "t": t, "q": a["q"], "qd": a.get("qd"), "tau": a.get("tau"), "i_q": a.get("i_q"),
-            "temp": a.get("temp_c"), "v": a.get("voltage")}]
-    if "q_target" in a and np.isfinite(a["q_target"]).any():
-        out.append({"situation": TARGET, "source": "target", "t": t, "q": a["q_target"], "qd": a.get("qd_target")})
+    run = record["trajectory"]
+    col = lambda name: run_files.column(run, name)  # noqa: E731
+    t = run.t - run.t[0]
+    out = [{"situation": REAL, "source": "real", "t": t, "q": col("q"), "qd": col("qd"), "tau": col("tau"), "i_q": col("i_q"),
+            "temp": col("temp_c"), "v": col("voltage")}]
+    if col("q_target") is not None and np.isfinite(col("q_target")).any():
+        out.append({"situation": TARGET, "source": "target", "t": t, "q": col("q_target"), "qd": col("qd_target")})
     return out
 
 
@@ -368,21 +362,21 @@ def coverage_rows(record: dict, run_id: str, device: str, kind: str, day: str, h
     """The run on a uniform time grid (w = 1, so a count is time spent), plus its argmin/argmax rows of every channel (w = 0:
     histograms that sum w stay unbiased, while min/max over rows stays exact; PEP 0010 §4.4, M4 weighted)."""
 
-    a = record["arrays"]
-    t = a["t"] - a["t"][0]
-    qd = a.get("qd")
+    run = record["trajectory"]
+    q, qd, tau = (run_files.column(run, name) for name in ("q", "qd", "tau"))
+    t = run.t - run.t[0]
     qdd = accel(t, qd) if qd is not None else None
     grid = np.arange(0.0, t[-1] + 1e-9, 1.0 / hz)
     on_grid = np.unique(np.clip(np.searchsorted(t, grid), 0, t.size - 1))
     extremes = set()
-    for values in (a["q"], qd, qdd, a.get("tau")):
+    for values in (q, qd, qdd, tau):
         if values is not None and np.isfinite(values).any():
             extremes.update((int(np.nanargmin(values)), int(np.nanargmax(values))))
     rows = []
     for i, w in [(int(i), 1) for i in on_grid] + [(i, 0) for i in sorted(extremes - set(on_grid.tolist()))]:
-        rows.append({"run": run_id, "device": device, "kind": kind, "day": day, "t": num(t[i], 5), "w": w, "q_deg": deg(a["q"], i),
+        rows.append({"run": run_id, "device": device, "kind": kind, "day": day, "t": num(t[i], 5), "w": w, "q_deg": deg(q, i),
                      "qd_deg_s": deg(qd, i) if qd is not None else None, "qdd_deg_s2": deg(qdd, i) if qdd is not None else None,
-                     "tau_nm": num(a["tau"][i], 4) if "tau" in a else None, "layer": "path"})
+                     "tau_nm": num(tau[i], 4) if tau is not None else None, "layer": "path"})
     return rows
 
 
@@ -396,13 +390,13 @@ def run_link(dep_id: str, slug: str):
     return link
 
 
-def run_diagnostics(dep_id: str, slug: str, title: str, device: str, situations: list[dict], arrays: dict, floor_mrad: float | None) -> list[dict]:
+def run_diagnostics(dep_id: str, slug: str, title: str, device: str, situations: list[dict], run, floor_mrad: float | None) -> list[dict]:
     """The gates layer of one run, computed FROM its data by robotdx.diagnostics: tracking (real vs target), each model's
     error against real over the station's floor, board temperature, faults and the sample rate."""
 
     by = {s["situation"]: s for s in situations}
     real_s = by[REAL]
-    mode = real_s.get("mode") if real_s.get("mode") is not None else (arrays.get("mode") if real_s["t"].size == arrays["t"].size else None)
+    mode = real_s.get("mode") if real_s.get("mode") is not None else (run_files.column(run, "mode") if real_s["t"].size == len(run) else None)
     real = Trajectory(t=real_s["t"], q_rad=real_s["q"], q_target_rad=by[TARGET]["q"] if TARGET in by else None, qd_rad_s=real_s.get("qd"),
                       tau_nm=real_s.get("tau"), mode=mode, run=slug, device=device)
     link = run_link(dep_id, slug)
@@ -418,7 +412,7 @@ def run_diagnostics(dep_id: str, slug: str, title: str, device: str, situations:
         result = evaluate("stock.model_error", ModelErrorConfig(controlled_only=mode is not None, limits=limits), [(real, model)], subject=subject)
         note = f" (gate {FIDELITY_GATE:g} x floor {floor_mrad:.2f} mrad)" if floor_mrad else " (no floor recorded: not judged)"
         results.append(replace(result, title=f"{name} vs real", message=result.message + note))
-    full = trajectory(arrays, run=slug, device=device, situation=REAL, source="real")
+    full = diagnostics_trajectory(run, slug=slug, device=device, situation=REAL, source="real")
     if full.temp_c is not None:
         results.append(evaluate("stock.box", BOARD_TEMP, [full], subject=subject))
     if full.fault is not None:
@@ -1048,19 +1042,19 @@ def build_deployment(entry: dict, replays: dict) -> dict:
             loaded = load_run(path)
             if loaded is not None:
                 found.append((path, loaded))
-    total_seconds = sum(float(l["arrays"]["t"][-1] - l["arrays"]["t"][0]) for _, l in found)
+    total_seconds = sum(l["trajectory"].duration for _, l in found)
     hz = COVER_HZ
     while total_seconds * hz > COVER_BUDGET * 0.93 and hz > 1:  # leave room for the w = 0 extremes
         hz /= 1.25
 
     runs, coverage, run_gate_rows, run_rows = [], [], [], []
     for path, loaded in found:
-        meta, arrays = loaded["meta"], loaded["arrays"]
+        meta, run = loaded["meta"], loaded["trajectory"]
         device = f"CAN {meta['can_id']}"
         rel = path.relative_to(Path(entry["archive"][0]).parent).with_suffix("")
         slug = str(rel).removeprefix("rack_").replace("/", "~")
         session = "/".join(p for p in rel.parts[1:-1] if p != "runs")
-        wall = arrays.get("wall")
+        wall = run_files.column(run, "wall")
         wall_s = float(wall[0]) if wall is not None and np.isfinite(wall[0]) else None
         started = dt.datetime.fromtimestamp(wall_s, tz=TZ) if wall_s else dt.datetime.fromtimestamp(path.stat().st_mtime, tz=TZ)
         day = started.date().isoformat()  # WHY the wall clock: the 10-29 calibration sessions sit in the rack_2026-10-28 folder
@@ -1082,10 +1076,10 @@ def build_deployment(entry: dict, replays: dict) -> dict:
             whole = replay.get("round") is not None or replay.get("origin") == "rack_replays"
             clock_offset = float(replay.get("prelude_s") or meta.get("prelude_s") or 0.0) if whole and replay.get("origin") != "rack_replays" else 0.0
             if real_s.get("i_q") is None:  # twin_replays carries no current or temperature: take them from the npz (prelude dropped if the replay did)
-                keep = np.ones(arrays["t"].size, bool) if whole else (arrays["t"] - arrays["t"][0]) >= float(replay.get("prelude_s") or 0.0) - 1e-9
+                keep = np.ones(len(run), bool) if whole else (run.t - run.t[0]) >= float(replay.get("prelude_s") or 0.0) - 1e-9
                 for key, column in (("i_q", "i_q"), ("temp", "temp_c")):
-                    if column in arrays and int(keep.sum()) == real_s["t"].size:
-                        real_s[key] = arrays[column][keep]
+                    if column in run.channels and int(keep.sum()) == real_s["t"].size:
+                        real_s[key] = run.channels[column][keep]
             floor = replay.get("floor_mrad") or (floors.get(str(meta["can_id"]), {}) or {}).get("floor_mrad")
         else:
             situations = situations_for(loaded)
@@ -1102,7 +1096,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
         if stamp.get("run"):
             title += f" · {stamp['run']}"
         url = f"{APP_URL}?d={dep_id}&run={slug}"
-        t = arrays["t"]
+        t = run.t
         row = {
             "run": slug, "title": title, "started": started.isoformat(timespec="seconds"), "day": day, "session": session, "device": device,
             "kind": kind, "class": (replay or {}).get("class"), "duration_s": num(t[-1] - t[0], 4), "samples": int(t.size),
@@ -1120,7 +1114,7 @@ def build_deployment(entry: dict, replays: dict) -> dict:
             "clock_offset_s": num(clock_offset, 6),
             "run_set": run_set, "split": stamp.get("split"), "mode": stamp.get("mode"), "schedule_run": stamp.get("run"),
         }
-        diagnostics = run_diagnostics(dep_id, slug, title, device, situations, arrays, floor)
+        diagnostics = run_diagnostics(dep_id, slug, title, device, situations, run, floor)
         tracking = next((d for d in diagnostics if d["diagnostic"] == "stock.tracking_error"), None)
         row["tracking_mrad"] = num(tracking["value"], 4) if tracking and tracking["value"] is not None else None
         best = min((d for d in diagnostics if d["diagnostic"] == "stock.model_error" and d["value"] is not None), key=lambda d: d["value"], default=None)

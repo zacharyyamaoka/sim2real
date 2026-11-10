@@ -9,7 +9,8 @@ one of them (10-23 onward) as a JointTrajectory at the one door, tools/run_files
   (t as recorded, q / qd / tau as positions / velocities / effort, every other column a channel), through save_npz / to_dict too;
 - a run that logged no qd or tau (the 10-24 thermal runs) has no velocities or effort, never zeros;
 - since 2026-11-04 the producer writes its own JointTrajectory of each run (bam_rack_twin.msgs, runs/joint_trajectory/<name>.npz): the
-  message read here equals the producer's file, header and meta included (the producer is the oracle, not this repo's code);
+  message read here equals the producer's file, header and meta included, on every 11-05 and 11-06 run with one (the producer is the oracle, not this
+  repo's code);
 - a repeated stamp goes through from_samples(duplicate_times="drop_later"), the producer's policy, and says so in header.meta;
 - tools/build_app.py's load_run returns the trajectory, so every page the app builds reads the run through it.
 """
@@ -31,7 +32,7 @@ import run_files  # noqa: E402
 
 OLD_RUN = Path("/archive/datasets/bam_rig/rack_2026-10-23/session_01a/runs/s01_can14_staircase.npz")
 NO_SPEED_RUN = Path("/archive/datasets/bam_rig/rack_2026-10-24/thermal/can12_thermal.npz")
-PRODUCER_DAY = Path("/archive/datasets/bam_rig/rack_2026-11-05")
+PRODUCER_DAYS = (Path("/archive/datasets/bam_rig/rack_2026-11-05"), Path("/archive/datasets/bam_rig/rack_2026-11-06"))
 
 
 def columns(path: Path) -> dict[str, np.ndarray]:
@@ -88,7 +89,7 @@ def test_a_run_that_logged_no_speed_or_torque_has_none_never_zeros():
 
 
 def producer_runs() -> list[Path]:
-    return sorted(p for p in PRODUCER_DAY.rglob("*.npz") if run_files.producer_path(p).is_file()) if PRODUCER_DAY.is_dir() else []
+    return sorted(p for day in PRODUCER_DAYS if day.is_dir() for p in day.rglob("*.npz") if run_files.producer_path(p).is_file())
 
 
 @pytest.mark.skipif(not producer_runs(), reason="no run with the producer's own joint_trajectory/ file on this machine")
