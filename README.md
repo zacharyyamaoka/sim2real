@@ -34,10 +34,18 @@ switch in the header that adds the diagnostics computed from the same runs. The 
 Build the data (about 20 s; the twin replays are optional and take about 1.5 min):
 
     /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
-    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/tools/build_app.py
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" --with-editable /home/bam/robot_msgs python /home/bam/sim2real/tools/build_app.py
     python3 -I /home/bam/sim2real/tools/build_pages.py
     uv run --no-project --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/app/tests/test_trajectory_contract.py --data --robotdx
+
+Every recorded run is read as robot_msgs' `JointTrajectory` (`/home/bam/robot_msgs`; Zach, 2026-11-10: every package depends on robot_msgs)
+through one door, `tools/run_files.py`: q / qd / tau as positions / velocities / effort, every other column a channel, built exactly as the
+producer's own `bam_rack_twin.msgs.run_trajectory` (held equal to its `runs/joint_trajectory/` files in `tools/tests/test_run_files.py`).
+sim2real has no pyproject: `build_app.py`'s command carries robot_msgs as `--with-editable`, and sysid's runtime (bam_rack_twin's venv) has
+it as bam_rack_twin's own editable dependency. The oracle's simulated arm excitations and belt runs are robot_msgs trajectories too.
+
+    env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/tools/tests/test_run_files.py
 
 Then the media (about 9 minutes the first time on a quiet machine, then only what changed; a cache folder, never git), and the site:
 

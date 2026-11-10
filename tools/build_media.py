@@ -64,6 +64,7 @@ import numpy as np  # noqa: E402
 
 import adapter  # noqa: E402  (stdlib: the app's data folder, station keys)
 import archive_roots  # noqa: E402  (the folders a deployment's runs lie under: the rule tools/build_app.py and site/deploy_tree.py read)
+import run_files  # noqa: E402  (a recorded run as robot_msgs' JointTrajectory: the one door to the rack's run files)
 
 SCHEMA = "sim2real.media/1"
 # WHY a version and not the file's digest: a comment edit must not re-cut 300 clips; bump it when an output's content changes
@@ -995,8 +996,8 @@ def session_job(task: dict) -> list[dict]:
     src_size = probe_size(mp4)
     jobs = []
     for j in task["runs"]:
-        with np.load(j["npz"]) as archive:
-            npz = {k: np.asarray(archive[k], float) for k in ("t", "wall", "q")}
+        _, run = run_files.load_run(j["npz"])  # a robot_msgs JointTrajectory; the clock's columns by their recorded names
+        npz = {k: run_files.column(run, k) for k in ("t", "wall", "q")}
         samples = json.loads(Path(j["samples"]).read_text())["rows"]
         grid = grid_of(npz, samples, stamps)
         new = 1.0 - grid["repeats"] / grid["n"]

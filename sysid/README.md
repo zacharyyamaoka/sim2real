@@ -46,6 +46,7 @@ re-runs only the fast checks. Why: `docs/decision-calibration-routines-2026-11-0
 
 Stock parts used in place, never copied: bam_rack_twin (schedule, twin, replayer, smoother, bootstrap, stock identification),
 MuJoCo Menagerie's UR5e and 2F-85, bam_scan_tunnel's `PinholeCamera` (the real pixels), intel_rgbd's D435 constants and stereo-noise
-law, type_cards (typing, ladders, wear laws, drift checks, selection rule, coverage functions).
+law, type_cards (typing, ladders, wear laws, drift checks, selection rule, coverage functions), robot_msgs (the arms' excitations and
+the belt's encoder and tracker runs are its JointTrajectory; CAN 11's runs stay bam_rack_twin's OutputRun, which its identify and replayer read).
 
 Why the truth is sealed, the ruler pinned, the results committed and bam_ws imported live: `docs/decision-sysid-oracle-2026-11-05.md`.

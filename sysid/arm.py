@@ -24,6 +24,8 @@ import zlib
 from dataclasses import dataclass, field
 
 import numpy as np
+from robot_msgs.std import Header
+from robot_msgs.trajectory import JointTrajectory, Trajectory
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wrist_3")
 # WHY these ranges: inside Menagerie's limits and away from the base (shoulder lift above horizontal-down, elbow folded either way)
@@ -466,9 +468,24 @@ def run_gripper(arm: ArmModel, counts: np.ndarray, hold: np.ndarray, offsets: np
 
 @dataclass
 class ArmMeasured:
-    poses: list[dict]          # static: commanded, encoder q, flange (p, R), TCP p
-    excitations: list[dict]    # encoder q, qd, torque, command, flange poses
+    poses: list[dict]                      # static: commanded, encoder q, flange (p, R), TCP p
+    excitations: list[JointTrajectory]     # encoder q, qd, joint torque; the command a channel
     gripper: dict | None = None
+    trackers: list[Trajectory] = field(default_factory=list)  # each excitation's tracker: flange_p (and tcp_p), every TRACKER_EVERY rows
+
+
+def excitation_trajectory(command: np.ndarray, q: np.ndarray, qd: np.ndarray, tau: np.ndarray) -> JointTrajectory:
+    """One excitation as the drive logs it: row k at k DT (the step's start angle, its end speed, the torque the joint received)."""
+    return JointTrajectory(t=DT * np.arange(q.shape[0]), joint_names=JOINTS, positions=q, velocities=qd, effort=tau, channels={"command": command},
+                           header=Header(frame_id="encoder", meta={"positions_relative_to": "each joint's encoder zero (link angle - zero offset)",
+                                                                   "units": "t s; positions rad; velocities rad/s; effort N.m; command rad"}))
+
+
+def tracker_trajectory(flange_p: np.ndarray, tcp_p: np.ndarray | None) -> Trajectory:
+    """The tracker during an excitation: the flange position (and the TCP marker's) at rows 0, TRACKER_EVERY, ... (no orientation)."""
+    channels = {"flange_p": flange_p} if tcp_p is None else {"flange_p": flange_p, "tcp_p": tcp_p}
+    return Trajectory(t=DT * TRACKER_EVERY * np.arange(flange_p.shape[0]), channels=channels,
+                      header=Header(frame_id="world", meta={"units": "t s; positions m"}))
 
 
 def measure(arm: ArmModel, values: dict, noise: dict, seed: int, poses: np.ndarray, excitations: list, gripper_counts=None, hold=None,
@@ -492,7 +509,7 @@ def measure(arm: ArmModel, values: dict, noise: dict, seed: int, poses: np.ndarr
         if arm.gripper:
             row["tcp"] = data.site_xpos[arm.gripper["pinch"]].copy() + rng.normal(0, noise["tcp_tracker_m"], 3)
         static.append(row)
-    dynamic = []
+    dynamic, trackers = [], []
     from sysid import world as hidden  # noqa: PLC0415
 
     late = hidden.perturbation("torque_late")  # the noise ladder's torque_late variant (sysid/noise_ladder.json); None outside it
@@ -502,16 +519,20 @@ def measure(arm: ArmModel, values: dict, noise: dict, seed: int, poses: np.ndarr
         lag = 0 if late is None else int(round(late / DT))
         if lag:
             tau = np.vstack([np.repeat(tau[:1], lag, axis=0), tau[:-lag]])
-        dynamic.append({"command": command, "q": q - offsets + rng.normal(0, noise["encoder_rad"], q.shape),
-                        "qd": qd + rng.normal(0, noise["speed_rad_s"], qd.shape), "tau": tau + rng.normal(0, 1.0, tau.shape) * big,
-                        "flange_p": np.array([p for p, _ in flange]) + rng.normal(0, noise["tracker_position_m"], (len(flange), 3)),
-                        "tcp_p": np.array(tcp) + rng.normal(0, noise.get("tcp_tracker_m", 0.0), (len(tcp), 3)) if tcp else None})
+        # WHY the draws in this order (encoder, speed, torque, flange, TCP): each excitation's rng stream is the hidden truth's
+        q_meas = q - offsets + rng.normal(0, noise["encoder_rad"], q.shape)
+        qd_meas = qd + rng.normal(0, noise["speed_rad_s"], qd.shape)
+        tau_meas = tau + rng.normal(0, 1.0, tau.shape) * big
+        flange_p = np.array([p for p, _ in flange]) + rng.normal(0, noise["tracker_position_m"], (len(flange), 3))
+        tcp_p = np.array(tcp) + rng.normal(0, noise.get("tcp_tracker_m", 0.0), (len(tcp), 3)) if tcp else None
+        dynamic.append(excitation_trajectory(command, q_meas, qd_meas, tau_meas))
+        trackers.append(tracker_trajectory(flange_p, tcp_p))
     grip = None
     if gripper_counts is not None:
         rng = rng_for(seed, label, "gripper")
         trace = run_gripper(arm, gripper_counts, hold, offsets)
         grip = {"counts": gripper_counts, "driver": trace + rng.normal(0, noise["gripper_rad"], trace.size), "hold": hold}
-    return ArmMeasured(static, dynamic, grip)
+    return ArmMeasured(static, dynamic, grip, trackers)
 
 
 # --- identification --------------------------------------------------------------------------------------------------------------
@@ -598,7 +619,7 @@ def rigid_inverse(arm: ArmModel, q: np.ndarray, qd: np.ndarray, qdd: np.ndarray,
             model.body_mass[g["body"]], model.body_ipos[g["body"], 2] = saved_tool
 
 
-def fit_dynamics(arm: ArmModel, excitations: list[dict], offsets: np.ndarray, *, tool: dict | None = None, stride: int = 2) -> dict:
+def fit_dynamics(arm: ArmModel, excitations: list[JointTrajectory], offsets: np.ndarray, *, tool: dict | None = None, stride: int = 2) -> dict:
     """Per joint armature, damping and Coulomb (and the tool's mass and centre-of-mass height) by weighted least squares of the
     measured torque on MuJoCo's rigid inverse dynamics; weights from each joint's residual of a first pass; intervals from the
     weighted fit's covariance."""
@@ -610,13 +631,13 @@ def fit_dynamics(arm: ArmModel, excitations: list[dict], offsets: np.ndarray, *,
     # torque read wrist 3's inertia +13 %; with the simulator's exact accelerations the same regression returns every joint to four
     # digits), and WHY the inverse dynamics on the RAW samples, smoothed after: the rigid-body torque is nonlinear in q and qd, so
     # L[ID(x)] is what L[tau] equals, not ID(L[x]) (that read the elbow's inertia -12 % under a gripper).
-    lengths = [e["q"].shape[0] for e in excitations]
+    lengths = [len(e) for e in excitations]
     cuts = np.cumsum(lengths)[:-1]
     smooth = lambda x: np.concatenate([savgol_filter(part, SMOOTHER, 3, axis=0) for part in np.split(x, cuts)])  # noqa: E731
-    q_raw = np.concatenate([e["q"] + offsets for e in excitations])
-    qd_raw = np.concatenate([e["qd"] for e in excitations])
-    qdd_raw = np.concatenate([np.vstack([np.zeros((1, 6)), np.diff(e["qd"], axis=0)]) / DT for e in excitations])
-    tau = smooth(np.concatenate([e["tau"] for e in excitations]))
+    q_raw = np.concatenate([e.positions + offsets for e in excitations])
+    qd_raw = np.concatenate([e.velocities for e in excitations])
+    qdd_raw = np.concatenate([np.vstack([np.zeros((1, 6)), np.diff(e.velocities, axis=0)]) / DT for e in excitations])
+    tau = smooth(np.concatenate([e.effort for e in excitations]))
     qd, qdd, sgn = smooth(qd_raw), smooth(qdd_raw), smooth(np.sign(qd_raw))
     # WHY rows a half window from any stuck sample are dropped too: inside the smoother's window a stuck joint's friction (anywhere in
     # [-F, F]) leaks into the moving rows' smoothed torque, which no sgn(qd) column describes
@@ -729,10 +750,10 @@ def predict_static(arm: ArmModel, values: dict, commands: np.ndarray, *, tcp: bo
     return np.array(out)
 
 
-def predict_torque(arm: ArmModel, values: dict, excitations: list[dict]) -> list[np.ndarray]:
+def predict_torque(arm: ArmModel, values: dict, excitations: list[JointTrajectory]) -> list[np.ndarray]:
     arm.set_values(values)
     offsets = arm.offsets(values)
-    return [run_excitation(arm, e["command"], offsets)[2] for e in excitations]
+    return [run_excitation(arm, e.channels["command"], offsets)[2] for e in excitations]
 
 
 # --- one example, end to end (the two UR5e pipelines are this with gripper off or on) -----------------------------------------
@@ -800,7 +821,7 @@ def score_example(description, plan_: ArmPlan, fit: ArmFit, measured: Measured, 
         pred = predict_static(model, values, plan_.poses_held_out, tcp=gripper)
         tool_mm = 1e3 * float(np.sqrt(np.mean(np.sum((pred - measured_tool) ** 2, axis=1))))
         torques = predict_torque(model, values, held.excitations)
-        torque = float(np.sqrt(np.mean(np.concatenate([(p - e["tau"]).ravel() for p, e in zip(torques, held.excitations)]) ** 2)))
+        torque = float(np.sqrt(np.mean(np.concatenate([(p - e.effort).ravel() for p, e in zip(torques, held.excitations)]) ** 2)))
         row = {"tool_mm": tool_mm, "torque_nm": torque}
         if gripper:
             trace = run_gripper(model, held.gripper["counts"], held.gripper["hold"], model.offsets(values))
