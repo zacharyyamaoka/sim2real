@@ -13,11 +13,19 @@ import itertools
 import math
 import statistics
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 from robot_msgs.compare import error_stats
 
-__all__ = ["rms", "center", "difference", "on_common_clock", "pair_rms", "pairwise_rms"]
+__all__ = ["rms", "center", "difference", "on_common_clock", "pair_rms", "pairwise_rms", "repeat_floor", "RepeatFloor",
+           "SAME_INPUT_TOLERANCE_RAD", "FLOOR_MIN_REPEATS"]
+
+# WHY a tolerance on the INPUT (2026-11-11 review, "Sim2Real KPIs and Gates", the floor check): a repeat is the same commanded input run
+# again; two runs whose commands differ disagree for that reason, and pooling them made a floor 6-20x too big. 0.01 deg RMS on the
+# command is the note's proposal (Zach to confirm).
+SAME_INPUT_TOLERANCE_RAD = math.radians(0.01)
+FLOOR_MIN_REPEATS = 5  # T1 (cards/servo_gates.FLOOR_REPEATS): at least 5 repeats of one input before the floor is known
 
 
 def rms(values) -> float:
@@ -73,3 +81,36 @@ def pairwise_rms(series: Sequence[tuple[np.ndarray, np.ndarray]], *, clock: str 
     """RMS of the difference for every pair (i < j). WHY one function: a fidelity ratio is never a ratio of two different rulers."""
 
     return [(i, j, pair_rms(a, b, clock=clock, dt=dt)) for (i, a), (j, b) in itertools.combinations(enumerate(series), 2)]
+
+
+@dataclass(frozen=True)
+class RepeatFloor:
+    """The real device's run-to-run floor from same-input repeats: the median RMS between two responses to one command. `value` is in the
+    signal's unit (rad for an angle) or None with no same-input pair; `known` needs `min_repeats` runs in those pairs."""
+
+    value: float | None
+    pairs: int            # same-input pairs the median is over
+    runs: int             # distinct runs in those pairs
+    rejected: int         # pairs dropped because their commands differ (or their lengths do)
+    min_repeats: int = FLOOR_MIN_REPEATS
+
+    @property
+    def known(self) -> bool:
+        return self.value is not None and self.runs >= self.min_repeats
+
+
+def repeat_floor(runs: Sequence[tuple[np.ndarray, np.ndarray, np.ndarray]], *, tolerance: float = SAME_INPUT_TOLERANCE_RAD,
+                 min_repeats: int = FLOOR_MIN_REPEATS, dt: float = 0.002, length_tolerance: float = 0.03) -> RepeatFloor:
+    """The floor over every pair of `runs` (each ``(t from 0, command, response)``, one signal) whose commands agree within `tolerance`
+    RMS on a common clock and whose lengths agree within `length_tolerance`; the rest are counted as rejected, never pooled."""
+
+    values, members, rejected = [], set(), 0
+    for (i, (t_a, c_a, y_a)), (j, (t_b, c_b, y_b)) in itertools.combinations(enumerate(runs), 2):
+        if abs(t_a[-1] - t_b[-1]) > length_tolerance * max(t_a[-1], t_b[-1]) or not pair_rms((t_a, c_a), (t_b, c_b), dt=dt) <= tolerance:
+            rejected += 1
+            continue
+        value = pair_rms((t_a, y_a), (t_b, y_b), dt=dt)
+        if math.isfinite(value):
+            values.append(value)
+            members.update((i, j))
+    return RepeatFloor(float(statistics.median(values)) if values else None, len(values), len(members), rejected, min_repeats)
