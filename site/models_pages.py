@@ -136,12 +136,40 @@ def load(site) -> Data:
 
 # --- the models: an index and a page per generic type --------------------------------------------------------------------------------
 
+def used_on(d: Data, tid: str) -> set[str]:
+    """The deployments (roots) where any model of the type is used: the index's and the home's Used on."""
+    return {node.split("/")[0] for m in dm.TYPES[tid].models for node, _h, _r in d.used.get((tid, m.id), [])}
+
+
+def type_tile(d: Data, tid: str) -> str:
+    """A type's tile on the home page: its icon, name, group, today's model, parameters and where it is used, opening its ladder.
+    WHY the home leads with these (Zach, 2026-11-11, after looking at sim2real and not finding the types work): sim2real owns the generic
+    types and the seam to robotparts is them (docs/decision-types-seam-2026-11-11.md)."""
+    t = dm.TYPES[tid]
+    # a model id breaks only at its dots (<wbr>), never inside a word
+    current = " · ".join(e(m.id).replace(".", ".<wbr>") for m in dm.current_models(tid))
+    used = used_on(d, tid)
+    where = f"used on {plural(len(used), 'deployment')}" if used else "not used yet"
+    return (f'<li><a class="tile s2r-type-tile" href="{e(model_url(tid))}" data-type="{e(tid)}">'
+            f'<span class="pic s2r-type-pic" data-thumb>{ui_shared.icon(tid)}</span><span class="tn">{e(t.title)}</span>'
+            f'<span class="s2r-tile-meta" data-meta="group">{e(t.group)}</span>'
+            f'<span class="s2r-tile-meta" data-meta="model"><code>{current}</code></span>'
+            f'<span class="s2r-tile-meta" data-meta="parameters" data-n="{len(t.parameters)}" data-used="{len(used)}">'
+            f'{plural(len(t.parameters), "parameter")} · {e(where)}</span></a></li>')
+
+
+def front_pages(d: Data) -> tuple[tuple[str, str, int], ...]:
+    """(label, url, count) of Models, Routines and Parameters: the home's Choose column lists them above the deployments."""
+    return (("Models", MODELS_URL, sum(len(dm.TYPES[tid].models) for tid in dm.TYPE_ORDER)), ("Routines", ROUTINES_URL, len(reg.ROUTINES)),
+            ("Parameters", PARAMETERS_URL, len(d.params["rows"])))
+
+
 def index_body(d: Data) -> str:
     rows = []
     for tid in dm.TYPE_ORDER:
         t = dm.TYPES[tid]
         current = " · ".join(f"<code>{e(m.id)}</code>" for m in dm.current_models(tid))
-        used = {node.split("/")[0] for m in t.models for node, _h, _r in d.used.get((tid, m.id), [])}
+        used = used_on(d, tid)
         rows.append(f'<tr data-row-type="{e(tid)}"><th scope="row"><span class="s2r-ei">{ui_shared.icon(tid)}</span> '
                     f'<a data-type="{e(tid)}" href="{e(model_url(tid))}">{e(t.title)}</a><br><small class="mut">{e(t.covers)}</small></th>'
                     f'<td class="s2r-nw">{e(t.group)}</td><td>{e(" · ".join(FAMILY_TITLE[f] for f in t.families))}</td><td>{len(t.models)}</td>'
