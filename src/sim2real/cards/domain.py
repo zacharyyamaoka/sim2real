@@ -960,7 +960,9 @@ def export() -> dict:
         "coverage": [plain(t.coverage) for t in TYPES.values()],
         "routines": [{"id": r.id, "title": r.title, "package": r.package, "kind": r.kind, "setting": r.setting, "status": r.status,
                       "identifies": [{"type": t, "model": m, "parameter": n} for t, m, n in routine_parameters(r.id)],
-                      "legacy_identifies": plain(r.identifies)} for r in reg.ROUTINES],
+                      "legacy_identifies": plain(r.identifies),
+                      "configures": [{"type": CARD_TYPE[c.card], "card": c.card, "settings": list(c.settings)} for c in r.configures]}
+                     for r in reg.ROUTINES],
         "parameter_routines": back,
         "migration": {
             "cards": CARD_TYPE,

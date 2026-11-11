@@ -4945,7 +4945,8 @@
     }
    },
    "alternatives": [
-    "rgbd.self_calibration"
+    "rgbd.self_calibration",
+    "rgbd.flat_target_noise"
    ],
    "references": [
     "Khoshelham, Elberink (2012). Accuracy and resolution of Kinect depth data for indoor mapping applications. Sensors.",
@@ -5011,11 +5012,709 @@
    },
    "recovery": {},
    "alternatives": [
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "rgbd.flat_target_noise"
    ],
    "references": [
     "Khoshelham, Elberink (2012). Accuracy and resolution of Kinect depth data for indoor mapping applications. Sensors."
    ],
+   "note": ""
+  },
+  {
+   "routine": "camera.exposure_response_ptc",
+   "title": "Exposure response, black level, gain and noise from a grey-card sweep (photon transfer)",
+   "package": "camera.rgb",
+   "kind": "identify",
+   "setting": "both",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "a dozen exposures x two gains, 10 frames each"
+   },
+   "operator_time": {
+    "value": 30.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "a grey card in view"
+   },
+   "equipment": [
+    {
+     "id": "grey_card",
+     "title": "An 18 % grey card (or the white tile) under the deployment's lights",
+     "cost": {
+      "value": 30.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 30.0,
+    "unit": "USD",
+    "source": "estimate (grey_card)",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M2",
+     "parameters": [
+      "exposure_response"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "exposure and gain stepped from the noise floor to saturation on a static grey card",
+   "coverage": "the response from black to clipping",
+   "repeats": 10,
+   "how": "per setting, the mean and the frame-to-frame variance of the card's pixels; least squares of mean DN on exposure x gain (black level, response, saturation), and the photon transfer curve (variance on mean) for the system gain and read noise",
+   "tests": [
+    "camera_rgb.grey_card"
+   ],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test; no sysid example films a grey card"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "camera.latency_led",
+   "title": "Capture latency from an LED blinked on a stamped clock",
+   "package": "camera.rgb",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 30.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "the LED in view"
+   },
+   "equipment": [
+    {
+     "id": "led_blinker",
+     "title": "An LED switched by the host on a stamped clock, in the camera's view",
+     "cost": {
+      "value": 20.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 20.0,
+    "unit": "USD",
+    "source": "estimate (led_blinker)",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M2",
+     "parameters": [
+      "latency_s"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "an LED switched on and off at random intervals on the host's clock",
+   "coverage": "on and off edges across the exposure's phase",
+   "repeats": 30,
+   "how": "each edge's first lit frame against the switch time; the latency is the median offset, its spread the stamp jitter",
+   "tests": [
+    "camera_rgb.led_blink"
+   ],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "camera.rolling_shutter_target",
+   "title": "Rolling-shutter line delay from a target moving at known speed",
+   "package": "camera.rgb",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "equipment": [
+    {
+     "id": "camera_tags",
+     "title": "A calibrated camera and printed ArUco / AprilTags (on the output, a flange, a gripper or the belt)",
+     "cost": {
+      "value": 325.0,
+      "unit": "USD",
+      "source": "camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 325.0,
+    "unit": "USD",
+    "source": "camera_tags: camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M3",
+     "parameters": [
+      "line_delay_s"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "a tag carried across the rows at a known, steady speed (the belt)",
+   "coverage": "the target across the image's rows",
+   "repeats": 10,
+   "how": "the tag's apparent shear: column offset per row over speed in px/s is the delay per row (Oth 2013's model, linear)",
+   "tests": [
+    "camera_rgb.moving_target"
+   ],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [
+    "Oth, Furgale, Kneip, Siegwart (2013). Rolling shutter camera calibration. IEEE Conference on Computer Vision and Pattern Recognition."
+   ],
+   "note": ""
+  },
+  {
+   "routine": "rgbd.flat_target_noise",
+   "title": "Depth noise law and depth bias from a flat target at measured distances",
+   "package": "camera.rgbd",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 600.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "a flat target at 6-8 distances, 40 frames each"
+   },
+   "operator_time": {
+    "value": 300.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "moving and measuring the target"
+   },
+   "equipment": [
+    {
+     "id": "flat_target",
+     "title": "A flat, matte, textured board and a tape or rangefinder for its distance",
+     "cost": {
+      "value": 100.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 100.0,
+    "unit": "USD",
+    "source": "estimate (flat_target)",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_rgbd",
+     "rung": "M1",
+     "parameters": [
+      "subpixel_sigma"
+     ]
+    },
+    {
+     "card": "camera_rgbd",
+     "rung": "M2",
+     "parameters": [
+      "depth_bias_coeffs"
+     ]
+    }
+   ],
+   "parameters_covered": 2,
+   "excitation": "a flat target stepped through the working range",
+   "coverage": "distances over the working range, the target filling the view",
+   "repeats": 40,
+   "how": "per distance, the plane's fitted depth against the measured one (bias, a polynomial in z) and the per-pixel std over frames; least squares of std on z^2 / (f b) for the sub-pixel disparity noise",
+   "tests": [
+    "camera_rgbd.flat_target"
+   ],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgbd with a hidden-truth test"
+   },
+   "recovery": {},
+   "alternatives": [
+    "rgbd.dot_card",
+    "rgbd.self_calibration"
+   ],
+   "references": [
+    "Khoshelham, Elberink (2012). Accuracy and resolution of Kinect depth data for indoor mapping applications. Sensors.",
+    "Herrera C., Kannala, Heikkil\u00e4 (2012). Joint depth and color camera calibration with distortion correction. IEEE Transactions on Pattern Analysis and Machine Intelligence."
+   ],
+   "note": ""
+  },
+  {
+   "routine": "hsi.lamp_lines",
+   "title": "Band centres and widths from a spectral lamp's known lines",
+   "package": "camera.hsi",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 300.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "the lamp over the line"
+   },
+   "equipment": [
+    {
+     "id": "spectral_lamp",
+     "title": "A mercury-argon (or krypton for SWIR) pen lamp with known emission lines",
+     "cost": {
+      "value": 400.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 400.0,
+    "unit": "USD",
+    "source": "estimate (spectral_lamp)",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_hsi",
+     "rung": "M0",
+     "parameters": [
+      "band_centres"
+     ]
+    },
+    {
+     "card": "camera_hsi",
+     "rung": "M1",
+     "parameters": [
+      "band_fwhm"
+     ]
+    }
+   ],
+   "parameters_covered": 2,
+   "excitation": "a lamp with known emission lines filling the slit",
+   "coverage": "lines spread over the camera's wavelength range",
+   "repeats": 20,
+   "how": "a Gaussian fitted to each line on the spectral axis: its centre pixel and FWHM; a low-order polynomial maps pixel to wavelength",
+   "tests": [
+    "camera_hsi.lamp_lines"
+   ],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented yet: the fit lands in sim2real.fit.camera_hsi with a hidden-truth test"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [
+    "Burger, Gowen (2011). Data handling in hyperspectral image analysis. Chemometrics and Intelligent Laboratory Systems."
+   ],
+   "note": ""
+  },
+  {
+   "routine": "hsi.smile_keystone_bars",
+   "title": "Smile and keystone from lamp lines and an edge across the field",
+   "package": "camera.hsi",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 300.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "equipment": [
+    {
+     "id": "spectral_lamp",
+     "title": "A mercury-argon (or krypton for SWIR) pen lamp with known emission lines",
+     "cost": {
+      "value": 400.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    },
+    {
+     "id": "bar_target",
+     "title": "Spectral and spatial bar targets across the field (a slit grid and an edge)",
+     "cost": {
+      "value": 200.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 600.0,
+    "unit": "USD",
+    "source": "estimate (spectral_lamp, bar_target)",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_hsi",
+     "rung": "M2",
+     "parameters": [
+      "smile_keystone_map"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "the lamp's lines across the whole slit (smile) and a sharp edge seen in every band (keystone)",
+   "coverage": "the full slit length and band range",
+   "repeats": 20,
+   "how": "smile: each line's centre against the spatial pixel (a quadratic); keystone: the edge's spatial position against the band (linear)",
+   "tests": [
+    "camera_hsi.bar_targets"
+   ],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented yet: the fit lands in sim2real.fit.camera_hsi with a hidden-truth test"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [
+    "Mouroulis, Green, Chrien (2000). Design of pushbroom imaging spectrometers for optimum recovery of spectroscopic and spatial information. Applied Optics."
+   ],
+   "note": ""
+  },
+  {
+   "routine": "camera.exposure_lock",
+   "title": "Lock exposure, gain and white balance under the deployment's lights",
+   "package": "camera.rgb",
+   "kind": "configure",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 40.0,
+    "unit": "s",
+    "source": "bam_camera_calibration evidence.json duration_s, the rack D435 at 1920x1080@15 on 2026-11-10 (35 probes)",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "unattended once the lights are on"
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "the camera's own auto mode once as a reference, then manual exposure, gain and white balance written and read back",
+   "coverage": "the metering ROI's brightness from dark to clipping, white balance over its Kelvin range",
+   "repeats": 1,
+   "how": "auto exposure and white balance as a reference; then the largest exposure (native gain first) under the target brightness without new clipping, white balance zeroing the grey pixels' red/blue, a mains-flicker snap, and every write proved by the device's per-frame echo and steady brightness",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/core/mdp/setup/bam_camera_calibration/src/bam_camera_calibration/calibrate.py",
+     "ref": "",
+     "note": "calibrate(): the search, lock and verify over the ExposureCamera protocol; RealSense adapter beside it"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid check: configuring recovers no hidden model value; its hidden-truth tests are bam_camera_calibration's twin tests (white balance to 3 mired of a hidden light, the same picture under different light)"
+   },
+   "recovery": {},
+   "alternatives": [
+    "camera.exposure_for_task"
+   ],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "camera.exposure_for_task",
+   "title": "Exposure and gain chosen by the task: the shortest exposure that still reads the markers",
+   "package": "camera.rgb",
+   "kind": "configure",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "bam_camera_calibration evidence.json, the rack D435 on 2026-11-10: 24 exposure x gain probes of 5 frames",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "unattended, the markers in view"
+   },
+   "equipment": [
+    {
+     "id": "camera_tags",
+     "title": "A calibrated camera and printed ArUco / AprilTags (on the output, a flange, a gripper or the belt)",
+     "cost": {
+      "value": 325.0,
+      "unit": "USD",
+      "source": "camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 325.0,
+    "unit": "USD",
+    "source": "camera_tags: camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "an exposure x gain grid: whole flicker periods up to the frame cap, gains up to a moderate cap",
+   "coverage": "the exposures from the cap down to a sixteenth of it",
+   "repeats": 5,
+   "how": "score the task (markers read per frame) at each setting and keep the shortest exposure within 90 % of the best score, then the least gain there: less motion blur for the same reads",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/core/mdp/setup/bam_camera_calibration/src/bam_camera_calibration/task.py",
+     "ref": "",
+     "note": "aruco_score; the grid is calibrate(task_score=...)"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid check: the score is the task itself, run live; bam_camera_calibration's tests hold the grid's pick on a known camera"
+   },
+   "recovery": {},
+   "alternatives": [
+    "camera.exposure_lock"
+   ],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "rgbd.depth_emitter_settings",
+   "title": "Depth module set-up: IR exposure, laser power and emitter for the fill rate",
+   "package": "camera.rgbd",
+   "kind": "configure",
+   "setting": "both",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "unattended, the work area in view"
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "IR exposure and laser power stepped with the emitter on",
+   "coverage": "the work area's depth ROI over the settings",
+   "repeats": 1,
+   "how": "the lowest laser power and IR exposure whose depth fill rate and plane noise in the ROI meet the gates, written and read back (laser power before the emitter flag: writing it re-enables the emitter)",
+   "tests": [],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented: intel_rgbd writes these settings, nothing searches them yet"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "hsi.integration_time",
+   "title": "Hyperspectral integration time and line rate against a white tile",
+   "package": "camera.hsi",
+   "kind": "configure",
+   "setting": "both",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 30.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "a white tile in the line"
+   },
+   "equipment": [
+    {
+     "id": "reflectance_refs",
+     "title": "White, grey and black reflectance references and a dark cap",
+     "cost": {
+      "value": 1500.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 1500.0,
+    "unit": "USD",
+    "source": "estimate (reflectance_refs)",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "integration time stepped on the white tile at the belt's line rate",
+   "coverage": "every band of the white tile below saturation",
+   "repeats": 1,
+   "how": "the line rate from belt speed / along-track pixel size; then the longest integration that fits the line period and keeps the white tile's brightest band at or below 85 % of full scale, proved on a fresh capture",
+   "tests": [],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented yet: lands in sim2real.schedule.camera_configure with a hidden-truth test"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "camera.focus_lock",
+   "title": "Focus and aperture locked on a target at the working distance",
+   "package": "camera.line_area_scan",
+   "kind": "configure",
+   "setting": "bench",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 300.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 300.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "turning the lens rings by hand"
+   },
+   "equipment": [
+    {
+     "id": "bar_target",
+     "title": "Spectral and spatial bar targets across the field (a slit grid and an edge)",
+     "cost": {
+      "value": 200.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 200.0,
+    "unit": "USD",
+    "source": "estimate (bar_target)",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "the focus ring turned through best focus on a bar target at the working distance",
+   "coverage": "the line's centre and both ends",
+   "repeats": 1,
+   "how": "the edge's sharpness (MTF50) read live while the ring turns; lock at the peak, the aperture where depth of field covers the belt's object heights",
+   "tests": [],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented: a C-mount line or hyperspectral camera needs it; the RealSense is fixed focus"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
    "note": ""
   },
   {
@@ -22867,7 +23566,8 @@
    },
    "routines": [
     "rgbd.dot_card",
-    "rgbd.self_calibration"
+    "rgbd.self_calibration",
+    "rgbd.flat_target_noise"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -23397,9 +24097,15 @@
    "distortion": [
     "camera.intrinsics_charuco"
    ],
-   "exposure_response": [],
-   "latency_s": [],
-   "line_delay_s": [],
+   "exposure_response": [
+    "camera.exposure_response_ptc"
+   ],
+   "latency_s": [
+    "camera.latency_led"
+   ],
+   "line_delay_s": [
+    "camera.rolling_shutter_target"
+   ],
    "extrinsic_drift_mm_per_sqrt_h": []
   },
   "camera_rgbd": {
@@ -23409,20 +24115,29 @@
     "rgbd.self_calibration"
    ],
    "depth_to_color": [],
-   "subpixel_sigma": [],
+   "subpixel_sigma": [
+    "rgbd.flat_target_noise"
+   ],
    "depth_bias_coeffs": [
     "rgbd.dot_card",
-    "rgbd.self_calibration"
+    "rgbd.self_calibration",
+    "rgbd.flat_target_noise"
    ],
    "depth_to_color_drift_mm_per_sqrt_h": []
   },
   "camera_hsi": {
-   "band_centres": [],
+   "band_centres": [
+    "hsi.lamp_lines"
+   ],
    "dark_white_refs": [
     "linescan.radiometry_refs"
    ],
-   "band_fwhm": [],
-   "smile_keystone_map": [],
+   "band_fwhm": [
+    "hsi.lamp_lines"
+   ],
+   "smile_keystone_map": [
+    "hsi.smile_keystone_bars"
+   ],
    "line_geometry": [
     "linescan.geometry_dot_card"
    ],

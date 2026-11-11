@@ -44,7 +44,7 @@ from . import coverage as cov
 from . import schema
 from .schema import (DRIFT_MESSAGE, DRIFT_THRESHOLD, ESTIMATE, KINDS, OUT_OF_COVERAGE, ROLES, ROUTINE_KINDS, ROUTINE_SETTINGS,  # noqa: F401
                      ROUTINE_STATUS, SCHEMA, SETTINGS, TWINNED_LIMIT, WEAR_LAWS, Architecture, CalibrationPackage, CalibrationRoutine,
-                     CodeHome, CoverageNeed, Diagnostic, DriftResult, Equipment, Forecast, Gate, Identifies, Limit, Quantity, Reference,
+                     CodeHome, Configures, CoverageNeed, Diagnostic, DriftResult, Equipment, Forecast, Gate, Identifies, Limit, Quantity, Reference,
                      Rung, RungScore, TestType, Wear, coverage_flag, drift_check, mlp_weights, usage_remaining, wear_usage_at, wear_value)
 
 REPO = Path(__file__).resolve().parents[3]  # src/sim2real/cards/ -> the repo (moved 2026-11-10)
@@ -812,7 +812,13 @@ def routines_for(card_or_package: Card | str) -> tuple[CalibrationRoutine, ...]:
             raise KeyError(f"no card or calibration package {card_or_package!r}")
         return tuple(r for r in ROUTINES if r.package == card_or_package)
     cid = _card(card_or_package).id
-    return tuple(r for r in ROUTINES if any(i.card == cid for i in r.identifies))
+    return tuple(r for r in ROUTINES if any(i.card == cid for i in r.identifies) or any(c.card == cid for c in r.configures))
+
+
+def routines_configuring(card: Card | str) -> tuple[CalibrationRoutine, ...]:
+    """Card -> its configure routines (kind "configure"): the set-up steps a robot of this type runs, like homing, before it is used."""
+    cid = _card(card).id
+    return tuple(r for r in ROUTINES if any(c.card == cid for c in r.configures))
 
 
 def routines_identifying(card: Card | str, parameter: str) -> tuple[CalibrationRoutine, ...]:

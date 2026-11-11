@@ -257,8 +257,11 @@ class CalibrationPackage:
 # Where a routine can run: a TestType's two SETTINGS, or both (a routine needing nothing the facility lacks).
 ROUTINE_SETTINGS = ("bench", "deployed", "both")
 # identify: it returns parameter values; measure: it is a gauge (it reads a metric or a calibration constant, e.g. the camera dwell
-# ruler's output stop error); use: it consumes a calibration at run time (the IK fine-tune), identifying nothing.
-ROUTINE_KINDS = ("identify", "measure", "use")
+# ruler's output stop error); use: it consumes a calibration at run time (the IK fine-tune), identifying nothing; configure (additive,
+# 2026-11-11): it sets a device up, the way homing finds a zero, rather than fitting a model (a camera's exposure, gain and white balance
+# locked under the deployment's lights). WHY a kind of its own (Zach, 2026-11-11): "we are not identifying a model so much as
+# automatically configuring it". A configure routine names what it writes in `configures`, not in `identifies`.
+ROUTINE_KINDS = ("identify", "measure", "use", "configure")
 ROUTINE_STATUS = ("implemented", "partial", "not implemented")
 ESTIMATE = "estimate"  # a Quantity's source when nobody measured or published the number
 
@@ -294,6 +297,14 @@ class Identifies:
 
 
 @dataclass(frozen=True)
+class Configures:
+    """The device settings a configure routine writes on one card's type (setting names as the device spells them, e.g. exposure, gain,
+    white_balance_k). Settings are not model parameters: they are inputs the model is evaluated at, fixed so the model stays valid."""
+    card: str
+    settings: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CalibrationRoutine:
     """A Calibration Routine: one way to calibrate parameters, where it runs, what it costs, what it needs, and how well it recovers a
     hidden truth.
@@ -325,6 +336,7 @@ class CalibrationRoutine:
     alternatives: tuple[str, ...] = ()    # routines that identify the same parameters another way (they name this one back)
     references: tuple[Reference, ...] = ()
     note: str = ""
+    configures: tuple[Configures, ...] = ()  # kind "configure" only: the settings it writes, per card (additive, 2026-11-11)
 
     def identifies_parameter(self, card: str, parameter: str) -> bool:
         return any(item.card == card and parameter in item.parameters for item in self.identifies)
