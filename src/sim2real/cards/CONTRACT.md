@@ -14,6 +14,12 @@ servo schedule's `MINIMUM_COVERAGE_PCT` / `NOTE_TARGETS`, as data that `sim2real
 `sim2real.schedule.joint.coverage` read. The servo card's gates and `ladders.GATE_PCT` read the same values (unchanged numbers). Decision:
 `docs/decision-actuator-verbs-2026-11-10.md`.
 
+Since 2026-11-11 (additive, the camera types built out): `ROUTINE_KINDS` gains `configure` (a routine that sets a device up, like homing,
+rather than fitting a model: Zach, "not identifying a model so much as automatically configuring it"). `CalibrationRoutine.configures`
+(default `()`) holds `Configures(card, settings)`, the device settings it writes; a configure routine identifies nothing.
+`reg.routines_configuring(card)` lists a card's; `reg.routines_for(card)` now also returns them. Eleven camera routines (six identify,
+five configure) and five equipment items join `ROUTINES` / `EQUIPMENT`; `domain_v3.json`'s routines carry `configures`.
+
 ## Rules of the road
 
 - **One import.** `sys.path` holds the repo root; then `from type_cards import registry as reg`. Everything below is a name on `reg`

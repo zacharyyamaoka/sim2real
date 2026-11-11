@@ -17,7 +17,7 @@ number exists for it. EQUIPMENT holds what a routine needs beyond the robot's ow
 from __future__ import annotations
 
 from . import references as refs
-from .schema import ESTIMATE, CalibrationPackage, CalibrationRoutine, CodeHome, Equipment, Identifies, Quantity
+from .schema import ESTIMATE, CalibrationPackage, CalibrationRoutine, CodeHome, Configures, Equipment, Identifies, Quantity
 
 BAM_WS = "/home/bam/bam_ws"
 IO_DX = "/home/bam/io-diagnostics"
@@ -133,6 +133,11 @@ EQUIPMENT = {e.id: e for e in (
     Equipment("thermocouple", "A thermocouple on the winding and its reader", Q(30, "USD", ESTIMATE)),
     Equipment("charuco_board", "A ChArUco board printed on a rigid flat", Q(50, "USD", ESTIMATE)),
     Equipment("dot_card", "A printed dot card with a certified step, and risers", Q(100, "USD", ESTIMATE)),
+    Equipment("grey_card", "An 18 % grey card (or the white tile) under the deployment's lights", Q(30, "USD", ESTIMATE)),
+    Equipment("led_blinker", "An LED switched by the host on a stamped clock, in the camera's view", Q(20, "USD", ESTIMATE)),
+    Equipment("flat_target", "A flat, matte, textured board and a tape or rangefinder for its distance", Q(100, "USD", ESTIMATE)),
+    Equipment("spectral_lamp", "A mercury-argon (or krypton for SWIR) pen lamp with known emission lines", Q(400, "USD", ESTIMATE)),
+    Equipment("bar_target", "Spectral and spatial bar targets across the field (a slit grid and an edge)", Q(200, "USD", ESTIMATE)),
     Equipment("reflectance_refs", "White, grey and black reflectance references and a dark cap", Q(1_500, "USD", ESTIMATE),
               "Spectralon-grade; a printed card is cheaper and drifts"),
 )}
@@ -140,6 +145,10 @@ EQUIPMENT = {e.id: e for e in (
 
 def I(card: str, rung: str, *parameters: str) -> Identifies:
     return Identifies(card, rung, tuple(parameters))
+
+
+def C(card: str, *settings: str) -> Configures:
+    return Configures(card, tuple(settings))
 
 
 def routine(id, title, package, identifies, setting, wall_time, operator_time, equipment, excitation, coverage, repeats, how, **kw):
@@ -543,7 +552,7 @@ ROUTINES = (
          "Levenberg-Marquardt of the dots' pixels and depths together, depth weighted by intel_rgbd's stereo law",
          tests=("camera_rgbd.flat_target",),
          code=(CodeHome(SIM2REAL, "sysid/examples/linescan_cell/pipeline.py"),), status="implemented",
-         oracle=("linescan_cell:rgbd.dot_card",), alternatives=("rgbd.self_calibration",),
+         oracle=("linescan_cell:rgbd.dot_card",), alternatives=("rgbd.self_calibration", "rgbd.flat_target_noise"),
          references=(refs.KHOSHELHAM_2012, refs.HERRERA_2012)),
     routine("rgbd.self_calibration", "Depth camera on-chip self-calibration (D400)", "camera.rgbd",
          (I("camera_rgbd", "M0", "depth_scale"), I("camera_rgbd", "M2", "depth_bias_coeffs")), "both",
@@ -552,7 +561,111 @@ ROUTINES = (
          "the camera's own on-chip routine re-fits its stereo calibration from a flat textured scene",
          tests=("camera_rgbd.self_calibration",),
          oracle_note="not implemented: the D400's on-chip self-calibration is RobotDx's proposed depth.health_check; nothing calls it",
-         alternatives=("rgbd.dot_card",), references=(refs.KHOSHELHAM_2012,)),
+         alternatives=("rgbd.dot_card", "rgbd.flat_target_noise"), references=(refs.KHOSHELHAM_2012,)),
+
+    # --- cameras: identify (2026-11-11, the camera types built out; Zach: "a rung of models ... and the routines for identifying them") ----
+    routine("camera.exposure_response_ptc", "Exposure response, black level, gain and noise from a grey-card sweep (photon transfer)", "camera.rgb",
+         (I("camera_rgb", "M2", "exposure_response"),), "both",
+         Q(120, "s", ESTIMATE, "a dozen exposures x two gains, 10 frames each"), Q(30, "s", ESTIMATE, "a grey card in view"), ("grey_card",),
+         "exposure and gain stepped from the noise floor to saturation on a static grey card", "the response from black to clipping", 10,
+         "per setting, the mean and the frame-to-frame variance of the card's pixels; least squares of mean DN on exposure x gain (black level, "
+         "response, saturation), and the photon transfer curve (variance on mean) for the system gain and read noise",
+         tests=("camera_rgb.grey_card",),
+         oracle_note="not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test; no sysid example films a grey card"),
+    routine("camera.latency_led", "Capture latency from an LED blinked on a stamped clock", "camera.rgb",
+         (I("camera_rgb", "M2", "latency_s"),), "bench",
+         Q(60, "s", ESTIMATE), Q(30, "s", ESTIMATE, "the LED in view"), ("led_blinker",),
+         "an LED switched on and off at random intervals on the host's clock", "on and off edges across the exposure's phase", 30,
+         "each edge's first lit frame against the switch time; the latency is the median offset, its spread the stamp jitter",
+         tests=("camera_rgb.led_blink",),
+         oracle_note="not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test"),
+    routine("camera.rolling_shutter_target", "Rolling-shutter line delay from a target moving at known speed", "camera.rgb",
+         (I("camera_rgb", "M3", "line_delay_s"),), "bench",
+         Q(120, "s", ESTIMATE), Q(60, "s", ESTIMATE), ("camera_tags",),
+         "a tag carried across the rows at a known, steady speed (the belt)", "the target across the image's rows", 10,
+         "the tag's apparent shear: column offset per row over speed in px/s is the delay per row (Oth 2013's model, linear)",
+         tests=("camera_rgb.moving_target",),
+         oracle_note="not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test",
+         references=(refs.OTH_2013,)),
+    routine("rgbd.flat_target_noise", "Depth noise law and depth bias from a flat target at measured distances", "camera.rgbd",
+         (I("camera_rgbd", "M1", "subpixel_sigma"), I("camera_rgbd", "M2", "depth_bias_coeffs")), "bench",
+         Q(600, "s", ESTIMATE, "a flat target at 6-8 distances, 40 frames each"), Q(300, "s", ESTIMATE, "moving and measuring the target"),
+         ("flat_target",),
+         "a flat target stepped through the working range", "distances over the working range, the target filling the view", 40,
+         "per distance, the plane's fitted depth against the measured one (bias, a polynomial in z) and the per-pixel std over frames; "
+         "least squares of std on z^2 / (f b) for the sub-pixel disparity noise",
+         tests=("camera_rgbd.flat_target",),
+         oracle_note="not implemented yet: the fit lands in sim2real.fit.camera_rgbd with a hidden-truth test",
+         alternatives=("rgbd.dot_card", "rgbd.self_calibration"), references=(refs.KHOSHELHAM_2012, refs.HERRERA_2012)),
+    routine("hsi.lamp_lines", "Band centres and widths from a spectral lamp's known lines", "camera.hsi",
+         (I("camera_hsi", "M0", "band_centres"), I("camera_hsi", "M1", "band_fwhm")), "bench",
+         Q(300, "s", ESTIMATE), Q(120, "s", ESTIMATE, "the lamp over the line"), ("spectral_lamp",),
+         "a lamp with known emission lines filling the slit", "lines spread over the camera's wavelength range", 20,
+         "a Gaussian fitted to each line on the spectral axis: its centre pixel and FWHM; a low-order polynomial maps pixel to wavelength",
+         tests=("camera_hsi.lamp_lines",),
+         oracle_note="not implemented yet: the fit lands in sim2real.fit.camera_hsi with a hidden-truth test",
+         references=(refs.BURGER_2011,)),
+    routine("hsi.smile_keystone_bars", "Smile and keystone from lamp lines and an edge across the field", "camera.hsi",
+         (I("camera_hsi", "M2", "smile_keystone_map"),), "bench",
+         Q(300, "s", ESTIMATE), Q(120, "s", ESTIMATE), ("spectral_lamp", "bar_target"),
+         "the lamp's lines across the whole slit (smile) and a sharp edge seen in every band (keystone)", "the full slit length and band range", 20,
+         "smile: each line's centre against the spatial pixel (a quadratic); keystone: the edge's spatial position against the band (linear)",
+         tests=("camera_hsi.bar_targets",),
+         oracle_note="not implemented yet: the fit lands in sim2real.fit.camera_hsi with a hidden-truth test",
+         references=(refs.MOUROULIS_2000,)),
+
+    # --- cameras: configure (kind "configure": set up, not fit; Zach, 2026-11-11: "like homing ... automatically configuring it") ---------
+    routine("camera.exposure_lock", "Lock exposure, gain and white balance under the deployment's lights", "camera.rgb", (), "both",
+         Q(40, "s", "bam_camera_calibration evidence.json duration_s, the rack D435 at 1920x1080@15 on 2026-11-10 (35 probes)"),
+         Q(0, "s", ESTIMATE, "unattended once the lights are on"), (),
+         "the camera's own auto mode once as a reference, then manual exposure, gain and white balance written and read back",
+         "the metering ROI's brightness from dark to clipping, white balance over its Kelvin range", 1,
+         "auto exposure and white balance as a reference; then the largest exposure (native gain first) under the target brightness without new "
+         "clipping, white balance zeroing the grey pixels' red/blue, a mains-flicker snap, and every write proved by the device's per-frame echo "
+         "and steady brightness",
+         kind="configure", configures=(C("camera_rgb", "exposure", "gain", "white_balance_k", "auto_exposure", "auto_white_balance"),
+                                       C("camera_rgbd", "exposure", "gain", "white_balance_k", "auto_exposure", "auto_white_balance")),
+         code=(CodeHome(BAM_WS, "src/core/mdp/setup/bam_camera_calibration/src/bam_camera_calibration/calibrate.py",
+                        note="calibrate(): the search, lock and verify over the ExposureCamera protocol; RealSense adapter beside it"),),
+         status="implemented",
+         oracle_note="no sysid check: configuring recovers no hidden model value; its hidden-truth tests are bam_camera_calibration's twin tests "
+                     "(white balance to 3 mired of a hidden light, the same picture under different light)",
+         alternatives=("camera.exposure_for_task",)),
+    routine("camera.exposure_for_task", "Exposure and gain chosen by the task: the shortest exposure that still reads the markers", "camera.rgb",
+         (), "both",
+         Q(60, "s", "bam_camera_calibration evidence.json, the rack D435 on 2026-11-10: 24 exposure x gain probes of 5 frames"),
+         Q(0, "s", ESTIMATE, "unattended, the markers in view"), ("camera_tags",),
+         "an exposure x gain grid: whole flicker periods up to the frame cap, gains up to a moderate cap", "the exposures from the cap down "
+         "to a sixteenth of it", 5,
+         "score the task (markers read per frame) at each setting and keep the shortest exposure within 90 % of the best score, then the least "
+         "gain there: less motion blur for the same reads",
+         kind="configure", configures=(C("camera_rgb", "exposure", "gain"), C("camera_rgbd", "exposure", "gain")),
+         code=(CodeHome(BAM_WS, "src/core/mdp/setup/bam_camera_calibration/src/bam_camera_calibration/task.py",
+                        note="aruco_score; the grid is calibrate(task_score=...)"),),
+         status="implemented",
+         oracle_note="no sysid check: the score is the task itself, run live; bam_camera_calibration's tests hold the grid's pick on a known camera",
+         alternatives=("camera.exposure_lock",)),
+    routine("rgbd.depth_emitter_settings", "Depth module set-up: IR exposure, laser power and emitter for the fill rate", "camera.rgbd", (), "both",
+         Q(60, "s", ESTIMATE), Q(0, "s", ESTIMATE, "unattended, the work area in view"), (),
+         "IR exposure and laser power stepped with the emitter on", "the work area's depth ROI over the settings", 1,
+         "the lowest laser power and IR exposure whose depth fill rate and plane noise in the ROI meet the gates, written and read back "
+         "(laser power before the emitter flag: writing it re-enables the emitter)",
+         kind="configure", configures=(C("camera_rgbd", "depth_exposure_us", "depth_gain", "laser_power", "emitter_enabled"),),
+         oracle_note="not implemented: intel_rgbd writes these settings, nothing searches them yet"),
+    routine("hsi.integration_time", "Hyperspectral integration time and line rate against a white tile", "camera.hsi", (), "both",
+         Q(60, "s", ESTIMATE), Q(30, "s", ESTIMATE, "a white tile in the line"), ("reflectance_refs",),
+         "integration time stepped on the white tile at the belt's line rate", "every band of the white tile below saturation", 1,
+         "the line rate from belt speed / along-track pixel size; then the longest integration that fits the line period and keeps the "
+         "white tile's brightest band at or below 85 % of full scale, proved on a fresh capture",
+         kind="configure", configures=(C("camera_hsi", "integration_time_s", "line_rate_hz", "gain"),),
+         oracle_note="not implemented yet: lands in sim2real.schedule.camera_configure with a hidden-truth test"),
+    routine("camera.focus_lock", "Focus and aperture locked on a target at the working distance", "camera.line_area_scan", (), "bench",
+         Q(300, "s", ESTIMATE), Q(300, "s", ESTIMATE, "turning the lens rings by hand"), ("bar_target",),
+         "the focus ring turned through best focus on a bar target at the working distance", "the line's centre and both ends", 1,
+         "the edge's sharpness (MTF50) read live while the ring turns; lock at the peak, the aperture where depth of field covers the belt's "
+         "object heights",
+         kind="configure", configures=(C("camera_hsi", "focus", "aperture"), C("camera_rgb", "focus", "aperture")),
+         oracle_note="not implemented: a C-mount line or hyperspectral camera needs it; the RealSense is fixed focus"),
 
     # --- PID ----------------------------------------------------------------------------------------------------------------------
     routine("pid.pidtuna", "PID gains from the identified model, then measured tuning (pidtuna)", "pid", (), "bench",

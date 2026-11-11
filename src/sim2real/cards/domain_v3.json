@@ -8503,7 +8503,9 @@
     ]
    ],
    "note": "",
-   "routines": []
+   "routines": [
+    "camera.exposure_response_ptc"
+   ]
   },
   {
    "key": "camera/latency_s",
@@ -8531,7 +8533,9 @@
     ]
    ],
    "note": "",
-   "routines": []
+   "routines": [
+    "camera.latency_led"
+   ]
   },
   {
    "key": "camera/line_delay_s",
@@ -8558,7 +8562,9 @@
     ]
    ],
    "note": "",
-   "routines": []
+   "routines": [
+    "camera.rolling_shutter_target"
+   ]
   },
   {
    "key": "camera/extrinsic_drift_mm_per_sqrt_h",
@@ -8708,7 +8714,9 @@
     ]
    ],
    "note": "",
-   "routines": []
+   "routines": [
+    "rgbd.flat_target_noise"
+   ]
   },
   {
    "key": "depth_camera/depth_bias_coeffs",
@@ -8737,7 +8745,8 @@
    "note": "a bias that grows with z and varies across the image",
    "routines": [
     "rgbd.dot_card",
-    "rgbd.self_calibration"
+    "rgbd.self_calibration",
+    "rgbd.flat_target_noise"
    ]
   },
   {
@@ -8793,7 +8802,9 @@
     ]
    ],
    "note": "",
-   "routines": []
+   "routines": [
+    "hsi.lamp_lines"
+   ]
   },
   {
    "key": "hyperspectral_camera/dark_white_refs",
@@ -8858,7 +8869,9 @@
     ]
    ],
    "note": "",
-   "routines": []
+   "routines": [
+    "hsi.lamp_lines"
+   ]
   },
   {
    "key": "hyperspectral_camera/smile_keystone_map",
@@ -8885,7 +8898,9 @@
     ]
    ],
    "note": "the distortion map the cube is resampled with",
-   "routines": []
+   "routines": [
+    "hsi.smile_keystone_bars"
+   ]
   },
   {
    "key": "hyperspectral_camera/line_geometry",
@@ -11745,7 +11760,8 @@
       "joint_offsets"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "homing.repeat_averaged",
@@ -11776,7 +11792,8 @@
       "joint_offsets"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "homing.repeat_checked_seek",
@@ -11807,7 +11824,8 @@
       "joint_offsets"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "kinematics.zero_offsets_tracker",
@@ -11843,7 +11861,8 @@
       "tcp_offset"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "kinematics.dh_ur_style",
@@ -11885,7 +11904,8 @@
       "tool_frame"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "kinematics.general_transform",
@@ -11927,7 +11947,8 @@
       "tool_frame"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "kinematics.ik_fine_tune",
@@ -11937,7 +11958,8 @@
    "setting": "both",
    "status": "implemented",
    "identifies": [],
-   "legacy_identifies": []
+   "legacy_identifies": [],
+   "configures": []
   },
   {
    "id": "servo.dynamics_regression",
@@ -11997,7 +12019,8 @@
       "friction_stribeck_drop_nm"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.stock_quasistatic",
@@ -12045,7 +12068,8 @@
       "damping_nm_s_rad"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.live_reid_t10",
@@ -12093,7 +12117,8 @@
       "damping_nm_s_rad"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.dynamometer",
@@ -12159,7 +12184,8 @@
       "torque_scale"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.known_mass",
@@ -12195,7 +12221,8 @@
       "kt_out_nm_a"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.top_speed_t7",
@@ -12225,7 +12252,8 @@
       "kt_out_nm_a"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.heating_t8",
@@ -12249,7 +12277,8 @@
       "thermal_r_c"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.backlash_reversals_camera",
@@ -12273,7 +12302,8 @@
       "backlash_rad"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.backlash_clamp",
@@ -12321,7 +12351,8 @@
       "gear_stiffness_nm_rad"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.gap_check_forecast",
@@ -12357,7 +12388,8 @@
       "backlash_wear_rad_per_nm_rev"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "servo.camera_dwell_stop_ruler",
@@ -12367,7 +12399,8 @@
    "setting": "bench",
    "status": "implemented",
    "identifies": [],
-   "legacy_identifies": []
+   "legacy_identifies": [],
+   "configures": []
   },
   {
    "id": "arm.dynamics_excitation",
@@ -12421,7 +12454,8 @@
       "link_inertials"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "arm.backlash_gravity_sweep",
@@ -12445,7 +12479,8 @@
       "backlash_rad"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "arm.backlash_reversal_tracker",
@@ -12469,7 +12504,8 @@
       "backlash_rad"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "gripper.drive_traces",
@@ -12493,7 +12529,8 @@
       "finger_width_map"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "conveyor.radius_tracker",
@@ -12517,7 +12554,8 @@
       "drum_radius_m"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "conveyor.dynamics_profiles",
@@ -12559,7 +12597,8 @@
       "viscous_n_s_m"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "cell.tags_bundle_adjustment",
@@ -12607,7 +12646,8 @@
       "extrinsics"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "hand_eye.ax_xb",
@@ -12643,7 +12683,8 @@
       "base_frame"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "camera.pose_recal_belt_tags",
@@ -12667,7 +12708,8 @@
       "extrinsics"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "camera.intrinsics_charuco",
@@ -12709,7 +12751,8 @@
       "distortion"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "linescan.geometry_dot_card",
@@ -12733,7 +12776,8 @@
       "line_geometry"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "linescan.radiometry_refs",
@@ -12757,7 +12801,8 @@
       "dark_white_refs"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "rgbd.dot_card",
@@ -12817,7 +12862,8 @@
       "depth_bias_coeffs"
      ]
     }
-   ]
+   ],
+   "configures": []
   },
   {
    "id": "rgbd.self_calibration",
@@ -12853,6 +12899,314 @@
       "depth_bias_coeffs"
      ]
     }
+   ],
+   "configures": []
+  },
+  {
+   "id": "camera.exposure_response_ptc",
+   "title": "Exposure response, black level, gain and noise from a grey-card sweep (photon transfer)",
+   "package": "camera.rgb",
+   "kind": "identify",
+   "setting": "both",
+   "status": "not implemented",
+   "identifies": [
+    {
+     "type": "camera",
+     "model": "M2.measurement.exposure_latency",
+     "parameter": "exposure_response"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M2",
+     "parameters": [
+      "exposure_response"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "camera.latency_led",
+   "title": "Capture latency from an LED blinked on a stamped clock",
+   "package": "camera.rgb",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "identifies": [
+    {
+     "type": "camera",
+     "model": "M2.measurement.exposure_latency",
+     "parameter": "latency_s"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M2",
+     "parameters": [
+      "latency_s"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "camera.rolling_shutter_target",
+   "title": "Rolling-shutter line delay from a target moving at known speed",
+   "package": "camera.rgb",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "identifies": [
+    {
+     "type": "camera",
+     "model": "M3.measurement.rolling_shutter",
+     "parameter": "line_delay_s"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M3",
+     "parameters": [
+      "line_delay_s"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "rgbd.flat_target_noise",
+   "title": "Depth noise law and depth bias from a flat target at measured distances",
+   "package": "camera.rgbd",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "identifies": [
+    {
+     "type": "depth_camera",
+     "model": "M1.measurement.disparity_noise",
+     "parameter": "subpixel_sigma"
+    },
+    {
+     "type": "depth_camera",
+     "model": "M2.measurement.depth_bias",
+     "parameter": "depth_bias_coeffs"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_rgbd",
+     "rung": "M1",
+     "parameters": [
+      "subpixel_sigma"
+     ]
+    },
+    {
+     "card": "camera_rgbd",
+     "rung": "M2",
+     "parameters": [
+      "depth_bias_coeffs"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "hsi.lamp_lines",
+   "title": "Band centres and widths from a spectral lamp's known lines",
+   "package": "camera.hsi",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "identifies": [
+    {
+     "type": "hyperspectral_camera",
+     "model": "M0.measurement.bands",
+     "parameter": "band_centres"
+    },
+    {
+     "type": "hyperspectral_camera",
+     "model": "M1.measurement.band_widths",
+     "parameter": "band_fwhm"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_hsi",
+     "rung": "M0",
+     "parameters": [
+      "band_centres"
+     ]
+    },
+    {
+     "card": "camera_hsi",
+     "rung": "M1",
+     "parameters": [
+      "band_fwhm"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "hsi.smile_keystone_bars",
+   "title": "Smile and keystone from lamp lines and an edge across the field",
+   "package": "camera.hsi",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "not implemented",
+   "identifies": [
+    {
+     "type": "hyperspectral_camera",
+     "model": "M2.measurement.smile_keystone",
+     "parameter": "smile_keystone_map"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_hsi",
+     "rung": "M2",
+     "parameters": [
+      "smile_keystone_map"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "camera.exposure_lock",
+   "title": "Lock exposure, gain and white balance under the deployment's lights",
+   "package": "camera.rgb",
+   "kind": "configure",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": [
+    {
+     "type": "camera",
+     "card": "camera_rgb",
+     "settings": [
+      "exposure",
+      "gain",
+      "white_balance_k",
+      "auto_exposure",
+      "auto_white_balance"
+     ]
+    },
+    {
+     "type": "depth_camera",
+     "card": "camera_rgbd",
+     "settings": [
+      "exposure",
+      "gain",
+      "white_balance_k",
+      "auto_exposure",
+      "auto_white_balance"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "camera.exposure_for_task",
+   "title": "Exposure and gain chosen by the task: the shortest exposure that still reads the markers",
+   "package": "camera.rgb",
+   "kind": "configure",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": [
+    {
+     "type": "camera",
+     "card": "camera_rgb",
+     "settings": [
+      "exposure",
+      "gain"
+     ]
+    },
+    {
+     "type": "depth_camera",
+     "card": "camera_rgbd",
+     "settings": [
+      "exposure",
+      "gain"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rgbd.depth_emitter_settings",
+   "title": "Depth module set-up: IR exposure, laser power and emitter for the fill rate",
+   "package": "camera.rgbd",
+   "kind": "configure",
+   "setting": "both",
+   "status": "not implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": [
+    {
+     "type": "depth_camera",
+     "card": "camera_rgbd",
+     "settings": [
+      "depth_exposure_us",
+      "depth_gain",
+      "laser_power",
+      "emitter_enabled"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hsi.integration_time",
+   "title": "Hyperspectral integration time and line rate against a white tile",
+   "package": "camera.hsi",
+   "kind": "configure",
+   "setting": "both",
+   "status": "not implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": [
+    {
+     "type": "hyperspectral_camera",
+     "card": "camera_hsi",
+     "settings": [
+      "integration_time_s",
+      "line_rate_hz",
+      "gain"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "camera.focus_lock",
+   "title": "Focus and aperture locked on a target at the working distance",
+   "package": "camera.line_area_scan",
+   "kind": "configure",
+   "setting": "bench",
+   "status": "not implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": [
+    {
+     "type": "hyperspectral_camera",
+     "card": "camera_hsi",
+     "settings": [
+      "focus",
+      "aperture"
+     ]
+    },
+    {
+     "type": "camera",
+     "card": "camera_rgb",
+     "settings": [
+      "focus",
+      "aperture"
+     ]
+    }
    ]
   },
   {
@@ -12863,7 +13217,8 @@
    "setting": "bench",
    "status": "implemented",
    "identifies": [],
-   "legacy_identifies": []
+   "legacy_identifies": [],
+   "configures": []
   }
  ],
  "parameter_routines": {
@@ -13059,9 +13414,15 @@
    "distortion": [
     "camera.intrinsics_charuco"
    ],
-   "exposure_response": [],
-   "latency_s": [],
-   "line_delay_s": [],
+   "exposure_response": [
+    "camera.exposure_response_ptc"
+   ],
+   "latency_s": [
+    "camera.latency_led"
+   ],
+   "line_delay_s": [
+    "camera.rolling_shutter_target"
+   ],
    "extrinsic_drift_mm_per_sqrt_h": []
   },
   "depth_camera": {
@@ -13071,20 +13432,29 @@
     "rgbd.self_calibration"
    ],
    "depth_to_color": [],
-   "subpixel_sigma": [],
+   "subpixel_sigma": [
+    "rgbd.flat_target_noise"
+   ],
    "depth_bias_coeffs": [
     "rgbd.dot_card",
-    "rgbd.self_calibration"
+    "rgbd.self_calibration",
+    "rgbd.flat_target_noise"
    ],
    "depth_to_color_drift_mm_per_sqrt_h": []
   },
   "hyperspectral_camera": {
-   "band_centres": [],
+   "band_centres": [
+    "hsi.lamp_lines"
+   ],
    "dark_white_refs": [
     "linescan.radiometry_refs"
    ],
-   "band_fwhm": [],
-   "smile_keystone_map": [],
+   "band_fwhm": [
+    "hsi.lamp_lines"
+   ],
+   "smile_keystone_map": [
+    "hsi.smile_keystone_bars"
+   ],
    "line_geometry": [
     "linescan.geometry_dot_card"
    ],

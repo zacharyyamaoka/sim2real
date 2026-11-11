@@ -72,7 +72,8 @@ def test_the_routine_types_are_on_the_one_import():
         assert hasattr(reg, name), name
     assert reg.CalibrationRoutine is reg.schema.CalibrationRoutine and reg.Quantity is reg.schema.Quantity
     assert reg.ROUTINE_SETTINGS == ("bench", "deployed", "both") and set(reg.SETTINGS) < set(reg.ROUTINE_SETTINGS)
-    assert reg.ROUTINE_KINDS == ("identify", "measure", "use")
+    # "configure" added 2026-11-11 (additive: a value appended, none renamed or removed)
+    assert reg.ROUTINE_KINDS == ("identify", "measure", "use", "configure")
     assert reg.ROUTINE_STATUS == ("implemented", "partial", "not implemented")
     assert reg.ESTIMATE == "estimate"
     assert isinstance(reg.ROUTINES, tuple) and len(reg.ROUTINES) >= 20, len(reg.ROUTINES)
@@ -240,3 +241,26 @@ def test_routine_references_are_real_and_checked():
             if ref.url:
                 hit = checked["url"].get(ref.url)
                 assert hit and hit["ok"], (p.id, ref.url, hit)
+
+
+# --- configure routines (2026-11-11) -------------------------------------------------------------------------------------------------
+
+def test_configure_routines_name_what_they_write_and_identify_nothing():
+    """Zach, 2026-11-11: calibration routines that are "like homing ... not identifying a model so much as automatically configuring it".
+    A configure routine writes device settings (configures), never a model parameter (identifies)."""
+    configure = [p for p in routines() if p.kind == "configure"]
+    assert configure, "no configure routine"
+    for p in routines():
+        assert bool(p.configures) == (p.kind == "configure"), p.id
+    for p in configure:
+        assert not p.identifies, p.id
+        for item in p.configures:
+            assert item.card in reg.CARDS and item.settings and all(isinstance(s, str) and s for s in item.settings), (p.id, item)
+
+
+def test_every_camera_type_has_identify_and_configure_routines():
+    for cid in ("camera_rgb", "camera_rgbd", "camera_hsi"):
+        kinds = {p.kind for p in reg.routines_for(cid)}
+        assert {"identify", "configure"} <= kinds, (cid, kinds)
+        assert reg.routines_configuring(cid), cid
+        assert all(p.kind == "configure" for p in reg.routines_configuring(cid)), cid
