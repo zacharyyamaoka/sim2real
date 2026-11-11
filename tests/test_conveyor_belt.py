@@ -194,3 +194,22 @@ def test_the_belt_routines_are_registered_with_their_kinds():
     assert "conveyor_belt.scale" in {r.id for r in reg.routines_identifying("conveyor", "drum_radius_m")}
     assert "conveyor.radius_tracker" in reg.routine("conveyor_belt.scale").alternatives
     assert set(reg.routine("conveyor_belt.plane_probe").alternatives) == {"conveyor_belt.plane_depth"}
+
+
+def test_contact_height_ignores_the_force_read_while_moving():
+    """Found 2026-11-11 (held-out probe points up to 0.44 mm off): while the tip descends in free air, a current-derived force reads
+    the servo's damping and the joint's friction (~0.75 N here) plus noise, so samples cross a fixed 1 N window centimetres above the
+    belt and drag the intercept. The contact must come from the force's rise above its own moving baseline, contiguous to the stop."""
+
+    from sim2real.models.conveyor_belt import contact_height
+
+    rng = np.random.default_rng(4)
+    surface, stiffness, speed, dt = -0.300, 5.0e4, 0.005, 1e-3
+    z_cmd = -0.285 - speed * dt * np.arange(4000)
+    z = np.maximum(z_cmd, surface - 0.0)                       # the tip stops at the belt (plus compliance below)
+    press = np.clip((surface - z_cmd) * 2800.0, 0, None)       # servo-limited press once in contact
+    z = np.where(press > 0, surface - press / stiffness, z_cmd)
+    force = press + 0.75 * (press < 0.5) + rng.normal(0, 0.25, size=len(z))   # moving baseline: damping + friction, then noise
+    stop = int(np.argmax(force >= 6.0))
+    trace = {"z_m": z[:stop + 1], "force_n": force[:stop + 1], "stopped_by": "force", "x_m": 0.0, "y_m": 0.0}
+    assert abs(contact_height(trace) - surface) < 0.02e-3
