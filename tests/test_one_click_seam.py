@@ -100,7 +100,7 @@ class ToyRig:
     def routines(self):
         return (self.routine,)
 
-    def held_out(self):
+    def held_out(self, values=None):
         return [seam.Run(f"held{k}", "held_out", None) for k in range(3)]
 
     def measure(self, runs, values, noise, stream, *, workers=1):
@@ -245,8 +245,8 @@ def test_eval_twin_needs_a_fitted_twin_and_refuses_a_training_run():
         runner().eval_twin()
 
     class Leaky(ToyRig):
-        def held_out(self):
-            return [seam.Run("train0", "held_out", None), *super().held_out()]
+        def held_out(self, values=None):
+            return [seam.Run("train0", "held_out", None), *super().held_out(values)]
 
     r = runner(Leaky())
     _, state = r.calibrate()
