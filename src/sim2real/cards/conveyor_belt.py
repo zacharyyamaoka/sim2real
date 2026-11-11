@@ -99,7 +99,7 @@ ROUTINES = (
                 ("line_scan_pose", "line_trigger_delay_ms", "line_mm_per_px"),
                 ("line_scan.offset_mm", "line_scan.yaw_deg", "line_scan.trigger_delay_ms", "line_scan.mm_per_px_pct"), "camera", False,
                 (BOARD, "the line scanner, encoder-triggered every 0.5 mm"),
-                "board seen by camera 1, carried under the line scanner at 0.1 and 0.25 m/s; ChArUco detected in the encoder-stitched "
+                "board seen by camera 1, carried under the line scanner at 0.1 and 0.4 m/s; ChArUco detected in the encoder-stitched "
                 "image; each corner's belt position gives where the scan line lies on the belt (camera 1 frame), its yaw, its mm per pixel, "
                 "and the trigger delay from the shift between the two speeds", 120, 60,
                 "Wendel & Underwood 2017's pattern-through-the-line method, on the belt's own clock"),
