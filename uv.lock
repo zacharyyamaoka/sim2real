@@ -375,11 +375,14 @@ requires-dist = [
     { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
+    { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = "==0.40.0" },
+    { name = "rerun-sdk", marker = "extra == 'test'", specifier = "==0.40.0" },
+    { name = "robot-msgs", extras = ["viz"], marker = "extra == 'rerun'" },
     { name = "rosbags", marker = "extra == 'ros'", specifier = ">=0.10" },
     { name = "rosbags", marker = "extra == 'test'", specifier = ">=0.10" },
     { name = "scipy", marker = "extra == 'test'", specifier = ">=1.11" },
 ]
-provides-extras = ["viz", "ros", "test"]
+provides-extras = ["viz", "ros", "rerun", "test"]
 
 [[package]]
 name = "sim2real"
