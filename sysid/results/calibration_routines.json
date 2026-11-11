@@ -4211,7 +4211,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "bench",
-   "status": "partial",
+   "status": "implemented",
    "wall_time": {
     "value": 600.0,
     "unit": "s",
@@ -4269,6 +4269,12 @@
    ],
    "code": [
     {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/camera_rgb.py",
+     "ref": "",
+     "note": "calibrate_planar: Zhang's closed form, then Levenberg-Marquardt over K, distortion and every view's pose; held to OpenCV's calibrateCamera in tests/test_camera_types.py"
+    },
+    {
      "repo": "/home/bam/bam_ws",
      "path": "src/core/mdp/setup/bam_calibration/docs/ref/bam_calibration/dev/camera_calibration/camera_calibration_v2.py",
      "ref": "",
@@ -4278,7 +4284,7 @@
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not in the sysid ladder: the reference script is wired to no example; the cell's K comes from its tags' bundle adjustment"
+    "note": "not in the sysid ladder (the cell's K comes from its tags' bundle adjustment); its hidden-truth test is tests/test_camera_types.py: a hidden lens recovered, held-out reprojection within 1.5 x the corner jitter"
    },
    "recovery": {},
    "alternatives": [
@@ -5026,7 +5032,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "both",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 120.0,
     "unit": "s",
@@ -5074,11 +5080,18 @@
    "tests": [
     "camera_rgb.grey_card"
    ],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/camera_rgb.py",
+     "ref": "",
+     "note": "fit_exposure_response (EMVA 1288 photon transfer)"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test; no sysid example films a grey card"
+    "note": "no sysid example films this target; the hidden-truth test is tests/test_camera_types.py (recovery, then held-out fidelity within 1.5 x the camera's floor, and the nominal model failing it)"
    },
    "recovery": {},
    "alternatives": [],
@@ -5091,7 +5104,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 60.0,
     "unit": "s",
@@ -5139,11 +5152,18 @@
    "tests": [
     "camera_rgb.led_blink"
    ],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/camera_rgb.py",
+     "ref": "",
+     "note": "fit_latency"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test"
+    "note": "no sysid example films this target; the hidden-truth test is tests/test_camera_types.py (recovery, then held-out fidelity within 1.5 x the camera's floor, and the nominal model failing it)"
    },
    "recovery": {},
    "alternatives": [],
@@ -5156,7 +5176,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 120.0,
     "unit": "s",
@@ -5204,11 +5224,18 @@
    "tests": [
     "camera_rgb.moving_target"
    ],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/camera_rgb.py",
+     "ref": "",
+     "note": "fit_line_delay"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgb with a hidden-truth test"
+    "note": "no sysid example films this target; the hidden-truth test is tests/test_camera_types.py (recovery, then held-out fidelity within 1.5 x the camera's floor, and the nominal model failing it)"
    },
    "recovery": {},
    "alternatives": [],
@@ -5223,7 +5250,7 @@
    "package": "camera.rgbd",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 600.0,
     "unit": "s",
@@ -5278,11 +5305,18 @@
    "tests": [
     "camera_rgbd.flat_target"
    ],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/camera_rgbd.py",
+     "ref": "",
+     "note": "fit_flat_target"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented yet: the fit lands in sim2real.fit.camera_rgbd with a hidden-truth test"
+    "note": "no sysid example films this target; the hidden-truth test is tests/test_camera_types.py (recovery, then held-out fidelity within 1.5 x the camera's floor, and the nominal model failing it)"
    },
    "recovery": {},
    "alternatives": [
@@ -5301,7 +5335,7 @@
    "package": "camera.hsi",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 300.0,
     "unit": "s",
@@ -5356,11 +5390,18 @@
    "tests": [
     "camera_hsi.lamp_lines"
    ],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/camera_hsi.py",
+     "ref": "",
+     "note": "fit_lamp_lines"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented yet: the fit lands in sim2real.fit.camera_hsi with a hidden-truth test"
+    "note": "no sysid example films this target; the hidden-truth test is tests/test_camera_types.py (recovery, then held-out fidelity within 1.5 x the camera's floor, and the nominal model failing it)"
    },
    "recovery": {},
    "alternatives": [],
@@ -5375,7 +5416,7 @@
    "package": "camera.hsi",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 300.0,
     "unit": "s",
@@ -5433,11 +5474,18 @@
    "tests": [
     "camera_hsi.bar_targets"
    ],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/camera_hsi.py",
+     "ref": "",
+     "note": "fit_smile, fit_keystone"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented yet: the fit lands in sim2real.fit.camera_hsi with a hidden-truth test"
+    "note": "no sysid example films this target; the hidden-truth test is tests/test_camera_types.py (recovery, then held-out fidelity within 1.5 x the camera's floor, and the nominal model failing it)"
    },
    "recovery": {},
    "alternatives": [],
@@ -5613,7 +5661,7 @@
    "package": "camera.hsi",
    "kind": "configure",
    "setting": "both",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 60.0,
     "unit": "s",
@@ -5651,11 +5699,18 @@
    "repeats": 1,
    "how": "the line rate from belt speed / along-track pixel size; then the longest integration that fits the line period and keeps the white tile's brightest band at or below 85 % of full scale, proved on a fresh capture",
    "tests": [],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/schedule/camera_configure.py",
+     "ref": "",
+     "note": "configure_integration, line_rate_for"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented yet: lands in sim2real.schedule.camera_configure with a hidden-truth test"
+    "note": "no sysid check: configuring recovers no hidden model value; tests/test_camera_types.py holds it to a line camera whose white tile it is not told (on target without clipping; line-period limited in dim light)"
    },
    "recovery": {},
    "alternatives": [],

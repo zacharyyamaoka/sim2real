@@ -12717,7 +12717,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "bench",
-   "status": "partial",
+   "status": "implemented",
    "identifies": [
     {
      "type": "camera",
@@ -12908,7 +12908,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "both",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [
     {
      "type": "camera",
@@ -12933,7 +12933,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [
     {
      "type": "camera",
@@ -12958,7 +12958,7 @@
    "package": "camera.rgb",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [
     {
      "type": "camera",
@@ -12983,7 +12983,7 @@
    "package": "camera.rgbd",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [
     {
      "type": "depth_camera",
@@ -13020,7 +13020,7 @@
    "package": "camera.hsi",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [
     {
      "type": "hyperspectral_camera",
@@ -13057,7 +13057,7 @@
    "package": "camera.hsi",
    "kind": "identify",
    "setting": "bench",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [
     {
      "type": "hyperspectral_camera",
@@ -13166,7 +13166,7 @@
    "package": "camera.hsi",
    "kind": "configure",
    "setting": "both",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [],
    "legacy_identifies": [],
    "configures": [
