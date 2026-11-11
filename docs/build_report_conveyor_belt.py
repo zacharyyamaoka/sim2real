@@ -80,6 +80,7 @@ class Recorder:
         for p in self.pipes.values():
             p.stdin.close()
             p.wait()
+        self.posters.setdefault("hero", self.posters.get("robot_to_robot", next(iter(self.posters.values()))))
         for label, img in self.posters.items():
             cv2.imwrite(str(MEDIA / f"{label}.jpg"), img[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 82])
 
@@ -173,8 +174,11 @@ def main() -> int:
     scale_svg = svg_plot([(s["revs"], linear * 1e3, "--c2", "camera minus linear fit, mm", "dots"),
                           (s["revs"][order], sine * 1e3, "--c1", f"fitted runout {line.runout_m * 1e3:.3f} mm", "line")],
                          "motor encoder revs", "along-belt, mm")
-    lo, hi = colour_png(cal["plane_depth"]["background"]["mean_m"] * 1e3, "background_mean.png")
-    slo, shi = colour_png(cal["plane_depth"]["background"]["std_m"] * 1e3, "background_std.png")
+    # WHY the range from the belt's central band: the side rails are 40 mm nearer and would flatten the belt's own millimetres
+    mean_mm, std_mm = cal["plane_depth"]["background"]["mean_m"] * 1e3, cal["plane_depth"]["background"]["std_m"] * 1e3
+    band = slice(int(mean_mm.shape[0] * 0.2), int(mean_mm.shape[0] * 0.8))
+    lo, hi = colour_png(mean_mm, "background_mean.png", *np.nanpercentile(mean_mm[band], [1, 99]))
+    slo, shi = colour_png(std_mm, "background_std.png", *np.nanpercentile(std_mm[band], [1, 99]))
     trace = cal["plane_probe"]["traces"][5]
     z0 = contact_height(trace)
     sel = trace["force_n"] > -1
