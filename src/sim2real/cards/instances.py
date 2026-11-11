@@ -30,7 +30,7 @@ from pathlib import Path
 from . import domain as dm
 from . import registry as reg
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[3]  # src/sim2real/cards/ -> the repo (moved 2026-11-10)
 RESULTS = REPO / "sysid" / "results"
 REGISTRY = REPO / "app" / "registry.json"
 SCHEDULES = Path(os.environ.get("SIM2REAL_SCHEDULES") or "/archive/datasets/bam_rig/schedules")

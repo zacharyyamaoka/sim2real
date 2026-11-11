@@ -47,7 +47,7 @@ from .schema import (DRIFT_MESSAGE, DRIFT_THRESHOLD, ESTIMATE, KINDS, OUT_OF_COV
                      CodeHome, CoverageNeed, Diagnostic, DriftResult, Equipment, Forecast, Gate, Identifies, Limit, Quantity, Reference,
                      Rung, RungScore, TestType, Wear, coverage_flag, drift_check, mlp_weights, usage_remaining, wear_usage_at, wear_value)
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[3]  # src/sim2real/cards/ -> the repo (moved 2026-11-10)
 ROBOTDX_REPO = Path("/home/bam/io-diagnostics")
 ROBOTDX_COMMIT = "58644fb"  # io-diagnostics main, 2026-11-04: the catalog every metric id is checked against
 ROBOTPARTS_REPO = Path("/home/bam/robotparts")  # main 06795ab: models/actuator/*, lab/models/actuator/twin (robotparts/2.5)

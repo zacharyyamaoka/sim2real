@@ -190,13 +190,13 @@ def load_definitions() -> dict[str, Report]:
     for path in sorted(REPORTS_DIR.glob("*.py")):
         if path.stem.startswith("_"):
             continue
-        record = importlib.import_module(f"type_cards.frozen_reports.{path.stem}").record
+        record = importlib.import_module(f"sim2real.cards.frozen_reports.{path.stem}").record
         out[record.id] = record
     return out
 
 
 def _code() -> str:
-    repo = Path(__file__).resolve().parents[1]
+    repo = Path(__file__).resolve().parents[3]  # src/sim2real/cards/ -> the repo
     head = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     # WHY the reports are left out: freezing writes a snapshot, and (2026-11-07) freeze --id writes the report's definition first; neither
     # is the code it was computed with

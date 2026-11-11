@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sim2real"
+version = "0.1.0"
+description = "How close each digital twin is to its real hardware: robot_msgs values in, numbers out (metrics, schedule, fit, sim, models, cards)."
+requires-python = ">=3.11"
+authors = [{ name = "Zach Yamaoka" }]
+# WHY robot_msgs and nothing else at runtime (Zach, 2026-11-10, proposal 2): the package sits on robot_msgs, the slowest-changing
+# layer; anything heavier is an extra, so the stable folders never pull a simulator.
+dependencies = ["robot-msgs"]
+
+[project.optional-dependencies]
+# WHY pinned: bam_rack_twin and the frozen CAN 12 twin run under mujoco 3.11.0 (its pyproject); sim/ replays them.
+sim = ["mujoco==3.11.0"]
+test = ["pytest>=8"]
+
+[tool.uv.sources]
+robot-msgs = { path = "/home/bam/robot_msgs", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sim2real"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

@@ -83,7 +83,8 @@ def verdict(doc: dict) -> dict:
 # What computes a result: sysid's code, the examples' descriptions and worlds, and the type cards it reads. Not sysid/results.
 # WHY: results/ is what a run writes, not what computes it; counting it stamped every example after the first in one
 # `all --write` run "+dirty" (every result committed on 2026-11-05 read 782bd5e+dirty).
-COMPUTES_RESULTS = ("sysid", "type_cards", ":(exclude)sysid/results")
+# WHY src/sim2real added beside type_cards, not instead (2026-11-10): the type cards moved there; type_cards/ keeps its shim and tests.
+COMPUTES_RESULTS = ("sysid", "type_cards", "src/sim2real", ":(exclude)sysid/results")
 
 
 def code_version(repo: Path = REPO) -> str:

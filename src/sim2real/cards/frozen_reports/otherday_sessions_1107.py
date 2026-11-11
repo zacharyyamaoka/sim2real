@@ -3,7 +3,7 @@
 Written by `python3 -m type_cards.report freeze --id otherday-sessions-1107 ...` (type_cards/report.py) from a selection of 42 runs; its snapshot is otherday-sessions-1107.json beside it.
 """
 
-from type_cards.report import Report
+from sim2real.cards.report import Report
 
 record = Report(
     id="otherday-sessions-1107",

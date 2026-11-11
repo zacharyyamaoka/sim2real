@@ -1,6 +1,6 @@
 """The One Dof Test Rack's v3 record: its declared tags, its cameras and its producer's model labels (app/registry.json holds the rest)."""
 
-from type_cards.domain import CameraDecl, ModelLabel, PhysicalDeployment, UnitLimit
+from sim2real.cards.domain import CameraDecl, ModelLabel, PhysicalDeployment, UnitLimit
 
 VIEW = "bam_ws src/dev/bam_rack_twin/docs/dataset_clips.py VIEW (the camera and the tag that see each CAN id); bam_rack_twin/trajectory_dataset.py CAMERAS"
 RT = "bam_ws src/dev/bam_rack_twin"
