@@ -18,7 +18,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from sim2real.metrics.gate import rule_of
+
 from . import references as R
+from . import servo_gates
 from .schema import DRIFT_MESSAGE, DRIFT_THRESHOLD, Architecture, CoverageNeed, Diagnostic, Forecast, Gate, Limit, Rung, TestType, Wear
 
 LEARNED_PCT = 95.0       # % of reachable cells a learned rung's train split must fill
@@ -167,11 +170,13 @@ def servo(reg, card):
     )
     gates = (
         gate("servo.stop_error", "<=", None, "mrad", "T4", "the joint's allocation of the 5 mm tool gate, per station (STOP_ALLOCATION_MRAD)"),
-        gate("servo.twin_fidelity", "<=", 1.5, "× floor", "T2"),
-        gate("servo.torque_fidelity", "<=", 2.0, "× scatter", "T3"),
-        gate("servo.warm_cold", "<=", 1.5, "× floor", "T9"),
-        gate("servo.envelope", "<=", 5.0, "%", "T7"),
-        gate("servo.thermal", "<=", 5.0, "°C", "T8"),
+        # WHY the acceptance targets themselves (2026-11-10, proposal 2 step 4): these were literals beside bam_rack_twin's own constants;
+        # servo_gates holds each once and bam_rack_twin's gates read it too
+        gate("servo.twin_fidelity", *rule_of(servo_gates.FIDELITY_TAPES), "× floor", "T2"),
+        gate("servo.torque_fidelity", *rule_of(servo_gates.TORQUE_RATIO), "× scatter", "T3"),
+        gate("servo.warm_cold", *rule_of(servo_gates.FIDELITY_TAPES), "× floor", "T9"),
+        gate("servo.envelope", *rule_of(servo_gates.SPEED_PCT), "%", "T7"),
+        gate("servo.thermal", *rule_of(servo_gates.THERMOCOUPLE_C), "°C", "T8"),
     )
     tests = (
         T("servo", "plateaus", "Velocity plateaus", "bench",
@@ -590,7 +595,7 @@ def conveyor(reg, card):
 
 LADDERS = {"servo": servo, "motor": motor, "gearbox": gearbox, "driver": driver, "encoder": encoder, "arm_subassembly": arm_sub, "arm_6dof": arm,
            "arm_6dof_gripper": arm_gripper, "camera_rgb": camera_rgb, "camera_rgbd": camera_rgbd, "camera_hsi": camera_hsi, "conveyor": conveyor}
-GATE_PCT = 40.0  # bam_rack_twin.schedule.MINIMUM_COVERAGE_PCT: visiting a cell once is what a schedule can promise before it runs
+GATE_PCT = servo_gates.MINIMUM_COVERAGE_PCT  # the schedule's coverage gate: visiting a cell once is what a schedule can promise before it runs
 
 
 def build(reg) -> dict:
