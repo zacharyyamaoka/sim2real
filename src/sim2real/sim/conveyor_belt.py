@@ -122,14 +122,15 @@ DIVOTS_BOARD = np.array([[-0.125, -0.085], [0.125, -0.085], [0.125, 0.085], [-0.
 class BeltTwin:
     """The BeltRig verbs (see sim2real.models.conveyor_belt.BeltRig) on MuJoCo, plus score() against the hidden truth."""
 
-    def __init__(self, description, truth: BeltTruth, seed: int = 0, board: CharucoSpec = BOARD, record: bool = False):
+    def __init__(self, description, truth: BeltTruth, seed: int = 0, board: CharucoSpec = BOARD, record=None):
         import mujoco
 
         self._mj = mujoco
         self.d, self.truth, self.spec = description, truth, board
         self.rng = np.random.default_rng(seed)
+        # the recorder (for the report's videos): None, or a callable that takes each frame dict as it is rendered. WHY a sink and not a
+        # list: a full calibration renders thousands of frames, gigabytes if held
         self.record = record
-        self.frames: list[dict] = []          # the recorder: overview + sensor frames per routine, for the report's videos
         self.label = ""
         d = description
         self.nominal_m_per_rev = float(d.mm_per_motor_rev) * MM
@@ -161,7 +162,10 @@ class BeltTwin:
         self.board_mocap = self.model.body_mocapid[mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "board")]
         self._act = {n: mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, n) for n in ("ax", "ay", "az")}
         self._jnt = {n: self.model.jnt_qposadr[mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, n)] for n in ("px", "py", "pz")}
-        self.data.ctrl[self._act["az"]] = self.data.qpos[self._jnt["pz"]] = 0.0
+        # WHY parked off the belt's side: a real arm moves clear before the cameras look; parked at (0, 0) the probe hid the board's centre
+        self.park = (0.0, 0.36, 0.0)
+        for axis, value in zip(("x", "y", "z"), self.park):
+            self.data.ctrl[self._act[f"a{axis}"]] = self.data.qpos[self._jnt[f"p{axis}"]] = value
         self._update_board()
 
     # ------------------------------------------------------------------------------------------------------------------------------
@@ -217,6 +221,7 @@ class BeltTwin:
   </asset>
   <worldbody>
     <light pos="0.9 0 1.6" dir="0 0 -1" diffuse=".35 .35 .35" specular="0 0 0"/>
+    <geom type="plane" size="4 3 0.1" pos="0.9 0 -0.8" rgba=".80 .81 .83 1" contype="0" conaffinity="0" group="2"/>
     <geom name="belt" type="box" pos="{centre[0]} {centre[1]} {centre[2]}" quat="{q[0]} {q[1]} {q[2]} {q[3]}" size="{length / 2} {width / 2} 0.01"
           material="belt" solref="{-k} -300" solimp="0.95 0.95 0.001"/>
     <geom type="box" pos="{centre[0]} {centre[1] + width / 2 + 0.03} {centre[2] - 0.02}" size="{length / 2} 0.02 0.04" rgba=".55 .57 .6 1" contype="0" conaffinity="0" group="2"/>
@@ -238,7 +243,7 @@ class BeltTwin:
       </body>
     </body>
     {ov}
-    <camera name="overview" pos="0.75 -1.75 0.75" xyaxes="1 0 0 0 0.55 0.835" fovy="45"/>
+    <camera name="overview" pos="0.85 -2.55 1.05" xyaxes="1 0 0 0 0.45 0.893" fovy="48"/>
     <camera name="probe_view" pos="0.0 -0.45 -0.12" xyaxes="1 0 0 0 0.35 0.937" fovy="40"/>
   </worldbody>
   <actuator>
@@ -475,7 +480,10 @@ class BeltTwin:
         d.ctrl[az] = start_z_m + 0.03
         for _ in range(600):
             mj.mj_step(m, d)
-        self.time_s += i * m.opt.timestep + 1.8
+        d.ctrl[ax], d.ctrl[ay], d.ctrl[az] = self.park
+        for _ in range(1600):
+            mj.mj_step(m, d)
+        self.time_s += i * m.opt.timestep + 2.6
         return {"z_m": np.array(zs), "force_n": np.array(fs), "stopped_by": tripped, "x_m": x_m, "y_m": y_m}
 
     # ------------------------------------------------------------------------------------------------------------------------------
@@ -491,7 +499,7 @@ class BeltTwin:
         elif sensor is not None:
             frame["sensor"] = sensor_rgb if sensor_rgb is not None else self._render(sensor, CAMERA_SIZE)
             frame["sensor_name"] = sensor
-        self.frames.append(frame)
+        self.record(frame)
 
     # ------------------------------------------------------------------------------------------------------------------------------
     # the oracle: every estimate against the hidden truth

@@ -394,7 +394,8 @@ class TimeOffsetStep(Step):
                 stamps.append(f["stamp"])
                 along.append(float(pose.centre_m @ direction))
         latency = fit_time_offset(np.array(stamps), np.array(along), t_log, travel_m(ctx, revs_log), search_s=(-0.15, 0.15))
-        ctx["time_offset"] = {"latency_s": latency, "frames": len(stamps)}
+        ctx["time_offset"] = {"latency_s": latency, "frames": len(stamps), "stamps_s": np.array(stamps), "along_m": np.array(along),
+                              "t_log_s": t_log, "travel_log_m": travel_m(ctx, revs_log)}
         return ctx
 
 
@@ -430,7 +431,7 @@ class LineScanStep(Step):
     def __call__(self, d, rig, ctx):
         k1, direction = rig.intrinsics("camera_1"), ctx["direction"]["direction_c1"]
         m_per_rev = ctx["scale"]["m_per_rev"]
-        fits, all_s, all_u, normals = [], [], [], []
+        fits, all_s, all_u, normals, scans = [], [], [], [], []
         for speed in self.speeds:
             rig.place_board("camera_1", yaw_deg=90.0)
             r0 = rig.encoder_revs()
@@ -446,6 +447,7 @@ class LineScanStep(Step):
             board_pts = BOARD.board().getChessboardCorners()[ids]
             x = (t0[:3, :3] @ board_pts.T).T + t0[:3, 3] + np.outer(travel_m(ctx, revs) - travel_m(ctx, r0), direction)
             fits.append((speed, x, px[:, 0]))
+            scans.append({"speed_m_s": speed, "image": image, "corners_px": px, "ids": ids})
         n = np.mean(normals, axis=0)
         n /= np.linalg.norm(n)
         e = np.cross(n, direction)
@@ -469,7 +471,7 @@ class LineScanStep(Step):
         range_m = float(d.pose("line_scan")[2, 3] - d.belt_height_mm * MM)
         m_per_px = abs(1 / px_per_m) * (1 + BOARD.thickness_m / range_m)
         ctx["line_scan"] = {"a": ends[0], "b": ends[1], "delay_s": delay, "m_per_px": m_per_px, "yaw_rad": math.atan(b),
-                            "offsets_m": offsets, "corners": [len(f[2]) for f in fits]}
+                            "offsets_m": offsets, "corners": [len(f[2]) for f in fits], "scans": scans}
         return ctx
 
 

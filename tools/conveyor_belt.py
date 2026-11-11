@@ -22,7 +22,7 @@ REAL_NEEDS = """the real belt rig adapter (a BeltRig) is not written yet. It nee
 See /home/bam/bam_ws/reports/conveyor-calibration-2026-11-11.html, runbook."""
 
 
-def _run(seed: int, only, record: bool = False):
+def _run(seed: int, only, record=None):
     from sim2real.cards import conveyor_belt as card
     from sim2real.metrics.gate import gate
     from sim2real.models.conveyor_belt import NOMINAL, ConveyorBelt
@@ -52,6 +52,13 @@ def main(argv=None) -> int:
                                                              "robot_to_robot time_offset line_scan")
     cal.add_argument("--seed", type=int, default=0)
     cal.add_argument("--json", default=None)
+    # the real rig's wiring (accepted now so the runbook's commands are final; refused until the BeltRig adapter exists)
+    cal.add_argument("--drive", default=None, help="belt drive adapter, /dev/serial/by-id/... (never autodetected)")
+    cal.add_argument("--camera-1", default=None, help="camera 1 RealSense serial")
+    cal.add_argument("--camera-2", default=None, help="camera 2 RealSense serial")
+    cal.add_argument("--hand-eye", default=None, help="camera 1's hand-eye file (bam_calibration)")
+    cal.add_argument("--max-speed", type=float, default=0.2, help="belt speed guard, m/s")
+    cal.add_argument("--dry-run", action="store_true", help="print the plan (moves, speeds, guards) and touch no hardware")
     seeds = sub.add_parser("seeds")
     seeds.add_argument("--n", type=int, default=5)
     seeds.add_argument("--json", default=None)
