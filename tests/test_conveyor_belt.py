@@ -170,3 +170,27 @@ def test_eval_twin_predicts_held_out_hand_offs(calibrated):
     _, _, _, _, _, held_out = calibrated
     for key, tolerance in card.EVAL_TOLERANCES.items():
         assert gate(held_out[key], tolerance).passes, (key, held_out[key])
+
+
+# ----------------------------------------------------------------------------------------------------------------------------------
+# Registered in cards/calibration.py beside every other type's routines (the coordinator, 2026-11-11: additively, with the new kinds)
+
+
+def test_the_belt_routines_are_registered_with_their_kinds():
+    from sim2real.cards import registry as reg
+
+    ids = {r.id for r in reg.ROUTINES}
+    assert {r.id for r in card.ROUTINES} <= ids, sorted({r.id for r in card.ROUTINES} - ids)
+    kinds = {r.id: r.kind for r in reg.ROUTINES}
+    # scale, direction and the planes are identify / measure; the belt's speed set-up writes the drive, so it is configure
+    assert kinds["conveyor_belt.scale"] == "identify"
+    for rid in ("conveyor_belt.direction", "conveyor_belt.plane_depth", "conveyor_belt.plane_probe"):
+        assert kinds[rid] in ("identify", "measure"), rid
+    setup = reg.routine("conveyor_belt.speed_setup")
+    assert setup.kind == "configure" and not setup.identifies
+    assert any(c.card == "conveyor" for c in setup.configures)
+    assert "conveyor_belt.speed_setup" in {r.id for r in reg.routines_configuring("conveyor")}
+    # the scale is the drum radius the actuator card already carries; both routines that find it name each other
+    assert "conveyor_belt.scale" in {r.id for r in reg.routines_identifying("conveyor", "drum_radius_m")}
+    assert "conveyor.radius_tracker" in reg.routine("conveyor_belt.scale").alternatives
+    assert set(reg.routine("conveyor_belt.plane_probe").alternatives) == {"conveyor_belt.plane_depth"}
