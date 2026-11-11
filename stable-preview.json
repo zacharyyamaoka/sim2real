@@ -47,7 +47,7 @@
       "PATH": "{home}/.local/bin:/usr/local/bin:/usr/bin:/bin",
       "PYTHONDONTWRITEBYTECODE": "1"
     },
-    "watch": ["/site/", "/type_cards/", "/sysid/", "/brand/", "/tools/", "/app/registry.json"],
+    "watch": ["/site/", "/src/", "/type_cards/", "/sysid/", "/brand/", "/tools/", "/app/registry.json"],
     "proxy": {
       "/media/": "http://127.0.0.1:4825",
       "/data/source/": "http://127.0.0.1:4823",

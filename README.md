@@ -85,6 +85,8 @@ as they are written. `tools/trajectory.py` computes difference(a, b) and reprodu
 | `brand/icons/` | the app icon proposals |
 | `reports/` | review reports (`reports/media/` is gitignored) |
 | `docs/` | decisions |
+| `src/sim2real/` | the library (`pyproject.toml`): `metrics/ schedule/ fit/ sim/ models/ cards/`, each importing only the folders to its left (`tests/test_layers.py`; `docs/decision-package-layers-2026-11-10.md`). `cards/` is the type cards, moved from `type_cards/` unchanged |
+| `type_cards/` | a shim: `type_cards.<name>` is `sim2real.cards.<name>`, `python -m type_cards.report` still runs, its data paths link to the moved files, and `type_cards/tests` stays here as the ruler that held the move |
 
 ## Deployment tree, run tags, config snapshots
 

@@ -35,7 +35,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-OUT = ROOT / "type_cards" / "arm_reachable"
+OUT = ROOT / "src" / "sim2real" / "cards" / "arm_reachable"  # type_cards/arm_reachable links here since 2026-11-10
 MOUNTS = {"ur5e_floor": "ur5e", "ur5e_2f85_floor": "ur5e_2f85"}  # mount -> the sysid example whose description it is
 LIFT = 1
 LIFT_STEP_RAD = 0.01

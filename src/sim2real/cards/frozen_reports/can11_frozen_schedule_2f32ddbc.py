@@ -5,7 +5,7 @@ split, recorded 2026-11-04 to 05: 46 train, 53 held-out, 5 floor), the servo's t
 station). Snapshot: can11-frozen-schedule-2f32ddbc.json (python3 -m type_cards.report freeze can11-frozen-schedule-2f32ddbc).
 """
 
-from type_cards.report import Report
+from sim2real.cards.report import Report
 
 record = Report(
     id="can11-frozen-schedule-2f32ddbc",
