@@ -1,0 +1,216 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One-click tracer</title>
+<style>
+:root { --bg:#fff; --bg2:#f5f6f7; --ink:#16181b; --ink3:#6a7079; --rule:#dcdfe3; --good:#1f7a3d; --bad:#b42318; --accent:#1d5fbf; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141619; --bg2:#1d2024; --ink:#e7e9ec; --ink3:#9aa1ab; --rule:#30343a; --good:#5cc27e; --bad:#ff7b6e; --accent:#7fb0ff; } }
+body { background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif; margin:0; }
+main { max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
+h1 { font-size:24px; margin:8px 0 4px; } h2 { margin-top:36px; border-bottom:1px solid var(--rule); padding-bottom:4px; }
+.verdict { font-size:17px; padding:10px 14px; border-left:4px solid var(--good); background:var(--bg2); }
+.mut { color:var(--ink3); } code, pre { font-family: ui-monospace, monospace; font-size:12.5px; }
+pre { background:var(--bg2); border:1px solid var(--rule); padding:10px 12px; overflow:auto; max-height:560px; white-space:pre; }
+table { border-collapse:collapse; width:100%; font-size:13.5px; } th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+td { font-variant-numeric: tabular-nums; } tr.bad td, tr.bad th { color:var(--bad); }
+.scroll { overflow-x:auto; } .chip { font-size:11px; border:1px solid var(--bad); color:var(--bad); border-radius:3px; padding:0 4px; }
+figure { margin:10px 0; } figure img { border:1px solid var(--rule); display:block; width:100%; height:auto; } figcaption { color:var(--ink3); font-size:13px; }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:760px) { .two { grid-template-columns:1fr; } }
+ul li { margin:3px 0; }
+</style></head><body><main>
+<h1>One-click tracer: types first, then Twin.load → simulate → calibrate → eval_twin</h1>
+<p class="verdict"><b>The home opens on the 11 types, and the pendulum oracle runs end to end through four calls.</b> Green run: <b>PASS</b> (every hidden
+value within its tolerance; the twin passes its gates). Truth moved 10 % on gravity: <b>RED as it must be</b>. <code>on="real"</code> raises, naming the rack path.</p>
+
+<h2>Part 1 · The types are the front door</h2>
+<p>Before, the home opened on Deployments, Stations and Oracle examples, and <code>/models/</code>, <code>/routines/</code> and <code>/parameters/</code> had no
+link on it. Now a Types section comes first, one tile per type in <code>cards.domain.TYPE_ORDER</code> (read from the data, so a new type shows up by itself),
+and Models · Routines · Parameters lead the Choose column and the header. Why it fails and Analysis left the bar: five links overlapped the search at every width
+from 768 to 1440 px (measured). They're still in the Account menu and on the home.</p>
+<div class="two"><figure><a href='media/one-click-tracer-2026-11-11/home-before-1280.jpg'><img src='media/one-click-tracer-2026-11-11/home-before-1280.jpg' alt='Before: the home at 1280 px' style='max-width:100%' loading='lazy'></a><figcaption>Before: the home at 1280 px</figcaption></figure><figure><a href='media/one-click-tracer-2026-11-11/home-after-1280.jpg'><img src='media/one-click-tracer-2026-11-11/home-after-1280.jpg' alt='After: Types first; Models · Routines · Parameters in Choose and the header' style='max-width:100%' loading='lazy'></a><figcaption>After: Types first; Models · Routines · Parameters in Choose and the header</figcaption></figure></div>
+<div class="two"><figure><a href='media/one-click-tracer-2026-11-11/home-after-390.jpg'><img src='media/one-click-tracer-2026-11-11/home-after-390.jpg' alt='After, at 390 px: no sideways scroll' style='max-width:390px' loading='lazy'></a><figcaption>After, at 390 px: no sideways scroll</figcaption></figure><figure><a href='media/one-click-tracer-2026-11-11/type-integrated_servo.jpg'><img src='media/one-click-tracer-2026-11-11/type-integrated_servo.jpg' alt='A type tile opens its ladder: /models/integrated_servo/' style='max-width:100%' loading='lazy'></a><figcaption>A type tile opens its ladder: /models/integrated_servo/</figcaption></figure></div>
+
+<h2>Part 2 · The API</h2>
+<pre>import sim2real
+
+twin = sim2real.Twin.load(&quot;pendulum_can11&quot;)          # typed instances, parameters as robot_msgs Values
+twin.simulate()                                      # MuJoCo, headless
+fitted = twin.calibrate(on=&quot;sim&quot;, truth=&quot;sealed&quot;)    # a NEW twin: values_, intervals_, rungs_, calibration_
+fitted.eval_twin().summary()                         # held-out runs only: error / floor and the gates
+
+# the level below: fitted.runner (SimRunner: plan -&gt; RealWorld.measure -&gt; identify (sealed) -&gt; score -&gt; assemble)
+# the mutation test of the ruler: twin.calibrate(on=&quot;sim&quot;, truth=&quot;sealed&quot;, move_truth={&quot;can11.gravity_nm&quot;: 5.555})
+# twin.calibrate(on=&quot;real&quot;) -&gt; NotImplementedError naming the rack path</pre>
+<p>This follows the API prior-art note's verdict (vault: <i>Sim2Real API Prior Art (2026-11-11)</i>):</p>
+<ul><li><b>The verbs are on a sim2real <code>Twin</code>, not on the description.</b> The description lives in robot_description, below sim2real, so verbs on it would bring back the cycle.</li>
+<li><b><code>calibrate()</code> returns a new fitted twin</b> (scikit-learn style): learned values end in <code>_</code>, and nothing is written to robotparts.</li>
+<li><b><code>eval_twin()</code> refuses a training run.</b> Identification runs sealed from the truth, and both guards live in the runner.</li>
+<li><b>The fitting is sysid's existing oracle code, not <code>mujoco.sysid</code>.</b> The pendulum's twin is bam_rack_twin's 30 kHz moteus PID with a gear-gap hinge (its Replayer), not a plain MJCF rollout. <code>mujoco.sysid</code> is in the pinned 3.11.0, but its extra's packages (colorama…) aren't installed. It's <code>fit/</code>'s engine for a type whose twin is plain MJCF.</li></ul>
+
+<h2>The four calls, end to end (green)</h2>
+<p class="mut">The slow acceptance test's own terminal output: <code>SIM2REAL_SLOW=1 pytest -s tests/test_one_click.py -k recovers_the_hidden_truth</code></p>
+<pre>One-DOF pendulum arm (pendulum_can11): 7 instances, model can11_hinge__89b6fde5__dt2000.xml
+  rack           (deployment)       One Dof Test Rack
+  can11          integrated_servo   CAN 11 servo (JMC60 plate link, tags 8-12)  [8 parameters]
+  can11_motor    bldc_motor         JMC 60ASM200 (inferred from Kv/R)
+  can11_gearbox  gearbox            StepperOnline AD60-G10-D14, 10:1 planetary
+  can11_driver   foc_controller     moteus r4.11, firmware 1.1.2
+  can11_encoder  encoder            the board&#x27;s motor encoder (output frame through 10:1)
+  link_camera    depth_camera       D405 on tags 8-12 (the link angle after the gear)
+simulate: can11_hinge__89b6fde5__dt2000.xml, can11_hinge released +0.300 rad off its bottom, 2.00 s headless at 201 Hz: q from -0.3141 to -0.0737 rad, ends at -0.3141 rad
+calibrate(on=&#x27;sim&#x27;, truth=&#x27;sealed&#x27;): 46 train runs fitted rungs M0, M2, M3, M4; the fitted twin runs M4.dynamics.twin (M4); 1246 s
+  parameter                                nominal      hidden   recovered     error       tol  verdict
+  can11.gravity_nm                           4.661        5.05       5.066   0.01622       2 %  pass
+  can11.gravity_bottom_rad                 -0.3737       -0.35     -0.3501 -5.857e-05     0.005  pass
+  can11.armature_kg_m2                      0.1219        0.14      0.1386 -0.001364       5 %  pass
+  can11.frictionloss_nm                     0.8331        1.05       1.051  0.001433      10 %  pass
+  can11.damping_nm_s_rad                      0.15         0.3      0.3047  0.004681      20 %  pass
+  can11.friction_stribeck_drop_nm                0        0.35      0.3566  0.006587      25 %  pass
+  can11.friction_stribeck_speed_rad_s            —         0.1      0.1041  0.004136      30 %  pass
+  can11.backlash_rad                             0       0.002    0.001957 -4.292e-05      10 %  pass
+  =&gt; PASS: 8/8 within tolerance of the hidden truth
+eval_twin: 29 held-out runs (424.5 s of motion), floor 0.426 mrad (two camera draws of one run)
+  held-out link error / floor: nominal 17.5x, M0 73.2x, M2 16.5x, M3 25.1x, M4 1.34x
+  the selection rule picks M4; the twin is M4.dynamics.twin (M4)
+  gate twinned                  pass  M4.dynamics.twin held-out link error / floor: 1.34 (&lt;= 1.5x; sim2real.cards.registry.TWINNED_LIMIT)
+  gate held_out_link_fidelity   pass  held-out link error, nominal / calibrated: 13.1 (&gt;= 4x; sysid/acceptance.json)
+  gate recovery                 pass  every hidden value within its tolerance (the sim oracle only): 8/8 (all; sysid/examples/&lt;id&gt;/world.json + sysid/acceptance.json)
+  =&gt; PASS: 3/3 gates
+1 passed, 10 deselected in 1615.38s (0:26:55)
+green exit 0</pre>
+<h3>Recovered vs hidden</h3><div class='scroll'><table><thead><tr><th>parameter</th><th>unit</th><th>nominal (description)</th><th>hidden truth (world.json)</th><th>recovered</th><th>error</th><th>tolerance</th><th>verdict</th></tr></thead><tbody><tr class=''><th scope='row'><code>can11.gravity_nm</code></th><td>N·m</td><td>4.661</td><td>5.05</td><td><b>5.066</b></td><td>+0.32 %</td><td>±2 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.gravity_bottom_rad</code></th><td>rad</td><td>-0.3737</td><td>-0.35</td><td><b>-0.3501</b></td><td>-0.02 %</td><td>±0.005</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.armature_kg_m2</code></th><td>kg·m²</td><td>0.1219</td><td>0.14</td><td><b>0.1386</b></td><td>-0.97 %</td><td>±5 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.frictionloss_nm</code></th><td>N·m</td><td>0.8331</td><td>1.05</td><td><b>1.051</b></td><td>+0.14 %</td><td>±10 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.damping_nm_s_rad</code></th><td>N·m·s/rad</td><td>0.15</td><td>0.3</td><td><b>0.3047</b></td><td>+1.56 %</td><td>±20 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_drop_nm</code></th><td>N·m</td><td>0</td><td>0.35</td><td><b>0.3566</b></td><td>+1.88 %</td><td>±25 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_speed_rad_s</code></th><td>rad/s</td><td>—</td><td>0.1</td><td><b>0.1041</b></td><td>+4.14 %</td><td>±30 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.backlash_rad</code></th><td>rad</td><td>0</td><td>0.002</td><td><b>0.001957</b></td><td>-2.15 %</td><td>±10 %</td><td>pass</td></tr></tbody></table></div><p>8 of 8 recovered values equal sysid's committed <code>results/pendulum_can11.json</code> bit for bit: the Twin calls the oracle's own pipeline and adds no fitting of its own.</p>
+<h3>eval_twin's gates</h3><p>Held-out link error ÷ floor (29 runs, floor 0.426 mrad): nominal 17.5× · M0 73.2× · M2 16.5× · M3 25.1× · M4 1.34×. The selection rule picks <b>M4</b>.</p><div class='scroll'><table><thead><tr><th>gate</th><th>what</th><th>value</th><th>rule</th><th>verdict</th><th>from</th></tr></thead><tbody><tr class=''><th scope='row'><code>twinned</code></th><td>M4.dynamics.twin held-out link error / floor</td><td>1.34</td><td>&lt;= 1.5x</td><td>pass</td><td class='mut'>sim2real.cards.registry.TWINNED_LIMIT</td></tr><tr class=''><th scope='row'><code>held_out_link_fidelity</code></th><td>held-out link error, nominal / calibrated</td><td>13.1</td><td>&gt;= 4x</td><td>pass</td><td class='mut'>sysid/acceptance.json</td></tr><tr class=''><th scope='row'><code>recovery</code></th><td>every hidden value within its tolerance (the sim oracle only)</td><td>8/8</td><td>all</td><td>pass</td><td class='mut'>sysid/examples/&lt;id&gt;/world.json + sysid/acceptance.json</td></tr></tbody></table></div>
+
+<h2>The red run: truth moved past its tolerance</h2>
+<p>The world plays gravity at 5.555 N·m, 10 % above the committed 5.05 and five times its 2 % tolerance. The ruler stays <code>world.json</code>'s.
+The fit recovers what the world played (gravity about 5.57), so the recovery gate goes red and names the parameter.</p>
+<p>The twinned gate also went red: the M4 twin fitted on the moved world reached 2.14× the floor on held-out runs, over the 1.5× limit.
+The test's first form guessed that only recovery would fail, and the first run proved that wrong. Now it asserts that recovery is <i>among</i> the red gates.</p>
+<pre>calibrate(on=&#x27;sim&#x27;, truth=&#x27;sealed&#x27;): 46 train runs fitted rungs M0, M2, M3, M4; the fitted twin runs M4.dynamics.twin (M4); 739 s
+  the hidden truth MOVED for this run: {&#x27;can11.gravity_nm&#x27;: 5.555000000000001} (the ruler stays world.json&#x27;s)
+  parameter                                nominal      hidden   recovered     error       tol  verdict
+  can11.gravity_nm                           4.661        5.05       5.571    0.5214       2 %  FAIL
+  can11.gravity_bottom_rad                 -0.3737       -0.35     -0.3501 -6.944e-05     0.005  pass
+  can11.armature_kg_m2                      0.1219        0.14      0.1387 -0.001272       5 %  pass
+  can11.frictionloss_nm                     0.8331        1.05       1.053  0.002532      10 %  pass
+  can11.damping_nm_s_rad                      0.15         0.3      0.3049  0.004876      20 %  pass
+  can11.friction_stribeck_drop_nm                0        0.35      0.3545  0.004497      25 %  pass
+  can11.friction_stribeck_speed_rad_s            —         0.1      0.1049  0.004933      30 %  pass
+  can11.backlash_rad                             0       0.002    0.001958 -4.23e-05      10 %  pass
+  =&gt; FAIL: 7/8 within tolerance of the hidden truth (failing: can11.gravity_nm)
+eval_twin: 29 held-out runs (424.5 s of motion), floor 0.426 mrad (two camera draws of one run)
+  held-out link error / floor: nominal 18.3x, M0 73.2x, M2 16.5x, M3 24.7x, M4 2.14x
+  the selection rule picks None; the twin is M4.dynamics.twin (M4)
+  gate twinned                  FAIL  M4.dynamics.twin held-out link error / floor: 2.14 (&lt;= 1.5x; sim2real.cards.registry.TWINNED_LIMIT)
+  gate held_out_link_fidelity   pass  held-out link error, nominal / calibrated: 8.52 (&gt;= 4x; sysid/acceptance.json)
+  gate recovery                 FAIL  every hidden value within its tolerance (the sim oracle only): 7/8, failing can11.gravity_nm (all; sysid/examples/&lt;id&gt;/world.json + sysid/acceptance.json)
+  =&gt; FAIL: 1/3 gates
+1 passed, 10 deselected in 888.06s (0:14:48)
+red exit 0</pre>
+<div class='scroll'><table><thead><tr><th>parameter</th><th>unit</th><th>nominal (description)</th><th>hidden truth (world.json)</th><th>recovered</th><th>error</th><th>tolerance</th><th>verdict</th></tr></thead><tbody><tr class='bad'><th scope='row'><code>can11.gravity_nm</code> <span class=chip>moved in the world</span></th><td>N·m</td><td>4.661</td><td>5.05</td><td><b>5.571</b></td><td>+10.33 %</td><td>±2 %</td><td><b>FAIL</b></td></tr><tr class=''><th scope='row'><code>can11.gravity_bottom_rad</code></th><td>rad</td><td>-0.3737</td><td>-0.35</td><td><b>-0.3501</b></td><td>-0.02 %</td><td>±0.005</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.armature_kg_m2</code></th><td>kg·m²</td><td>0.1219</td><td>0.14</td><td><b>0.1387</b></td><td>-0.91 %</td><td>±5 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.frictionloss_nm</code></th><td>N·m</td><td>0.8331</td><td>1.05</td><td><b>1.053</b></td><td>+0.24 %</td><td>±10 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.damping_nm_s_rad</code></th><td>N·m·s/rad</td><td>0.15</td><td>0.3</td><td><b>0.3049</b></td><td>+1.63 %</td><td>±20 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_drop_nm</code></th><td>N·m</td><td>0</td><td>0.35</td><td><b>0.3545</b></td><td>+1.28 %</td><td>±25 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_speed_rad_s</code></th><td>rad/s</td><td>—</td><td>0.1</td><td><b>0.1049</b></td><td>+4.93 %</td><td>±30 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.backlash_rad</code></th><td>rad</td><td>0</td><td>0.002</td><td><b>0.001958</b></td><td>-2.11 %</td><td>±10 %</td><td>pass</td></tr></tbody></table></div><p>Held-out link error ÷ floor (29 runs, floor 0.426 mrad): nominal 18.3× · M0 73.2× · M2 16.5× · M3 24.7× · M4 2.14×. The selection rule picks <b>None</b>.</p><div class='scroll'><table><thead><tr><th>gate</th><th>what</th><th>value</th><th>rule</th><th>verdict</th><th>from</th></tr></thead><tbody><tr class='bad'><th scope='row'><code>twinned</code></th><td>M4.dynamics.twin held-out link error / floor</td><td>2.14</td><td>&lt;= 1.5x</td><td><b>FAIL</b></td><td class='mut'>sim2real.cards.registry.TWINNED_LIMIT</td></tr><tr class=''><th scope='row'><code>held_out_link_fidelity</code></th><td>held-out link error, nominal / calibrated</td><td>8.52</td><td>&gt;= 4x</td><td>pass</td><td class='mut'>sysid/acceptance.json</td></tr><tr class='bad'><th scope='row'><code>recovery</code></th><td>every hidden value within its tolerance (the sim oracle only)</td><td>7/8, failing can11.gravity_nm</td><td>all</td><td><b>FAIL</b></td><td class='mut'>sysid/examples/&lt;id&gt;/world.json + sysid/acceptance.json</td></tr></tbody></table></div>
+
+<h2>Red first</h2><p class="mut">The acceptance tests before <code>sim2real.load</code> existed (their first form, before the move onto <code>Twin</code>):</p>
+<pre>      1 2 failed, 2 skipped, 6 errors in 0.51s
+      1 E           AttributeError: module &#x27;sim2real&#x27; has no attribute &#x27;load&#x27;
+      6 E       AttributeError: module &#x27;sim2real&#x27; has no attribute &#x27;load&#x27;
+      1 ERROR ../home/bam/sim2real/tests/test_one_click.py::test_an_unknown_backend_is_refused
+      1 ERROR ../home/bam/sim2real/tests/test_one_click.py::test_load_gives_a_composition_of_typed_instances
+      1 ERROR ../home/bam/sim2real/tests/test_one_click.py::test_simulate_swings_the_description_about_its_bottom
+      1 ERROR ../home/bam/sim2real/tests/test_one_click.py::test_the_real_backend_names_the_rack_path
+      1 ERROR ../home/bam/sim2real/tests/test_one_click.py::test_the_servo_carries_every_parameter_as_a_robot_msgs_value
+      1 ERROR ../home/bam/sim2real/tests/test_one_click.py::test_the_types_name_the_parameters_they_hold
+      1 FAILED ../home/bam/sim2real/tests/test_one_click.py::test_eval_twin_needs_a_calibration_first
+FAILED ../home/bam/sim2real/tests/test_layers.py::test_no_layer_imports_the_front_door
+1 failed, 15 passed in 0.16s
+</pre>
+<h2>Suites before → after</h2><pre>suite                                   before (4bded75)                                   after
+tests/ (uv run --project, --extra test) 78 passed                                          97 passed, 2 skipped on main after the camera-types merge (83 + 1 skipped before it; test_one_click skips outside bam_rack_twin&#x27;s venv)
+tests/test_one_click.py (rack venv)     — (did not exist; red first: 2 failed, 6 errors)    9 passed fast + 2 slow passed (SIM2REAL_SLOW=1: green 1615 s, red 888 s)
+tests/test_layers.py                    11 passed                                          16 passed (+ the front-door rule and its 4 planted cases)
+type_cards/tests                        178 passed, 4 failed (environmental*)              179 passed, 3 failed (the same environmental*)
+tools/tests                             12 passed                                          12 passed
+site/tests/test_site_flow.py            445 PASS, 2 FAIL (archive day**; Play clock 0.27 s) 452 PASS, 1 FAIL (archive day**); re-run: 449 PASS, 3 FAIL (archive day**; voxels scroll timeout; clip clock: load ~45)
+sysid/tests                             not re-run: sysid/ is unchanged (the API calls its pipeline; its committed pendulum result is reproduced bit for bit)
+
+*  bam_ws moved the servo constants into sim2real (bam_rack_twin now reads _cards.STOP_ALLOCATION_MRAD), and bam_rack_twin&#x27;s venv lacks
+   dataclass_values (robot_msgs 0.2.0 needs it): the sysid runtime here runs with PYTHONPATH=/home/bam/dataclass_values/src.
+** rack_2026-11-10 is an archive day the registry does not list.
+
+commits on main: 727f34f (Part 1, the home), 13f1ce5 (the acceptance tests), 100bc92 (sim2real.Twin), then this report.
+</pre>
+
+<h2>What robot_description would need (a proposal; its contract is untouched here)</h2>
+<ul><li><b>A typed instance element.</b> Each component needs a name, its sim2real type id as a plain string, a parent, binds (joint, link) and
+<code>parameters: Mapping[str, robot_msgs.space.Value]</code>. Today <code>Actuator</code> and <code>Sensor</code> carry <code>tags: tuple[tuple[str, str], ...]</code>,
+which hold strings, not Values with a unit and source.</li>
+<li><b>A description of the station itself.</b> The One Dof Test Rack's CAN 11 hinge and plate link aren't in it today (<code>build_payload</code> is the FB payload).
+The tracer's model is bam_rack_twin's MJCF, named by sysid's manifest.</li>
+<li><b>A lowering that applies typed values.</b> MJCF <code>armature</code>, <code>damping</code> and <code>frictionloss</code> should come from the instance's
+parameter Values, so a calibrated parameter set produces the twin's model.</li>
+<li><b>Until then</b>, <code>sim2real.describe()</code> is the thin adapter: it reads the sysid manifest and returns typed instances.</li>
+<li><b>A contract gap, for the type card.</b> <code>integrated_servo</code> has no parameter named <code>gravity_bottom_rad</code> or <code>friction_stribeck_speed_rad_s</code>.
+The oracle recovers both, and <code>Instance.on_type</code> carries and flags them.</li></ul>
+
+<h2>Next for <code>on="real"</code></h2>
+<ul><li>Play the same schedule on CAN 11 through bam_rack_twin.hardware. Its torque cap and stops are the runner's guards, never callbacks.</li>
+<li>Read the runs back through <code>tools/run_files.py</code> as robot_msgs <code>JointTrajectory</code>, then fit with the same <code>identify</code>.</li>
+<li>Score held-out runs against the rack's own run-to-run floor (gate T1), not two camera draws.</li>
+<li>Bind with <code>binding=</code>: the description stays address-free, and CAN ids and bus serials come from the deployment record.</li></ul>
+
+<h2>The Twin's code</h2><p class="mut"><code>src/sim2real/twin.py</code>, from <code>class Twin</code> on:</p><pre>class Twin:
+    &quot;&quot;&quot;A description&#x27;s twin: its typed instances, the model each runs (the type&#x27;s current model unless `model=` picks a rung), and, once
+    calibrated, its learned values (scikit-learn&#x27;s convention: values_, intervals_, rungs_, calibration_ exist only on a fitted twin).
+    Each verb is a thin call into its runner (self.runner), the level to drop to.&quot;&quot;&quot;
+
+    def __init__(self, description: Description, *, model: str | None = None, workers: int = 6):
+        self.description = description
+        self.runner = SimRunner(description, workers=workers)
+        self.model = model or dm.current_models(self.runner.typed().type)[0].id
+
+    @classmethod
+    def load(cls, name: str, *, model: str | None = None, workers: int = 6) -&gt; Twin:
+        &quot;&quot;&quot;A twin from its description&#x27;s name (today the sysid oracle examples&#x27; manifests: sysid/examples/&lt;name&gt;/description.json).&quot;&quot;&quot;
+        return cls(describe(name), model=model, workers=workers)
+
+    @property
+    def fitted(self) -&gt; bool:
+        return hasattr(self, &quot;values_&quot;)
+
+    def simulate(self, **options) -&gt; Simulation:
+        return self.runner.simulate(**options)
+
+    def calibrate(self, on: str = &quot;sim&quot;, *, truth: str = &quot;sealed&quot;, move_truth: Mapping[str, float] | None = None) -&gt; Twin:
+        &quot;&quot;&quot;A NEW twin, fitted: the type&#x27;s routine schedule played `on` the simulator at the hidden truth (`truth=&quot;sealed&quot;`: the fit never
+        sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test).&quot;&quot;&quot;
+        if on not in BACKENDS:
+            raise ValueError(f&quot;on must be one of {BACKENDS}, not {on!r}&quot;)
+        if on == &quot;real&quot;:
+            raise NotImplementedError(
+                &quot;on=&#x27;real&#x27; is next: the rack path. CAN 11 plays the same schedule on the One Dof Test Rack (bam_rack_twin.schedule replay &quot;
+                &quot;through bam_rack_twin.hardware, its torque cap and stops as the runner&#x27;s guards), its runs come back through &quot;
+                &quot;tools/run_files.py as robot_msgs JointTrajectory, and the same identify fits them; held-out score against the rack&#x27;s own &quot;
+                &quot;floor (gate T1). Not wired in this lane.&quot;)
+        if truth != &quot;sealed&quot;:
+            raise ValueError(f&quot;on=&#x27;sim&#x27; fits against a sealed hidden truth (truth=&#x27;sealed&#x27;), not {truth!r}&quot;)
+        calibration, state = self.runner.calibrate(model=self.model, truth=move_truth)
+        fitted = Twin.__new__(Twin)
+        fitted.description, fitted.model = self.description, self.model
+        fitted.runner = SimRunner(self.description, workers=self.runner.workers, state=state)
+        fitted.values_ = calibration.values
+        fitted.intervals_ = {k: tuple(r[&quot;ci95&quot;]) for k, r in ((r[&quot;name&quot;], r) for r in calibration.rows) if r[&quot;ci95&quot;]}
+        fitted.rungs_ = calibration.rungs
+        fitted.calibration_ = calibration
+        return fitted
+
+    def eval_twin(self) -&gt; TwinReport:
+        if not self.fitted:
+            raise RuntimeError(&quot;eval_twin needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval_twin()&quot;)
+        return self.runner.eval_twin()
+
+    def summary(self) -&gt; str:
+        return self.calibration_.summary() if self.fitted else self.description.summary()
+
+
+def load(name: str, **options) -&gt; Twin:
+    &quot;&quot;&quot;sim2real.load(name) is Twin.load(name): the brief&#x27;s spelling, the same call.&quot;&quot;&quot;
+    return Twin.load(name, **options)
+</pre>
+</main></body></html>

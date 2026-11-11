@@ -195,9 +195,9 @@ CAMERA_KITS: dict[str, CameraKit] = {
         fidelity=(
             FidelityMetric("camera.intrinsics", "where known board corners land (held-out views)", "corner jitter on a static board", "px",
                            rgb_geometry_fidelity),
-            FidelityMetric("camera.photometric", "a grey patch's mean DN at exposures the fit never used", "the patch's temporal noise",
+            FidelityMetric("camera.photometric", "a grey patch's mean DN at exposures the fit never used", "its temporal noise, session floor",
                            "DN", rgb_photometric_fidelity, on_card=False),
-            FidelityMetric("camera.latency_model", "event-to-stamp delay on held-out LED edges", "stamp jitter", "s", rgb_latency_fidelity,
+            FidelityMetric("camera.latency_model", "event-to-stamp delay on held-out LED edges", "stamp jitter, session floor", "s", rgb_latency_fidelity,
                            on_card=False),
         ),
     ),
@@ -213,7 +213,7 @@ CAMERA_KITS: dict[str, CameraKit] = {
         configure={"camera.exposure_lock": BAM_CAMERA_CALIBRATION, "camera.exposure_for_task": BAM_CAMERA_CALIBRATION,
                    "rgbd.depth_emitter_settings": "not implemented"},
         fidelity=(
-            FidelityMetric("depth.cloud_vs_sim", "a flat surface's depth at held-out distances", "the measured depth's standard error", "m",
+            FidelityMetric("depth.cloud_vs_sim", "a flat surface's depth at held-out distances", "the depth noise there, session floor", "m",
                            rgbd_depth_fidelity),
         ),
         members=("camera_rgb",),

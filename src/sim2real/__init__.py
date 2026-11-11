@@ -10,3 +10,15 @@ models/ without touching metrics/; a changed gate target is a cards/ data edit. 
 The site, dashboards and catalog are app folders beside this package, not in it. This file imports no layer, so importing
 sim2real.metrics never loads cards.
 """
+
+FRONT_DOOR = ("Twin", "load", "describe")
+
+
+def __getattr__(name: str):
+    """The front door, loaded on first use (sim2real.Twin.load(...), sim2real.load(...), sim2real.describe(...); src/sim2real/twin.py).
+    WHY lazy: `import sim2real` must load no layer; twin.py imports cards and metrics."""
+    if name in FRONT_DOOR:
+        from . import twin  # noqa: PLC0415
+
+        return getattr(twin, name)
+    raise AttributeError(f"module 'sim2real' has no attribute {name!r}")

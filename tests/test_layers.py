@@ -105,3 +105,64 @@ def test_the_checker_catches_a_planted_violation(tmp_path, layer, source, caught
         assert found == []
     else:
         assert found and all(f.startswith(f"{layer}/planted.py:") and f.endswith(f"imports {caught}") for f in found), found
+
+
+# --- the front door (2026-11-11, extended deliberately with the one-click API) ----------------------------------------------------------
+# WHY a top-level module right of every folder (Zach, 2026-11-11: "you set the model, you calibrate it and then you eval it"):
+# sim2real.twin composes every layer (cards' types, metrics' gates, the oracle's fit), so it may import any of them, and none may import
+# it, or the stable end would load the whole package. sim2real/__init__.py reaches it only inside a function (a module __getattr__) (`import sim2real` loads no
+# layer, held by tests/test_one_click.py).
+FRONT = ("twin",)
+
+
+def front_door_imports(root: Path) -> list[str]:
+    """Every import of a front-door module (sim2real.twin) from inside a layer folder, as 'file:line imports twin'."""
+    out = []
+    for layer in LAYERS:
+        for path in sorted((root / layer).rglob("*.py")):
+            if "tests" in path.relative_to(root).parts:
+                continue
+            rel = path.relative_to(root).with_suffix("").parts
+            package = list(rel[:-1])
+            for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+                targets: list[list[str]] = []
+                if isinstance(node, ast.Import):
+                    targets = [alias.name.split(".") for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level:
+                        base = package[: max(0, len(package) - (node.level - 1))]
+                        module = ["sim2real", *base, *(node.module.split(".") if node.module else [])]
+                        targets = [module + [alias.name] for alias in node.names] if node.module is None else [module]
+                    elif node.module:
+                        parts = node.module.split(".")
+                        targets = [parts + [alias.name] for alias in node.names] if parts == ["sim2real"] else [parts]
+                for parts in targets:
+                    if len(parts) >= 2 and parts[0] == "sim2real" and parts[1] in FRONT:
+                        out.append(f"{path.relative_to(root)}:{node.lineno} imports {parts[1]}")
+    return out
+
+
+def test_no_layer_imports_the_front_door():
+    assert (PACKAGE / "twin.py").is_file()
+    assert front_door_imports(PACKAGE) == []
+
+
+@pytest.mark.parametrize(
+    ("layer", "source", "caught"),
+    [
+        ("cards", "from sim2real import twin\n", True),
+        ("metrics", "def f():\n    from sim2real.twin import load\n", True),
+        ("models", "from ..twin import Twin\n", True),
+        ("cards", "from sim2real.metrics.gate import gate\n", False),
+    ],
+)
+def test_the_front_door_checker_catches_a_planted_import(tmp_path, layer, source, caught):
+    root = tmp_path / "sim2real"
+    for name in LAYERS:
+        (root / name).mkdir(parents=True)
+        (root / name / "__init__.py").write_text("")
+    (root / "__init__.py").write_text("")
+    (root / "twin.py").write_text("")
+    (root / layer / "planted.py").write_text(source)
+    found = front_door_imports(root)
+    assert bool(found) == caught, found
