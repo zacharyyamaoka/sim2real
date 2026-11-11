@@ -130,6 +130,8 @@ class BeltRig(Protocol):
     def stream(self, camera: str, profile, fps: float = 30.0): ...
     def line_scan(self, speed_m_s: float, line_pitch_revs: float, n_lines: int): ...
     def touch(self, arm: str) -> np.ndarray: ...
+    # stop_force_n is press ABOVE the moving baseline (damping and friction read while descending); a real arm's adapter tares on the move,
+    # not at rest, or a geared joint's friction alone could end the descent before contact (found 2026-11-11, see contact_height)
     def probe(self, arm: str, x_m: float, y_m: float, start_z_m: float, speed_m_s: float = 0.005, stop_force_n: float = 6.0,
               max_travel_m: float = 0.03) -> dict: ...
 
@@ -280,20 +282,33 @@ class PlaneDepthStep(Step):
         return ctx
 
 
-def contact_height(trace: dict, low_n: float = 1.0, high_n: float = 5.5) -> float:
-    """The tip centre's height at zero press force: the intercept of z on force over the loaded part of a probe trace.
+def contact_height(trace: dict, low_n: float = 1.0, high_n: float = 5.5, baseline_s: float = 0.2) -> float:
+    """The tip centre's height where the press force leaves its free-motion baseline: the intercept of z on force over the loaded tail.
 
     WHY the intercept and not the threshold crossing: the crossing sits threshold / stiffness below the surface and moves with how soft
-    the belt is over its bed; the intercept does not (a load cell's tare-and-slope, as Prusa's MK4 load-cell probe does)."""
+    the belt is over its bed; the intercept does not (a load cell's tare-and-slope, as Prusa's MK4 load-cell probe does).
+    WHY a moving baseline (found 2026-11-11, held-out points 0.44 mm off): a joint-current force reads the servo's damping and the joint's
+    friction while the tip descends in free air (~0.75 N on the twin, more on a geared arm), so a fixed window counts samples from above
+    the belt. The baseline is the first baseline_s of the descent (median, MAD noise); the fit keeps only the contiguous tail that stays
+    above baseline + max(low_n, 6 noise), and the contact is where that line meets the baseline, not zero."""
 
-    f, z = trace["force_n"], trace["z_m"]
+    f, z = np.asarray(trace["force_n"], float), np.asarray(trace["z_m"], float)
     if trace["stopped_by"] != "force":
         raise CalibrationError(f"probe at ({trace['x_m']:.3f}, {trace['y_m']:.3f}) m found no belt within its travel guard")
-    sel = (f >= low_n) & (f <= high_n)
+    n_free = max(20, min(int(baseline_s * 1000), len(f) // 3))
+    free = f[:n_free]
+    baseline = float(np.median(free))
+    noise = 1.4826 * float(np.median(np.abs(free - baseline)))
+    low = baseline + max(low_n, 6 * noise)
+    below = np.flatnonzero(f < low)
+    start = int(below[-1]) + 1 if len(below) else 0
+    sel = np.zeros(len(f), bool)
+    sel[start:] = True
+    sel &= f <= baseline + high_n
     if sel.sum() < 5:
         raise CalibrationError("too few loaded samples in a probe trace")
     slope, intercept = np.polyfit(f[sel], z[sel], 1)
-    return float(intercept)
+    return float(intercept + slope * baseline)
 
 
 class PlaneProbeStep(Step):
