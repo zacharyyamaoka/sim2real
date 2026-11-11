@@ -20,6 +20,13 @@ rather than fitting a model: Zach, "not identifying a model so much as automatic
 `reg.routines_configuring(card)` lists a card's; `reg.routines_for(card)` now also returns them. Eleven camera routines (six identify,
 five configure) and five equipment items join `ROUTINES` / `EQUIPMENT`; `domain_v3.json`'s routines carry `configures`.
 
+Since 2026-11-11 (additive, the conveyor belt's geometry): `sim2real.cards.conveyor_belt` holds the belt's calibration card (routines, the
+quantity each recovers, what limits it, and every tolerance a robot_msgs Value). Ten `conveyor_belt.*` routines join `ROUTINES`: scale
+(identify, the conveyor card's `drum_radius_m`), slip, direction and both belt planes (measure), camera_to_camera / robot_to_robot /
+time_offset / line_scan (identify camera_rgb extrinsics, arm_6dof base_frame, camera_rgb latency_s, camera_hsi line_geometry) and
+speed_setup (configure, not implemented); four equipment items (`belt_charuco_acm`, `divot_board`, `probe_ball_tip`, `belt_load`).
+`conveyor.radius_tracker` gains one alternative (`conveyor_belt.scale`), its only change.
+
 ## Rules of the road
 
 - **One import.** `sys.path` holds the repo root; then `from type_cards import registry as reg`. Everything below is a name on `reg`

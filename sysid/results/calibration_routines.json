@@ -3490,7 +3490,9 @@
      "not_run": {}
     }
    },
-   "alternatives": [],
+   "alternatives": [
+    "conveyor_belt.scale"
+   ],
    "references": [],
    "note": ""
   },
@@ -5817,6 +5819,663 @@
     "status": "not checked",
     "checks": [],
     "note": "not in the sysid ladder: tuning chooses gains and recovers no hidden value; its grade is the closed loop's (pidtuna's gates)"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.scale",
+   "title": "Belt distance scale: camera board travel vs motor encoder revs (and drum runout)",
+   "package": "servo_dynamic.actuator",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 180.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "three 0.56 m passes, 40 stops each"
+   },
+   "operator_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "laying the board under camera 1"
+   },
+   "equipment": [
+    {
+     "id": "belt_charuco_acm",
+     "title": "A 7 x 5 ChArUco board (40 / 30 mm, DICT_5X5_100) printed on 3 mm aluminium composite, flat on the belt",
+     "cost": {
+      "value": 23.0,
+      "unit": "USD",
+      "source": "zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 23.0,
+    "unit": "USD",
+    "source": "belt_charuco_acm: zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "conveyor",
+     "rung": "M0",
+     "parameters": [
+      "drum_radius_m"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "the belt stepped back and forth 0.56 m three times under camera 1",
+   "coverage": "two drum turns of belt travel, both directions",
+   "repeats": 3,
+   "how": "least squares of the board centre's travel (ChArUco pose per stop) on motor revs, with a once-per-drum-turn sine for runout; the effective drum radius is mm per rev x gear / 2 pi, belt thickness and wear included",
+   "tests": [
+    "conveyor.tag_metre"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "ScaleStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin in sim2real.sim.conveyor_belt grades it (tests/test_conveyor_belt.py; 0.004 % worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [
+    "conveyor.radius_tracker"
+   ],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.slip",
+   "title": "Encoder-to-surface ratio under load (slip)",
+   "package": "servo_dynamic.actuator",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 240.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 180.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "loading the belt"
+   },
+   "equipment": [
+    {
+     "id": "belt_charuco_acm",
+     "title": "A 7 x 5 ChArUco board (40 / 30 mm, DICT_5X5_100) printed on 3 mm aluminium composite, flat on the belt",
+     "cost": {
+      "value": 23.0,
+      "unit": "USD",
+      "source": "zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+      "note": ""
+     }
+    },
+    {
+     "id": "belt_load",
+     "title": "15 kg of sandbags spread on the belt",
+     "cost": {
+      "value": 20.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 43.0,
+    "unit": "USD",
+    "source": "estimate (belt_load); belt_charuco_acm: zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "the scale routine's sweep with 15 kg on the belt",
+   "coverage": "one load against the unloaded scale",
+   "repeats": 3,
+   "how": "slip = 1 - loaded scale / unloaded scale; a gauge on the drum-to-surface ratio, not a rung parameter yet",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "SlipStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it (tests/test_conveyor_belt.py; 0.003 % worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.direction",
+   "title": "Belt direction in camera 1's frame, and its sideways wander",
+   "package": "hand_eye",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 1.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "computed from the scale routine's data"
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "equipment": [
+    {
+     "id": "belt_charuco_acm",
+     "title": "A 7 x 5 ChArUco board (40 / 30 mm, DICT_5X5_100) printed on 3 mm aluminium composite, flat on the belt",
+     "cost": {
+      "value": 23.0,
+      "unit": "USD",
+      "source": "zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 23.0,
+    "unit": "USD",
+    "source": "belt_charuco_acm: zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "the scale routine's sweep, no motion of its own",
+   "coverage": "the same two drum turns of travel",
+   "repeats": 3,
+   "how": "the fitted line's unit vector in camera 1's frame; its perpendicular scatter is the tracking wander",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "DirectionStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it (tests/test_conveyor_belt.py; 0.002 deg worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.plane_depth",
+   "title": "Belt plane from the depth camera (v1), and the background model",
+   "package": "camera.rgbd",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 10.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "30 depth frames"
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "the empty belt held still under camera 1",
+   "coverage": "the belt's central band across the image",
+   "repeats": 30,
+   "how": "per-pixel mean and std of 30 depth frames (kept as the background model), a plane fit, into arm 1's frame through the hand-eye; camera-limited by the depth's range bias",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "PlaneDepthStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it (tests/test_conveyor_belt.py; 1.8 mm worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [
+    "conveyor_belt.plane_probe"
+   ],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.plane_probe",
+   "title": "Belt plane from arm 1's touch, Prusa-style (v2)",
+   "package": "hand_eye",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "16 touches"
+   },
+   "operator_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "fitting the ball tip"
+   },
+   "equipment": [
+    {
+     "id": "probe_ball_tip",
+     "title": "A 6 mm ball tip on arm 1's flange and its joint-current read-back as a load cell",
+     "cost": {
+      "value": 30.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 30.0,
+    "unit": "USD",
+    "source": "estimate (probe_ball_tip)",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "a 4 x 4 grid of slow descents (5 mm/s) to 6 N or a 30 mm travel guard",
+   "coverage": "a 0.3 x 0.3 m grid over arm 1's reach",
+   "repeats": 1,
+   "how": "each contact is the zero-force intercept of tip height on the tared joint-current force; a least-squares plane through the 16; the only belt-plane route under 1 mm",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "PlaneProbeStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it with contact simulated (tests/test_conveyor_belt.py; 0.08 mm worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [
+    "conveyor_belt.plane_depth"
+   ],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.camera_to_camera",
+   "title": "Camera-to-camera transform, a board carried between them by the belt",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "deployed",
+   "status": "implemented",
+   "wall_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "three placements, 1.3 m carries"
+   },
+   "operator_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "equipment": [
+    {
+     "id": "belt_charuco_acm",
+     "title": "A 7 x 5 ChArUco board (40 / 30 mm, DICT_5X5_100) printed on 3 mm aluminium composite, flat on the belt",
+     "cost": {
+      "value": 23.0,
+      "unit": "USD",
+      "source": "zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 23.0,
+    "unit": "USD",
+    "source": "belt_charuco_acm: zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M0",
+     "parameters": [
+      "extrinsics"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "the board seen by camera 1, carried whole drum turns, seen by camera 2",
+   "coverage": "three placements across the belt",
+   "repeats": 3,
+   "how": "camera 1's board pose carried by the calibrated scale and direction, composed with camera 2's; chordal mean over placements",
+   "tests": [
+    "camera_rgb.tag_poses"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "CameraToCameraStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it (tests/test_conveyor_belt.py; 1.4 mm worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.robot_to_robot",
+   "title": "Arm-to-arm transform by touching a board the belt carries between them",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "deployed",
+   "status": "implemented",
+   "wall_time": {
+    "value": 600.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "3 placements x 12 touches"
+   },
+   "operator_time": {
+    "value": 600.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "jogging both arms to the divots"
+   },
+   "equipment": [
+    {
+     "id": "divot_board",
+     "title": "The belt ChArUco with four conical divots at its corners, for an arm's touch",
+     "cost": {
+      "value": 60.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 60.0,
+    "unit": "USD",
+    "source": "estimate (divot_board)",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "arm_6dof",
+     "rung": "M0",
+     "parameters": [
+      "base_frame"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "arm 1 touches the divots twice two drum turns apart, the belt carries them to arm 2, which touches",
+   "coverage": "three placements across the belt",
+   "repeats": 3,
+   "how": "the belt's vector in arm 1's frame from its two touches (ABB's 4-point conveyor calibration), then Kabsch over all 12 divot pairs",
+   "tests": [
+    "arm_6dof.tool_tag"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "RobotToRobotStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it (tests/test_conveyor_belt.py; 0.84 mm worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.time_offset",
+   "title": "Camera-to-encoder time offset from the belt moving both ways",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 30.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "6 s of streaming plus set-up"
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "equipment": [
+    {
+     "id": "belt_charuco_acm",
+     "title": "A 7 x 5 ChArUco board (40 / 30 mm, DICT_5X5_100) printed on 3 mm aluminium composite, flat on the belt",
+     "cost": {
+      "value": 23.0,
+      "unit": "USD",
+      "source": "zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 23.0,
+    "unit": "USD",
+    "source": "belt_charuco_acm: zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M2",
+     "parameters": [
+      "latency_s"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "the belt at +-0.1 and +-0.2 m/s while camera 1 streams at 30 fps",
+   "coverage": "two speeds in both directions",
+   "repeats": 1,
+   "how": "the shift of the encoder log that best explains the camera track at every speed; a sign flip separates latency from offset",
+   "tests": [
+    "camera_rgb.moving_target"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "TimeOffsetStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it, motion blur not modelled (tests/test_conveyor_belt.py; 0.005 ms worst)"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.line_scan",
+   "title": "Line-scanner line on the belt, yaw, mm per pixel and trigger delay",
+   "package": "camera.line_area_scan",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "two encoder-triggered passes"
+   },
+   "operator_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "equipment": [
+    {
+     "id": "belt_charuco_acm",
+     "title": "A 7 x 5 ChArUco board (40 / 30 mm, DICT_5X5_100) printed on 3 mm aluminium composite, flat on the belt",
+     "cost": {
+      "value": 23.0,
+      "unit": "USD",
+      "source": "zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 23.0,
+    "unit": "USD",
+    "source": "belt_charuco_acm: zach_brain Sources/Chats/Claude Code/2026-10-03 \u2014 9c458d05 (CHAT).md: C$32 printed on 3 mm ACM",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "camera_hsi",
+     "rung": "M3",
+     "parameters": [
+      "line_geometry"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "the board measured by camera 1, carried under the line scanner at 0.1 and 0.4 m/s",
+   "coverage": "two speeds, the board across the swath",
+   "repeats": 1,
+   "how": "ChArUco in the encoder-stitched image; each corner's belt position places the scan line in camera 1's frame; the shift between the speeds is the trigger delay (Wendel and Underwood's pattern-through-the-line, on the belt's clock)",
+   "tests": [
+    "camera_hsi.belt_target"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/models/conveyor_belt.py",
+     "ref": "",
+     "note": "LineScanStep"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example: the hidden-truth twin grades it (tests/test_conveyor_belt.py; 1.7 mm, 0.17 ms worst of 5 seeds)"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": ""
+  },
+  {
+   "routine": "conveyor_belt.speed_setup",
+   "title": "Belt drive set-up: counts per metre, direction sign and speed limits written to the drive",
+   "package": "servo_dynamic.actuator",
+   "kind": "configure",
+   "setting": "both",
+   "status": "not implemented",
+   "wall_time": {
+    "value": 60.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 30.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "confirming the drive's write"
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "no motion: the scale and direction routines' results written to the drive",
+   "coverage": "the drive's speed and acceleration limits",
+   "repeats": 1,
+   "how": "write counts per metre from the scale routine, the sign that makes positive commands move downstream, and the guards the calibration runs under (0.2 m/s, 0.4 m/s for the line scan), then read them back",
+   "tests": [],
+   "code": [],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "not implemented: it needs the real belt's drive (its motor and driver are not known yet)"
    },
    "recovery": {},
    "alternatives": [],
@@ -15008,7 +15667,8 @@
     "value": 0.001
    },
    "routines": [
-    "conveyor.radius_tracker"
+    "conveyor.radius_tracker",
+    "conveyor_belt.scale"
    ],
    "checks": [
     "conveyor:conveyor.radius_tracker"
@@ -15439,7 +16099,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -15549,7 +16210,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -15659,7 +16321,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -15769,7 +16432,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -15879,7 +16543,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -15989,7 +16654,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16099,7 +16765,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16209,7 +16876,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16319,7 +16987,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16429,7 +17098,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16539,7 +17209,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16649,7 +17320,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16759,7 +17431,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16869,7 +17542,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -16979,7 +17653,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -17089,7 +17764,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -17199,7 +17875,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -17309,7 +17986,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -17855,7 +18533,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -17938,7 +18617,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -18021,7 +18701,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -18104,7 +18785,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -18187,7 +18869,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -18270,7 +18953,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -18350,7 +19034,8 @@
     "value": 0.01
    },
    "routines": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "checks": [
     "linescan_cell:linescan.geometry_dot_card"
@@ -18457,7 +19142,8 @@
     "value": 1.0
    },
    "routines": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "checks": [
     "linescan_cell:linescan.geometry_dot_card"
@@ -18564,7 +19250,8 @@
     "value": 0.003
    },
    "routines": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "checks": [
     "linescan_cell:linescan.geometry_dot_card"
@@ -18671,7 +19358,8 @@
     "value": 0.001
    },
    "routines": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "checks": [
     "linescan_cell:linescan.geometry_dot_card"
@@ -18778,7 +19466,8 @@
     "value": 0.001
    },
    "routines": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "checks": [
     "linescan_cell:linescan.geometry_dot_card"
@@ -18885,7 +19574,8 @@
     "value": 0.002
    },
    "routines": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "checks": [
     "linescan_cell:linescan.geometry_dot_card"
@@ -22855,7 +23545,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -22965,7 +23656,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -23075,7 +23767,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -23185,7 +23878,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -23295,7 +23989,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -23405,7 +24100,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -24076,7 +24772,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "tool_frame": [
     "kinematics.dh_ur_style",
@@ -24113,7 +24810,8 @@
   },
   "conveyor": {
    "drum_radius_m": [
-    "conveyor.radius_tracker"
+    "conveyor.radius_tracker",
+    "conveyor_belt.scale"
    ],
    "gear_ratio": [],
    "moving_mass_kg": [
@@ -24147,7 +24845,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "distortion": [
     "camera.intrinsics_charuco"
@@ -24156,7 +24855,8 @@
     "camera.exposure_response_ptc"
    ],
    "latency_s": [
-    "camera.latency_led"
+    "camera.latency_led",
+    "conveyor_belt.time_offset"
    ],
    "line_delay_s": [
     "camera.rolling_shutter_target"
@@ -24194,7 +24894,8 @@
     "hsi.smile_keystone_bars"
    ],
    "line_geometry": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "reference_drift_per_h": []
   },

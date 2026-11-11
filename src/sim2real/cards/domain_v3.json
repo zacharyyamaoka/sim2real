@@ -6146,7 +6146,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ]
   },
   {
@@ -8046,7 +8047,8 @@
    ],
    "note": "",
    "routines": [
-    "conveyor.radius_tracker"
+    "conveyor.radius_tracker",
+    "conveyor_belt.scale"
    ]
   },
   {
@@ -8443,7 +8445,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ]
   },
   {
@@ -8534,7 +8537,8 @@
    ],
    "note": "",
    "routines": [
-    "camera.latency_led"
+    "camera.latency_led",
+    "conveyor_belt.time_offset"
    ]
   },
   {
@@ -8927,7 +8931,8 @@
    ],
    "note": "the line's pose and the belt distance per line",
    "routines": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ]
   },
   {
@@ -13219,6 +13224,197 @@
    "identifies": [],
    "legacy_identifies": [],
    "configures": []
+  },
+  {
+   "id": "conveyor_belt.scale",
+   "title": "Belt distance scale: camera board travel vs motor encoder revs (and drum runout)",
+   "package": "servo_dynamic.actuator",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "conveyor",
+     "model": "M0.kinematics.belt",
+     "parameter": "drum_radius_m"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "conveyor",
+     "rung": "M0",
+     "parameters": [
+      "drum_radius_m"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.slip",
+   "title": "Encoder-to-surface ratio under load (slip)",
+   "package": "servo_dynamic.actuator",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.direction",
+   "title": "Belt direction in camera 1's frame, and its sideways wander",
+   "package": "hand_eye",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.plane_depth",
+   "title": "Belt plane from the depth camera (v1), and the background model",
+   "package": "camera.rgbd",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.plane_probe",
+   "title": "Belt plane from arm 1's touch, Prusa-style (v2)",
+   "package": "hand_eye",
+   "kind": "measure",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.camera_to_camera",
+   "title": "Camera-to-camera transform, a board carried between them by the belt",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "deployed",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "camera",
+     "model": "M0.measurement.pinhole",
+     "parameter": "extrinsics"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M0",
+     "parameters": [
+      "extrinsics"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.robot_to_robot",
+   "title": "Arm-to-arm transform by touching a board the belt carries between them",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "deployed",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "rigid_body_chain",
+     "model": "M0.kinematics.nominal",
+     "parameter": "base_frame"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "arm_6dof",
+     "rung": "M0",
+     "parameters": [
+      "base_frame"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.time_offset",
+   "title": "Camera-to-encoder time offset from the belt moving both ways",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "camera",
+     "model": "M2.measurement.exposure_latency",
+     "parameter": "latency_s"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_rgb",
+     "rung": "M2",
+     "parameters": [
+      "latency_s"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.line_scan",
+   "title": "Line-scanner line on the belt, yaw, mm per pixel and trigger delay",
+   "package": "camera.line_area_scan",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "hyperspectral_camera",
+     "model": "M3.measurement.pushbroom",
+     "parameter": "line_geometry"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "camera_hsi",
+     "rung": "M3",
+     "parameters": [
+      "line_geometry"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "conveyor_belt.speed_setup",
+   "title": "Belt drive set-up: counts per metre, direction sign and speed limits written to the drive",
+   "package": "servo_dynamic.actuator",
+   "kind": "configure",
+   "setting": "both",
+   "status": "not implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": [
+    {
+     "type": "conveyor",
+     "card": "conveyor",
+     "settings": [
+      "counts_per_m",
+      "direction_sign",
+      "speed_limit_m_s",
+      "accel_limit_m_s2"
+     ]
+    }
+   ]
   }
  ],
  "parameter_routines": {
@@ -13227,7 +13423,8 @@
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
     "cell.tags_bundle_adjustment",
-    "hand_eye.ax_xb"
+    "hand_eye.ax_xb",
+    "conveyor_belt.robot_to_robot"
    ],
    "tool_frame": [
     "kinematics.dh_ur_style",
@@ -13375,7 +13572,8 @@
   },
   "conveyor": {
    "drum_radius_m": [
-    "conveyor.radius_tracker"
+    "conveyor.radius_tracker",
+    "conveyor_belt.scale"
    ],
    "gear_ratio": [],
    "encoder_counts_per_m": [],
@@ -13409,7 +13607,8 @@
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
-    "rgbd.dot_card"
+    "rgbd.dot_card",
+    "conveyor_belt.camera_to_camera"
    ],
    "distortion": [
     "camera.intrinsics_charuco"
@@ -13418,7 +13617,8 @@
     "camera.exposure_response_ptc"
    ],
    "latency_s": [
-    "camera.latency_led"
+    "camera.latency_led",
+    "conveyor_belt.time_offset"
    ],
    "line_delay_s": [
     "camera.rolling_shutter_target"
@@ -13456,7 +13656,8 @@
     "hsi.smile_keystone_bars"
    ],
    "line_geometry": [
-    "linescan.geometry_dot_card"
+    "linescan.geometry_dot_card",
+    "conveyor_belt.line_scan"
    ],
    "reference_drift_per_h": []
   }
