@@ -36,7 +36,8 @@ REPO = Path(__file__).resolve().parents[2]
 KIT = REPO / "vendor" / "data-ui" / "dist"
 RULER_TWINNED = 1.5          # sim->real / floor at most this: twinned (sim2real README, the ruler)
 RULER_CLOSE = 3.0            # past twinned, up to this: close
-TOOL_GATE_MM = 5.0           # the deployment's tool gate at a stop (Zach's standing metric)
+# WHY 1 mm (Zach, 2026-11-11): "we certainly need final tool error sub 1mm final accuracy" - replaces the 5 mm of Oct 24.
+TOOL_GATE_MM = 1.0           # the deployment's tool gate at a stop (Zach's standing metric)
 
 
 VERDICT_RANK = {"twinned": 0, "gate pass": 0, "close": 1, "not twinned": 2, "gate fail": 2}
