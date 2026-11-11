@@ -29,7 +29,10 @@ from robot_msgs.space import Value
 
 from sim2real.fit.belt_geometry import (Plane, fit_belt_line, fit_plane, fit_time_offset, invert, kabsch, mean_transform, rotation_zyx,
                                         scan_line_on_plane)
-from sim2real.metrics.charuco import BOARD, board_pose, detect_corners
+from sim2real.fit.camera_rgb import Intrinsics
+from sim2real.fit.charuco_pose import board_pose
+from sim2real.metrics.camera import fidelity, jitter_floor, session_floor
+from sim2real.metrics.charuco import BOARD, detect_corners
 
 MM, DEG = 1e-3, math.pi / 180
 
@@ -121,7 +124,7 @@ class BeltRig(Protocol):
     def set_load(self, kg: float) -> None: ...                                   # real: the operator loads the belt, then confirms
     def place_board(self, near: str, along_m: float = 0.0, lateral_m: float = 0.0, yaw_deg: float = 90.0) -> None: ...
     def clear_belt(self) -> None: ...
-    def intrinsics(self, camera: str) -> np.ndarray: ...
+    def intrinsics(self, camera: str) -> Intrinsics: ...
     def hand_eye(self, camera: str) -> np.ndarray: ...
     def capture(self, camera: str, depth: bool = False) -> dict: ...
     def stream(self, camera: str, profile, fps: float = 30.0): ...
@@ -270,7 +273,7 @@ class PlaneDepthStep(Step):
         # the belt fills the middle of the image across; keep its central band, away from the side rails
         v, u = np.mgrid[int(h * 0.2):int(h * 0.8):4, int(w * 0.08):int(w * 0.92):4]
         z = mean[v, u]
-        pts = np.column_stack([((u - k[0, 2]) / k[0, 0] * z).ravel(), ((v - k[1, 2]) / k[1, 1] * z).ravel(), z.ravel()])
+        pts = np.column_stack([((u - k.cx) / k.fx * z).ravel(), ((v - k.cy) / k.fy * z).ravel(), z.ravel()])
         plane_c1 = fit_plane(pts[np.isfinite(pts).all(axis=1)])
         ctx["plane_depth"] = {"plane_c1": plane_c1, "plane_world": plane_c1.transformed(rig.hand_eye("camera_1")),
                               "background": {"mean_m": mean, "std_m": std}, "frames": self.frames}
@@ -444,7 +447,7 @@ class LineScanStep(Step):
                 raise CalibrationError(f"the line scan at {speed} m/s decoded {0 if found is None else len(found[0])} ChArUco corners")
             ids, px = found
             revs = np.interp(px[:, 1], np.arange(len(trig)), trig)
-            board_pts = BOARD.board().getChessboardCorners()[ids]
+            board_pts = BOARD.object_points(ids)
             x = (t0[:3, :3] @ board_pts.T).T + t0[:3, 3] + np.outer(travel_m(ctx, revs) - travel_m(ctx, r0), direction)
             fits.append((speed, x, px[:, 0]))
             scans.append({"speed_m_s": speed, "image": image, "corners_px": px, "ids": ids})
@@ -530,6 +533,17 @@ class ConveyorBelt:
         carried = _centre(t1) + cal["direction"]["direction_c1"] * float(travel_m(cal, r1) - travel_m(cal, r0))
         predicted = (invert(cal["camera_to_camera"]["T_c1_c2"]) @ np.append(carried, 1))[:3]
         out["camera_2_handoff_mm"] = float(np.linalg.norm(predicted - _centre(t2))) / MM
+        # the same hand-off as a camera-types Fidelity: the error over camera 2's own floor for this statistic (its board-centre jitter
+        # over repeated frames, as a session floor: 3 calibration placements, 5 held-out frames); reported, not gated
+        repeats = []
+        for _ in range(5):
+            p2 = board_pose(rig.capture("camera_2")["grey"], BOARD, k2)
+            if p2 is not None:
+                repeats.append(p2.centre_m)
+        if len(repeats) >= 2:
+            sigma_3d = jitter_floor(np.array(repeats)[:, None, :]) * math.sqrt(3)
+            out["camera_2_handoff_fidelity"] = fidelity("conveyor_belt.eval.camera_2_handoff", out["camera_2_handoff_mm"] * MM,
+                                                        session_floor(sigma_3d, 3, len(repeats)), "m", len(repeats))
         rig.place_board("arm_1", lateral_m=0.04, yaw_deg=92.0)
         r0, p = rig.encoder_revs(), rig.touch("arm_1")
         rig.move_belt(_whole_turns(d, _station(d, "arm_2") - _station(d, "arm_1")), speed_m_s=0.2)

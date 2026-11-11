@@ -40,6 +40,9 @@ def _run(seed: int, only, record=None):
                          "pass": gate(abs(s.error), card.TOLERANCES[q]).passes,
                          "nominal_pass": gate(abs(nominal[q].error), card.TOLERANCES[q]).passes})
         held_out = belt.eval_twin(result)
+        fid = held_out.pop("camera_2_handoff_fidelity", None)
+        if fid is not None:
+            held_out["camera_2_handoff_x_floor"] = fid.ratio
     return twin, result, rows, held_out
 
 
@@ -78,7 +81,7 @@ def main(argv=None) -> int:
             print(f"seed {seed} {'PASS' if r['pass'] else 'FAIL'}  {r['quantity']:34s} error {r['error']:+9.4f} {r['unit']:4s} "
                   f"(tolerance {r['tolerance']:g}; nominal {r['nominal_error']:+.3f})")
         for k, v in held_out.items():
-            print(f"seed {seed} eval  {k:34s} {v:9.4f} mm")
+            print(f"seed {seed} eval  {k:34s} {v:9.4f} {'x floor' if k.endswith('x_floor') else 'mm'}")
     if args.json:
         with open(args.json, "w") as fh:
             json.dump(every, fh, indent=1)

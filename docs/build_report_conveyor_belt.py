@@ -154,6 +154,7 @@ def main() -> int:
     try:
         cal = belt.calibrate()
         held = belt.eval_twin(cal)
+        handoff_fidelity = held.pop("camera_2_handoff_fidelity", None)
         truths = twin.truths()
         scores = twin.score(cal)
         nominal = twin.score(belt.nominal_calibration())
@@ -234,6 +235,9 @@ def main() -> int:
     eval_rows = "".join(f"<tr><td>{k.replace('_', ' ')}</td><td class='num'><b>{v:.3f}</b></td><td class='num'>{float(card.EVAL_TOLERANCES[k].high):g}</td>"
                         f"<td>mm</td><td class='{'ok' if gate(v, card.EVAL_TOLERANCES[k]).passes else 'bad'}'>"
                         f"{'pass' if gate(v, card.EVAL_TOLERANCES[k]).passes else 'FAIL'}</td></tr>" for k, v in held.items())
+    if handoff_fidelity is not None:
+        eval_rows += (f"<tr><td>camera 2 hand-off / camera 2's floor (metrics.camera.Fidelity)</td><td class='num'><b>{handoff_fidelity.ratio:.2f}</b></td>"
+                      f"<td class='num'>1.5</td><td>x floor</td><td class='muted'>reported, not gated (floor {handoff_fidelity.floor * 1e3:.3f} mm)</td></tr>")
 
     def vid(name, caption):
         return (f'<figure><video controls muted loop playsinline preload="metadata" poster="{REL}/{name}.jpg" src="{REL}/{name}.mp4"></video>'

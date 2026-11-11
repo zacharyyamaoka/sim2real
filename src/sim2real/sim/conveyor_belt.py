@@ -18,8 +18,9 @@ in for arm 1's tool (a contact-simulated Prusa-style touch). Arm 2's touch is th
 WHY kinematic belt travel and not geom/surfacevel (bam_pick_worlds/belt.py uses surfacevel for carrying blocks): calibration needs the
 belt's position, not its friction on a block, and a mocap board makes the hidden scale, slip and runout exact by construction.
 
-A peer lane builds the camera types (models/camera_rgbd.py); CameraNoise is the stand-in until it lands, kept to one dataclass so the
-swap is one import.
+The camera's errors come from the camera types (2026-11-11, swapped in from the placeholder): depth is a fit.camera_rgbd.DepthModel (M1
+stereo noise, M2 bias polynomial) and every routine gets a fit.camera_rgb.Intrinsics. CameraNoise keeps only what the camera types do not
+model for a render: image grey noise and how far the routine's calibrated intrinsics sit from the render's true ones.
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
+from sim2real.fit.camera_rgb import Intrinsics
+from sim2real.fit.camera_rgbd import DepthModel
 from sim2real.fit.belt_geometry import fit_plane, invert, rotation_angle_deg, rotation_zyx, scan_line_on_plane, vector_angle_deg
 from sim2real.metrics.charuco import BOARD, CharucoSpec
 
@@ -53,14 +56,20 @@ def _perturb(t: np.ndarray, dxyz_mm, drpy_deg) -> np.ndarray:
     return out
 
 
+def d435_depth() -> DepthModel:
+    """A D435's depth at its datasheet: 50 mm baseline, ~640 px depth focal length at 848 x 480, 0.08 px subpixel (M1: ~1 mm at 0.65 m),
+    and a 0.4 % range bias (M2: z + 0.004 z) that averaging does not remove."""
+
+    return DepthModel(baseline_m=0.050, focal_px=640.0, subpixel_sigma=0.08, depth_bias_coeffs=(0.004, 0.0))
+
+
 @dataclass(frozen=True)
 class CameraNoise:
-    """A D435-like colour + depth camera's errors. WHY these numbers: Intel's D435 datasheet (depth RMS < 2 % at 2 m; ~0.2 % at 1 m with
-    a 50 mm baseline and 0.08 px subpixel), and a ChArUco intrinsic calibration good to ~0.3 % in focal length."""
+    """What the twin adds to a render: grey-level noise, the depth model (camera_rgbd's DepthModel), and how far the intrinsics a routine
+    gets are from the render's (a ChArUco intrinsic calibration good to ~0.3 % in focal length)."""
 
     grey_sigma: float = 2.0             # image noise, grey levels
-    depth_sigma_at_1m_m: float = 0.002  # per-pixel depth RMS, scales with range squared
-    depth_scale_bias: float = 0.004     # systematic range error (does not average out)
+    depth: DepthModel = field(default_factory=d435_depth)
     focal_error: float = 0.003          # the intrinsics the routines get vs the render's true focal length
     principal_error_px: float = 1.5
 
@@ -324,16 +333,13 @@ class BeltTwin:
         self.board_s0 = 50.0
         self._update_board()
 
-    def intrinsics(self, camera: str) -> np.ndarray:
-        """The camera matrix a routine gets: its own calibration, off the render's true focal length by CameraNoise."""
+    def intrinsics(self, camera: str) -> Intrinsics:
+        """The intrinsics a routine gets: its own calibration, off the render's true focal length and centre by CameraNoise."""
 
         k = self._true_k(camera)
         c = self.truth.camera
-        k[0, 0] *= 1 + c.focal_error
-        k[1, 1] *= 1 + c.focal_error
-        k[0, 2] += c.principal_error_px
-        k[1, 2] -= c.principal_error_px
-        return k
+        return Intrinsics(k[0, 0] * (1 + c.focal_error), k[1, 1] * (1 + c.focal_error), k[0, 2] + c.principal_error_px,
+                          k[1, 2] - c.principal_error_px)
 
     def _true_k(self, camera: str) -> np.ndarray:
         w, h = LINE_SIZE if camera == "line_scan" else CAMERA_SIZE
@@ -371,7 +377,7 @@ class BeltTwin:
         if depth:
             z = self._render(camera, CAMERA_SIZE, depth=True).astype(np.float64)
             c = self.truth.camera
-            z = z * (1 + c.depth_scale_bias) + self.rng.normal(0, 1, size=z.shape) * c.depth_sigma_at_1m_m * z ** 2
+            z = c.depth.mean_depth(z) + self.rng.normal(0, 1, size=z.shape) * c.depth.sigma(z)
             frame["depth_m"] = z
         self._record(camera, rgb)
         return frame
