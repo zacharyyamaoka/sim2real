@@ -25,6 +25,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dataclass-values"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6c/ca/387a299f05bcd7f76b26e0951f95527e9e68e29c02676c8d5186113ce7df/dataclass_values-0.1.0.tar.gz", hash = "sha256:e95bafd4b96ef74bdb99d475ede4bac76115b1f8562407e42e0eabd7e9cbe3bc", size = 12336, upload-time = "2026-11-11T15:39:20.928Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/d5/0269abcf68c59a3a9a032f52e84b5c88b3d50fb76b9aaf73783b7eb4fca8/dataclass_values-0.1.0-py3-none-any.whl", hash = "sha256:98faeb88a13c555d5e10ce5e17a9e5d6821483d1088d69ae72490269393e3ec7", size = 9415, upload-time = "2026-11-11T15:39:19.887Z" },
+]
+
+[[package]]
 name = "etils"
 version = "1.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -323,15 +332,19 @@ wheels = [
 
 [[package]]
 name = "robot-msgs"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "/home/bam/robot_msgs" }
 dependencies = [
+    { name = "dataclass-values" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "dataclass-values", specifier = ">=0.1.0" },
+    { name = "imageio-ffmpeg", marker = "extra == 'test'", specifier = ">=0.5" },
+    { name = "imageio-ffmpeg", marker = "extra == 'viz'", specifier = ">=0.5" },
     { name = "matplotlib", marker = "extra == 'test'", specifier = ">=3.8" },
     { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=1.26" },
