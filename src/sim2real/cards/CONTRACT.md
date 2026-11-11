@@ -8,6 +8,12 @@ of the same day (wear; learned rungs at the top of each ladder). Held by `type_c
 Since 2026-11-10 (additive): the module is `sim2real.cards` (`src/sim2real/cards/`); `type_cards.<name>` is the same module through
 a shim, so every name below still reads `type_cards.` / `reg.` / `cov.` as before. Decision: `docs/decision-package-layers-2026-11-10.md`.
 
+Since 2026-11-10 (additive, proposal 2 step 4): `sim2real.cards.servo_gates` holds the servo's acceptance targets T1-T11 (`SERVO`, each a
+robot_msgs Value whose range is the rule), `GATE_RULES`, `TYPE_GATES` / `UNIT_GATES`, the rack stations' `STOP_ALLOCATION_MRAD`, and the
+servo schedule's `MINIMUM_COVERAGE_PCT` / `NOTE_TARGETS`, as data that `sim2real.metrics.servo_gates.evaluate` and
+`sim2real.schedule.joint.coverage` read. The servo card's gates and `ladders.GATE_PCT` read the same values (unchanged numbers). Decision:
+`docs/decision-actuator-verbs-2026-11-10.md`.
+
 ## Rules of the road
 
 - **One import.** `sys.path` holds the repo root; then `from type_cards import registry as reg`. Everything below is a name on `reg`

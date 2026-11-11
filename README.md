@@ -85,7 +85,7 @@ as they are written. `tools/trajectory.py` computes difference(a, b) and reprodu
 | `brand/icons/` | the app icon proposals |
 | `reports/` | review reports (`reports/media/` is gitignored) |
 | `docs/` | decisions |
-| `src/sim2real/` | the library (`pyproject.toml`): `metrics/ schedule/ fit/ sim/ models/ cards/`, each importing only the folders to its left (`tests/test_layers.py`; `docs/decision-package-layers-2026-11-10.md`). `cards/` is the type cards, moved from `type_cards/` unchanged |
+| `src/sim2real/` | the library (`pyproject.toml`): `metrics/ schedule/ fit/ sim/ models/ cards/`, each importing only the folders to its left (`tests/test_layers.py`; `docs/decision-package-layers-2026-11-10.md`). `cards/` is the type cards, moved from `type_cards/` unchanged. Since step 4: `metrics/` holds the actuator verbs and the servo gates T1-T11 (RobotDx's stock checks and bam_rack_twin's acceptance call them), `schedule/joint.py` the 1-DOF test schedule generator (bam_rack_twin plays it), `cards/servo_gates.py` their targets as data (`docs/decision-actuator-verbs-2026-11-10.md`) |
 | `type_cards/` | a shim: `type_cards.<name>` is `sim2real.cards.<name>`, `python -m type_cards.report` still runs, its data paths link to the moved files, and `type_cards/tests` stays here as the ruler that held the move |
 
 ## Deployment tree, run tags, config snapshots

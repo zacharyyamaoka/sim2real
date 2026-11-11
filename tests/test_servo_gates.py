@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import math
 from pathlib import Path
 
 import pytest
@@ -62,11 +61,11 @@ def test_every_station_grades_as_the_rack_wrote_it(name):
 @needs_archive
 def test_a_moved_target_grades_differently():
     document = json.loads((ANALYSIS / ORACLE_FILES[-1]).read_text(encoding="utf-8"))
-    facts = document["stations"]["21"]["facts"]
-    stored = {gate["id"]: gate for gate in document["stations"]["21"]["gates"]}
+    facts = document["stations"]["4"]["facts"]
+    stored = {gate["id"]: gate for gate in document["stations"]["4"]["gates"]}
     assert stored["T2"]["status"] == "pass"
     tighter = dataclasses.replace(cards.SERVO, fidelity_tapes=at_most(0.5, "x floor"))
-    moved = {gate.id: gate for gate in _evaluate(21, facts, tighter)}
+    moved = {gate.id: gate for gate in _evaluate(4, facts, tighter)}
     assert moved["T2"].status == "fail" and moved["T2"].limit == 0.5
 
 
