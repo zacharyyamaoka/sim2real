@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conveyor Belt Calibration</title>
+<style>
+:root {{ --bg:#fbfbfa; --fg:#1d1f21; --muted:#6b6f75; --line:#e3e4e6; --card:#ffffff; --c1:#1f9d55; --c2:#2f6fd0; --c3:#c2611f; --bad:#c0392b; --code:#f2f3f4; }}
+@media (prefers-color-scheme: dark) {{ :root:not([data-theme="light"]) {{ --bg:#141517; --fg:#e6e7e9; --muted:#9aa0a6; --line:#2b2d31; --card:#1b1c1f; --c1:#4cc77f; --c2:#6aa0ff; --c3:#f0a060; --bad:#ff6b5b; --code:#24262a; }} }}
+:root[data-theme="dark"] {{ --bg:#141517; --fg:#e6e7e9; --muted:#9aa0a6; --line:#2b2d31; --card:#1b1c1f; --c1:#4cc77f; --c2:#6aa0ff; --c3:#f0a060; --bad:#ff6b5b; --code:#24262a; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }}
+main {{ max-width:1100px; margin:0 auto; padding:28px 16px 80px; }}
+h1 {{ font-size:26px; margin:0 0 6px; }} h2 {{ font-size:19px; margin:40px 0 10px; border-top:1px solid var(--line); padding-top:22px; }}
+h3 {{ font-size:16px; margin:28px 0 6px; }}
+.verdict {{ font-size:17px; background:var(--card); border:1px solid var(--line); border-left:4px solid var(--c1); padding:14px 16px; border-radius:6px; }}
+.muted {{ color:var(--muted); }} code {{ background:var(--code); padding:1px 5px; border-radius:4px; font-size:13px; }}
+pre {{ background:var(--code); padding:10px 12px; border-radius:6px; overflow-x:auto; font-size:12.5px; }}
+video, img {{ width:100%; border-radius:6px; border:1px solid var(--line); background:#000; }}
+figure {{ margin:12px 0; }} figcaption {{ color:var(--muted); font-size:13px; margin-top:4px; }}
+.pair {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }} @media (max-width:700px) {{ .pair {{ grid-template-columns:1fr; }} }}
+.tablewrap {{ overflow-x:auto; }}
+table {{ border-collapse:collapse; width:100%; font-size:13.5px; }} th, td {{ border-bottom:1px solid var(--line); padding:5px 8px; text-align:left; white-space:nowrap; }}
+th {{ color:var(--muted); font-weight:600; }} td.num {{ text-align:right; font-variant-numeric:tabular-nums; }}
+table.small {{ font-size:12.5px; max-width:520px; }}
+.ok {{ color:var(--c1); font-weight:600; }} .bad {{ color:var(--bad); font-weight:700; }}
+.tag {{ display:inline-block; font-size:11.5px; padding:1px 7px; border-radius:10px; border:1px solid var(--line); color:var(--muted); font-weight:500; }}
+.tag.contact, .tag.sub {{ color:var(--c1); border-color:var(--c1); }} .tag.camera {{ color:var(--c2); border-color:var(--c2); }} .tag.touch {{ color:var(--c3); border-color:var(--c3); }}
+svg.plot {{ width:100%; max-width:640px; background:var(--card); border:1px solid var(--line); border-radius:6px; }}
+svg .grid {{ stroke:var(--line); }} svg .tick {{ fill:var(--muted); font-size:11px; }} svg .axis {{ fill:var(--muted); font-size:12px; }}
+ul li {{ margin:3px 0; }} details summary {{ cursor:pointer; color:var(--muted); }}
+nav a {{ color:var(--c2); margin-right:12px; font-size:13.5px; }}
+</style></head><body><main>
+<h1>Conveyor belt calibration, proven in sim</h1>
+<p class="muted">2026-11-11 &middot; sim2real branch <code>claude/conveyor-type</code> (rebased on main 4c5115d; not merged, left to the coordinator) &middot; Zach's brief: Daily Note Nov 11, "# Conveyor belt calibration" &middot; <a href="obsidian://open?vault=zach_brain&amp;file=Projects%2FBAM%20Robotics%2FNotes%2FConveyor%20Belt%20Calibration%20%E2%80%94%20Prior%20Art%20and%20Ladder%20(2026-11-11)">research note</a></p>
+<p class="verdict"><b>Nine belt calibration routines recover a hidden truth on a MuJoCo twin, each inside a tolerance fixed before the code.</b> The nominal description fails every one of those gates. The arm probe finds the belt plane to {probe} mm, against {depth} mm from the depth camera. Arm-to-arm through the carried board is {r2r} mm off, camera-to-camera {c2c} mm. <b>Sim only:</b> nothing touched hardware, and the real-rig adapter waits on the belt's motor and serials.</p>
+<nav><a href="#table">Recovery table</a><a href="#routines">Routines</a><a href="#ladder">Ladder</a><a href="#runbook">Runbook</a><a href="#needs">Needs from Zach</a><a href="#notes">Decisions and caveats</a></nav>
+
+{hero}
+
+<h2 id="table">Recovery: estimate vs hidden truth (seed 0)</h2>
+<p class="muted">Linear values in mm, angles in degrees. Error = estimate - truth (for vectors and rotations, the angle between them). Tolerance = the card's gate (<code>sim2real.cards.conveyor_belt.TOLERANCES</code>). Nominal = the description's own value scored the same way; it must fail, so every gate is shown able to fail.</p>
+<div class="tablewrap"><table><tr><th>routine</th><th>quantity</th><th>estimate</th><th>truth</th><th>error</th><th>tolerance</th><th>{seeds_note}</th><th>nominal error</th><th>unit</th><th>gate</th><th>limited by</th></tr>
+{rows}</table></div>
+<h3>eval_twin: hand-offs the fit never saw</h3>
+<div class="tablewrap"><table class="small"><tr><th>held-out prediction</th><th>error</th><th>tolerance</th><th>unit</th><th>gate</th></tr>{eval_rows}</table></div>
+<p class="muted">Read the camera-2 hand-off ({c2h} mm) beside the camera-to-camera truth error ({c2c} mm). The transform fitted through the belt absorbs camera 1's focal and depth bias, and it reproduces the same bias when predicting. Board hand-offs between the cameras are therefore nearly exact in their own measured frames, even though the absolute extrinsic is {c2c} mm off. Use the truth error for anything that mixes camera geometry with the arm.</p>
+
+<h2 id="routines">The routines</h2>
+<p class="muted">Every routine is a <code>Step</code>: <code>(description, rig, context) -&gt; context</code>. <code>ConveyorBelt(NOMINAL, rig).calibrate()</code> runs them in order; <code>.eval_twin()</code> checks the result on held-out hand-offs. A routine reaches the rig only through the <code>BeltRig</code> verbs (move_belt, capture, stream, line_scan, probe, touch, place_board), so the same code runs on the twin and on the real belt.</p>
+{sections}
+
+<h2 id="ladder">The calibration ladder, ranked by accuracy for the cost</h2>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>rung</th><th>gives</th><th>sim accuracy</th><th>real expectation</th><th>operator / wall</th><th>needs</th></tr>
+<tr><td>0</td><td>description nominals</td><td>everything, roughly</td><td>&mdash;</td><td>cm, 1-2 deg; scale 2 % (belt thickness)</td><td>0</td><td>CAD / tape</td></tr>
+<tr><td>1</td><td><b>scale + direction + runout</b></td><td>mm/rev, belt axis in camera 1, drum TIR, wander</td><td>0.003 %, 0.001 deg, 0.002 mm</td><td>~0.05 %, ~0.05 deg</td><td>2 min / 3 min</td><td>board, camera 1</td></tr>
+<tr><td>2</td><td>time offset</td><td>camera latency vs encoder</td><td>0.004 ms</td><td>~2 ms (motion blur, jitter)</td><td>0 / 30 s</td><td>rung 1</td></tr>
+<tr><td>3</td><td>belt plane by depth (v1) + background model</td><td>belt height and tilt; per-pixel background</td><td>1.8 mm, 0.16 deg</td><td>2-5 mm</td><td>0 / 10 s</td><td>camera 1 hand-eye</td></tr>
+<tr><td>4</td><td><b>belt plane by arm probe (v2)</b></td><td>belt height and tilt in arm 1's frame, flatness</td><td>{probe_abs} mm, {probe_tilt} deg</td><td>0.2-0.5 mm, bounded by arm 1's kinematics and current noise</td><td>1 min / 2 min</td><td>ball tip, current read-back</td></tr>
+<tr><td>5</td><td>arm-to-arm via carried divot board</td><td>arm 2 in arm 1's frame; belt axis in arm 1</td><td>0.44 mm, 0.04 deg</td><td>1-2 mm (the touch)</td><td>10 min / 10 min</td><td>divot board, both arms, rung 1</td></tr>
+<tr><td>6</td><td>camera-to-camera via the belt</td><td>camera 2 in camera 1's frame</td><td>1.4 mm, 0.12 deg</td><td>2-5 mm</td><td>2 min / 2 min</td><td>rung 1</td></tr>
+<tr><td>7</td><td>line scanner registration + trigger delay</td><td>scan line on the belt, yaw, mm/px, delay</td><td>0.8 mm, 0.02 deg, 0.08 ms, 0.06 %</td><td>1-2 mm, ~0.5 ms</td><td>2 min / 1 min</td><td>scanner, rung 1</td></tr>
+<tr><td>8</td><td>slip under load</td><td>encoder-to-surface ratio vs load</td><td>0.001 %</td><td>~0.05 %</td><td>5 min / 4 min</td><td>15 kg of sandbags</td></tr>
+</table></div>
+<p class="muted">Order to run on day one: 1 &rarr; 2 &rarr; 3 (free once 1 is done) &rarr; 4 &rarr; 5 &rarr; 6 &rarr; 7 &rarr; 8. Rung 1 is where every other rung gets its belt travel, so do it first. The real expectations are estimates: the sim has no motion blur, no lens distortion, no board warp and a kinematically perfect arm.</p>
+
+<h2 id="runbook">Runbook for the real belt (not run)</h2>
+<p><b>State:</b> the Steps are written and proven in sim. The real <code>BeltRig</code> adapter is ~150 lines that wrap the belt drive, two RealSense cameras, arm 1's current read-back and the arms' touch. It can't be written until the belt's motor and driver are known. Until it lands, <code>--rig real</code> prints what it needs and exits 2 without touching anything.</p>
+<p><b>Guards, every run:</b> the belt speed is capped by <code>--max-speed</code> (0.2 m/s, or 0.4 m/s for the line scan only), and every move is a bounded rev count the plan prints first. Run <code>--dry-run</code> first, keep a hand on the e-stop, and never let the drive be autodetected (pass the <code>/dev/serial/by-id</code> path). The arm probe descends at 5 mm/s and stops at 6 N or 30 mm of travel, whichever comes first, with arm 1's current limit set low. Arm touches use teach-mode jogging at reduced speed.</p>
+<p>Identify the hardware (read-only):</p>
+<pre>ls -l /dev/serial/by-id/
+rs-enumerate-devices -s</pre>
+<p>Then one command per rung (from a fresh terminal; replace the angle-bracket values):</p>
+<pre>cd /home/bam/sim2real-worktrees/conveyor-type
+# 1 + 2 + 3: board flat under camera 1, belt empty otherwise
+env -u VIRTUAL_ENV uv run --project /home/bam/sim2real-worktrees/conveyor-type --extra sim --extra vision python /home/bam/sim2real-worktrees/conveyor-type/tools/conveyor_belt.py calibrate --rig real --only scale direction time_offset plane_depth --drive /dev/serial/by-id/&lt;DRIVE&gt; --camera-1 &lt;CAM1_SERIAL&gt; --hand-eye &lt;HAND_EYE_FILE&gt; --max-speed 0.2 --dry-run
+# 4: belt clear; arm 1 with the 6 mm ball tip
+env -u VIRTUAL_ENV uv run --project /home/bam/sim2real-worktrees/conveyor-type --extra sim --extra vision python /home/bam/sim2real-worktrees/conveyor-type/tools/conveyor_belt.py calibrate --rig real --only plane_probe --drive /dev/serial/by-id/&lt;DRIVE&gt; --dry-run
+# 5: divot board under arm 1; arm 2 powered, both in teach mode
+env -u VIRTUAL_ENV uv run --project /home/bam/sim2real-worktrees/conveyor-type --extra sim --extra vision python /home/bam/sim2real-worktrees/conveyor-type/tools/conveyor_belt.py calibrate --rig real --only robot_to_robot --drive /dev/serial/by-id/&lt;DRIVE&gt; --max-speed 0.2 --dry-run
+# 6: board under camera 1; camera 2 1.2 m downstream
+env -u VIRTUAL_ENV uv run --project /home/bam/sim2real-worktrees/conveyor-type --extra sim --extra vision python /home/bam/sim2real-worktrees/conveyor-type/tools/conveyor_belt.py calibrate --rig real --only camera_to_camera --drive /dev/serial/by-id/&lt;DRIVE&gt; --camera-1 &lt;CAM1_SERIAL&gt; --camera-2 &lt;CAM2_SERIAL&gt; --max-speed 0.2 --dry-run
+# 7: line scanner on its encoder trigger
+env -u VIRTUAL_ENV uv run --project /home/bam/sim2real-worktrees/conveyor-type --extra sim --extra vision python /home/bam/sim2real-worktrees/conveyor-type/tools/conveyor_belt.py calibrate --rig real --only line_scan --drive /dev/serial/by-id/&lt;DRIVE&gt; --camera-1 &lt;CAM1_SERIAL&gt; --max-speed 0.4 --dry-run
+# 8: 15 kg spread on the belt, board under camera 1
+env -u VIRTUAL_ENV uv run --project /home/bam/sim2real-worktrees/conveyor-type --extra sim --extra vision python /home/bam/sim2real-worktrees/conveyor-type/tools/conveyor_belt.py calibrate --rig real --only slip --drive /dev/serial/by-id/&lt;DRIVE&gt; --camera-1 &lt;CAM1_SERIAL&gt; --max-speed 0.2 --dry-run</pre>
+<p>Re-run the sim proof any time:</p>
+<pre>env -u VIRTUAL_ENV MUJOCO_GL=egl uv run --project /home/bam/sim2real-worktrees/conveyor-type --extra sim --extra vision --extra test pytest -q /home/bam/sim2real-worktrees/conveyor-type/tests/test_conveyor_belt.py</pre>
+
+<h2 id="needs">What I need from Zach when the belt is attached</h2>
+<ul>
+<li><b>The belt drive:</b> motor and driver type (moteus? a JMC MCAC? a VFD?), the adapter's <code>/dev/serial/by-id</code> path, encoder counts per rev, gear ratio, and the drum diameter. The nominals today are pidtuna's 50 mm radius drum, 10:1 gearbox and 2^14 counts.</li>
+<li><b>Cameras:</b> the RealSense serials for camera 1 and camera 2, and camera 1's hand-eye file.</li>
+<li><b>Belt geometry:</b> width, length, the belt's height under arm 1, and where camera 1, camera 2, arm 2 and the line scanner sit. These become the description's nominals; today they are a placeholder layout.</li>
+<li><b>Equipment:</b> the 7 x 5 ChArUco board printed on 3 mm aluminium composite (DICT_5X5_100, 40 / 30 mm), with four corner divots for the arm touch; a 6 mm ball tip for arm 1; 15 kg of sandbags for the slip run.</li>
+<li><b>Your go</b> for the first powered belt move. Moves stay guarded and dry-run first.</li>
+</ul>
+
+<h2 id="notes">Decisions taken for you, caveats, not done</h2>
+<ul>
+<li><b>Decided:</b> a new type module (<code>cards/conveyor_belt.py</code>, <code>models/conveyor_belt.py</code>) beside the existing actuator card <code>registry.CONVEYOR</code>. The existing card is the belt's dynamics; the new one is its geometry. Both are additive. Undo: <code>git revert</code> the two commits on <code>claude/conveyor-type</code>.</li>
+<li><b>Decided:</b> a <code>vision</code> extra (opencv-python-headless 4.11.0.86) for the ChArUco verbs, so the stable folders still load without OpenCV.</li>
+<li><b>Decided:</b> every belt carry between stations is a whole number of drum turns, which makes the drum's runout cancel exactly.</li>
+<li><b>Decided:</b> the probe reads contact as the zero-force intercept, not the threshold crossing, so the reading doesn't depend on belt stiffness.</li>
+<li><b>On the camera types (rebased onto sim2real main 4c5115d):</b> board poses are solved by <code>fit.camera_rgb.solve_pose</code> / <code>project</code> (my <code>cv2.solvePnP</code> duplicate is gone); the twin's depth is a <code>fit.camera_rgbd.DepthModel</code>; rigs hand out a <code>camera_rgb.Intrinsics</code>; <code>eval_twin</code> also reports the camera-2 hand-off as a <code>metrics.camera.Fidelity</code>. I touched none of the camera lane's files.</li>
+<li><b>Registered:</b> the ten <code>conveyor_belt.*</code> routines are in <code>cards/calibration.py</code>. Scale identifies the conveyor card's <code>drum_radius_m</code> (alternative: <code>conveyor.radius_tracker</code>). Slip, direction and both planes are <i>measure</i>. Camera-to-camera, robot-to-robot, latency and line scan identify <code>camera_rgb</code> extrinsics, <code>arm_6dof</code> base_frame, <code>camera_rgb</code> latency_s and <code>camera_hsi</code> line_geometry. The belt speed set-up is <i>configure</i> (not implemented until the drive is known).</li>
+<li><b>Fixed on the way:</b> the probe's contact now leaves the force's <i>moving</i> baseline. While the tip descends, a current-derived force reads the servo's damping and the joint's friction, so a fixed 1 N window counted samples from above the belt; held-out points were up to 0.44 mm off and are now under 0.005 mm. A real arm's adapter must stop on press above that moving baseline too.</li>
+<li><b>Caveats:</b> the sim arm is kinematically perfect, and arm 1's own error adds directly to the probe's plane. The board is perfectly flat and the lens has no distortion. There is no motion blur in the latency or line-scan streams. Arm 2's touch is the divot's true position plus 0.3 mm of noise, not a contact simulation.</li>
+<li><b>Not done:</b> the real <code>BeltRig</code> adapter (it waits on the motor type) and merging the branch (left to the coordinator).</li>
+<li><b>The paper:</b> no paper describing an aluminium <i>ChArUco</i> board that calibrates a hyperspectral line scanner against a robot arm and an RGB-D camera could be confirmed. The closest confirmed match is Alexakis et al., <i>Enhanced Waste Sorting Technology by Integrating Hyperspectral and RGB Imaging</i>, MDPI Recycling 10(5):179 (2025): aluminium-foil ArUco markers on black card, an HSI and an RGB camera on a conveyor, registered by encoder ticks and a homography. Research note: <code>~/zach_brain/Projects/BAM Robotics/Notes/Conveyor Belt Calibration — Prior Art and Ladder (2026-11-11).md</code> (<a href="obsidian://open?vault=zach_brain&amp;file=Projects%2FBAM%20Robotics%2FNotes%2FConveyor%20Belt%20Calibration%20%E2%80%94%20Prior%20Art%20and%20Ladder%20(2026-11-11)">open in Obsidian</a>).</li>
+</ul>
+</main></body></html>
