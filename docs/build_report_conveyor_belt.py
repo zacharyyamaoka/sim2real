@@ -282,7 +282,8 @@ def main() -> int:
         hero=vid("hero", "The whole calibration on the twin, every 5th frame. Left: the cell (camera 2 at 1.2 m, line scanner at 0.75 m, arm 2 at 1.5 m). Right: the latest sensor frame."),
         rows="".join(rows), eval_rows=eval_rows, sections="".join(sections),
         seeds_note=(f"Worst |error| over {len(seeds)} seeds (passes/runs)" if seeds else "seed sweep not run"),
-        probe=f"{scores['plane_probe.height_mm'].error:+.3f}", depth=f"{scores['plane_depth.height_mm'].error:+.2f}",
+        probe=f"{scores['plane_probe.height_mm'].error:+.3f}", probe_abs=f"{abs(scores['plane_probe.height_mm'].error):.3f}",
+        probe_tilt=f"{scores['plane_probe.tilt_deg'].error:.3f}", depth=f"{scores['plane_depth.height_mm'].error:+.2f}",
         r2r=f"{scores['robot_to_robot.translation_mm'].error:.2f}", c2c=f"{scores['camera_to_camera.translation_mm'].error:.2f}",
         c2h=f"{held['camera_2_handoff_mm']:.2f}",
     )
