@@ -33,3 +33,24 @@ working just in sim2real then.. Robot parts will depend on sim2real. The seam wi
 - robotparts' own model definitions (`models.json` M0…M5) become a projection of sim2real's ladder for the type, to be migrated in robotparts
   when it next needs them. robotparts stays stdlib-only at runtime by reading a generated JSON of the type contract, not by importing numpy code.
 - What robotparts keeps: the catalog (identity, sourced specs, offers, files), and the mapping from a part to its type.
+
+## Addendum, same day: no cycle, because RobotDescription lives below both
+
+Zach worried this makes a cycle: "Sim2Real accepts a robotdescription… Robotparts imports sim2real… now we have like circular dependencies."
+There is no cycle once RobotDescription sits where his Nov 10 order already puts it, in `robot_description`, below both
+(robot_msgs ← robot_description ← everything):
+
+```
+robot_msgs  ←  robot_description  ←  sim2real (types, models, schedules, fit, eval; accepts a RobotDescription)
+                                  ←  robotparts (catalog; maps a part → a sim2real type; fills parameter priors)  → imports sim2real
+```
+
+- A RobotDescription is a composition of typed instances with parameter values. It names a type by id and never imports the
+  catalog, so building one needs neither sim2real's fitting code nor robotparts.
+- sim2real never imports robotparts. Calibration schedules and their comparison take a RobotDescription, wherever its values came from.
+- Glue that uses both (`robotparts.describe("rig-1dof")` → `sim2real.calibrate(desc)`) lives in robotparts, which already depends on
+  sim2real, or in the caller's script.
+- **Models stay in sim2real for now.** They aren't extracted into their own repo, and they don't go into robotparts. A standalone models package
+  would be sterile, robotparts is already too big, and next to the fitting and eval pages is where the models mean something.
+  Revisit this when a third package (five_bar, pid_tuna) needs the model types without sim2real's fitting. Then the type contract
+  (`cards/` + the model definitions) moves down into `robot_description`, not into a new repo.
