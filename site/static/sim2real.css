@@ -175,6 +175,14 @@
 .s2r-ex-open { margin: 10px 0 0; font-size: 13px; }
 .s2r-ex-drift { margin: 6px 0 4px; padding-left: 18px; font-size: 13.5px; max-width: 1000px; }
 .s2r-ex-pic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; }
+/* the home's Types tiles (site/models_pages.py type_tile): the type's line icon, then its group, today's model, parameters, where it is used */
+.s2r-type-pic svg { width: 48px; height: 48px; fill: none; stroke: currentColor; stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+.s2r-tile-meta { display: block; color: var(--ink3); font-size: 12px; line-height: 1.3; }
+.s2r-tile-meta code { font-size: 11px; color: var(--ink2, var(--ink)); }
+/* WHY wider outer tracks (2026-11-11): the right one holds Models, Routines, Parameters and Account (393 px measured at 1280); both stay
+   equal so the search stays centred and narrows instead. Below 1100 px the three fold into the Account menu, as the shell does on a phone. */
+@media (min-width: 1100px) { .bar { grid-template-columns: minmax(25rem, 1fr) minmax(0, 46rem) minmax(25rem, 1fr); } }
+@media (min-width: 768px) and (max-width: 1099px) { .quick > a { display: none; } }
 .s2r-ex-full td, .s2r-ex-full th { font-variant-numeric: tabular-nums; }
 .s2r-ex-hit { background: var(--accent-bg); }
 .s2r-ex-fig { margin: 10px 0; max-width: 700px; }

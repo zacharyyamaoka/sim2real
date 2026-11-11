@@ -131,6 +131,10 @@ A level is a link: `/<deployment>/runs/<run>/?entity=<node id>`.
 
 ## Models, routines, parameters
 
+**The home opens on the types** (Zach, 2026-11-11; `docs/decision-types-seam-2026-11-11.md`): a Types section first, one tile per generic type
+in `cards.domain.TYPE_ORDER` (icon, name, group, today's model, parameters, where it is used) opening `/models/<type>/`; Models · Routines ·
+Parameters lead the Choose column and are the header's links (Why it fails and Analysis moved to the Account menu: five links overlapped the search).
+
 `site/models_pages.py` (decision: `docs/decision-models-routines-parameters-2026-11-07.md`): `/models/` lists the eleven generic types, and
 `/models/<type>/` is a type's model ladder, one table per family, with Zach's columns (rung, model, parameters, adds, identified here) and where each
 model is used (the oracle examples' fits, and the rack's stations by the producer's model labels, which `type_cards/deployments/one_dof_test_rack.py`

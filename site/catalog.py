@@ -196,7 +196,10 @@ CATALOG = Catalog(
     menu=menu,
     kinds=(DEPLOYMENT, STATION, TYPE),  # RUN's pages: site_pages (run_pages.pages_of), in two panes
     areas=AREAS,
-    quick=(("Why it fails", "/analysis/why-it-fails/"), ("Analysis", "/analysis/")),
+    # WHY Models · Routines · Parameters in place of Why it fails and Analysis (Zach, 2026-11-11: the types are sim2real's front door,
+    # docs/decision-types-seam-2026-11-11.md): the bar's right track holds about three links and Account (measured 2026-11-11: five
+    # overlapped the search at every width from 768 to 1440 px). Why it fails and Analysis stay in the Account menu and on the home.
+    quick=(("Models", "/models/"), ("Routines", "/routines/"), ("Parameters", "/parameters/")),
     account=Account(lists=tuple((f"/analysis/{slug}/", title) for slug, title, _w in REPORTS), pill="standard",
                     create="Your own analyses", links=(("/analysis/", "Analysis"), ("/runs/", "Every run")),
                     data="/data/deployments.json"),

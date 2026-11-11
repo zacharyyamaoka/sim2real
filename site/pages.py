@@ -515,10 +515,26 @@ def app_icon() -> str:
     return '<span class="pic plate"><img src="/static/sim2real-app.svg" class="ph" alt="" loading="lazy"></span>'
 
 
+def choose_with_pages(frame: str, links) -> str:
+    """tile_home's Choose column with page links (label, href, count) at the top of its list, in the column's own row markup."""
+    head = '<h2>Choose</h2>\n<ul>\n'
+    if frame.count(head) != 1:
+        raise ValueError("the home's Choose column is not tile_home's shape: cannot put the page links in it")
+    items = "".join(f'<li><a href="{e(href)}">{e(label)}</a> <span class="n">({count:,})</span></li>\n' for label, href, count in links)
+    return frame.replace(head, head + items, 1)
+
+
 def home_body(site: Site) -> str:
+    import models_pages  # noqa: PLC0415  (models_pages imports this module)
+
     groups = []
     deps = site.deployments
     media = media_of(site)
+    # WHY the types first, and Models · Routines · Parameters at the top of Choose (Zach, 2026-11-11, after looking at sim2real and not
+    # finding the types work): sim2real owns the generic types, and the seam to robotparts is them (docs/decision-types-seam-2026-11-11.md)
+    md = models_pages.load(site)
+    types = tuple(models_pages.type_tile(md, tid) for tid in models_pages.dm.TYPE_ORDER)
+    groups.append(Group("types", "Types", models_pages.MODELS_URL, len(types), types))
     # WHY the render (Zach, 2026-11-07: "in these cards I was hoping to see an image of the actual deployment")
     groups.append(Group("deployments", "Deployments", "/deployments/", len(deps),
                         tuple(tile(deployment_url(d.id), d.row["title"], len(d.runs), site_media.thumb(media, d.id) or app_icon()) for d in deps)))
@@ -530,7 +546,7 @@ def home_body(site: Site) -> str:
     examples = tuple(tile(*t) for t in landing.tiles(oracle, media))
     if examples:
         groups.append(Group("examples", "Oracle examples", "/sysid/", len(examples), examples))
-    frame = tile_home("sim2real: how close each twin is to its real hardware", "Choose", groups)
+    frame = choose_with_pages(tile_home("sim2real: how close each twin is to its real hardware", "Choose", groups), models_pages.front_pages(md))
     # the matrix is data-ui's gate_matrix (CONTRACT §35) once the kit loads; the static one reads first and without JavaScript
     where = "".join(f"""<h2 id="where-h">Where it fails · {e(dep.row["title"])}</h2>
 {standing_line(dep)}

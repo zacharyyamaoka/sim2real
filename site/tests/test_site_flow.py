@@ -513,6 +513,50 @@ def portability_checks(out: Path) -> None:
 SCHEDULE_CAN11 = Path("/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/schedule.json")
 
 
+def home_type_count() -> int:
+    """How many generic types type_cards' domain lists (never a fixed number: a new type must show up on the home by itself)."""
+    sys.path.append(str(REPO))
+    from type_cards import domain as dm  # noqa: PLC0415
+
+    return len(dm.TYPE_ORDER)
+
+
+def home_types_checks(out: Path) -> None:
+    """The types are the home's front door (Zach, 2026-11-11: he looked at sim2real and did not find the types work; decision
+    docs/decision-types-seam-2026-11-11.md), as served: the first group of tiles is Types, one per generic type in type_cards' order,
+    each with its group, today's model and its parameter count, opening /models/<type>/; the Choose column lists Models, Routines and
+    Parameters above the groups, Types first among them; the header's quick links start with the same three pages. Oracle: type_cards'
+    domain, imported here (written 2026-11-11, held red on the build before the change)."""
+    sys.path.append(str(REPO))
+    from type_cards import domain as dm  # noqa: PLC0415
+
+    home = (out / "index.html").read_text()
+    sections = re.findall(r'<section class="group" id="c-([\w-]+)"', home)
+    types_html = section_of(home, "c-types")
+    tiles = start_tags(types_html, "a", "data-type")
+    metas = {(m.get("data-meta"), i) for i, m in enumerate(start_tags(types_html, "span", "data-meta"))}
+    groups = re.findall(r'data-meta="group">([^<]*)<', types_html)
+    models = [x.replace("<wbr>", "") for x in re.findall(r'data-meta="model"><code>(.*?)</code>', types_html)]
+    counts = [int(x["data-n"]) for x in start_tags(types_html, "span", "data-n")]
+    want = list(dm.TYPE_ORDER)
+    check(sections[:1] == ["types"] and [t["data-type"] for t in tiles] == want and [t.get("href") for t in tiles] == [f"/models/{t}/" for t in want]
+          and groups == [dm.TYPES[t].group for t in want] and models == [" · ".join(m.id for m in dm.current_models(t)) for t in want]
+          and counts == [len(dm.TYPES[t].parameters) for t in want] and len(metas) == 3 * len(want)
+          and all((out / "models" / t / "index.html").is_file() for t in want),
+          f"the home opens on Types ({len(tiles)} of {len(want)} tiles; groups in order {sections}): each type's icon, name, group, today's model, "
+          "parameters and where it is used, opening /models/<type>/")
+    choose = re.search(r'<nav class="choose"[^>]*>.*?<ul>(.*?)</ul>', home, re.S)
+    rail = re.findall(r'<a href="([^"]*)"', choose.group(1)) if choose else []
+    check(rail[:5] == ["/models/", "/routines/", "/parameters/", "#c-types", "#c-deployments"],
+          f"the Choose column lists Models, Routines and Parameters, then Types, above Deployments ({rail[:6]})")
+    quick = re.search(r'<nav class="quick"[^>]*>(.*?)<button', home, re.S)
+    links = re.findall(r'<a href="([^"]*)"', quick.group(1)) if quick else []
+    check(links[:3] == ["/models/", "/routines/", "/parameters/"], f"the header's quick links start with Models, Routines and Parameters ({links})")
+    menu = re.search(r'<div class="am" id="am"(.*?)<!-- /am -->', home, re.S)
+    check(bool(menu) and all(f'href="{h}"' in menu.group(1) for h in ("/analysis/why-it-fails/", "/analysis/")),
+          "Why it fails and Analysis, no longer in the bar, stay in the Account menu")
+
+
 def types_served_checks(out: Path) -> None:
     """Zach's Nov 5 workflow, as served (no browser; written before the pages, 2026-11-05): every card's page carries its whole
     ladder (each rung's key, kind and parameter count), its drift warning in Zach's words and its test types; /types/ carries every
@@ -3589,6 +3633,7 @@ def main() -> int:
     schedule_freshness_checks(out, adapter.SCHEDULES)
     served_explanation_checks(out)
     types_served_checks(out)
+    home_types_checks(out)
     whole = [r["started"] for r in json.loads((data / "runs.json").read_text())["rows"]]
     check(whole == sorted(whole, reverse=True), f"runs.json is newest first ({len(whole)} runs)")
     run_set_checks(data, out)
@@ -3676,6 +3721,18 @@ def main() -> int:
                                   [f"/data/{DEP}/runs/{newest_run}/samples.json", f"/data/{DEP}/coverage.json"])
             check(all(status == 200 and n > 0 for _u, status, n in loads), f"the newest run's samples and coverage.json load in the browser ({loads})")
             shell_checks(page, "home at 1280")
+            # the types lead the home, measured as drawn (2026-11-11): their tiles sit above the deployments', each one visible
+            placed = page.evaluate("""() => { const top = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect().top : null; };
+                const seen = [...document.querySelectorAll('#c-types a.tile')].filter(a => { const b = a.getBoundingClientRect(); return b.width > 40 && b.height > 40; }).length;
+                return {types: top('#c-types'), deployments: top('#c-deployments'), seen}; }""")
+            n_types = home_type_count()
+            check(placed["types"] is not None and placed["deployments"] is not None and placed["types"] < placed["deployments"] and placed["seen"] == n_types,
+                  f"the home draws all {n_types} type tiles above the deployments ({placed})")
+            clear = page.evaluate("""() => { const f = document.querySelector('header.top form.find').getBoundingClientRect();
+                return [...document.querySelectorAll('header.top .quick > a')].map(a => { const b = a.getBoundingClientRect();
+                    return [a.textContent.trim(), Math.round(b.left - f.right), b.width > 0]; }); }""")
+            check(len(clear) == 3 and all(gap >= 0 and shown for _t, gap, shown in clear),
+                  f"at 1280 px the bar shows Models, Routines and Parameters right of the search, none under it ({clear})")
             tiles = page.evaluate("[...document.querySelectorAll('.groups .tile .tn')].map(t => t.textContent.trim())")
             check("One Dof Test Rack" in tiles and sum(1 for t in tiles if t.startswith("CAN ")) == 8,
                   f"the home is tiles of deployments and stations ({len(tiles)} tiles: {tiles[:3]}…)")
