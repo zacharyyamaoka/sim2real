@@ -1,6 +1,6 @@
 """Deployments, their trees and the parameters table (type_cards/instances.py), written before it (2026-11-07).
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 Zach (2026-11-06): "I like organizing this around Deployments ... The orcale examples are also deployments its just they are
 'Virtual' ... Each sub componet of the deployment could basically be its own deployment ... the first level of filtering ... those

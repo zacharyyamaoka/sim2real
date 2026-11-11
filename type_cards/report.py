@@ -10,11 +10,11 @@ its runs (selection.compute), its models' records and its parameter rows as the 
 page names them by (annotations), when, from which code, and a digest over all of it. A page reads the snapshot; nothing recomputes it, so a report never changes as data grows. Re-freezing is a new
 decision (a new snapshot, its own commit).
 
-    python3 -m type_cards.report freeze <id> [--data /home/bam/sim2real/app/data]
-    python3 -m type_cards.report freeze --id <id> --title "..." --question "..." --deployment <dep> (--runs a,b | --select col=v[,v] ... |
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --directory /home/bam/sim2real python -m type_cards.report freeze <id> [--data /home/bam/sim2real/app/data]
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --directory /home/bam/sim2real python -m type_cards.report freeze --id <id> --title "..." --question "..." --deployment <dep> (--runs a,b | --select col=v[,v] ... |
         --preset "station: CAN 11") [--models <type>/<model> ...] [--parameters <row id> ...] [--note "..."]
-    python3 -m type_cards.report verify <id>
-    python3 -m type_cards.report list
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --directory /home/bam/sim2real python -m type_cards.report verify <id>
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --directory /home/bam/sim2real python -m type_cards.report list
 
 The second form (2026-11-07, the metrics lane) makes a report from a selection: it writes the definition, frozen_reports/<id with _>.py, from
 the selected runs (by id, by runs.json columns, or by a preset of selection.presets), then freezes it. It never overwrites a report that

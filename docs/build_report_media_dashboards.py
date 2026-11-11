@@ -1,8 +1,8 @@
 """The media dashboards report (2026-11-07): the cards' renders, the run page's 3D link, the camera clip beside the twin's render, and
 the lines that say what you are looking at.
 
-    python3 /home/bam/sim2real/site/build.py
-    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_media_dashboards.py --site-tests /abs/site-test.log
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with playwright python /home/bam/sim2real/docs/build_report_media_dashboards.py --site-tests /abs/site-test.log
 
 Serves a built site (default ~/.cache/sim2real/site) with `python3 -m http.server` on a free port in 4711-4799 (never 4700, Zach's) and
 stops it by the PID it started; records the click-through landing -> the oracle cards -> the rack's tile -> its page -> a run the camera

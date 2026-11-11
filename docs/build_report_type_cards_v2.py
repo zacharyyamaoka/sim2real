@@ -1,7 +1,7 @@
 """The type cards v2 report (2026-11-05): Zach's Nov 5 workflow in the type-card registry and the site's Types area.
 
-    python3 /home/bam/sim2real/site/build.py
-    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_type_cards_v2.py --registry-tests 58/58 --site-tests 194/194
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with playwright python /home/bam/sim2real/docs/build_report_type_cards_v2.py --registry-tests 58/58 --site-tests 194/194
 
 Serves a built site (default ~/.cache/sim2real/site) with `python3 -m http.server` on a free port in 4711-4799 (never 4700, Zach's)
 and stops it by the PID it started; records the click-through /types/ -> the Servo card's Models, Tests, Metrics and Coverage

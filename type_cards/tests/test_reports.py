@@ -1,6 +1,6 @@
 """Reports: a frozen, named set of rows and the results computed at freeze time (type_cards/report.py), written before it (2026-11-07).
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 Zach (2026-11-06): "Now we can make a report with like a set number of rows etc. So that is how we kinda like 'freeze it' and see the
 full breakdown. So even as you add more data etc.. the Reports is a great way to just see an overview fixed."

@@ -6,7 +6,7 @@ parameters and what are the methods we have to calibrate those parameters." And 
 methods of identify the parmaters"): "enumerate some different like calibration schemes ... dynameter could be one ... Some of these we
 can run on a bench some we can run when the robot is deployed etc.. We can also like check these vs an orcale in simulation".
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 What it holds type_cards/calibration.py's ROUTINES and EQUIPMENT to (they extend that module's packages; the API is CONTRACT.md's):
 - a routine belongs to one of Zach's packages and names what it identifies as (card, rung, parameter), each real on that card's ladder;

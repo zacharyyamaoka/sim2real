@@ -5,7 +5,7 @@
   "stable": {
     "port": 4820,
     "build": [
-      ["python3", "-I", "site/build.py", "--out", ".sps-site"],
+      ["uv", "run", "--isolated", "--no-project", "--with-editable", "{home}/robot_msgs", "python", "-I", "site/build.py", "--out", ".sps-site"],
       ["find", ".sps-site", "-type", "l", "-delete"]
     ],
     "output": ".sps-site",
@@ -41,7 +41,7 @@
   "preview": {
     "port": 4821,
     "static": {"directory": "dist/site", "spa": false},
-    "command": ["python3", "-I", "site/build.py", "--out", "dist/site"],
+    "command": ["uv", "run", "--isolated", "--no-project", "--with-editable", "{home}/robot_msgs", "python", "-I", "site/build.py", "--out", "dist/site"],
     "health": "/",
     "env": {
       "PATH": "{home}/.local/bin:/usr/local/bin:/usr/bin:/bin",

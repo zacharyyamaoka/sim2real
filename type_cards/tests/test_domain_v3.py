@@ -1,6 +1,6 @@
 """Domain model v3 (type_cards/CONTRACT.md, "Domain model v3"), written before type_cards/domain.py (2026-11-07).
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 Zach, PROJECT - Sim2Real, "Feedback on how it is right now" (2026-11-06): deployments (virtual or physical, tagged, a tree), runs
 (raw data, tagged with their config, driven or free response, closed loop), entity TYPES (generic, not instances: "the 6 DOF robot arm

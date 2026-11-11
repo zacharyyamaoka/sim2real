@@ -36,21 +36,22 @@ Build the data (about 20 s; the twin replays are optional and take about 1.5 min
     /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/twin_replays.py
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" --with-editable /home/bam/robot_msgs python /home/bam/sim2real/tools/build_app.py
     python3 -I /home/bam/sim2real/tools/build_pages.py
-    uv run --no-project --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with playwright python /home/bam/sim2real/app/tests/test_app_flow.py
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" python /home/bam/sim2real/app/tests/test_trajectory_contract.py --data --robotdx
 
 Every recorded run is read as robot_msgs' `JointTrajectory` (`/home/bam/robot_msgs`; Zach, 2026-11-10: every package depends on robot_msgs)
 through one door, `tools/run_files.py`: q / qd / tau as positions / velocities / effort, every other column a channel, built exactly as the
 producer's own `bam_rack_twin.msgs.run_trajectory` (held equal to its `runs/joint_trajectory/` files in `tools/tests/test_run_files.py`).
 sim2real has no pyproject: `build_app.py`'s command carries robot_msgs as `--with-editable`, and sysid's runtime (bam_rack_twin's venv) has
-it as bam_rack_twin's own editable dependency. The oracle's simulated arm excitations and belt runs are robot_msgs trajectories too.
+it as bam_rack_twin's own editable dependency. Coverage's binning rule is `robot_msgs.coverage` too (`type_cards.coverage` re-exports it and
+keeps every type's axes and gates), so the type cards, the site build and their tests all run with `--with-editable /home/bam/robot_msgs`. The oracle's simulated arm excitations and belt runs are robot_msgs trajectories too.
 
     env -u VIRTUAL_ENV uv run --isolated --with "/home/bam/io-diagnostics[diagnostics]" --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/tools/tests/test_run_files.py
 
 Then the media (about 9 minutes the first time on a quiet machine, then only what changed; a cache folder, never git), and the site:
 
     env -u VIRTUAL_ENV MUJOCO_GL=egl /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -I /home/bam/sim2real/tools/build_media.py
-    python3 /home/bam/sim2real/site/build.py
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py
 
 `tools/build_media.py` writes `~/.cache/sim2real/media` (or `$SIM2REAL_MEDIA`), which the site serves at `/media/` (Zach, 2026-11-07: "a
 bit more media rich ... we can basically always have a 3D view ... in these cards I was hoping to see an image of the actual deployment"):
@@ -157,7 +158,7 @@ gates, coverage, models, parameter rows, its rows, and since 2026-11-07 its part
 recomputed; the three reports frozen before snapshots kept titles and labels say on their page that those are today's. Make one from a selection (it writes `type_cards/frozen_reports/<id>.py` and
 `<id>.json`; commit both):
 
-    PYTHONPATH=/home/bam/sim2real python3 -m type_cards.report freeze --id my-report --title "…" --question "…" --deployment one-dof-test-rack --select "device=CAN 11" --select "split=held_out"
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --directory /home/bam/sim2real python -m type_cards.report freeze --id my-report --title "…" --question "…" --deployment one-dof-test-rack --select "device=CAN 11" --select "split=held_out"
 
 **The per-run model-independent metrics** (`tools/run_metrics.py`, written last by `tools/build_app.py`, or alone in about 6 s): RobotDx's catalog
 entries `servo.stop_error` (p90 at every dwell, T4's scan) and `driver.saturation` (rows on the torque cap) on each run's npz, to

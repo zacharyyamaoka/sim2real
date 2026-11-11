@@ -1,6 +1,6 @@
 """The type cards' v2 content, written before it (2026-11-05): Zach's Nov 5 workflow per type.
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 What it holds the registry's content to (tests/test_contract.py holds the API):
 - the cards: Zach's 7 actuators + 4 sensors, plus a conveyor belt (the landing-page examples need it);

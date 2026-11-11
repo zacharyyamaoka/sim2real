@@ -1,8 +1,8 @@
 """The type cards report (2026-11-04): serves a built site, records the click-through from a station to its Servo card's
 Coverage tab, takes stills of the Types area, and writes one self-contained page.
 
-    python3 /home/bam/sim2real/site/build.py --out /abs/site
-    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_type_cards.py --site /abs/site
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py --out /abs/site
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with playwright python /home/bam/sim2real/docs/build_report_type_cards.py --site /abs/site
 
 Writes /home/bam/sim2real/reports/media/type-cards-2026-11-04/report.html (reports/media/ is gitignored). Serves on a free port in
 4711-4799 (never 4700, Zach's) and stops the server by the PID it started.

@@ -1,6 +1,6 @@
 """Build sim2real's site: catalog-workbench (vendored, site/vendor/) over the app's data (tools/build_app.py).
 
-    python3 /home/bam/sim2real/site/build.py [--data PATH] [--out PATH]
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py [--data PATH] [--out PATH]
     python3 -m http.server 4710 --bind 127.0.0.1 --directory /home/bam/.cache/sim2real/site
 
 Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing here is in git):

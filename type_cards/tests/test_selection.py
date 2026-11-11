@@ -1,6 +1,6 @@
 """Metrics, diagnostics and coverage over any list of run ids (type_cards/selection.py), written before it (2026-11-07).
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 Zach (2026-11-06): "Generally I think we can calculate these metrics on a per run basis... but also accross all the runs which is what
 we really want to do... its just the row model you can basically like include or not what runs will be included"; coverage "for the
