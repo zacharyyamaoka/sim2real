@@ -1,7 +1,7 @@
 """Check every reference the type cards cite, online, and write type_cards/references_checked.json (committed; the offline test
 holds every Reference to it).
 
-    python3 /home/bam/sim2real/type_cards/check_references.py
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/type_cards/check_references.py
 
 Stdlib only. For each DOI: Crossref's record (title, year, venue, authors), and doi.org's handle API (the DOI resolves). For each
 URL: a doi.org URL is checked through that same handle API (publishers refuse automated fetches, so their page is not the test);

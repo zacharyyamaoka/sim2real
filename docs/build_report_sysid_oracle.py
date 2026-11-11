@@ -1,7 +1,7 @@
 """The system-ID oracle report (2026-11-05): six robot descriptions in, a better model out, each checked against a hidden truth.
 
-    python3 /home/bam/sim2real/site/build.py
-    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_sysid_oracle.py --oracle-tests /abs/sysid-junit.xml --site-tests /abs/site-test.log --type-cards-tests /abs/type-cards-junit.xml
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with playwright python /home/bam/sim2real/docs/build_report_sysid_oracle.py --oracle-tests /abs/sysid-junit.xml --site-tests /abs/site-test.log --type-cards-tests /abs/type-cards-junit.xml
 
 Serves a built site (default ~/.cache/sim2real/site) with `python3 -m http.server` on a free port in 4711-4799 (never 4700, Zach's) and
 stops it by the PID it started; records the click-through home -> the oracle cards -> CAN 11's page (its ladder, its wear chart) ->

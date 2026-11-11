@@ -1,98 +1,41 @@
 """Coverage of a planned set, per type: how much of a type's input space a plan visits, before anything runs.
 
-Stdlib only (the site build is stdlib only). One binned rule for every type: a type declares its input axes (continuous axes with
-edges, categorical axes with levels), a plan is a list of points on those axes, and coverage is the share of the reachable cells
-that at least one point visits. The types differ only in their axes, their edges and which cells are reachable.
+One binned rule for every type: a type declares its input axes (continuous axes with edges, categorical axes with levels), a plan is
+a list of points on those axes, and coverage is the share of the reachable cells that at least one point visits. The types differ only
+in their axes, their edges and which cells are reachable.
+
+The rule itself (CoverageResult, bin_index, occupancy, binned, marginal, signed, random_plan) is robot_msgs.coverage since 2026-11-10;
+this module keeps every type's axes, edges and reachable rule and re-exports the rule's names, so `from type_cards.coverage import binned`
+keeps working. WHY split there (Zach, 2026-11-10, "Sim2Real as a Pure Library on robot_msgs", proposal 2): robot_msgs changes slowest,
+so it holds only the math with one definition; a type's axes, edges, reachable cells and gates are policy that churns, so they stay
+here, and nothing in robot_msgs may import them. Stdlib plus robot_msgs (which brings numpy); still no MuJoCo.
 
 WHY generalised from bam_rack_twin.schedule and not re-derived (dispatcher brief, 2026-11-04: "Generalise schedule.py's for the
 1-DOF case rather than duplicating it"): the servo's (q, qd, qdd) edges, its reachable rule and numpy.histogramdd's bin
-convention are schedule.py's (edges_of, reachable_cells, occupancy at bam_ws main b5600075), written once here for any
+convention are schedule.py's (edges_of, reachable_cells, occupancy at bam_ws main b5600075), written once for any
 number of axes; tests/test_registry.py holds this module to schedule.py's own CAN 11 number, so a drift in either shows.
 """
 
 from __future__ import annotations
 
-import bisect
 import functools
 import itertools
 import json
 import math
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-
-@dataclass(frozen=True)
-class CoverageResult:
-    pct: float                 # visited reachable cells / reachable cells, %, 2 decimals (schedule.py's rounding)
-    visited: int               # reachable cells with at least one point
-    reachable: int             # the denominator
-    samples: int               # points offered
-    outside: int = 0           # points outside every edge (dropped, as histogramdd does)
-    axes: dict = field(default_factory=dict)        # extra axis -> its own marginal %, or None when the plan does not vary it
-    unplanned: tuple = ()      # axes the type declares that the plan cannot cover (said, never hidden)
-    cells: dict = field(default_factory=dict)       # cell index tuple -> count (for plots)
-    note: str = ""
-
-
-def bin_index(value: float, edges: Sequence[float]) -> int | None:
-    """numpy.histogramdd's convention: [lo, hi) per bin, the last bin [lo, hi]; outside -> None."""
-    if value == edges[-1]:
-        return len(edges) - 2
-    i = bisect.bisect_right(edges, value) - 1
-    return i if 0 <= i < len(edges) - 1 else None
-
-
-def occupancy(points: Sequence[Sequence[Any]], axes: Sequence[Sequence[Any]]) -> tuple[dict, int]:
-    """Points per cell. An axis is a list of float edges (continuous) or a tuple of level names (categorical: ('levels', a, b ...))."""
-    counts: dict[tuple, int] = {}
-    outside = 0
-    for point in points:
-        cell = []
-        for value, axis in zip(point, axes):
-            if axis and axis[0] == "levels":
-                i = axis.index(value) - 1 if value in axis[1:] else None
-            else:
-                i = bin_index(float(value), axis)
-            if i is None:
-                break
-            cell.append(i)
-        else:
-            counts[tuple(cell)] = counts.get(tuple(cell), 0) + 1
-            continue
-        outside += 1
-    return counts, outside
-
-
-def n_cells(axis) -> int:
-    return len(axis) - 1
-
-
-def centres(axis) -> list:
-    if axis and axis[0] == "levels":
-        return list(axis[1:])
-    return [0.5 * (a + b) for a, b in zip(axis[:-1], axis[1:])]
-
-
-def binned(points, grid_axes, reachable: Callable[[tuple], bool] | None = None, reach: frozenset | set | None = None, **extra) -> CoverageResult:
-    """Coverage over the product of `grid_axes`; `reachable(centre tuple)` drops cells the device cannot hold (None: every cell), or
-    `reach` names the reachable cells already (a set computed once for the same axes, reachable_cells)."""
-    counts, outside = occupancy(points, grid_axes)
-    if reach is None:
-        grid = [centres(a) for a in grid_axes]
-        reach = {cell for cell in itertools.product(*(range(n_cells(a)) for a in grid_axes))
-                 if reachable is None or reachable(tuple(grid[k][i] for k, i in enumerate(cell)))}
-    visited = sum(1 for cell in counts if cell in reach)
-    total = max(1, len(reach))
-    return CoverageResult(pct=round(100.0 * visited / total, 2), visited=visited, reachable=len(reach), samples=len(points),
-                          outside=outside, cells=counts, **extra)
-
-
-def marginal(values: Sequence[float], edges: Sequence[float], keep: Callable[[float], bool] | None = None) -> float:
-    """One axis alone: % of its (kept) bins any value visits."""
-    counts, _ = occupancy([(v,) for v in values], [edges])
-    bins = [i for i, c in enumerate(centres(edges)) if keep is None or keep(c)]
-    return round(100.0 * sum(1 for i in bins if (i,) in counts) / max(1, len(bins)), 2)
+from robot_msgs.coverage import (  # noqa: F401  (re-exported: this module's public names before 2026-11-10)
+    CoverageResult,
+    bin_index,
+    binned,
+    centres,
+    marginal,
+    n_cells,
+    occupancy,
+    random_plan,  # WHY (Zach, Nov 5: "you can randomly sample within the full space, but its a easy way to quickly check if your
+    signed,       # covering it ... its like a histogram"): the cells are only the ruler; a plan need not sit on them.
+)
 
 
 # --- the 1-DOF actuator (servo, and a gearbox or motor on a 1-DOF rig) --------------------------------------------------------
@@ -103,11 +46,6 @@ QDD_EDGE_FRACTIONS = (0.00625, 0.025, 0.0625, 0.1875, 0.5, 1.0)
 Q_BINS = 12
 TAU_CELL_NM = 0.25
 FF_BAND_RAD_S = 0.05  # bam_rack_twin.hardware.experiments.FF_BAND_RAD_S: the tanh band of the model's Coulomb term
-
-
-def signed(fractions: Sequence[float], scale: float) -> list[float]:
-    positive = [scale * f for f in fractions]
-    return [-v for v in reversed(positive)] + positive
 
 
 def joint_edges(description: Mapping[str, Any]) -> list[list[float]]:
@@ -235,7 +173,7 @@ _ARM_MASKS: dict[str, frozenset] = {}
 def arm_reachable_cells(mount: str) -> frozenset:
     """The joint-cube cells (index tuples) a mounted arm can be in: a collision-free configuration of the arm lies inside the cell,
     its shoulder lift inside the span connected to home. A committed mask (4,096 bits in itertools.product order) because the rule
-    needs MuJoCo's collision check and this module is stdlib only; tools/arm_reachable.py writes it and
+    needs MuJoCo's collision check and this module never imports MuJoCo; tools/arm_reachable.py writes it and
     sysid/tests/test_arm_reachable_mask.py holds the file to a fresh run."""
     if mount not in _ARM_MASKS:
         if mount not in ARM_MOUNTS:
@@ -308,19 +246,6 @@ def condition_coverage(axes: Mapping[str, Sequence[Any]]) -> Callable[[Sequence[
         return CoverageResult(**{**result.__dict__, "unplanned": tuple(n for n in names if n not in given)})
 
     return measure
-
-
-# --- v2: random plans over the full space ------------------------------------------------------------------------------------
-
-def random_plan(axes: Sequence[Sequence[Any]], n: int, seed: int = 0) -> list[tuple]:
-    """n points drawn uniformly over the FULL space the axes span (a continuous axis from its first edge to its last, a categorical
-    one over its levels), reproducible from `seed`. WHY (Zach, Nov 5: "you can randomly sample within the full space, but its a easy
-    way to quickly check if your covering it ... its like a histogram"): the cells are only the ruler; a plan need not sit on them."""
-    import random  # noqa: PLC0415
-
-    rng = random.Random(seed)
-    return [tuple(rng.choice(axis[1:]) if axis and axis[0] == "levels" else rng.uniform(float(axis[0]), float(axis[-1])) for axis in axes)
-            for _ in range(n)]
 
 
 # --- the conveyor: belt speed by load ------------------------------------------------------------------------------------------

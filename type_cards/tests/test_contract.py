@@ -1,6 +1,6 @@
 """The type cards' v2 contract (type_cards/CONTRACT.md), written before it (2026-11-05).
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 What it holds, independent of the cards' content (tests/test_ladders.py holds the content):
 - every v1 name is still there and v1 constructors still work (positional Parameter, Card without the new fields): additive only;

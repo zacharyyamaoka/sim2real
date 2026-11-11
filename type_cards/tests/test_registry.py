@@ -1,6 +1,6 @@
 """The type cards' ruler, written before the registry (2026-11-04).
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests
 
 What it holds the registry to (Zach's journal, PROJECT - Sim2Real, Nov 4 2026, and the dispatcher's design rules):
 - every metric is black-box and cites a RobotDx stock-catalog id at the pinned commit, or says `proposed` and why;

@@ -152,6 +152,11 @@ arm_6dof card's measure is `cov.arm_6dof_coverage(points, mount="ur5e_floor")`, 
 sub-assembly's). The gate stays 40 % on every card: on the arm that is 1,024 reachable cells (it was 1,639 of the box, 64 % of
 what a floor-mounted arm can reach). Decision record: `docs/decision-arm-reachable-coverage-2026-11-05.md`.
 
+Since 2026-11-10 (additive, nothing renamed): the rule itself (`CoverageResult`, `bin_index`, `occupancy`, `binned`, `marginal`,
+`signed`, `random_plan`) is `robot_msgs.coverage` (`/home/bam/robot_msgs`), and `cov.<name>` re-exports each one unchanged; every
+type's axes, edges, reachable rule and gate stay here. type_cards therefore needs robot_msgs on its path (every command carries
+`--with-editable /home/bam/robot_msgs`); it still never imports MuJoCo.
+
 ## Calibration packages
 
 `reg.CALIBRATION_PACKAGES` (filled by `type_cards/calibration.py`) / `reg.packages_for(card)`: Zach's packages (hand-eye, kinematic

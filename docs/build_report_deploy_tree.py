@@ -2,8 +2,8 @@
 the rail's tree, then on CAN 11, the runs narrowing each time), takes stills of the tree, the flat /runs/ list, the Gates tab's
 roll-up tree, a run's configuration and a station's place in the tree, and writes one self-contained page.
 
-    python3 /home/bam/sim2real/site/build.py --out /abs/site
-    uv run --no-project --with playwright python /home/bam/sim2real/docs/build_report_deploy_tree.py --site /abs/site
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py --out /abs/site
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with playwright python /home/bam/sim2real/docs/build_report_deploy_tree.py --site /abs/site
 
 Writes /home/bam/sim2real/reports/media/deploy-tree-2026-11-05/report.html (reports/media/ is gitignored). Serves on a free port in
 4711-4799 (never 4700, Zach's) and stops the server by the PID it started. Every number on the page is read from the built site's

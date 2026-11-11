@@ -1,6 +1,6 @@
 """Render the type registry into its vault note (a generated note: edit the registry, then re-run this).
 
-    python3 /home/bam/sim2real/type_cards/render_note.py [--out PATH]
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/type_cards/render_note.py [--out PATH]
 
 Stdlib only. Writes the note to the vault directly when it does not exist yet; an existing note is Obsidian's, so it is
 rewritten only through ~/zach_brain/Settings/Scripts/obsidian-edit.py (the script says so and prints the path to pass it).

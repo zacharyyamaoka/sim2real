@@ -3,7 +3,7 @@ description), and every coverage number is the same with the cache as without it
 computes a selection of one per run, 2239 of them, and each call rebuilt the same reachable set over all 2016 cells (19 s of a 35 s
 site build).
 
-    uv run --no-project --with pytest pytest -q /home/bam/sim2real/type_cards/tests/test_coverage_cache.py
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs --with pytest pytest -q /home/bam/sim2real/type_cards/tests/test_coverage_cache.py
 """
 
 from __future__ import annotations
