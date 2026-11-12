@@ -698,7 +698,8 @@ def plot_ladder(name: str, records: Sequence[dict], base, path: Path, tolerance_
     top = 100.0
     ax.axhspan(FLOOR_RATIO * 0.7, 1.0, color=BAND, zorder=0, lw=0)
     ax.axhline(1.0, color=INK_2, lw=1.0, zorder=1)
-    ax.text(len(levels) - 0.5 + 0.02, 1.0, " tolerance", va="center", ha="left", fontsize=8.5, color=INK_2)
+    # WHY above the line at the left: at the right edge it collided with a series label landing near 1 (the encoder ladder, 2026-11-11)
+    ax.text(-0.45, 1.06, "tolerance", va="bottom", ha="left", fontsize=8.5, color=INK_2)
     ax.text(-0.45, 0.012, "inside tolerance", va="bottom", ha="left", fontsize=8.5, color=MUTED)
     def draw(key, color, lw, z, label=False):
         by = series[key]
@@ -955,11 +956,13 @@ def coverage(out: Path, base) -> dict:
             whole = [lb for lb in labels if lb in full and "error" not in full[lb]]
             fronts = [lb for lb in labels if lb in front and "error" not in front[lb]]
             front_breaks = any(misses(front[lb]) for lb in fronts)
+            whole_breaks = any(misses(full[lb]) for lb in whole)
             rows.append({"ladder": name, "level": level, "whole": whole, "front": fronts, "front_breaks": front_breaks})
             for lb in labels:
                 if lb in full or lb.startswith("baseline-"):
                     continue
                 why = ("its front pass already misses at this level: the level breaks whatever the dynamics do" if front_breaks else
+                       "a whole seed already misses at this level (the level breaks); another seed would only add a count" if whole_breaks else
                        "wall-time budget (a whole cell is ~1 h on the shared host; seed 20261111 ran whole below each break, the front "
                        "pass ran every seed)")
                 dropped.append({"label": lb, "why": why})
@@ -1047,6 +1050,47 @@ def findings(out: Path) -> list[dict]:
             "measured": (f"breakaway worst |error| / tolerance {max(r['static_committed']['err_over_tol'] for r in enc):.2f} -> "
                          f"{max(r['static_leave_3_steps']['err_over_tol'] for r in enc):.2f} with the 3-step leave; gap unchanged by the mean "
                          f"({max(r['gap_mean']['err_over_tol'] for r in enc):.2f})")})
+    # the dynamics rows a whole cell misses, and how close the 1x runs already sit to their tolerance (the margin the stress eats)
+    full = [r for r in read_records(out) if "error" not in r and "report" in r]
+    front_keys = {f"can{c}.{n}" for c in (14, 15, 16) for n in ("backlash_rad", "static_friction_nm", "zero_offset_rad")}
+    dyn_miss: dict[str, list] = {}
+    for record in full:
+        if record["cell"]["ladder"] == "mismatch":
+            continue   # a term the model lacks: the motor_friction_model finding, not the fit's margin
+        for key, ratio in misses(record).items():
+            if key not in front_keys:
+                dyn_miss.setdefault(key, []).append((record["label"], ratio))
+    for key, where in sorted(dyn_miss.items(), key=lambda kv: -len(kv[1])):
+        base_ratios = [_ratio(next(x for x in r["calibration"]["rows"] if x["key"] == key)) for r in full if r["label"].startswith("baseline-")]
+        found.append({
+            "id": f"dynamics-margin-{key}", "routine": "servo.dynamics_regression",
+            "breaks": ", ".join(f"{label} ({ratio:.2f})" for label, ratio in where),
+            "params": key,
+            "cause": ((f"thin margin at 1x: the three 1x seeds already sit at {min(base_ratios):.2f}-{max(base_ratios):.2f} of the tolerance, so "
+                       "any stress that adds bias to the fit's residual (velocity noise, timing spread, a far truth) pushes it out")
+                      if base_ratios and max(base_ratios) > 0.3 else
+                      f"the 1x seeds sit at {min(base_ratios, default=0):.2f}-{max(base_ratios, default=0):.2f} of the tolerance; the stress itself moves it"),
+            "fix": ("see the dynamics_downstream rows below for whether the miss is the cell's own; for an own miss: weight the fit by the rests' "
+                    "velocity noise (reading_noise() reads it ~3x high) and add slow constant-speed sweeps both ways on this joint to the "
+                    "dynamics plan, where Coulomb separates from damping"),
+            "measured": "whole cells only (seed 20261111 below the front's break); |error| / tolerance in brackets"})
+    lumped_bp = None
+    mism = [r for r in full if r["cell"]["ladder"] == "mismatch" and r.get("variant", {}).get("motor_friction_nm")]
+    if mism:
+        lumped_bp = breaking_point([lumped(r) for r in mism])
+    if lumped_bp and lumped_bp["level"] is not None:
+        rev_rows = probe("reversal_crossing") or []
+        crossing = {lv: _median([r["crossing_mnm"] for r in rev_rows if r["motor_friction_mnm"] == lv]) for lv in sorted({r["motor_friction_mnm"] for r in rev_rows})}
+        found.append({
+            "id": "motor_friction_model", "routine": "servo.dynamics_regression (the model, not the routine)",
+            "breaks": f"motor-side friction {lumped_bp['level']:g} mN.m even held to the lumped truth (Coulomb + the motor's friction)",
+            "params": ", ".join(f"{k} ({v:.2f})" for k, v in lumped_bp["worst"].items()),
+            "cause": ("friction before the gap is not friction after it: the motor's drags across every gap crossing and the output's does not, "
+                      "so no output-side Coulomb level reproduces both and the fit lands between them"),
+            "fix": ("a model term, not a routine change: a motor-side Coulomb on each geared joint in the twin's plant, identified directly by "
+                    "the held reversal's gap-crossing torque (it measures exactly that friction)"),
+            "measured": ("the held reversal's median crossing torque by motor friction: " + ", ".join(f"{lv} mN.m -> {c:.1f}" for lv, c in crossing.items())
+                         if crossing else "-")})
     for path in sorted((out / "probes").glob("dynamics_downstream-*-truth-reading.json")):
         doc = json.loads(path.read_text())
         bad_cell = [r for r in doc["rows"] if r["cell_err_over_tol"] is not None and r["cell_err_over_tol"] > 1]
@@ -1063,17 +1107,26 @@ def findings(out: Path) -> list[dict]:
             "fix": ("fix the front routines first (dead_band above); the dynamics then need nothing" if not own else
                     "the fit's velocity-noise weight: reading_noise() reads the velocity sigma 3.5x high at 1x (second differences carry the "
                     "commanded motion); take it from the rests (quiet_velocity_sigma) - see the dynamics_downstream quiet probe"),
-            "measured": "; ".join(f"{r['key']} {r['cell_err_over_tol']:.2f} -> {r['probe_err_over_tol']:.2f}" for r in bad_cell)})
+            "measured": "with the true front values: " + "; ".join(f"{r['key']} {r['cell_err_over_tol']:.2f} -> {r['probe_err_over_tol']:.2f}" for r in bad_cell)})
+        quiet = path.with_name(path.name.replace("-truth-reading", "-truth-quiet"))
+        if own and quiet.exists():
+            q = {r["key"]: r["probe_err_over_tol"] for r in json.loads(quiet.read_text())["rows"]}
+            found[-1]["measured"] += "; and with the rests' velocity noise too: " + "; ".join(f"{k} {q[k]:.2f}" for k in own if k in q)
+        elif own:
+            found[-1]["measured"] += "; the rests' velocity-noise refit is not written"
     return found
 
 
 def findings_html(items: Sequence[dict]) -> str:
     if not items:
         return ""
-    body = [(f["routine"], f["breaks"], f["params"], f["cause"], f["fix"], f["measured"]) for f in items]
+    # WHY blocks, not a table: six columns of sentences scrolled sideways and hid the fix (rendered and looked at, 2026-11-11)
+    cards = "".join(f"<section class=card><b>{_esc(f['routine'])}</b> &middot; breaks at {_esc(f['breaks'])}<dl>"
+                    + "".join(f"<dt>{name}</dt><dd>{_esc(f[key])}</dd>" for name, key in
+                              (("first parameters", "params"), ("cause", "cause"), ("proposed fix", "fix"), ("probe measured", "measured")))
+                    + "</dl></section>" for f in items)
     return ("<h2>Where recovery breaks, why, and the proposed fixes</h2><p class=m>The routines are not changed here: each fix is proposed with "
-            "what its probe measured on the routines' own recordings.</p>"
-            + _table(["routine", "breaks at", "first parameters", "cause", "proposed fix", "probe measured"], body))
+            "what its probe measured on the routines' own recordings.</p>" + cards)
 
 
 def index_html(doc: dict, out: Path) -> str:
@@ -1105,6 +1158,8 @@ main{{max-width:1180px;margin:0 auto}} h1{{font-size:20px;margin:0 0 4px}} .m{{c
 table{{border-collapse:collapse;width:100%;background:var(--surface);font-size:13px}} td,th{{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}}
 .n{{font-variant-numeric:tabular-nums;white-space:nowrap}} .s{{font-size:12px;color:var(--ink2)}} .wrap{{overflow-x:auto}}
 figure{{margin:18px 0;background:var(--surface);padding:8px}} img{{max-width:100%;height:auto}} figcaption{{color:var(--ink2);font-size:12px}}
+.card{{background:var(--surface);border:1px solid var(--line);padding:10px 12px;margin:10px 0}} dl{{display:grid;grid-template-columns:130px 1fr;gap:4px 12px;margin:8px 0 0;font-size:13px}}
+dt{{color:var(--muted)}} dd{{margin:0}} @media (max-width:600px){{dl{{grid-template-columns:1fr}}}}
 pre{{white-space:pre-wrap;word-break:break-word;font-size:11px;background:var(--surface);padding:8px;max-height:320px;overflow:auto}}
 </style></head><body><main>
 <h1>The wrist's one-click, stress-tested</h1>
