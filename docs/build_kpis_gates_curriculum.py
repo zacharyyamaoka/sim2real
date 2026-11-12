@@ -145,7 +145,7 @@ def gate_cell(data: dict, name: str) -> str:
     if value is None:
         return "not measured"
     limit = rigs.GATES[name]["limit"]
-    verdict = "" if limit is None else (" · **passes**" if value <= limit else f" · **fails** ({value / limit:.1f}× the gate)")
+    verdict = "" if limit is None else (" · **passes**" if value <= limit else f" · **fails** ({value / limit:.{2 if value / limit < 1.5 else 1}f}× the gate)")
     return f"{unit(name, value)}{verdict} · {title}"
 
 
@@ -462,7 +462,7 @@ it: the latest twin for the twin gate, the last controller configuration that ra
 - **UR wrist:** {first_open(rd['ur_wrist'])}. The controller in sim on the operating gains (pick_sliding) tracks to
   {latest(rd['ur_wrist'], 'target_vs_sim_tracking_deg')[0]:.3f}° (worst joint, held-out runs on the twin of
   record), the real joints to {latest(rd['ur_wrist'], 'tracking_rms_deg')[0]:.3f}°. At a stop the twin's holder passes 1 mm and the real one
-  misses it by a hair ({latest(rd['ur_wrist'], 'sim_vs_real_at_stop_mm')[0]:.2f} mm between them), so the first fix is the twin (CAN 14's passive
+  just misses it ({latest(rd['ur_wrist'], 'tool_error_at_stop_mm')[0]:.2f} mm; twin vs real {latest(rd['ur_wrist'], 'sim_vs_real_at_stop_mm')[0]:.2f} mm at the same stops), so the first fix is the twin (CAN 14's passive
   release) and a tool floor, not the controller.
 - **Five-bar:** {first_open(rd['fivebar'])}. Gate 1 fails first: the controller misses the tool gate in a sim that is right by
   construction ({latest(rd['fivebar'], 'target_vs_sim_at_stop_mm')[0]:.2f} mm vs the real arm's {latest(rd['fivebar'], 'tool_error_at_stop_mm')[0]:.2f} mm), so
