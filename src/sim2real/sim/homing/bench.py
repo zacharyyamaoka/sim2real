@@ -34,6 +34,8 @@ from robot_msgs.control import JointCommandSequenceController
 from .geometry import BUNDLE_SHA, C1, DRIVES, EXPORT, J1, J2, MIRROR, ROLE, FivebarGeometry
 from .plant import HIDDEN_GAP_ARCMIN, KinematicStopPlant, Start, hidden_backlash
 from .procedures import PROCEDURES, HomingRefused, PressReverse, home_cad, identify_backlash
+from .recover import RECOVER_PREFIX_NAME as RECOVER
+from .recover import recover_first
 
 DT = 0.01
 RUNG = "kinematic"
@@ -162,8 +164,19 @@ class Episode:
     notes: dict
 
 
+def make_procedure(name: str):
+    """A leaderboard procedure by name; ``recover_first+<name>`` puts the blind recovery in front (recover.py)."""
+    if name.startswith(RECOVER):
+        return recover_first(name.removeprefix(RECOVER))
+    return PROCEDURES[name]()
+
+
+def inner_name(name: str) -> str:
+    return name.removeprefix(RECOVER)
+
+
 def run_episode(name: str, plant: KinematicStopPlant, start: Start, prior: Prior, environment: str) -> Episode:
-    procedure = PROCEDURES[name]()
+    procedure = make_procedure(name)
     plant.reset(start)
     phases, outcome = [], "done"
     while (sequence := procedure.plan(prior, phases)) is not None:
@@ -230,7 +243,7 @@ def _job(args):
     geometry = _GEOMETRY.get(root) or _GEOMETRY.setdefault(root, FivebarGeometry(root))
     table = BacklashTable.from_dict(table_dict) if table_dict is not None else None
     plant = KinematicStopPlant(geometry, hidden_backlash(model))
-    uses_table = name in ("single_touch", "two_level_touch")
+    uses_table = inner_name(name) in ("single_touch", "two_level_touch")
     episode = run_episode(name, plant, start, prior_for(geometry, table if uses_table else None), f"{RUNG} · {model}")
     return model, name, start.name, episode.record.to_dict(), episode.notes
 
@@ -370,8 +383,10 @@ def main(argv=None) -> int:
     parser.add_argument("--sobol", type=int, default=SOBOL_STARTS)
     parser.add_argument("--procedures", nargs="*", default=list(PROCEDURES))
     parser.add_argument("--models", nargs="*", default=list(MODELS))
+    parser.add_argument("--recover-first", action="store_true", help="put the blind recovery in front of every procedure (recover.py)")
     args = parser.parse_args(argv)
-    results = run_bench(procedures=tuple(args.procedures), models=tuple(args.models), n_sobol=args.sobol,
+    procedures = [RECOVER + inner_name(p) for p in args.procedures] if args.recover_first else args.procedures
+    results = run_bench(procedures=tuple(procedures), models=tuple(args.models), n_sobol=args.sobol,
                         workers=min(args.workers, 3))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(results))

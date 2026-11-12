@@ -1,0 +1,313 @@
+{
+ "schema": "sim2real_homing_recovery/1",
+ "source": "bam_fivebar_recovery.routine.blind_recovery(references=...) -> commands.to_robot_msgs, steps 1-7",
+ "bam_ws_sha": "604f60af7",
+ "references_deg": {
+  "j2_stop": 125.00002492407022,
+  "c1_contact": 197.76955013392538
+ },
+ "frame": "URDF joint frame of the v11 CAD (Craig = URDF + offset, sign +1 for J2 and C1, bam_fb_test_rig.gravity.CraigMap)",
+ "steps_planned": 8,
+ "steps_kept": 7,
+ "tuning": {
+  "j2_seek_speed": 0.15,
+  "j2_seek_cap": 8.0,
+  "lift_deg": 15.0,
+  "c1_seek_speed": 0.3,
+  "c1_seek_cap": 8.0,
+  "j2_hold_cap": 10.0,
+  "j2_press_rad": 0.3,
+  "j2_press_cap": 10.0,
+  "c1_press_cap": 4.0,
+  "c1_hold_cap": 6.0,
+  "backoff_deg": 5.0,
+  "move_speed": 0.3,
+  "move_cap": 10.0,
+  "waypoint_deg": 4.0,
+  "reach_tolerance_rad": 0.06,
+  "drop_s": 3.0,
+  "timeout_s": 60.0
+ },
+ "sequence": {
+  "_type": "control/JointCommandSequence",
+  "joint_names": [
+   "j2",
+   "c1"
+  ],
+  "steps": [
+   {
+    "_type": "control/JointCommandStep",
+    "name": "limp",
+    "commands": [
+     {
+      "_type": "control/JointCommand",
+      "joint": "j2",
+      "mode": "limp",
+      "position": null,
+      "distance": null,
+      "speed": null,
+      "max_effort": null,
+      "feedforward_effort": 0.0
+     },
+     {
+      "_type": "control/JointCommand",
+      "joint": "c1",
+      "mode": "limp",
+      "position": null,
+      "distance": null,
+      "speed": null,
+      "max_effort": null,
+      "feedforward_effort": 0.0
+     }
+    ],
+    "done_when": [
+     {
+      "_type": "control/Elapsed",
+      "duration": 3.0
+     }
+    ],
+    "timeout": 60.0,
+    "define_position": {}
+   },
+   {
+    "_type": "control/JointCommandStep",
+    "name": "J2 + until it stalls, crank limp",
+    "commands": [
+     {
+      "_type": "control/JointCommand",
+      "joint": "j2",
+      "mode": "move_by",
+      "position": null,
+      "distance": 5.759586531581287,
+      "speed": 0.15,
+      "max_effort": 8.0,
+      "feedforward_effort": 0.0
+     },
+     {
+      "_type": "control/JointCommand",
+      "joint": "c1",
+      "mode": "limp",
+      "position": null,
+      "distance": null,
+      "speed": null,
+      "max_effort": null,
+      "feedforward_effort": 0.0
+     }
+    ],
+    "done_when": [
+     {
+      "_type": "control/Stall",
+      "joint": "j2",
+      "lead": 0.06,
+      "speed": 0.01,
+      "dwell": 0.2
+     }
+    ],
+    "timeout": 60.0,
+    "define_position": {}
+   },
+   {
+    "_type": "control/JointCommandStep",
+    "name": "J2 - 15 deg (lift L1 off), crank limp",
+    "commands": [
+     {
+      "_type": "control/JointCommand",
+      "joint": "j2",
+      "mode": "move_by",
+      "position": null,
+      "distance": -0.2617993877991494,
+      "speed": 0.15,
+      "max_effort": 8.0,
+      "feedforward_effort": 0.0
+     },
+     {
+      "_type": "control/JointCommand",
+      "joint": "c1",
+      "mode": "limp",
+      "position": null,
+      "distance": null,
+      "speed": null,
+      "max_effort": null,
+      "feedforward_effort": 0.0
+     }
+    ],
+    "done_when": [
+     {
+      "_type": "control/Reached",
+      "joints": [
+       "j2"
+      ],
+      "tolerance": 0.06,
+      "speed": 0.01,
+      "dwell": 0.05
+     },
+     {
+      "_type": "control/Stall",
+      "joint": "j2",
+      "lead": 0.06,
+      "speed": 0.01,
+      "dwell": 0.2
+     }
+    ],
+    "timeout": 60.0,
+    "define_position": {}
+   },
+   {
+    "_type": "control/JointCommandStep",
+    "name": "C1 + until it stalls, J2 holds",
+    "commands": [
+     {
+      "_type": "control/JointCommand",
+      "joint": "j2",
+      "mode": "hold",
+      "position": null,
+      "distance": null,
+      "speed": null,
+      "max_effort": 10.0,
+      "feedforward_effort": 0.0
+     },
+     {
+      "_type": "control/JointCommand",
+      "joint": "c1",
+      "mode": "move_by",
+      "position": null,
+      "distance": 5.759586531581287,
+      "speed": 0.3,
+      "max_effort": 8.0,
+      "feedforward_effort": 0.0
+     }
+    ],
+    "done_when": [
+     {
+      "_type": "control/Stall",
+      "joint": "c1",
+      "lead": 0.06,
+      "speed": 0.01,
+      "dwell": 0.2
+     }
+    ],
+    "timeout": 60.0,
+    "define_position": {}
+   },
+   {
+    "_type": "control/JointCommandStep",
+    "name": "J2 + onto its stop, crank limp",
+    "commands": [
+     {
+      "_type": "control/JointCommand",
+      "joint": "j2",
+      "mode": "move_by",
+      "position": null,
+      "distance": 5.759586531581287,
+      "speed": 0.15,
+      "max_effort": 8.0,
+      "feedforward_effort": 0.0
+     },
+     {
+      "_type": "control/JointCommand",
+      "joint": "c1",
+      "mode": "limp",
+      "position": null,
+      "distance": null,
+      "speed": null,
+      "max_effort": null,
+      "feedforward_effort": 0.0
+     }
+    ],
+    "done_when": [
+     {
+      "_type": "control/Stall",
+      "joint": "j2",
+      "lead": 0.06,
+      "speed": 0.01,
+      "dwell": 0.2
+     }
+    ],
+    "timeout": 60.0,
+    "define_position": {}
+   },
+   {
+    "_type": "control/JointCommandStep",
+    "name": "C1 + until the hub meets L1's plate, J2 pressed on its stop: define both positions",
+    "commands": [
+     {
+      "_type": "control/JointCommand",
+      "joint": "j2",
+      "mode": "move_by",
+      "position": null,
+      "distance": 0.3,
+      "speed": 1.0,
+      "max_effort": 10.0,
+      "feedforward_effort": 0.0
+     },
+     {
+      "_type": "control/JointCommand",
+      "joint": "c1",
+      "mode": "move_by",
+      "position": null,
+      "distance": 6.981317007977318,
+      "speed": 0.3,
+      "max_effort": 4.0,
+      "feedforward_effort": 0.0
+     }
+    ],
+    "done_when": [
+     {
+      "_type": "control/Stall",
+      "joint": "c1",
+      "lead": 0.06,
+      "speed": 0.01,
+      "dwell": 0.2
+     }
+    ],
+    "timeout": 60.0,
+    "define_position": {
+     "j2": 2.181662,
+     "c1": 3.4517298100249905
+    }
+   },
+   {
+    "_type": "control/JointCommandStep",
+    "name": "J2 5 deg off its stop, crank holds",
+    "commands": [
+     {
+      "_type": "control/JointCommand",
+      "joint": "j2",
+      "mode": "position",
+      "position": 2.094395537400284,
+      "distance": null,
+      "speed": 0.15,
+      "max_effort": 10.0,
+      "feedforward_effort": 0.0
+     },
+     {
+      "_type": "control/JointCommand",
+      "joint": "c1",
+      "mode": "hold",
+      "position": null,
+      "distance": null,
+      "speed": null,
+      "max_effort": 6.0,
+      "feedforward_effort": 0.0
+     }
+    ],
+    "done_when": [
+     {
+      "_type": "control/Reached",
+      "joints": [
+       "j2"
+      ],
+      "tolerance": 0.06,
+      "speed": 0.01,
+      "dwell": 0.05
+     }
+    ],
+    "timeout": 60.0,
+    "define_position": {}
+   }
+  ],
+  "name": "bam_fivebar_blind_recovery (steps 1-7)",
+  "max_speed": 3.0
+ },
+ "sequence_sha1": "60f5571ba995"
+}
