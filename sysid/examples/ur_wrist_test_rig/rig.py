@@ -102,7 +102,13 @@ def wrist_models(gravity):
         wrist_model.WristModel.__init__ = original
 REVERSAL = {"amplitude_rad": 0.6 * DEG, "speed_rad_s": 0.5 * DEG, "cycles": 3, "cap_fraction": 0.4}
 DELAY_GRID_S = (0.0, 0.003, 0.006)
-II_ITERATIONS = 4
+# WHY 8 iterations at a gain of 0.7 and not 4 full steps (measured 2026-11-11, the inference run standalone at 1x with its history):
+# the armature and the command delay pull on the chirps' response together (CAN 16's closed loop sits at ~15 Hz, the chirps reach 11),
+# so a full step overshot: CAN 16's axis inertia read +12, -10, +9, -7, +8 % over iterations 4-8 and the delay 1.2, 0.2, 0.9, 0.2,
+# 0.8 ms (truth 0.6), and the 4th step's +12 % failed its 10 %. At 0.5 the swing goes and every term walks in, CAN 14's slowest (x0.78
+# an iteration: its equation-error armature answers its twin's at 0.44); 0.7 keeps the swing under 0.3 a step and that walk at x0.69
+II_ITERATIONS = 8
+II_GAIN = 0.7
 BOOTSTRAP = 40
 
 
@@ -537,7 +543,7 @@ class BacklashReversal:
 
 # WHY the held reversal's own drive and not bam_fb_test_rig.backlash.measure's torque probe (measured 2026-11-11 on this world at 1x, every joint
 # "not observable: the link left"): the probe lets the rotor cross the gap as a free mass under a torque ramp, and on these light outputs it hits
-# the far flank hard enough to break the output loose (a ~0.4 m/s-class impact on a 2 N.m/arcmin mesh peaks near 1 N.m against ~0.2 N.m of
+# the far flank hard enough to break the output loose (a rotor landing at ~0.4 rad/s on a 2 N.m/arcmin mesh peaks near 1 N.m against ~0.2 N.m of
 # breakaway); the probe's torque, above the output's 0.05 N.m sliding level, then drags it 2 deg. The five-bar's outputs hold 0.74 N.m. Under
 # the position loop the motor crosses at the target's 0.5 deg/s and lands softly. WHY 0.7 of the cap (measured the same day): at 0.3 the 1x
 # torque noise (10 mN.m against a 70 mN.m cap) split CAN 15's crossings into spurious ones and read 3.9 arcmin of an 18 arcmin gap; 0.5 and 0.7
@@ -810,6 +816,13 @@ class Dynamics:
         # CAN 14's to the board's 1.0 N.m cap (truth 0.20) and CAN 15's to 0.46 (0.14), pulling CAN 14's axis inertia 45 % low with it
         static = [DYN_TERMS.index("static_friction_nm") * len(MOVING) + k for k in range(len(MOVING))]
         theta[static] = [float(values[f"{INSTANCE[c]}.static_friction_nm"]) for c in MOVING]
+        # WHY the description's armature where the plain fit's is below the floor (measured the same day): CAN 14's equation error read
+        # -0.18 g.m2 (the board's end-of-tick torque against a qdd from 100 Hz samples), clamped to 0, and the slow walk up from there was
+        # the inference's longest
+        armature = [DYN_TERMS.index("armature_kg_m2") * len(MOVING) + k for k in range(len(MOVING))]
+        for k, can in enumerate(MOVING):
+            if not theta[armature[k]] > ARMATURE_FLOOR_KG_M2:
+                theta[armature[k]] = float(values[f"{INSTANCE[can]}.armature_kg_m2"])
         chirps = [n for n in names if "/chirp-" in n]
         lag_world = float(np.mean([command_lag_s(measured[n]) for n in chirps])) if chirps else None
         delay = float(values["wrist.command_delay_s"])
@@ -820,10 +833,11 @@ class Dynamics:
         # WHY the command delay in the same loop (measured 2026-11-11 on the smoke): the twin's replays at the description's 5.5 ms put the
         # chirps on another trajectory than the world's 0.6 ms, the estimator's bias with them, and the armature stayed 40 % low; the
         # estimator for the delay is the chirps' command-to-response lag, which the twin's lag at its delay is held to the same way.
-        # WHY the replays get the readings' noise (estimated from the world's own data): the breakaway is a percentile of onset torques,
-        # which white torque noise lifts; a noise-free twin would leave that lift in the fit
-        rng = np.random.default_rng(20261111)
+        # WHY the replays get the readings' noise (estimated from the world's own data), the same draw every iteration: the estimator then
+        # meets the noise it met on the world, and the inference's map is a function of theta alone, so a fixed point is reached instead of
+        # walked around (at 1x the draw moved the 4th iterate < 1 %: the swing above is the coupling's, not the noise's)
         for iteration in range(II_ITERATIONS):
+            rng = np.random.default_rng(20261111)
             trial = {**current, **_from_theta(theta), "wrist.command_delay_s": delay}
             for can in MOVING:
                 key = f"{INSTANCE[can]}.armature_kg_m2"
@@ -834,8 +848,8 @@ class Dynamics:
             gap[static] = 0.0
             lag_gap = 0.0 if lag_world is None else lag_world - float(np.mean([command_lag_s(replays[n]) for n in chirps]))
             history.append([*np.round(gap, 6).tolist(), round(lag_gap, 6)])
-            theta = np.maximum(theta + gap, 0.0)
-            delay = max(0.0, delay + lag_gap)
+            theta = np.maximum(theta + II_GAIN * gap, 0.0)
+            delay = max(0.0, delay + II_GAIN * lag_gap)
         found = {k: v for k, v in _from_theta(theta).items() if not k.endswith(".static_friction_nm")}
         boot = _bootstrap(runs, prior, theta - target, gravity_vector(values), workers=getattr(twin, "workers", 1))
         # WHY the links at the regression's masses and not the prior's (found 2026-11-11 reading the full run): the inference holds the
@@ -855,7 +869,8 @@ class Dynamics:
         for key, value in found.items():
             ci = boot.get(key)
             out[key] = seam.Estimate(value, ci, f"bam_ur_wrist.refit.fit (equation error, {first.rows:,} sliding rows of {len(runs)} train runs) "
-                                                f"+ {II_ITERATIONS} indirect-inference iterations on the twin (last gap {np.round(history[-1], 6).tolist()})"
+                                                f"+ {II_ITERATIONS} indirect-inference iterations at a gain of {II_GAIN} on the twin (last gap "
+                                                f"{np.round(history[-1], 6).tolist()})"
                                                 + ("; 95 % from a run bootstrap of the equation-error fit, shifted by the inference" if ci else ""))
         out.update({k: seam.Estimate(v, None, "bam_ur_wrist.refit_rig.gravity_masses of the regression's first moments") for k, v in _mass_values(masses).items()})
         out["wrist.command_delay_s"] = seam.Estimate(delay, None, f"the chirps' command-to-response lag, held to the world's by indirect inference "
