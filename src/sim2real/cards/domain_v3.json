@@ -6145,6 +6145,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -6794,6 +6795,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ]
@@ -6913,7 +6915,9 @@
     ]
    ],
    "note": "",
-   "routines": []
+   "routines": [
+    "servo.command_delay_scan"
+   ]
   },
   {
    "key": "integrated_servo/thermal_r_c",
@@ -11742,7 +11746,7 @@
    "package": "hardstop_homing",
    "kind": "identify",
    "setting": "both",
-   "status": "not implemented",
+   "status": "implemented",
    "identifies": [
     {
      "type": "rigid_body_chain",
@@ -12405,6 +12409,81 @@
    "status": "implemented",
    "identifies": [],
    "legacy_identifies": [],
+   "configures": []
+  },
+  {
+   "id": "servo.backlash_reversal_held",
+   "title": "Backlash from slow reversals at a held pose (the output's own breakaway as the clamp)",
+   "package": "servo_dynamic.actuator",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "integrated_servo",
+     "model": "M4.dynamics.twin",
+     "parameter": "backlash_rad"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "servo",
+     "rung": "M4",
+     "parameters": [
+      "backlash_rad"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "servo.command_delay_scan",
+   "title": "Command delay from twin replays of the train chirps at a grid of delays",
+   "package": "servo_dynamic.actuator",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "integrated_servo",
+     "model": "M4.dynamics.twin",
+     "parameter": "command_delay_s"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "servo",
+     "rung": "M4",
+     "parameters": [
+      "command_delay_s"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "arm.gravity_direction",
+   "title": "Mount tilt: gravity's direction in the chain's base frame, from the joints' own gravity torques",
+   "package": "servo_dynamic.arm",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "rigid_body_chain",
+     "model": "M0.kinematics.nominal",
+     "parameter": "base_frame"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "arm_6dof",
+     "rung": "M0",
+     "parameters": [
+      "base_frame"
+     ]
+    }
+   ],
    "configures": []
   },
   {
@@ -13422,6 +13501,7 @@
    "base_frame": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -13491,6 +13571,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ],
@@ -13502,7 +13583,9 @@
     "servo.known_mass"
    ],
    "current_loop_hz": [],
-   "command_delay_s": [],
+   "command_delay_s": [
+    "servo.command_delay_scan"
+   ],
    "thermal_r_c": [
     "servo.heating_t8"
    ],

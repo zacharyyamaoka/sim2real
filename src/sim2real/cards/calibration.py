@@ -181,8 +181,12 @@ ROUTINES = (
          "one slow seek into the joint's hard stop at a capped torque", "one point: the stop (no range)", 1,
          "drive the joint into its stop at a capped torque and latch the encoder when it stalls; the zero is that reading minus the stop's "
          "CAD angle",
-         oracle_note=f"not implemented: no single-touch seek exists in code (bam_homing's seek presses, backs off, probes and re-presses: "
-                     f"homing.repeat_checked_seek), and {NO_HARD_STOP}",
+         # 2026-11-11 (one-click lane): Zach's tview procedure on the UR wrist IS a single touch (seek at 0.1 rev/s under 1 N.m, stall, relabel)
+         code=(CodeHome(BAM_WS, "src/dev/bam_ur_wrist/bam_ur_wrist/homing.py", note="tview_home_one: Zach's tview procedure, one touch per joint"),
+               CodeHome(SIM2REAL, "sysid/examples/ur_wrist_test_rig/rig.py", note="Homing: the stall corrected by half the measured gap and the gear's give")),
+         status="implemented",
+         oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
+                     "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
          alternatives=("homing.repeat_averaged", "homing.repeat_checked_seek"),
          note="its error: the stall detection's timing times the seek speed and one encoder noise draw (random), and the stop's and the "
               "gear's give under the seek torque, and which flank of the gap the stop leaves the gear on (bias)",
@@ -379,7 +383,7 @@ ROUTINES = (
          code=(CodeHome(SIM2REAL, "sysid/examples/pendulum_can11/pipeline.py", note="backlash_from_gaps"),
                CodeHome(BAM_WS, f"{TWIN}/backlash.py", note="the rack's: the gap from staircase holds")),
          status="implemented", oracle=("pendulum_can11:servo.backlash_reversals_camera",),
-         alternatives=("servo.backlash_clamp", "arm.backlash_gravity_sweep", "arm.backlash_reversal_tracker"),
+         alternatives=("servo.backlash_clamp", "arm.backlash_gravity_sweep", "arm.backlash_reversal_tracker", "servo.backlash_reversal_held"),
          references=(refs.NORDIN_2002,)),
     routine("servo.backlash_clamp", "Backlash and gear stiffness from a locked-output clamp test", "servo_dynamic.actuator",
          (I("servo", "M4", "backlash_rad", "gear_stiffness_nm_rad"), I("gearbox", "M4", "backlash_rad", "gear_stiffness_nm_rad")), "bench",
@@ -392,7 +396,7 @@ ROUTINES = (
          status="implemented",
          oracle_note="not in the sysid ladder: the clamp test lives on an unmerged bam_ws branch (claude/backlash-simulation-7673dc, 8e8501bd8) "
                      "and sysid imports bam_ws main only; its own 648-run study (examples/clamp_test_study.py) is its oracle so far",
-         alternatives=("servo.backlash_reversals_camera", "arm.backlash_gravity_sweep", "arm.backlash_reversal_tracker"),
+         alternatives=("servo.backlash_reversals_camera", "arm.backlash_gravity_sweep", "arm.backlash_reversal_tracker", "servo.backlash_reversal_held"),
          references=(refs.NORDIN_2002, refs.TUTTLE_1996)),
     routine("servo.gap_check_forecast", "Deployed gap check every 12 h on the daily motions, with the wear forecast", "servo_dynamic.actuator",
          (I("servo", "M4", "backlash_rad"), I("servo", "M5.wear", "backlash_wear_rad_per_nm_rev")), "deployed",
@@ -421,6 +425,63 @@ ROUTINES = (
                      "2-11 mrad each (stop_camera.py's own figures), so a ladder run would grade the ruler on a camera it does not have",
          note="a gauge, not a fit: it measures the output stop error (T4's metric) and the common-mode anchor; repeats = the ~60 frames of a 2 s "
               "tail at 30 fps (TAIL_S = 2.0)"),
+
+    # 2026-11-11 (the one-click lane, Zach: "backlash calibration is definitely something we want to be detecting and measuring"): the two
+    # routines the UR wrist's sequence needed that no entry named; each graded on the seam (sim2real.rig) against the wrist's sealed truth
+    routine("servo.backlash_reversal_held", "Backlash from slow reversals at a held pose (the output's own breakaway as the clamp)",
+         "servo_dynamic.actuator",
+         (I("servo", "M4", "backlash_rad"),), "both",
+         Q(2 * 14.4 + 60, "s", "3 cycles of a +-0.6 deg triangle at 0.5 deg/s per moving joint, 14.4 s each "
+                               "(sysid/examples/ur_wrist_test_rig/rig.py REVERSAL); 60 s of moves to the pose: estimate"),
+         Q(0, "s", "the joint's own motor and encoder; no person or fixture"), (),
+         "a slow triangle of the position target at a held pose, under a torque cap below the output's breakaway (40 % of its prior)",
+         "both flanks, at one pose per joint", 6,
+         "the output holds by its own static friction while the motor crosses the gear's gap; each half cycle the motor encoder's span between "
+         "the two flank pushes (each saturated at the cap) is the gap plus the gear's give at the cap (2 cap / k, k the stiffness prior), "
+         "two-sided by construction; the median over the spans, 95 % by a bootstrap over them",
+         code=(CodeHome(SIM2REAL, "sysid/examples/ur_wrist_test_rig/rig.py", note="BacklashReversal, reversal_spans"),),
+         status="implemented",
+         oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
+                     "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
+         alternatives=("servo.backlash_reversals_camera", "servo.backlash_clamp"),
+         note="needs an output that holds under the cap: a joint whose gravity load beats its breakaway less the cap slips, and the routine "
+              "then reads the slip as gap (the cap is the operator's to lower); the homing lane's generic two-sided measurement is to replace it "
+              "when it lands",
+         references=(refs.NORDIN_2002,)),
+    routine("servo.command_delay_scan", "Command delay from twin replays of the train chirps at a grid of delays", "servo_dynamic.actuator",
+         (I("servo", "M4", "command_delay_s"),), "both",
+         Q(2 * 16.0, "s", "no motion of its own: the dynamics routine's train chirps, 16 s per moving joint (the coverage plans' can*_07_chirp)"),
+         Q(0, "s", "compute only"), (),
+         "the train chirps (0.2-11 Hz): the fast reversals a late command shows on",
+         "the chirp's band, both joints", 1,
+         "the twin, with the dynamics routine's values, replays each train chirp's own commands at its own clock at a grid of command delays "
+         "(coarse, then every 0.2 ms physics step around the best); the output-error minimum, 95 % by a run bootstrap",
+         code=(CodeHome(SIM2REAL, "sysid/examples/ur_wrist_test_rig/rig.py", note="DelayScan"),
+               CodeHome(BAM_WS, "src/dev/bam_ur_wrist/bam_ur_wrist/delay_scan.py", note="the wrist lane's command x measurement scan on the real runs")),
+         status="implemented",
+         oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
+                     "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
+         note="train runs only: the wrist lane's own scan picked on the train error and reported held-out beside it"),
+
+    # 2026-11-11 (the one-click lane, the coordinator relaying the real lane: the UR wrist lies on its side, real up 94.7 deg from the twin's z)
+    routine("arm.gravity_direction", "Mount tilt: gravity's direction in the chain's base frame, from the joints' own gravity torques",
+         "servo_dynamic.arm",
+         (I("arm_6dof", "M0", "base_frame"),), "both",
+         Q(3 * (66.3 + 33.8), "s", "the gravity sweeps and staircase of each driven joint, 100 s per board (the coverage plans' can*_01_gravity, "
+                                    "can*_02_staircase); no motion of its own: the dynamics routine's runs"),
+         Q(0, "s", "compute only"), (),
+         "slow gravity sweeps both ways and the staircase's holds, every driven joint (the one that carries the wrist's load most)",
+         "each joint's whole window, both directions", 1,
+         "variable projection: for each candidate direction the fit's models take that gravity and the joint-torque regression solves the "
+         "rest (friction, armature, damping, the chain's gravity first moments on their visible subspace around the CAD prior); the direction "
+         "is the regression residual's minimum (Nelder-Mead from the measured floor-plane direction)",
+         code=(CodeHome(SIM2REAL, "sysid/examples/ur_wrist_test_rig/rig.py", note="GravityDirection"),
+               CodeHome(BAM_WS, "src/dev/bam_ur_wrist/bam_ur_wrist/refit.py", note="fit: the regression it projects over")),
+         status="implemented",
+         oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
+                     "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
+         note="a joint whose axis is near vertical feels none of gravity's direction; with one joint moving at a time, a rotation of gravity about "
+              "a joint's axis trades against the centre of mass it carries, so the direction is fixed only as far as the other joints' loads pin it"),
 
     # --- servo dynamic, arm level --------------------------------------------------------------------------------------------------
     routine("arm.dynamics_excitation", "Joint dynamics from Fourier excitations and the coverage sweep (each joint a servo)", "servo_dynamic.arm",

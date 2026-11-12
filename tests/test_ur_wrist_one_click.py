@@ -13,7 +13,10 @@ need final tool error sub 1 mm".
 
 The wrist (bam_ws src/dev/bam_ur_wrist): CAN 14/15/16, SteadyWin GIM4305-10 (10:1, encoder on the ROTOR) on moteus C1, the coverage lane's
 twin of record it5 (Karnopp Coulomb + 0.6 ms command delay + the gravity refit's masses), with gear backlash added (gear_backlash's double
-joint, friction on the output). CAN 14 is HELD (Zach's cable rule): no routine moves it, so its terms are listed unidentified, never faked.
+joint, friction on the output). The coordinator, the same evening, from the real lane: the rig LIES ON ITS SIDE (real up 94.7 deg from the
+twin's z, a D405 floor-plane fit), so gravity's direction is a description parameter set from that vector, hidden tilted in the truth and
+recovered (a mount tilt, as the five-bar's J1); CAN 14, vertical in the bundle, carries the wrist's ~0.25 N.m, and is driven now; the real
+repeat floors (CAN 15 0.092 deg, CAN 16 0.241, CAN 14 0.100, driven, 5 same-input repeats) anchor the noise model's 1x.
 
 The oracles are read here, never from the code under test: the hidden truth from sysid/examples/ur_wrist_test_rig/world.json, the units from
 the description's manifest, the real noise floor's numbers from the archive's own runs.
@@ -45,7 +48,8 @@ EXAMPLE = REPO / "sysid" / "examples" / NAME
 SLOW = os.environ.get("SIM2REAL_SLOW") == "1"
 CAPTURE = os.environ.get("SIM2REAL_CAPTURE")  # a folder: the slow runs write their documents there (the report reads them)
 WORKERS = int(os.environ.get("SIM2REAL_WORKERS", "4"))
-MOVING = ("can15", "can16")
+MOVING = ("can14", "can15", "can16")
+REAL_FLOOR_DEG = {"can14": 0.100, "can15": 0.092, "can16": 0.241}  # the real lane's repeat floors, driven (bam_ws claude/ur-wrist-real @ 6e26aa27a)
 ARCMIN = math.pi / (180 * 60)
 # the mutation run: CAN 15's backlash 50 % past the committed truth (its tolerance is 10 %), the ruler unchanged
 MOVED_KEY = "can15.backlash_rad"
@@ -96,9 +100,11 @@ def test_the_runner_is_the_seam_and_every_routine_is_a_registered_one(twin):
     ids = [r.id for r in rig.routines()]
     known = {r.id for r in reg.ROUTINES}
     assert set(ids) <= known, set(ids) - known
-    # backlash, the joint zero (homing), the dynamics and the command delay: Zach's four, each a routine in the sequence
-    assert {"servo.backlash_reversal_held", "homing.single_touch", "servo.dynamics_regression", "servo.command_delay_scan"} <= set(ids)
+    # backlash, the joint zero (homing), the mount tilt, the dynamics and the command delay, each a routine in the sequence
+    assert {"servo.backlash_reversal_held", "homing.single_touch", "arm.gravity_direction", "servo.dynamics_regression",
+            "servo.command_delay_scan"} <= set(ids)
     assert ids.index("servo.backlash_reversal_held") < ids.index("homing.single_touch"), "homing corrects its stall by half the gap"
+    assert ids.index("servo.dynamics_regression") < ids.index("arm.gravity_direction"), "the direction is read off the load the dynamics found"
 
 
 def test_every_hidden_value_is_a_row_identified_or_said_why_not(twin):
@@ -109,13 +115,18 @@ def test_every_hidden_value_is_a_row_identified_or_said_why_not(twin):
             assert p.why_not, f"{key}: an unidentified parameter says why"
         else:
             assert p.tolerance is not None and p.tolerance_source, f"{key}: an identified parameter has a tolerance and its source"
-    # CAN 14 is held by Zach's cable rule: no routine moves it, so none of its servo terms is identified
-    for name in ("armature_kg_m2", "coulomb_nm", "static_friction_nm", "backlash_rad", "zero_offset_rad"):
-        assert params[f"can14.{name}"].routine is None and "held" in params[f"can14.{name}"].why_not
+    # every joint is driven: each servo's own terms are identified
     for can in MOVING:
-        for name in ("armature_kg_m2", "coulomb_nm", "static_friction_nm", "backlash_rad", "zero_offset_rad"):
+        for name in ("armature_kg_m2", "coulomb_nm", "static_friction_nm", "damping_nm_s_rad", "backlash_rad", "zero_offset_rad"):
             assert params[f"{can}.{name}"].routine is not None, f"{can}.{name}"
     assert params["wrist.command_delay_s"].routine == "servo.command_delay_scan"
+    # on its side, CAN 14 carries the wrist's gravity and 15 / 16 next to none: only CAN 14's is identified, the others say why
+    assert params["can14.gravity_nm"].routine == "servo.dynamics_regression"
+    for can in ("can15", "can16"):
+        assert params[f"{can}.gravity_nm"].routine is None and "noise" in params[f"{can}.gravity_nm"].why_not
+    assert params["wrist.gravity_azimuth_rad"].routine == "arm.gravity_direction"
+    # near 90 deg CAN 14's load goes as sin(polar): flat, so the polar angle is said, not faked
+    assert params["wrist.gravity_polar_rad"].routine is None and "sin(polar)" in params["wrist.gravity_polar_rad"].why_not
 
 
 def test_the_hidden_truth_is_set_apart_from_nominal(twin):
@@ -128,6 +139,25 @@ def test_the_hidden_truth_is_set_apart_from_nominal(twin):
     # Zach's ask: 10-20 arcmin of backlash per joint
     for can in ("can14", "can15", "can16"):
         assert 10.0 <= truth[f"{can}.backlash_rad"] / ARCMIN <= 20.0
+
+
+def test_gravity_is_the_measured_up_and_the_truth_tilts_it(twin):
+    floor = json.loads(Path("/archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/camera/floor_gravity_a/floor.json").read_text())
+    nominal = {k: float(v) for k, v in twin.description.values().items() if v is not None}
+    from sysid.examples.ur_wrist_test_rig import rig as wr  # noqa: PLC0415
+
+    up = wr.up_vector(nominal["wrist.gravity_polar_rad"], nominal["wrist.gravity_azimuth_rad"])
+    measured = np.asarray(floor["up_base"], float) / np.linalg.norm(floor["up_base"])
+    assert np.degrees(np.arccos(np.clip(up @ measured, -1, 1))) < 1e-6, "the description's up is the floor-plane fit's"
+    assert math.degrees(nominal["wrist.gravity_polar_rad"]) == pytest.approx(floor["angle_between_up_and_twin_world_z_deg"], abs=1e-6)
+    truth = world()["truth"]
+    tilt = np.degrees(np.arccos(np.clip(wr.up_vector(truth["wrist.gravity_polar_rad"], truth["wrist.gravity_azimuth_rad"]) @ up, -1, 1)))
+    assert 1.0 < tilt < 5.0, "the hidden mount tilt is a few degrees off the measured up"
+    # the rig's derived gravity rows are what MuJoCo gives for world.json's masses under world.json's gravity
+    derived = twin.runner.rig.derived({**nominal, **truth})
+    for key in ("can14.gravity_nm", "can14.gravity_bottom_rad"):
+        assert derived[key] == pytest.approx(truth[key], rel=1e-9, abs=1e-12)
+    assert 0.2 < truth["can14.gravity_nm"] < 0.35, "on its side CAN 14 carries the wrist (the real lane: ~0.23 N.m)"
 
 
 def test_the_noise_model_at_one_is_the_real_wrists(twin):
@@ -222,6 +252,17 @@ def test_the_result_page_is_the_typed_tree(green, tmp_path):
     kit = REPO / "vendor" / "data-ui" / "dist" / "data-ui.js"
     if kit.exists():
         assert Path(result.display(tmp_path / "page", open=False)).exists()
+
+
+@pytest.mark.skipif(not SLOW, reason="the floor repeats take minutes: SIM2REAL_SLOW=1")
+def test_the_sims_repeat_floor_at_one_is_the_real_floor(twin):
+    """The noise model's 1x is anchored to the real lane's repeat floors: each joint's floor tape (+-10 deg out and back) five times under
+    independent draws, the median pairwise RMS, within 2x of the real one per joint."""
+    rig = twin.runner.rig
+    floors = rig.floor_check(twin.noise())
+    print({k: round(v, 4) for k, v in floors.items()}, flush=True)
+    for joint, real in REAL_FLOOR_DEG.items():
+        assert real / 2.0 <= floors[joint] <= 2.0 * real, (joint, floors[joint], real)
 
 
 @pytest.mark.skipif(not SLOW, reason="the wrist's whole sequence takes tens of minutes: SIM2REAL_SLOW=1")

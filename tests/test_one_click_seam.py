@@ -227,6 +227,33 @@ def test_a_rig_must_say_why_a_parameter_is_unidentified_and_name_real_routines()
 # --- eval_twin: held out, over the sim's own repeat floor ------------------------------------------------------------------------------
 
 
+def test_a_routine_may_set_a_value_for_the_twin_without_claiming_it():
+    """`adjusts`: a value the twin needs that the routine sets but does not identify (a chain's masses on their visible subspace). The twin
+    uses it; its row stays "not identified" with no verdict, so nothing unidentified is ever reported as found."""
+
+    class Nuisance(ToyFit):
+        adjusts = ("toy.hidden",)
+
+        def fit(self, measured, values, twin):
+            return {**super().fit(measured, values, twin), "toy.hidden": seam.Estimate(6.0, None, "set for the twin")}
+
+    toy = ToyRig()
+    toy.routine = Nuisance()
+    cal, state = runner(toy).calibrate()
+    row = {r["key"]: r for r in cal.rows}["toy.hidden"]
+    assert row["recovered"] is None and row["pass"] is None and row["set_for_twin"] == 6.0
+    assert state["values"]["toy.hidden"] == 6.0 and "toy.hidden" not in cal.values
+
+    class Undeclared(ToyFit):
+        def fit(self, measured, values, twin):
+            return {**super().fit(measured, values, twin), "toy.hidden": seam.Estimate(6.0)}
+
+    toy = ToyRig()
+    toy.routine = Undeclared()
+    with pytest.raises(KeyError, match="does not declare"):
+        runner(toy).calibrate()
+
+
 def test_eval_twin_scores_held_out_runs_over_the_repeat_floor():
     r = runner()
     cal, state = r.calibrate()

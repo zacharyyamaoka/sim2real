@@ -1,0 +1,393 @@
+{
+ "schema": "sysid.description/1",
+ "id": "ur_wrist_test_rig",
+ "title": "UR wrist test rig",
+ "subtitle": "CAN 14 / 15 / 16 on the One Dof Test Rack, lying on its side",
+ "summary": "Three SteadyWin GIM4305-10 (10:1, encoder on the rotor) on moteus C1. The model is the cad2robot bundle the coverage lane loads (3f7ef84); the nominal values are the 2026-11-10 twin of record's (bam_ur_wrist.plant.PlantTruth defaults, the bundle's placeholders) and the 583ee39 mass prior. The calibration sequence is sysid/examples/ur_wrist_test_rig/rig.py (the one-click seam).",
+ "model": {
+  "format": "mjcf",
+  "path": "/home/bam/.cache/cad2robot-build/bundles/3f7ef84/fixtures/cad2robot/ur_wrist_test_rig/mjcf/scene.xml",
+  "sha256": "b24d18b97ba1c5d1ce0dbd95ec1e4e545531a41a68339d48f9cda649215afb27",
+  "source": "cad-exporter claude/ur-wrist-test-rig @ 3f7ef84 (bam_ur_wrist_coverage.rig.BUNDLE_ROOT; fetched by git archive)"
+ },
+ "record": {
+  "path": "/home/bam/bam_ws/src/dev/bam_rack_twin/records/ur-wrist-test-rig/deployment.json",
+  "deployment": "ur-wrist-test-rig"
+ },
+ "components": [
+  {
+   "id": "rig",
+   "type": "deployment",
+   "title": "UR Wrist Test Rig on the One Dof Test Rack",
+   "parent": null
+  },
+  {
+   "id": "wrist",
+   "type": "arm_subassembly",
+   "title": "UR wrist (Revolute 11 / 14 / 17)",
+   "parent": "rig",
+   "binds": {}
+  },
+  {
+   "id": "can14",
+   "type": "moteus_servo",
+   "title": "CAN 14 servo, revolute_11",
+   "parent": "wrist",
+   "binds": {
+    "joint": "revolute_11",
+    "can_id": 14
+   }
+  },
+  {
+   "id": "can14_motor",
+   "type": "motor",
+   "title": "SteadyWin GIM4305 gimbal motor",
+   "parent": "can14",
+   "binds": {}
+  },
+  {
+   "id": "can14_gearbox",
+   "type": "gearbox",
+   "title": "its integrated 10:1 planetary",
+   "parent": "can14",
+   "binds": {}
+  },
+  {
+   "id": "can14_driver",
+   "type": "driver",
+   "title": "moteus C1, flashed 2 A",
+   "parent": "can14",
+   "binds": {}
+  },
+  {
+   "id": "can14_encoder",
+   "type": "encoder",
+   "title": "the board's rotor encoder (output frame through 10:1)",
+   "parent": "can14",
+   "binds": {
+    "joint": "revolute_11"
+   }
+  },
+  {
+   "id": "can15",
+   "type": "moteus_servo",
+   "title": "CAN 15 servo, revolute_14",
+   "parent": "wrist",
+   "binds": {
+    "joint": "revolute_14",
+    "can_id": 15
+   }
+  },
+  {
+   "id": "can15_motor",
+   "type": "motor",
+   "title": "SteadyWin GIM4305 gimbal motor",
+   "parent": "can15",
+   "binds": {}
+  },
+  {
+   "id": "can15_gearbox",
+   "type": "gearbox",
+   "title": "its integrated 10:1 planetary",
+   "parent": "can15",
+   "binds": {}
+  },
+  {
+   "id": "can15_driver",
+   "type": "driver",
+   "title": "moteus C1, flashed 2 A",
+   "parent": "can15",
+   "binds": {}
+  },
+  {
+   "id": "can15_encoder",
+   "type": "encoder",
+   "title": "the board's rotor encoder (output frame through 10:1)",
+   "parent": "can15",
+   "binds": {
+    "joint": "revolute_14"
+   }
+  },
+  {
+   "id": "can16",
+   "type": "moteus_servo",
+   "title": "CAN 16 servo, revolute_17",
+   "parent": "wrist",
+   "binds": {
+    "joint": "revolute_17",
+    "can_id": 16
+   }
+  },
+  {
+   "id": "can16_motor",
+   "type": "motor",
+   "title": "SteadyWin GIM4305 gimbal motor",
+   "parent": "can16",
+   "binds": {}
+  },
+  {
+   "id": "can16_gearbox",
+   "type": "gearbox",
+   "title": "its integrated 10:1 planetary",
+   "parent": "can16",
+   "binds": {}
+  },
+  {
+   "id": "can16_driver",
+   "type": "driver",
+   "title": "moteus C1, flashed 2 A",
+   "parent": "can16",
+   "binds": {}
+  },
+  {
+   "id": "can16_encoder",
+   "type": "encoder",
+   "title": "the board's rotor encoder (output frame through 10:1)",
+   "parent": "can16",
+   "binds": {
+    "joint": "revolute_17"
+   }
+  },
+  {
+   "id": "holder",
+   "type": "tool",
+   "title": "the ArUco holder on hard_stop_3 (the tool point: its first board's origin)",
+   "parent": "wrist",
+   "binds": {
+    "body": "hard_stop_3"
+   }
+  }
+ ],
+ "parameters": {
+  "can14.armature_kg_m2": {
+   "unit": "kg·m²",
+   "from": "mjcf:joint:revolute_11:armature",
+   "note": "the bundle's placeholder (the exporter's N^2 x 1e-5)"
+  },
+  "can14.coulomb_nm": {
+   "unit": "N·m",
+   "value": 0.0413,
+   "source": "bam_ur_wrist.actuator.GIM4305 (the rack's CAN 14 card, the same motor on the same board family): coulomb_nm, the sliding friction on plateaus"
+  },
+  "can14.static_friction_nm": {
+   "unit": "N·m",
+   "value": 0.175,
+   "source": "bam_ur_wrist.actuator.GIM4305 (the rack's CAN 14 card, the same motor on the same board family): static_friction_nm, the real wrist's sways (sticks to 0.15-0.2 N.m)"
+  },
+  "can14.damping_nm_s_rad": {
+   "unit": "N·m·s/rad",
+   "from": "mjcf:joint:revolute_11:damping",
+   "note": "the bundle's joint damping (the 2026-11-10 twin of record kept it)"
+  },
+  "can14.backlash_rad": {
+   "unit": "rad",
+   "value": 0.0,
+   "source": "the twin of record it5 is rigid (no gap modelled); the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
+  },
+  "can14.zero_offset_rad": {
+   "unit": "rad",
+   "value": 1.4679964338524305,
+   "source": "bam_ur_wrist_coverage.rig.OFFSET_RAD: Zach's tview homing in RAM, 2026-11-11 (that power cycle; CAN 14 inferred from the camera, never homed)"
+  },
+  "can14.gravity_nm": {
+   "unit": "N·m",
+   "value": 0.2286296507112097,
+   "source": "MuJoCo's gravity of the 583ee39 mass prior at the held pose under the measured up (rig.gravity_profile)"
+  },
+  "can14.gravity_bottom_rad": {
+   "unit": "rad",
+   "value": 1.3982888781462472,
+   "source": "as gravity_nm: that torque's bottom"
+  },
+  "can15.armature_kg_m2": {
+   "unit": "kg·m²",
+   "from": "mjcf:joint:revolute_14:armature",
+   "note": "the bundle's placeholder (the exporter's N^2 x 1e-5)"
+  },
+  "can15.coulomb_nm": {
+   "unit": "N·m",
+   "value": 0.0413,
+   "source": "bam_ur_wrist.actuator.GIM4305 (the rack's CAN 14 card, the same motor on the same board family): coulomb_nm, the sliding friction on plateaus"
+  },
+  "can15.static_friction_nm": {
+   "unit": "N·m",
+   "value": 0.175,
+   "source": "bam_ur_wrist.actuator.GIM4305 (the rack's CAN 14 card, the same motor on the same board family): static_friction_nm, the real wrist's sways (sticks to 0.15-0.2 N.m)"
+  },
+  "can15.damping_nm_s_rad": {
+   "unit": "N·m·s/rad",
+   "from": "mjcf:joint:revolute_14:damping",
+   "note": "the bundle's joint damping (the 2026-11-10 twin of record kept it)"
+  },
+  "can15.backlash_rad": {
+   "unit": "rad",
+   "value": 0.0,
+   "source": "the twin of record it5 is rigid (no gap modelled); the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
+  },
+  "can15.zero_offset_rad": {
+   "unit": "rad",
+   "value": -0.04014257279586958,
+   "source": "bam_ur_wrist_coverage.rig.OFFSET_RAD: Zach's tview homing in RAM, 2026-11-11 (that power cycle; CAN 14 inferred from the camera, never homed)"
+  },
+  "can15.gravity_nm": {
+   "unit": "N·m",
+   "value": 0.0031203304107060986,
+   "source": "MuJoCo's gravity of the 583ee39 mass prior at the held pose under the measured up (rig.gravity_profile)"
+  },
+  "can15.gravity_bottom_rad": {
+   "unit": "rad",
+   "value": -0.6036521484895325,
+   "source": "as gravity_nm: that torque's bottom"
+  },
+  "can16.armature_kg_m2": {
+   "unit": "kg·m²",
+   "from": "mjcf:joint:revolute_17:armature",
+   "note": "the bundle's placeholder (the exporter's N^2 x 1e-5)"
+  },
+  "can16.coulomb_nm": {
+   "unit": "N·m",
+   "value": 0.0413,
+   "source": "bam_ur_wrist.actuator.GIM4305 (the rack's CAN 14 card, the same motor on the same board family): coulomb_nm, the sliding friction on plateaus"
+  },
+  "can16.static_friction_nm": {
+   "unit": "N·m",
+   "value": 0.175,
+   "source": "bam_ur_wrist.actuator.GIM4305 (the rack's CAN 14 card, the same motor on the same board family): static_friction_nm, the real wrist's sways (sticks to 0.15-0.2 N.m)"
+  },
+  "can16.damping_nm_s_rad": {
+   "unit": "N·m·s/rad",
+   "from": "mjcf:joint:revolute_17:damping",
+   "note": "the bundle's joint damping (the 2026-11-10 twin of record kept it)"
+  },
+  "can16.backlash_rad": {
+   "unit": "rad",
+   "value": 0.0,
+   "source": "the twin of record it5 is rigid (no gap modelled); the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
+  },
+  "can16.zero_offset_rad": {
+   "unit": "rad",
+   "value": 0.0645771823237902,
+   "source": "bam_ur_wrist_coverage.rig.OFFSET_RAD: Zach's tview homing in RAM, 2026-11-11 (that power cycle; CAN 14 inferred from the camera, never homed)"
+  },
+  "can16.gravity_nm": {
+   "unit": "N·m",
+   "value": 0.002022009227498587,
+   "source": "MuJoCo's gravity of the 583ee39 mass prior at the held pose under the measured up (rig.gravity_profile)"
+  },
+  "can16.gravity_bottom_rad": {
+   "unit": "rad",
+   "value": 3.1128550834560738,
+   "source": "as gravity_nm: that torque's bottom"
+  },
+  "wrist.gravity_polar_rad": {
+   "unit": "rad",
+   "value": 1.6536526814873729,
+   "source": "the real lane's D405 floor-plane fit, /archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/camera/floor_gravity_a/floor.json (bam_ws claude/ur-wrist-real @ 3406ecb3d: the rig lies on its side): up_base's angle from the twin's z (94.75 deg)"
+  },
+  "wrist.gravity_azimuth_rad": {
+   "unit": "rad",
+   "value": -1.6234296691324173,
+   "source": "the real lane's D405 floor-plane fit, /archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/camera/floor_gravity_a/floor.json (bam_ws claude/ur-wrist-real @ 3406ecb3d: the rig lies on its side): up_base's azimuth about the twin's z"
+  },
+  "wrist.command_delay_s": {
+   "unit": "s",
+   "value": 0.0055,
+   "source": "bam_ur_wrist.plant.PlantTruth.command_delay_s: the 2026-11-10 twin of record's 5.5 ms (CAN 14 card's 14 ms round trip, split as bam_fivebar's RACK_BOARD)"
+  },
+  "wrist.mass_hard_stop_kg": {
+   "unit": "kg",
+   "value": 0.293,
+   "source": "bam_ur_wrist.mass_prior.pending_masses: cad-exporter 583ee39's masses (hidden parts out)"
+  },
+  "wrist.com_hard_stop_x_m": {
+   "unit": "m",
+   "value": -0.00157697,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.com_hard_stop_y_m": {
+   "unit": "m",
+   "value": 7.0397e-05,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.com_hard_stop_z_m": {
+   "unit": "m",
+   "value": 0.0454404,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.mass_hard_stop_2_kg": {
+   "unit": "kg",
+   "value": 0.293,
+   "source": "bam_ur_wrist.mass_prior.pending_masses: cad-exporter 583ee39's masses (hidden parts out)"
+  },
+  "wrist.com_hard_stop_2_x_m": {
+   "unit": "m",
+   "value": 0.0454404,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.com_hard_stop_2_y_m": {
+   "unit": "m",
+   "value": 2.4348e-05,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.com_hard_stop_2_z_m": {
+   "unit": "m",
+   "value": -0.00157697,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.mass_hard_stop_3_kg": {
+   "unit": "kg",
+   "value": 0.0874437,
+   "source": "bam_ur_wrist.mass_prior.pending_masses: cad-exporter 583ee39's masses (hidden parts out)"
+  },
+  "wrist.com_hard_stop_3_x_m": {
+   "unit": "m",
+   "value": -0.00236654,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.com_hard_stop_3_y_m": {
+   "unit": "m",
+   "value": 3.67627e-05,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  },
+  "wrist.com_hard_stop_3_z_m": {
+   "unit": "m",
+   "value": 0.0274618,
+   "source": "pending_masses (583ee39): the CAD's centre of mass in the link frame"
+  }
+ },
+ "known": {
+  "note": "configuration the description states and no routine touches",
+  "board_gains": "bam_ur_wrist_coverage.rig.RAM_GAINS: kp 75 N.m/rev, kd 2.4 / 1 / 1 N.m/(rev/s), ki 0 (the gains every real motion ran at)",
+  "board": "moteus C1, 2 A x Kt 0.5087 = 1.017 N.m cap, 200 Hz current loop (bam_ur_wrist.actuator.GIM4305)",
+  "stops": "the physical stops at +-0.4583 rev (165 deg): Zach's tview constant for the fatter hard stop (bam_ur_wrist.plant.PlantTruth.stop_rad)",
+  "gear_stiffness_nm_per_arcmin": 2.0,
+  "gear_stiffness_source": "estimate: a 43 mm gimbal actuator's 10:1 planetary (none published); the backlash and homing routines' give correction uses it",
+  "encoder": "the rotor encoder through 10:1; the board reports the output position in steps of 2 pi / 65536 rad",
+  "gravity": "|g| 9.81 m/s^2; its direction is a parameter (wrist.gravity_polar_rad / azimuth_rad: real up in the twin's base frame)",
+  "real_floors_deg": {
+   "can15": 0.092,
+   "can16": 0.241,
+   "can14": 0.1,
+   "can14_passive": 0.326,
+   "source": "the real lane's repeat floors, 5 same-input repeats, driven (bam_ws claude/ur-wrist-real @ 6e26aa27a)"
+  }
+ },
+ "sensors": [
+  {
+   "id": "encoder",
+   "kind": "joint_state",
+   "on": "each board",
+   "measures": "the motor-side angle and speed at the output (the board's report)"
+  },
+  {
+   "id": "torque",
+   "kind": "joint_effort",
+   "on": "each board",
+   "measures": "the firmware's torque (q-current x Kt)"
+  }
+ ],
+ "schedule": {
+  "source": "the coverage lane's plans (bam_rack_twin.schedule families), /archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/coverage/plans/plans",
+  "use": "train: gravity, staircase, dither, plateaus, chirp, jog, sweep per board; held out: jog_heldout, sweep_heldout; CAN 14's plans built by the same builder (bam_ur_wrist_coverage.plans) with CAN 14 let move"
+ }
+}

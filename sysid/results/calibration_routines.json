@@ -67,7 +67,7 @@
    "package": "hardstop_homing",
    "kind": "identify",
    "setting": "both",
-   "status": "not implemented",
+   "status": "implemented",
    "wall_time": {
     "value": 20.0,
     "unit": "s",
@@ -109,11 +109,24 @@
    "repeats": 1,
    "how": "drive the joint into its stop at a capped torque and latch the encoder when it stalls; the zero is that reading minus the stop's CAD angle",
    "tests": [],
-   "code": [],
+   "code": [
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/dev/bam_ur_wrist/bam_ur_wrist/homing.py",
+     "ref": "",
+     "note": "tview_home_one: Zach's tview procedure, one touch per joint"
+    },
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "sysid/examples/ur_wrist_test_rig/rig.py",
+     "ref": "",
+     "note": "Homing: the stall corrected by half the measured gap and the gear's give"
+    }
+   ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not implemented: no single-touch seek exists in code (bam_homing's seek presses, backs off, probes and re-presses: homing.repeat_checked_seek), and the sysid oracle has no hard-stop scene yet"
+    "note": "graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam"
    },
    "recovery": {},
    "alternatives": [
@@ -2095,7 +2108,8 @@
    "alternatives": [
     "servo.backlash_clamp",
     "arm.backlash_gravity_sweep",
-    "arm.backlash_reversal_tracker"
+    "arm.backlash_reversal_tracker",
+    "servo.backlash_reversal_held"
    ],
    "references": [
     "Nordin, Gutman (2002). Controlling mechanical systems with backlash\u2014a survey. Automatica."
@@ -2183,7 +2197,8 @@
    "alternatives": [
     "servo.backlash_reversals_camera",
     "arm.backlash_gravity_sweep",
-    "arm.backlash_reversal_tracker"
+    "arm.backlash_reversal_tracker",
+    "servo.backlash_reversal_held"
    ],
    "references": [
     "Nordin, Gutman (2002). Controlling mechanical systems with backlash\u2014a survey. Automatica.",
@@ -2468,6 +2483,200 @@
    "alternatives": [],
    "references": [],
    "note": "a gauge, not a fit: it measures the output stop error (T4's metric) and the common-mode anchor; repeats = the ~60 frames of a 2 s tail at 30 fps (TAIL_S = 2.0)"
+  },
+  {
+   "routine": "servo.backlash_reversal_held",
+   "title": "Backlash from slow reversals at a held pose (the output's own breakaway as the clamp)",
+   "package": "servo_dynamic.actuator",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 88.8,
+    "unit": "s",
+    "source": "3 cycles of a +-0.6 deg triangle at 0.5 deg/s per moving joint, 14.4 s each (sysid/examples/ur_wrist_test_rig/rig.py REVERSAL); 60 s of moves to the pose: estimate",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "the joint's own motor and encoder; no person or fixture",
+    "note": ""
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "servo",
+     "rung": "M4",
+     "parameters": [
+      "backlash_rad"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "a slow triangle of the position target at a held pose, under a torque cap below the output's breakaway (40 % of its prior)",
+   "coverage": "both flanks, at one pose per joint",
+   "repeats": 6,
+   "how": "the output holds by its own static friction while the motor crosses the gear's gap; each half cycle the motor encoder's span between the two flank pushes (each saturated at the cap) is the gap plus the gear's give at the cap (2 cap / k, k the stiffness prior), two-sided by construction; the median over the spans, 95 % by a bootstrap over them",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "sysid/examples/ur_wrist_test_rig/rig.py",
+     "ref": "",
+     "note": "BacklashReversal, reversal_spans"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam"
+   },
+   "recovery": {},
+   "alternatives": [
+    "servo.backlash_reversals_camera",
+    "servo.backlash_clamp"
+   ],
+   "references": [
+    "Nordin, Gutman (2002). Controlling mechanical systems with backlash\u2014a survey. Automatica."
+   ],
+   "note": "needs an output that holds under the cap: a joint whose gravity load beats its breakaway less the cap slips, and the routine then reads the slip as gap (the cap is the operator's to lower); the homing lane's generic two-sided measurement is to replace it when it lands"
+  },
+  {
+   "routine": "servo.command_delay_scan",
+   "title": "Command delay from twin replays of the train chirps at a grid of delays",
+   "package": "servo_dynamic.actuator",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 32.0,
+    "unit": "s",
+    "source": "no motion of its own: the dynamics routine's train chirps, 16 s per moving joint (the coverage plans' can*_07_chirp)",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "compute only",
+    "note": ""
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "servo",
+     "rung": "M4",
+     "parameters": [
+      "command_delay_s"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "the train chirps (0.2-11 Hz): the fast reversals a late command shows on",
+   "coverage": "the chirp's band, both joints",
+   "repeats": 1,
+   "how": "the twin, with the dynamics routine's values, replays each train chirp's own commands at its own clock at a grid of command delays (coarse, then every 0.2 ms physics step around the best); the output-error minimum, 95 % by a run bootstrap",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "sysid/examples/ur_wrist_test_rig/rig.py",
+     "ref": "",
+     "note": "DelayScan"
+    },
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/dev/bam_ur_wrist/bam_ur_wrist/delay_scan.py",
+     "ref": "",
+     "note": "the wrist lane's command x measurement scan on the real runs"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": "train runs only: the wrist lane's own scan picked on the train error and reported held-out beside it"
+  },
+  {
+   "routine": "arm.gravity_direction",
+   "title": "Mount tilt: gravity's direction in the chain's base frame, from the joints' own gravity torques",
+   "package": "servo_dynamic.arm",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 300.29999999999995,
+    "unit": "s",
+    "source": "the gravity sweeps and staircase of each driven joint, 100 s per board (the coverage plans' can*_01_gravity, can*_02_staircase); no motion of its own: the dynamics routine's runs",
+    "note": ""
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "compute only",
+    "note": ""
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "arm_6dof",
+     "rung": "M0",
+     "parameters": [
+      "base_frame"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "slow gravity sweeps both ways and the staircase's holds, every driven joint (the one that carries the wrist's load most)",
+   "coverage": "each joint's whole window, both directions",
+   "repeats": 1,
+   "how": "variable projection: for each candidate direction the fit's models take that gravity and the joint-torque regression solves the rest (friction, armature, damping, the chain's gravity first moments on their visible subspace around the CAD prior); the direction is the regression residual's minimum (Nelder-Mead from the measured floor-plane direction)",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "sysid/examples/ur_wrist_test_rig/rig.py",
+     "ref": "",
+     "note": "GravityDirection"
+    },
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/dev/bam_ur_wrist/bam_ur_wrist/refit.py",
+     "ref": "",
+     "note": "fit: the regression it projects over"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [],
+   "note": "a joint whose axis is near vertical feels none of gravity's direction; with one joint moving at a time, a rotation of gravity about a joint's axis trades against the centre of mass it carries, so the direction is fixed only as far as the other joints' loads pin it"
   },
   {
    "routine": "arm.dynamics_excitation",
@@ -9279,6 +9488,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ],
@@ -16098,6 +16308,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16209,6 +16420,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16320,6 +16532,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16431,6 +16644,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16542,6 +16756,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16653,6 +16868,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16764,6 +16980,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16875,6 +17092,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -16986,6 +17204,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -17097,6 +17316,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -17208,6 +17428,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -17319,6 +17540,7 @@
    "routines": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"
@@ -24428,6 +24650,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ],
@@ -24524,6 +24747,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ],
@@ -24620,6 +24844,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ],
@@ -24645,6 +24870,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ],
@@ -24727,6 +24953,7 @@
     "servo.backlash_reversals_camera",
     "servo.backlash_clamp",
     "servo.gap_check_forecast",
+    "servo.backlash_reversal_held",
     "arm.backlash_gravity_sweep",
     "arm.backlash_reversal_tracker"
    ],
@@ -24738,7 +24965,9 @@
     "servo.known_mass"
    ],
    "current_loop_hz": [],
-   "command_delay_s": [],
+   "command_delay_s": [
+    "servo.command_delay_scan"
+   ],
    "thermal_r_c": [
     "servo.heating_t8"
    ],
@@ -24771,6 +25000,7 @@
    "base_frame": [
     "kinematics.dh_ur_style",
     "kinematics.general_transform",
+    "arm.gravity_direction",
     "cell.tags_bundle_adjustment",
     "hand_eye.ax_xb",
     "conveyor_belt.robot_to_robot"

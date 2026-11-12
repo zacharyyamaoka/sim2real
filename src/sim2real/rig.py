@@ -62,6 +62,8 @@ class NoiseModel:
     encoder_noise_rad      white noise on the reported position, before rounding
     velocity_noise_rad_s   white noise on the reported velocity
     torque_noise_nm        white noise on the reported torque (the board's q-current x Kt)
+    torque_disturbance_nm  white noise on the torque a commanded board APPLIES, held over each host period (the current loop's own noise
+                           and whatever else moves a joint differently between two runs of one tape: what a real repeat floor is made of)
     period_overrun_s       the host loop's mean overrun past its planned tick (each tick overruns by an exponential draw of this mean)
     latency_jitter_s       each command's extra latency past the plant's own command delay (uniform on [0, this])
     truth_offset           how far the hidden truth sits from nominal, as a multiple of world.json's offset (1: world.json; 0: nominal);
@@ -72,6 +74,7 @@ class NoiseModel:
     encoder_noise_rad: float = 0.0
     velocity_noise_rad_s: float = 0.0
     torque_noise_nm: float = 0.0
+    torque_disturbance_nm: float = 0.0
     period_overrun_s: float = 0.0
     latency_jitter_s: float = 0.0
     level: float = 1.0
@@ -80,7 +83,7 @@ class NoiseModel:
     sources: Mapping[str, str] = field(default_factory=dict, compare=False, hash=False)
 
     TERMS: ClassVar[tuple[str, ...]] = ("encoder_quantum_rad", "encoder_noise_rad", "velocity_noise_rad_s", "torque_noise_nm",
-                                        "period_overrun_s", "latency_jitter_s")
+                                        "torque_disturbance_nm", "period_overrun_s", "latency_jitter_s")
 
     def __post_init__(self) -> None:
         for name in (*self.TERMS, "level", "truth_offset"):
@@ -122,7 +125,7 @@ class NoiseModel:
         e = self.effective()
         return (f"noise x{self.level:g} (seed {self.seed}, truth offset x{self.truth_offset:g}): encoder step {math.degrees(e['encoder_quantum_rad']):.4f} deg, "
                 f"encoder sigma {math.degrees(e['encoder_noise_rad']):.4f} deg, speed sigma {math.degrees(e['velocity_noise_rad_s']):.3f} deg/s, "
-                f"torque sigma {e['torque_noise_nm'] * 1e3:.1f} mN.m, loop overrun {e['period_overrun_s'] * 1e3:.2f} ms mean, "
+                f"torque sigma {e['torque_noise_nm'] * 1e3:.1f} mN.m, applied-torque disturbance {e['torque_disturbance_nm'] * 1e3:.1f} mN.m, loop overrun {e['period_overrun_s'] * 1e3:.2f} ms mean, "
                 f"command latency jitter {e['latency_jitter_s'] * 1e3:.2f} ms")
 
 
@@ -192,7 +195,9 @@ class TwinHandle:
 
 class Routine(Protocol):
     id: str                                        # a cards.calibration ROUTINES id
-    identifies: tuple[str, ...]                    # the parameter keys its fit returns
+    identifies: tuple[str, ...]                    # the parameter keys its fit returns as found (held to the truth)
+    # optional: adjusts: tuple[str, ...]           # keys it SETS for the twin without claiming them (a chain's masses on their visible
+    #                                              # subspace): the twin uses them, their rows stay "not identified"
 
     def runs(self, values: Mapping[str, float]) -> Sequence[Run]: ...
 
@@ -389,6 +394,9 @@ class RigRunner:
                 if key not in params:
                     raise KeyError(f"{routine.id} identifies {key!r}, which {self.rig.name} does not carry")
                 claimed[key] = routine.id
+            unknown_adjusts = sorted(set(getattr(routine, "adjusts", ())) - set(params))
+            if unknown_adjusts:
+                raise KeyError(f"{routine.id} adjusts {unknown_adjusts}, which {self.rig.name} does not carry")
         mismatched = [k for k, p in params.items() if p.routine is not None and claimed.get(k) != p.routine]
         if mismatched:
             raise ValueError(f"{self.rig.name}: these parameters name a routine that does not identify them: {mismatched}")
@@ -413,32 +421,52 @@ class RigRunner:
         committed = dict(self._world()["truth"])           # the runner alone reads the truth, outside the seal
         nominal = self.nominal()
         ruled = ruler(committed, nominal, noise)
+        derive = getattr(self.rig, "derived", None)
+        if derive is not None:
+            # WHY: a value the rig computes from others (a joint's gravity from the chain's masses) is held to what the ruled masses give,
+            # not scaled on its own: at truth_offset != 1 the two differ
+            ruled.update(derive({**{k: v for k, v in nominal.items() if v is not None}, **ruled}))
         moved = {k: float(v) for k, v in (truth or {}).items()}
         unknown = sorted(set(moved) - set(committed))
         if unknown:
             raise KeyError(f"no hidden value {unknown} in {self.rig.name}'s world (it has {sorted(committed)})")
+        if derive is not None and set(moved) & set(derive({**{k: v for k, v in nominal.items() if v is not None}, **ruled})):
+            raise KeyError(f"{sorted(moved)}: a derived value cannot be moved on its own; move what it is derived from")
         # the world plays the ruled truth, moved where asked; a parameter world.json does not hide plays at its nominal
         world_values = {**{k: v for k, v in nominal.items() if v is not None}, **ruled, **moved}
         values = {k: v for k, v in nominal.items() if v is not None}
         estimates: dict[str, Estimate] = {}
+        adjusted: dict[str, Estimate] = {}
         steps, trained = [], set()
+        played: dict[str, Any] = {}
         for routine in self.rig.routines():
             began = time.monotonic()
             runs = list(routine.runs(dict(values)))
-            measured = self.rig.measure(runs, world_values, noise, f"routine:{routine.id}", workers=self.workers)
+            # WHY played once: a run two routines both read (the dynamics fit's chirps are the delay scan's) is one physical run, its data shared
+            fresh = [run for run in runs if run.id not in played]
+            if fresh:
+                played.update(self.rig.measure(fresh, world_values, noise, f"routine:{routine.id}", workers=self.workers))
+            measured = {run.id: played[run.id] for run in runs}
             with hidden.sealed():
                 found = dict(routine.fit(measured, dict(values), TwinHandle(self.rig, self.workers)))
-            extra = sorted(set(found) - set(routine.identifies))
+            adjusts = tuple(getattr(routine, "adjusts", ()))
+            extra = sorted(set(found) - set(routine.identifies) - set(adjusts))
             if extra:
-                raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies})")
+                raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies}, adjusts: {adjusts})")
             for key, estimate in found.items():
-                estimates[key] = estimate
+                if key in routine.identifies:
+                    estimates[key] = estimate
+                else:
+                    adjusted[key] = estimate
                 if estimate.value is not None and math.isfinite(estimate.value):
                     values[key] = float(estimate.value)
             trained.update(run.id for run in runs)
             steps.append({"routine": routine.id, "identifies": list(routine.identifies), "runs": len(runs), "seconds": round(time.monotonic() - began, 1),
                           "found": {k: (None if e.value is None else float(e.value)) for k, e in found.items()}})
         rows = self._rows(params, nominal, ruled, estimates)
+        for row in rows:
+            if row["key"] in adjusted and row["routine"] is None:
+                row["set_for_twin"] = adjusted[row["key"]].value   # used by the twin, never claimed: no verdict
         fitted_values = {}
         for key, estimate in estimates.items():
             if estimate.value is None:
