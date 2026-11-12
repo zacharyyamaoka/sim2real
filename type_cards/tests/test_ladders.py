@@ -40,6 +40,8 @@ CHECKED = REPO / "type_cards" / "references_checked.json"
 ROBOTPARTS_NUMBERED = ("servo", "motor", "gearbox", "conveyor")
 ACTUATORS = ("gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "conveyor")
 SENSORS = ("camera_rgb", "camera_rgbd", "camera_hsi", "encoder")
+# WHY a third group (Zach, 2026-11-11, PEP 0001): an ArUco marker is neither driven nor sensing; a sensor reads it (group "target")
+TARGETS = ("aruco_marker",)
 KEY = re.compile(r"M\d+(\.wear)?")
 
 
@@ -63,7 +65,8 @@ def every_reference():
 # --- the cards -----------------------------------------------------------------------------------------------------------------
 
 def test_zachs_types_plus_the_conveyor():
-    assert set(ACTUATORS + SENSORS) == set(reg.CARDS) and list(reg.CARDS) == list(reg.ORDER)
+    assert set(ACTUATORS + SENSORS + TARGETS) == set(reg.CARDS) and list(reg.CARDS) == list(reg.ORDER)
+    assert {c.id for c in reg.CARDS.values() if c.group == "target"} == set(TARGETS)
     assert {c.id for c in reg.CARDS.values() if c.group == "actuator"} == set(ACTUATORS)
     assert reg.card_for("conveyor belt").id == "conveyor"
     assert reg.CARDS["conveyor"].model.parameters and reg.CARDS["conveyor"].robotdx_part is None

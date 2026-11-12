@@ -261,7 +261,14 @@ ROUTINE_SETTINGS = ("bench", "deployed", "both")
 # 2026-11-11): it sets a device up, the way homing finds a zero, rather than fitting a model (a camera's exposure, gain and white balance
 # locked under the deployment's lights). WHY a kind of its own (Zach, 2026-11-11): "we are not identifying a model so much as
 # automatically configuring it". A configure routine names what it writes in `configures`, not in `identifies`.
-ROUTINE_KINDS = ("identify", "measure", "use", "configure")
+# tune (additive, 2026-11-12, PEP 0001): it optimises a metric where there is no real reference to match (PID gains; a camera's exposure,
+# gain and frame rate chosen for ArUco corner accuracy), and writes the settings it picks in `configures`, like configure.
+ROUTINE_KINDS = ("identify", "measure", "use", "configure", "tune")
+# The stage each kind runs in when no declared dependency orders two routines (Zach, 2026-11-12: "configure -> fit -> tune -> measure";
+# "identify" is the catalog's word for fit, kept so no id or export changes). A declared `requires` always beats the stage: the camera's
+# ArUco tuning (tune) runs before the bundle adjustment (fit) that requires its exposure. sim2real.calibration orders by this tuple.
+KIND_STAGE = ("configure", "identify", "tune", "measure", "use")
+KIND_WORDS = {"configure": "configure", "identify": "fit", "tune": "tune", "measure": "measure", "use": "use"}  # what pages print
 ROUTINE_STATUS = ("implemented", "partial", "not implemented")
 ESTIMATE = "estimate"  # a Quantity's source when nobody measured or published the number
 
@@ -327,7 +334,7 @@ class CalibrationRoutine:
     coverage: str                         # the share of which space it needs
     repeats: int                          # how many times its measurement is taken (averaged or checked)
     how: str
-    kind: str = "identify"                # ROUTINE_KINDS
+    kind: str = "identify"                # ROUTINE_KINDS (pages print KIND_WORDS: identify reads "fit")
     tests: tuple[str, ...] = ()           # TestType ids whose data it uses
     code: tuple[CodeHome, ...] = ()       # where it is implemented; () = not implemented
     status: str = "not implemented"       # ROUTINE_STATUS
@@ -337,6 +344,13 @@ class CalibrationRoutine:
     references: tuple[Reference, ...] = ()
     note: str = ""
     configures: tuple[Configures, ...] = ()  # kind "configure" only: the settings it writes, per card (additive, 2026-11-11)
+    # The routine's dependencies, by parameter or setting NAME (resolved over the instances it runs on; additive, 2026-11-11, PEP 0001).
+    # WHY three kinds, not one (measured on the UR wrist's six routines): with a single "reads" edge the wrist is a cycle (the backlash
+    # reversal reads the breakaway prior for its cap, the breakaway reads the backlash); what the code needs is a hard edge, a soft one
+    # and a refinement. sim2real.calibration orders a plan from these (graphlib, ties broken by the soft edges, then time, then id).
+    requires: tuple[str, ...] = ()           # names that must be identified or configured before it runs (a hard edge; a cycle is refused)
+    uses: tuple[str, ...] = ()               # names it reads if an earlier routine found them, else its prior (a soft edge: tie-break only)
+    refines: tuple[str, ...] = ()            # names an earlier routine sets provisionally (its adjusts) that this one finds: it runs after them
 
     def identifies_parameter(self, card: str, parameter: str) -> bool:
         return any(item.card == card and parameter in item.parameters for item in self.identifies)

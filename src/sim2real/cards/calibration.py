@@ -190,7 +190,10 @@ ROUTINES = (
          alternatives=("homing.repeat_averaged", "homing.repeat_checked_seek"),
          note="its error: the stall detection's timing times the seek speed and one encoder noise draw (random), and the stop's and the "
               "gear's give under the seek torque, and which flank of the gap the stop leaves the gear on (bias)",
-         references=(refs.HOLLERBACH_WAMPLER_1996,)),
+         references=(refs.HOLLERBACH_WAMPLER_1996,),
+         # WHY uses the breakaway (PEP 0001): the seek's stall threshold must clear the output's breakaway or it stalls mid-travel; the
+         # sim's seek holds a fixed cap today, so this is a soft edge (the prior serves)
+         requires=("backlash_rad",), uses=("static_friction_nm",)),
     routine("homing.repeat_averaged", "Homing zero, N touches averaged (Prusa-style)", "hardstop_homing",
          (I("arm_6dof", "M1", "joint_zero_offsets"), I("arm_subassembly", "M1", "joint_offsets")), "both",
          Q(100, "s", ESTIMATE, "five seeks, backing off between them, per joint"), Q(0, "s", ESTIMATE, "unattended"), (),
@@ -306,7 +309,10 @@ ROUTINES = (
          code=(CodeHome(SIM2REAL, "sysid/examples/pendulum_can11/pipeline.py", note="identify()"),), status="implemented",
          oracle=("pendulum_can11:servo.dynamics_regression",),
          alternatives=("servo.dynamometer", "servo.stock_quasistatic", "servo.live_reid_t10", "servo.breakaway_two_sided"),
-         references=(refs.SWEVERS_1997, refs.ARMSTRONG_1994, refs.HOLLERBACH_2016)),
+         references=(refs.SWEVERS_1997, refs.ARMSTRONG_1994, refs.HOLLERBACH_2016),
+         # WHY (PEP 0001; sysid/examples/ur_wrist_test_rig/rig.py Dynamics): its runs are planned in the homed frame, and it holds the
+         # static term at the breakaway routine's value
+         requires=("zero_offset_rad", "static_friction_nm")),
     routine("servo.stock_quasistatic", "Servo dynamics, quasi-static: gravity sweeps, plateaus and chirps (bam_rack_twin.identify)",
          "servo_dynamic.actuator",
          (I("servo", "M0", "armature_kg_m2", "gravity_nm"), I("servo", "M2", "frictionloss_nm", "damping_nm_s_rad")), "bench",
@@ -452,7 +458,9 @@ ROUTINES = (
               "(bam_fb_test_rig.backlash.measure, measured 2026-11-11 on the wrist's world): it lets the rotor cross the gap free under a "
               "torque ramp, and on a light output (~0.2 N.m breakaway) the far flank's impact breaks it loose and the probe drags it; the "
               "five-bar's outputs hold 0.74 N.m",
-         references=(refs.NORDIN_2002,)),
+         references=(refs.NORDIN_2002,),
+         # WHY a soft edge (PEP 0001): its reversal cap is 40 % of the breakaway, which the breakaway routine finds only after the gap
+         uses=("static_friction_nm",)),
     # 2026-11-11 (the one-click lane, the wrist's first full run at 1x): refit's onset percentile walked CAN 14's breakaway to the board's cap
     # once the gear had a gap (its onsets became gap crossings at ~0 N.m), so the breakaway is measured where it happens
     routine("servo.breakaway_two_sided", "Breakaway from a held flank, both ways (the cap ramped until the output leaves)",
@@ -475,7 +483,9 @@ ROUTINES = (
          alternatives=("servo.dynamics_regression",),
          note="needs an output whose load at the pose is inside its breakaway (it holds at rest); written against the five-bar lane's "
               "ProbeDrive (bam_fb_test_rig.backlash), so it can live beside measure once that lands",
-         references=(refs.ARMSTRONG_1994,)),
+         references=(refs.ARMSTRONG_1994,),
+         # WHY (PEP 0001): the walk crosses the gap the backlash routine found; its low cap is a fraction of the sliding prior
+         requires=("backlash_rad",), uses=("coulomb_nm",)),
     routine("servo.command_delay_scan", "Command delay from twin replays of the train chirps at a grid of delays", "servo_dynamic.actuator",
          (I("servo", "M4", "command_delay_s"),), "both",
          Q(2 * 16.0, "s", "no motion of its own: the dynamics routine's train chirps, 16 s per moving joint (the coverage plans' can*_07_chirp)"),
@@ -489,7 +499,10 @@ ROUTINES = (
          status="implemented",
          oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
                      "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
-         note="train runs only: the wrist lane's own scan picked on the train error and reported held-out beside it"),
+         note="train runs only: the wrist lane's own scan picked on the train error and reported held-out beside it",
+         # WHY (PEP 0001): it replays the twin in the homed frame around the delay the dynamics fit set provisionally, and a gravity
+         # direction error biases the replay's tracking, so it prefers the direction found
+         requires=("zero_offset_rad",), refines=("command_delay_s",), uses=("gravity_azimuth_rad",)),
 
     # 2026-11-11 (the one-click lane, the coordinator relaying the real lane: the UR wrist lies on its side, real up 94.7 deg from the twin's z)
     routine("arm.gravity_direction", "Mount tilt: gravity's direction in the chain's base frame, from the joints' own gravity torques",
@@ -509,7 +522,9 @@ ROUTINES = (
          oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
                      "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
          note="a joint whose axis is near vertical feels none of gravity's direction; with one joint moving at a time, a rotation of gravity about "
-              "a joint's axis trades against the centre of mass it carries, so the direction is fixed only as far as the other joints' loads pin it"),
+              "a joint's axis trades against the centre of mass it carries, so the direction is fixed only as far as the other joints' loads pin it",
+         # WHY (PEP 0001): it turns the gravity load the dynamics fit found at the held pose into the direction
+         requires=("gravity_nm", "gravity_bottom_rad")),
 
     # --- servo dynamic, arm level --------------------------------------------------------------------------------------------------
     routine("arm.dynamics_excitation", "Joint dynamics from Fourier excitations and the coverage sweep (each joint a servo)", "servo_dynamic.arm",

@@ -73,7 +73,7 @@ def test_the_routine_types_are_on_the_one_import():
     assert reg.CalibrationRoutine is reg.schema.CalibrationRoutine and reg.Quantity is reg.schema.Quantity
     assert reg.ROUTINE_SETTINGS == ("bench", "deployed", "both") and set(reg.SETTINGS) < set(reg.ROUTINE_SETTINGS)
     # "configure" added 2026-11-11 (additive: a value appended, none renamed or removed)
-    assert reg.ROUTINE_KINDS == ("identify", "measure", "use", "configure")
+    assert reg.ROUTINE_KINDS == ("identify", "measure", "use", "configure", "tune")  # tune: PEP 0001 (Zach, 2026-11-12)
     assert reg.ROUTINE_STATUS == ("implemented", "partial", "not implemented")
     assert reg.ESTIMATE == "estimate"
     assert isinstance(reg.ROUTINES, tuple) and len(reg.ROUTINES) >= 20, len(reg.ROUTINES)
@@ -251,7 +251,7 @@ def test_configure_routines_name_what_they_write_and_identify_nothing():
     configure = [p for p in routines() if p.kind == "configure"]
     assert configure, "no configure routine"
     for p in routines():
-        assert bool(p.configures) == (p.kind == "configure"), p.id
+        assert bool(p.configures) == (p.kind in ("configure", "tune")), p.id  # a tune routine writes the settings it picks (PEP 0001)
     for p in configure:
         assert not p.identifies, p.id
         for item in p.configures:
