@@ -223,6 +223,31 @@ def floors_rows(floors: dict, twins: dict, mode: str, source: str) -> list[dict]
 # ------------------------------------------------------------------------------------------------------------------- UR wrist
 
 REPEAT_FLOOR = WRIST / ".." / "repeat_floor"
+# the coverage lane's reachable mask (bam_ws claude/ur-wrist-coverage @ eef94b778, schema bam_ur_wrist_coverage.reachable/1): its joint
+# descriptions and the PROPOSED good-data thresholds; read from that lane's worktree until it lands
+REACHABLE_EXPORT = Path("/home/bam/bam_ws-worktrees/ur-wrist-coverage/src/dev/bam_ur_wrist_coverage/bam_ur_wrist_coverage/data/reachable_2026-11-11.json")
+MULTI3 = WRIST / "multi3"
+
+
+def joint_data(description: dict, samples: list[tuple[np.ndarray, np.ndarray, np.ndarray]], threshold_pct: float, status: str) -> dict:
+    """A joint's Data answer: the share of its reachable (q, qd, qdd) cells (sim2real.schedule.joint: edges_of, reachable_cells,
+    occupancy) that real samples visited, against the coverage lane's PROPOSED threshold. Caveat (the lane's): reachable_cells marks
+    every cell of the box reachable for these joints, so this is the visited share of the full box."""
+    from .schedule.joint import JointDescription, edges_of, occupancy, reachable_cells
+
+    edges = edges_of(description)
+    reachable = reachable_cells(JointDescription.from_json(description), edges)
+    origin = description["origin_rad"]
+    rows = [np.column_stack([q - origin, qd, qdd]) for q, qd, qdd in samples if len(q)]
+    counts = occupancy(np.vstack(rows), edges) if rows else np.zeros(reachable.shape, int)
+    visited = int(((counts > 0) & reachable).sum())
+    pct = 100.0 * visited / max(1, int(reachable.sum()))
+    caveat = " (reachable_cells marks the whole box: the visited share of the full box)" if reachable.all() else ""
+    return {"own": "yes" if pct >= threshold_pct else "no",
+            "numbers": f"{pct:.1f} % of {int(reachable.sum())} reachable (q, qd, qdd) cells visited by {sum(len(r) for r in rows)} real samples{caveat}",
+            "gate": f"≥ {threshold_pct:g} % of reachable cells ({status})"}
+
+
 # WHY N/A (the real lane, 2026-11-11; proposed, Zach to confirm): CAN 15 and 16 carry at most 0.012 N·m of gravity against 0.14-0.19 N·m
 # of breakaway (refit_rig it5 static friction), so released they do not move: no passive response exists to repeat
 PASSIVE_NA = {15: "it cannot move unpowered: ≤ 0.012 N·m of gravity against 0.140 N·m breakaway (refit_rig it5)",
@@ -254,6 +279,7 @@ def repeat_campaign() -> dict[int, dict]:
                 keep = t >= start
                 runs.append((t[keep] - start, _wrist_target(t, data["q"], data["q_target"], data["qd_target"])[keep], data["q"][keep]))
                 q_all.append(np.degrees(data["q"])); qd_all.append(np.degrees(data["qd"])); qdd_all.append(np.degrees(np.gradient(data["qd"], t)))
+                entry.setdefault("samples", []).append((data["q"], data["qd"], np.gradient(data["qd"], t)))
                 dts.append(float(np.median(np.diff(t))))
             floor = repeat_floor(runs)
             floor_deg = math.degrees(floor.value) if floor.value is not None else None
@@ -319,6 +345,7 @@ def ur_wrist() -> CalibrationResult:
     groups: dict[int, dict] = {can: defaultdict(list) for can in (14, 15, 16)}
     per_run: dict[int, list] = {can: [] for can in (14, 15, 16)}
     cover: dict[int, list] = {can: [[], [], []] for can in (14, 15, 16)}
+    samples: dict[int, list] = {can: [] for can in (14, 15, 16)}   # real (q rad board, qd, qdd) for the Data question
     dt_of = {}
     for (session, name), row in scored[alias[order[-1]]].items():
         gainset = Path(session).parent.name
@@ -334,6 +361,7 @@ def ur_wrist() -> CalibrationResult:
         cover[can][0].append(np.degrees(q))
         cover[can][1].append(np.degrees(qd))
         cover[can][2].append(np.degrees(np.gradient(qd, t)) if t.size > 2 else np.array([]))
+        samples[can].append((q, qd, np.gradient(qd, t) if t.size > 2 else np.zeros_like(qd)))
         # WHY (gain set, tape): a repeat is the same tape on the same controller config, compared like for like (T1 "per run kind");
         # pooling every tape let low-motion tapes (parks, holds) set a floor 5-20x under the dedicated campaign's (2026-11-11 review)
         kind = tape
@@ -424,12 +452,39 @@ def ur_wrist() -> CalibrationResult:
         {"measure": "CAN15 x CAN16 plane", "value": f"{single['plane_pct']:.0f} % → {both['plane_pct']:.0f} %", "unit": "of reachable"},
         {"measure": "workspace panel", "value": "joint plane: x = CAN 15, y = CAN 16", "unit": "° (10° cells, multi-joint runs)"},
     ]
+    if REACHABLE_EXPORT.exists():
+        export = json.loads(REACHABLE_EXPORT.read_text())
+        thresholds = export["good_data_thresholds"]
+        status = thresholds["status"]
+        # the multi-joint runs (multi3: CAN 14 free) log all three joints in CAD degrees; board = CAD - the export's offset
+        for trace in sorted((MULTI3 / "twin_traces").glob("*/*.npz")):
+            data = np.load(trace)
+            t = data["t"] - data["t"][0]
+            for can in (14, 15, 16):
+                q = np.radians(data[f"q_real_can{can}"] - export["frames"]["cad_equals_board_plus_deg"][str(can)])
+                qd = np.gradient(q, t)
+                samples[can].append((q, qd, np.gradient(qd, t)))
+        for can, node in joints.items():
+            own = campaign.get(can, {})
+            node.questions["Data"] = joint_data(export["joint_descriptions"][str(can)], samples[can] + own.get("samples", []),
+                                                thresholds["per_joint_reachable_cells_pct"], status)
+        real = json.loads((MULTI3 / "multi_scores.json").read_text())["coverage_real_rows"]["real_all"]["allowed"]
+        gates = (("joint cube", real["joint_cube_pct"], thresholds["joint_cube_pct_of_allowed"]),
+                 ("workspace", real["workspace_pct"], thresholds["workspace_pct_of_allowed"]),
+                 ("facing", real["facing_pct"], thresholds["facing_pct_of_allowed"]))
+        arm_data = {"own": "yes" if all(value >= limit for _name, value, limit in gates) else "no",
+                    "numbers": "; ".join(f"{name} {value:.1f} % of allowed (≥ {limit:g} %)" for name, value, limit in gates)
+                    + f" — every real run (multi3 real_all, {export['counts']['allowed']['joint_grid_poses']} allowed grid poses)",
+                    "gate": f"cube ≥ {thresholds['joint_cube_pct_of_allowed']:g} %, workspace ≥ {thresholds['workspace_pct_of_allowed']:g} %, "
+                            f"facing ≥ {thresholds['facing_pct_of_allowed']:g} % of the allowed mask ({status})"}
+    else:
+        arm_data = None
     tapes = json.loads((WRIST / "multi" / "multi_scores.json").read_text())["tapes"]
     twin_multi = [j["twin_vs_real_deg"] for tape in tapes for j in tape["joints"].values() if j.get("twin_vs_real_deg") is not None]
     target_multi = [j["target_vs_real_deg"] for tape in tapes for j in tape["joints"].values() if j.get("target_vs_real_deg") is not None]
     arm.questions = {
         "Floor": {"own": "no", "numbers": "no tool-pose repeats (ISO 9283 RP) on the arm", "gate": "repeatability at the tool: 5 poses × 30 cycles"},
-        "Data": {"own": "partial", "numbers": f"joint cube {both['joint_cube_pct_of_r11_held']:.0f} % of reachable with CAN 14 held, "
+        "Data": arm_data or {"own": "partial", "numbers": f"joint cube {both['joint_cube_pct_of_r11_held']:.0f} % of reachable with CAN 14 held, "
                  f"{both['joint_cube_pct']:.0f} % of the full cube; workspace {both['workspace_pct_of_r11_held']:.0f} % (CAN 14 held)",
                  "gate": "≥ 40 % of the reachable joint cube"},
         "Routines": {"own": "unknown", "numbers": "no arm-level routine (kinematics, mounts) graded on a hidden truth", "gate": "per routine"},
