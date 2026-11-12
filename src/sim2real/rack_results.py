@@ -225,6 +225,29 @@ def floors_rows(floors: dict, twins: dict, mode: str, source: str) -> list[dict]
 # ------------------------------------------------------------------------------------------------------------------- UR wrist
 
 REPEAT_FLOOR = WRIST / ".." / "repeat_floor"
+# the one-click calibration of the wrist on a sealed truth at 1x noise (sim2real 82f14db, its green run's rows): the Routines question
+ONE_CLICK = Path(__file__).resolve().parent / "data" / "ur_wrist_one_click_2026-11-11.json"
+
+
+def routines_from_rows(rows: list[dict], prefix: str, stress: str = "noise stress: pending (the stress lane is running)") -> dict:
+    """A node's Routines answer from the one-click calibration's rows under `prefix` (can15. / wrist.): yes when every IDENTIFIABLE
+    row recovers its hidden truth within tolerance at 1x noise; an unidentifiable one is listed "not identifiable (reason)", never a
+    fail (coordinator, 2026-11-11)."""
+    mine = [r for r in rows if r["key"].startswith(prefix)]
+    found = [r for r in mine if r["routine"]]
+    missed = [r for r in found if not r["pass"]]
+    not_identifiable = [r for r in mine if not r["routine"]]
+    if not found:
+        return {"own": "unknown", "numbers": "no identifiable parameter at this level", "gate": ""}
+    names = ", ".join(r["title"] for r in found)
+    text = (f"{len(found) - len(missed)}/{len(found)} identifiable recovered within tolerance at 1x noise, sealed truth ({names})"
+            + (f"; MISSED: {', '.join(r['title'] for r in missed)}" if missed else "")
+            + ("; not identifiable: " + "; ".join(f"{r['title']} ({(r['why_not'] or '')[:90]})" for r in not_identifiable) if not_identifiable else "")
+            + f"; {stress}")
+    return {"own": "yes" if not missed else "no", "numbers": text,
+            "gate": "every identifiable parameter within its tolerance of the sealed truth at 1x noise (sim2real one-click seam)"}
+
+
 # the coverage lane's reachable mask (bam_ws claude/ur-wrist-coverage @ eef94b778, schema bam_ur_wrist_coverage.reachable/1): its joint
 # descriptions and the PROPOSED good-data thresholds. WHY two places, main first (coordinator, 2026-11-11): bam_ws main's copy once the
 # lane lands, so a worktree sweep cannot break the page; the lane's worktree only until then
@@ -489,6 +512,11 @@ def ur_wrist() -> CalibrationResult:
                             f"facing ≥ {thresholds['facing_pct_of_allowed']:g} % of the allowed mask ({status})"}
     else:
         arm_data = None
+    one_click = json.loads(ONE_CLICK.read_text()) if ONE_CLICK.exists() else None
+    if one_click:
+        rows = one_click["calibration"]["rows"]
+        for can, node in joints.items():
+            node.questions["Routines"] = routines_from_rows(rows, f"can{can}.")
     tapes = json.loads((WRIST / "multi" / "multi_scores.json").read_text())["tapes"]
     twin_multi = [j["twin_vs_real_deg"] for tape in tapes for j in tape["joints"].values() if j.get("twin_vs_real_deg") is not None]
     target_multi = [j["target_vs_real_deg"] for tape in tapes for j in tape["joints"].values() if j.get("target_vs_real_deg") is not None]
@@ -497,7 +525,8 @@ def ur_wrist() -> CalibrationResult:
         "Data": arm_data or {"own": "partial", "numbers": f"joint cube {both['joint_cube_pct_of_r11_held']:.0f} % of reachable with CAN 14 held, "
                  f"{both['joint_cube_pct']:.0f} % of the full cube; workspace {both['workspace_pct_of_r11_held']:.0f} % (CAN 14 held)",
                  "gate": "≥ 40 % of the reachable joint cube"},
-        "Routines": {"own": "unknown", "numbers": "no arm-level routine (kinematics, mounts) graded on a hidden truth", "gate": "per routine"},
+        "Routines": (routines_from_rows(one_click["calibration"]["rows"], "wrist.") if one_click else
+                     {"own": "unknown", "numbers": "no arm-level routine (kinematics, mounts) graded on a hidden truth", "gate": "per routine"}),
         "Twin": {"own": "unknown", "numbers": f"coupled multi-joint runs: twin vs real {min(twin_multi):.2f}–{max(twin_multi):.2f}°, "
                  f"real vs target {min(target_multi):.2f}–{max(target_multi):.2f}° (no skill over the target yet); no tool floor to divide by",
                  "gate": "twin vs real tool pose ≤ 1.5× the tool floor"},
@@ -529,7 +558,9 @@ FIVEBAR_LADDERS = {"ladder_real_101015": "stock", "ladder_real_104843": "winners
                    "ladder_real_122045": "winners", "ladder_real_124755": "winners + lumped comp",
                    # five identical repeats of the 0.05 m/s rungs (2026-11-11 night): the floor's repeats
                    **{name: "winners" for name in ("ladder_real_repeat1_012235", "ladder_real_repeat2_013240", "ladder_real_repeat3_014218",
-                                                   "ladder_real_repeat4_015157", "ladder_real_repeat5_020134")}}
+                                                   "ladder_real_repeat4_015157", "ladder_real_repeat5_020134")},
+                   # seven C1 swings across C1's range (the lane's coverage tape set, claude/fivebar-guard @ d5213c2a3): C1's Data
+                   "coverage_real_031652": "winners"}
 FIVEBAR_STAGES = (("study", "study twin (nominal)", None), ("massid", "+ mass-ID gravity", ("refit_both_111322", "held_out_before")),
                   ("dynamics", "+ dynamics refit", ("refit_both_111322", "held_out_after")),
                   ("tick", "refit on the tick clock", ("refit_breakdown_123729", "held_out_before")))
@@ -612,7 +643,8 @@ def fivebar() -> CalibrationResult:
                 samples[joint].append((q[::10, k], qd[::10, k], np.gradient(qd[:, k], t)[::10]))
             rung_key = f"{ladder}:{step['name']}"
             held_out = rung_key not in train
-            label = f"{ladder[-6:]} {step['speed_m_s']:.2f} m/s {step['ff_mode']}"
+            raster = step["name"].startswith("vertical.")
+            label = f"{ladder[-6:]} {step['speed_m_s']:.2f} m/s {step['ff_mode']}" if raster else f"{ladder[-6:]} {step['name']}"
             run_slug = slug(f"fivebar-{label}")
             files[run_slug] = ("fivebar", FIVEBAR / ladder / "ladder" / step["real"], FIVEBAR / ladder / "ladder" / step["sim"], ("j2", "c1"))
             study_t = t if sim["t"].size == t.size else sim["t"] - sim["t"][0]
@@ -630,7 +662,8 @@ def fivebar() -> CalibrationResult:
                                                  "target_real_deg": target_real, "phase": phase if held_out else ""})
                 per_run[joint].append(((gainset, step["name"], t.size), held_out, values.get(stages[-1]), values.get(stages[0]), target_real))
                 joints[joint].runs.append({"run": run_slug, "label": label, "held_out": held_out, "gains": gainset,
-                                           "tape": f"coverage raster {step['ff_mode']} {step['speed_m_s']:.2f} m/s",
+                                           "tape": (f"coverage raster {step['ff_mode']} {step['speed_m_s']:.2f} m/s" if raster
+                                                    else f"C1 swing {step['name']}"),
                                            "target_real_deg": _r(target_real), "sim_real_deg": _r(values.get(stages[-1])),
                                            "sim_real_before_deg": _r(values.get(stages[0])), "run_view": run_view(run_slug)})
     dt = float(np.median(dt_all))

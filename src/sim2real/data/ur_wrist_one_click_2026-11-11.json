@@ -1,0 +1,1414 @@
+{
+ "schema": "sim2real.rack.ur_wrist_one_click/1",
+ "source": "Twin.load('ur_wrist_test_rig').calibrate(on='sim', truth='sealed') at 1x noise, then .eval_twin(): the one-click lane's green run (tests/test_ur_wrist_one_click.py's capture, 2026-11-11 20:13, the code merged as sim2real 82f14db); 22/22 identifiable recovered, 3/3 gates",
+ "calibration": {
+  "seam": "sim2real.rig/1",
+  "backend": "sim",
+  "rig": "ur_wrist_test_rig",
+  "model": "it5 twin of record (Karnopp Coulomb, command delay, gravity) + gear backlash: servo M4.dynamics.twin x3, chain M0.dynamics.rigid",
+  "noise": {
+   "encoder_quantum_rad": 9.587379924285257e-05,
+   "encoder_noise_rad": 0.0,
+   "velocity_noise_rad_s": 0.001,
+   "torque_noise_nm": 0.01,
+   "torque_disturbance_nm": 0.0,
+   "period_overrun_s": 0.00071,
+   "latency_jitter_s": 0.0,
+   "level": 1.0,
+   "truth_offset": 1.0,
+   "seed": 20261111,
+   "sources": {
+    "encoder_quantum_rad": "the smallest position step in the real runs, 9.587e-5 rad = 2 pi / 65536 (/archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/coverage/real/ram (CAN 15/16 floor-dither runs, measured 2026-11-11))",
+    "encoder_noise_rad": "0: the real board's position at rest moves by whole steps only; the step is the encoder's noise",
+    "velocity_noise_rad_s": "the real board's velocity at rest: 1.1e-3 rad/s std (/archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/coverage/real/ram (CAN 15/16 floor-dither runs, measured 2026-11-11))",
+    "torque_noise_nm": "the real torque at rest: 0.014 N.m std with the loop's own chatter in it (/archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/coverage/real/ram (CAN 15/16 floor-dither runs, measured 2026-11-11)); bam_ur_wrist.refit's hidden twin used 0.01",
+    "torque_disturbance_nm": "0 at 1x: anchored on the real lane's repeat floors (CAN 14 0.100, CAN 15 0.092, CAN 16 0.241 deg driven, bam_ws claude/ur-wrist-real @ 6e26aa27a), which the host loop's measured timing alone already reproduces to within about 2x (WristRig.floor_check); a disturbance raised CAN 15's floor 2x and left CAN 14's",
+    "period_overrun_s": "the real host loop: median 10.57 ms, mean 10.71 ms, std 0.53 ms against the plan's 10 ms tick (/archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/coverage/real/ram (CAN 15/16 floor-dither runs, measured 2026-11-11))",
+    "latency_jitter_s": "0 at 1x, set by the floor anchor (WristRig.floor_check against the real lane's floors, 2026-11-11): the host loop's measured overrun alone gives CAN 14 / 15 / 16 1.70x / 1.62x / 0.53x the real floors (geometric mean 1.13x); 0.4 ms of jitter took CAN 14 to 2.06x. Unmeasured on the bus; the term stays for the stress lane"
+   }
+  },
+  "values": {
+   "can14.backlash_rad": 0.003533077049760923,
+   "can15.backlash_rad": 0.0052588054361323265,
+   "can16.backlash_rad": 0.0037248246482466346,
+   "can14.static_friction_nm": 0.19995500000000827,
+   "can15.static_friction_nm": 0.14057749999999714,
+   "can16.static_friction_nm": 0.21030249999999892,
+   "can14.zero_offset_rad": 1.4784801427188046,
+   "can15.zero_offset_rad": 0.5882756146624675,
+   "can16.zero_offset_rad": -0.565070570339668,
+   "can14.coulomb_nm": 0.05185666087656504,
+   "can15.coulomb_nm": 0.06503735169485904,
+   "can16.coulomb_nm": 0.06567753808490322,
+   "can14.damping_nm_s_rad": 0.00213789277382447,
+   "can15.damping_nm_s_rad": 0.0007716871253269047,
+   "can16.damping_nm_s_rad": 0.0,
+   "can14.axis_inertia_kg_m2": 0.0035103328129541984,
+   "can15.axis_inertia_kg_m2": 0.00174144867034829,
+   "can16.axis_inertia_kg_m2": 0.0012964117991177571,
+   "can14.gravity_nm": 0.27459335281568426,
+   "can14.gravity_bottom_rad": 1.3547292259694297,
+   "wrist.gravity_azimuth_rad": -1.6669893213092348,
+   "wrist.command_delay_s": 0.0006000000000000001
+  },
+  "estimates": {
+   "can14.backlash_rad": {
+    "value": 0.003533077049760923,
+    "ci95": [
+     0.0034372032505180705,
+     0.0036289508490037793
+    ],
+    "method": "held reversal under a 70 mN.m cap, read by bam_fb_test_rig.backlash.dead_band (the five-bar lane's estimator, threshold 49 mN.m): 5 flank-to-flank crossings, 0.049' windup off; 95 % by a bootstrap over the crossings"
+   },
+   "can15.backlash_rad": {
+    "value": 0.0052588054361323265,
+    "ci95": [
+     0.005162931636889474,
+     0.005354679235375179
+    ],
+    "method": "held reversal under a 70 mN.m cap, read by bam_fb_test_rig.backlash.dead_band (the five-bar lane's estimator, threshold 49 mN.m): 5 flank-to-flank crossings, 0.049' windup off; 95 % by a bootstrap over the crossings"
+   },
+   "can16.backlash_rad": {
+    "value": 0.0037248246482466346,
+    "ci95": [
+     0.003628950849003782,
+     0.0039165722467324054
+    ],
+    "method": "held reversal under a 70 mN.m cap, read by bam_fb_test_rig.backlash.dead_band (the five-bar lane's estimator, threshold 49 mN.m): 5 flank-to-flank crossings, 0.049' windup off; 95 % by a bootstrap over the crossings"
+   },
+   "can14.static_friction_nm": {
+    "value": 0.19995500000000827,
+    "ci95": [
+     0.19928999999999866,
+     0.20049499999998566
+    ],
+    "method": "two-sided breakaway at the rest pose, 3 cycles: up [0.2295, 0.228, 0.2266] N.m, down [0.1701, 0.1719, 0.1734] N.m (the cap at which the output left the flank); the load there -28.0 mN.m; 95 % by a bootstrap over the cycles"
+   },
+   "can15.static_friction_nm": {
+    "value": 0.14057749999999714,
+    "ci95": [
+     0.1399299999999991,
+     0.14116750000000441
+    ],
+    "method": "two-sided breakaway at the rest pose, 3 cycles: up [0.1372, 0.1373, 0.1374] N.m, down [0.1437, 0.144, 0.1437] N.m (the cap at which the output left the flank); the load there +3.2 mN.m; 95 % by a bootstrap over the cycles"
+   },
+   "can16.static_friction_nm": {
+    "value": 0.21030249999999892,
+    "ci95": [
+     0.20963749999998654,
+     0.21086250000000673
+    ],
+    "method": "two-sided breakaway at the rest pose, 3 cycles: up [0.2099, 0.2101, 0.2098] N.m, down [0.2107, 0.2106, 0.2105] N.m (the cap at which the output left the flank); the load there +0.4 mN.m; 95 % by a bootstrap over the cycles"
+   },
+   "can14.zero_offset_rad": {
+    "value": 1.4784801427188046,
+    "ci95": [
+     1.4783842689195617,
+     1.4785760165180475
+    ],
+    "method": "tview single touch at +165.0 deg, stall +1.01 N.m, corrected by half the gap (6.07 arcmin) and the gear's give (0.51 arcmin); the interval is the encoder's step"
+   },
+   "can15.zero_offset_rad": {
+    "value": 0.5882756146624675,
+    "ci95": [
+     0.5881797408632247,
+     0.5883714884617103
+    ],
+    "method": "tview single touch at -165.0 deg, stall -0.98 N.m, corrected by half the gap (9.04 arcmin) and the gear's give (0.49 arcmin); the interval is the encoder's step"
+   },
+   "can16.zero_offset_rad": {
+    "value": -0.565070570339668,
+    "ci95": [
+     -0.5651664441389108,
+     -0.5649746965404252
+    ],
+    "method": "tview single touch at +165.0 deg, stall +1.01 N.m, corrected by half the gap (6.40 arcmin) and the gear's give (0.50 arcmin); the interval is the encoder's step"
+   },
+   "can14.coulomb_nm": {
+    "value": 0.05185666087656504,
+    "ci95": [
+     0.049666960407855246,
+     0.05322455232010467
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can15.coulomb_nm": {
+    "value": 0.06503735169485904,
+    "ci95": [
+     0.06216296328449013,
+     0.06763326186032238
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can16.coulomb_nm": {
+    "value": 0.06567753808490322,
+    "ci95": [
+     0.05975451738201552,
+     0.06824606385622331
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can14.damping_nm_s_rad": {
+    "value": 0.00213789277382447,
+    "ci95": [
+     0.0,
+     0.0035874521535660293
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can15.damping_nm_s_rad": {
+    "value": 0.0007716871253269047,
+    "ci95": [
+     0.0,
+     0.0023615119082056857
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can16.damping_nm_s_rad": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0018985010040718992
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can14.axis_inertia_kg_m2": {
+    "value": 0.0035103328129541984,
+    "ci95": [
+     0.002388219821464048,
+     0.0038816808185889867
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can15.axis_inertia_kg_m2": {
+    "value": 0.00174144867034829,
+    "ci95": [
+     0.0010551061022859212,
+     0.0017520214858603694
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can16.axis_inertia_kg_m2": {
+    "value": 0.0012964117991177571,
+    "ci95": [
+     0.0010104082308171473,
+     0.0013024972015460397
+    ],
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   "can14.gravity_nm": {
+    "value": 0.27459335281568426,
+    "ci95": null,
+    "method": "the refit's gravity first moments (its visible subspace around the 583ee39 prior, refit_rig.gravity_masses) as the torque CAN 14 feels at the held pose under the description's gravity (MuJoCo): the first moments take up whatever direction error there is, so the load is right either way"
+   },
+   "can14.gravity_bottom_rad": {
+    "value": 1.3547292259694297,
+    "ci95": null,
+    "method": "as can14.gravity_nm: that torque's bottom"
+   },
+   "wrist.gravity_azimuth_rad": {
+    "value": -1.6669893213092348,
+    "ci95": null,
+    "method": "CAN 14's identified load (274.6 mN.m, bottom 77.62 deg) on the CAD centres of mass: azimuth turned -2.50 deg from the description's, masses x 1.201 (check: 274.6 mN.m, 77.62 deg)"
+   },
+   "wrist.command_delay_s": {
+    "value": 0.0006000000000000001,
+    "ci95": [
+     0.0004,
+     0.0006000000000000001
+    ],
+    "method": "output error of the twin over 3 train chirps at 10 command delays (0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 3.0, 6.0 ms); the minimum, 95 % by a run bootstrap"
+   }
+  },
+  "rows": [
+   {
+    "key": "can14.axis_inertia_kg_m2",
+    "title": "axis inertia at the held pose (armature + the links it turns)",
+    "unit": "kg\u00b7m\u00b2",
+    "display": "",
+    "nominal": 0.0029868656333158832,
+    "true": 0.0035842387599790615,
+    "recovered": 0.0035103328129541984,
+    "ci95": [
+     0.002388219821464048,
+     0.0038816808185889867
+    ],
+    "error": -7.390594702486302e-05,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 % (the it5 refit's own indirect-inference gap closed to < 1 %)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can14.armature_kg_m2",
+    "title": "armature (reflected rotor inertia)",
+    "unit": "kg\u00b7m\u00b2",
+    "display": "",
+    "nominal": 0.001,
+    "true": 0.0012,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only the axis inertia is seen (armature + the links it turns: can14.axis_inertia_kg_m2): the CAD links' inertia is a prior the hidden masses move, so any error in it lands in the armature one for one (on CAN 14 the links carry twice its armature); the fit sets it for the twin as the axis inertia less the links at the twin's masses",
+    "method": "",
+    "set_for_twin": 0.0011240277376968854
+   },
+   {
+    "key": "can14.coulomb_nm",
+    "title": "sliding (Coulomb) friction, the M2 frictionloss level",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.0413,
+    "true": 0.052,
+    "recovered": 0.05185666087656504,
+    "ci95": [
+     0.049666960407855246,
+     0.05322455232010467
+    ],
+    "error": -0.00014333912343495597,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, the pendulum oracle's frictionloss tolerance (sysid/acceptance.json)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can14.static_friction_nm",
+    "title": "breakaway (static) friction, the M3 frictionloss level",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.175,
+    "true": 0.2,
+    "recovered": 0.19995500000000827,
+    "ci95": [
+     0.19928999999999866,
+     0.20049499999998566
+    ],
+    "error": -4.499999999174609e-05,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, as the sliding level"
+    },
+    "pass": true,
+    "routine": "servo.breakaway_two_sided",
+    "why_not": "",
+    "method": "two-sided breakaway at the rest pose, 3 cycles: up [0.2295, 0.228, 0.2266] N.m, down [0.1701, 0.1719, 0.1734] N.m (the cap at which the output left the flank); the load there -28.0 mN.m; 95 % by a bootstrap over the cycles"
+   },
+   {
+    "key": "can14.damping_nm_s_rad",
+    "title": "viscous friction",
+    "unit": "N\u00b7m\u00b7s/rad",
+    "display": "",
+    "nominal": 0.005,
+    "true": 0.002,
+    "recovered": 0.00213789277382447,
+    "ci95": [
+     0.0,
+     0.0035874521535660293
+    ],
+    "error": 0.00013789277382446992,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.001,
+     "source": "proposed: 1e-3 N.m.s/rad absolute (6 mN.m at the 6 rad/s ceiling; the truth may be 0)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can14.backlash_rad",
+    "title": "gear backlash (the full lost motion)",
+    "unit": "rad",
+    "display": "arcmin",
+    "nominal": 0.004363323129985824,
+    "true": 0.0034906585039886587,
+    "recovered": 0.003533077049760923,
+    "ci95": [
+     0.0034372032505180705,
+     0.0036289508490037793
+    ],
+    "error": 4.241854577226442e-05,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, the pendulum oracle's backlash tolerance (sysid/acceptance.json)"
+    },
+    "pass": true,
+    "routine": "servo.backlash_reversal_held",
+    "why_not": "",
+    "method": "held reversal under a 70 mN.m cap, read by bam_fb_test_rig.backlash.dead_band (the five-bar lane's estimator, threshold 49 mN.m): 5 flank-to-flank crossings, 0.049' windup off; 95 % by a bootstrap over the crossings"
+   },
+   {
+    "key": "can14.zero_offset_rad",
+    "title": "joint zero (cad = board + offset, this session's frame)",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": 1.4679964338524305,
+    "true": 1.4784684093643965,
+    "recovered": 1.4784801427188046,
+    "ci95": [
+     1.4783842689195617,
+     1.4785760165180475
+    ],
+    "error": 1.1733354408072216e-05,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.002617993877991494,
+     "source": "proposed: 0.15 deg, a third of the 1 mm tool gate at the holder's ~0.1 m lever"
+    },
+    "pass": true,
+    "routine": "homing.single_touch",
+    "why_not": "",
+    "method": "tview single touch at +165.0 deg, stall +1.01 N.m, corrected by half the gap (6.07 arcmin) and the gear's give (0.51 arcmin); the interval is the encoder's step"
+   },
+   {
+    "key": "can14.gravity_nm",
+    "title": "gravity torque amplitude at the held pose",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.2286296507112097,
+    "true": 0.27366514348095955,
+    "recovered": 0.27459335281568426,
+    "ci95": null,
+    "error": 0.0009282093347247056,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.05,
+     "source": "proposed: 5 % (the wrist's whole load, ~0.25 N.m on its side)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "the refit's gravity first moments (its visible subspace around the 583ee39 prior, refit_rig.gravity_masses) as the torque CAN 14 feels at the held pose under the description's gravity (MuJoCo): the first moments take up whatever direction error there is, so the load is right either way"
+   },
+   {
+    "key": "can14.gravity_bottom_rad",
+    "title": "gravity's bottom at the held pose",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": 1.3982888781462472,
+    "true": 1.3546556468463886,
+    "recovered": 1.3547292259694297,
+    "ci95": null,
+    "error": 7.357912304106762e-05,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.03490658503988659,
+     "source": "proposed: 2 deg"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "as can14.gravity_nm: that torque's bottom"
+   },
+   {
+    "key": "can15.axis_inertia_kg_m2",
+    "title": "axis inertia at the held pose (armature + the links it turns)",
+    "unit": "kg\u00b7m\u00b2",
+    "display": "",
+    "nominal": 0.0013427397784015534,
+    "true": 0.0017583816376514452,
+    "recovered": 0.00174144867034829,
+    "ci95": [
+     0.0010551061022859212,
+     0.0017520214858603694
+    ],
+    "error": -1.693296730315521e-05,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 % (the it5 refit's own indirect-inference gap closed to < 1 %)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can15.armature_kg_m2",
+    "title": "armature (reflected rotor inertia)",
+    "unit": "kg\u00b7m\u00b2",
+    "display": "",
+    "nominal": 0.001,
+    "true": 0.001347093903569581,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only the axis inertia is seen (armature + the links it turns: can15.axis_inertia_kg_m2): the CAD links' inertia is a prior the hidden masses move, so any error in it lands in the armature one for one (on CAN 14 the links carry twice its armature); the fit sets it for the twin as the axis inertia less the links at the twin's masses",
+    "method": "",
+    "set_for_twin": 0.0013298044912060736
+   },
+   {
+    "key": "can15.coulomb_nm",
+    "title": "sliding (Coulomb) friction, the M2 frictionloss level",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.0413,
+    "true": 0.06564565996563594,
+    "recovered": 0.06503735169485904,
+    "ci95": [
+     0.06216296328449013,
+     0.06763326186032238
+    ],
+    "error": -0.0006083082707769027,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, the pendulum oracle's frictionloss tolerance (sysid/acceptance.json)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can15.static_friction_nm",
+    "title": "breakaway (static) friction, the M3 frictionloss level",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.175,
+    "true": 0.14014936191660393,
+    "recovered": 0.14057749999999714,
+    "ci95": [
+     0.1399299999999991,
+     0.14116750000000441
+    ],
+    "error": 0.0004281380833932036,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, as the sliding level"
+    },
+    "pass": true,
+    "routine": "servo.breakaway_two_sided",
+    "why_not": "",
+    "method": "two-sided breakaway at the rest pose, 3 cycles: up [0.1372, 0.1373, 0.1374] N.m, down [0.1437, 0.144, 0.1437] N.m (the cap at which the output left the flank); the load there +3.2 mN.m; 95 % by a bootstrap over the cycles"
+   },
+   {
+    "key": "can15.damping_nm_s_rad",
+    "title": "viscous friction",
+    "unit": "N\u00b7m\u00b7s/rad",
+    "display": "",
+    "nominal": 0.005,
+    "true": 0.0004477681153053359,
+    "recovered": 0.0007716871253269047,
+    "ci95": [
+     0.0,
+     0.0023615119082056857
+    ],
+    "error": 0.00032391901002156885,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.001,
+     "source": "proposed: 1e-3 N.m.s/rad absolute (6 mN.m at the 6 rad/s ceiling; the truth may be 0)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can15.backlash_rad",
+    "title": "gear backlash (the full lost motion)",
+    "unit": "rad",
+    "display": "arcmin",
+    "nominal": 0.004363323129985824,
+    "true": 0.005235987755982988,
+    "recovered": 0.0052588054361323265,
+    "ci95": [
+     0.005162931636889474,
+     0.005354679235375179
+    ],
+    "error": 2.281768014933839e-05,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, the pendulum oracle's backlash tolerance (sysid/acceptance.json)"
+    },
+    "pass": true,
+    "routine": "servo.backlash_reversal_held",
+    "why_not": "",
+    "method": "held reversal under a 70 mN.m cap, read by bam_fb_test_rig.backlash.dead_band (the five-bar lane's estimator, threshold 49 mN.m): 5 flank-to-flank crossings, 0.049' windup off; 95 % by a bootstrap over the crossings"
+   },
+   {
+    "key": "can15.zero_offset_rad",
+    "title": "joint zero (cad = board + offset, this session's frame)",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": -0.04014257279586958,
+    "true": 0.5881759579220891,
+    "recovered": 0.5882756146624675,
+    "ci95": [
+     0.5881797408632247,
+     0.5883714884617103
+    ],
+    "error": 9.965674037837324e-05,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.002617993877991494,
+     "source": "proposed: 0.15 deg, a third of the 1 mm tool gate at the holder's ~0.1 m lever"
+    },
+    "pass": true,
+    "routine": "homing.single_touch",
+    "why_not": "",
+    "method": "tview single touch at -165.0 deg, stall -0.98 N.m, corrected by half the gap (9.04 arcmin) and the gear's give (0.49 arcmin); the interval is the encoder's step"
+   },
+   {
+    "key": "can15.gravity_nm",
+    "title": "gravity torque amplitude at the held pose",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.0031203304107060986,
+    "true": 0.004084148059627338,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "~2 mN.m at the held pose with the rig on its side: a fifth of the torque reading's noise and 1/50 of the breakaway, so no run of the schedule resolves it (its load sits in the chain's masses, below)",
+    "method": ""
+   },
+   {
+    "key": "can15.gravity_bottom_rad",
+    "title": "gravity's bottom at the held pose",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": -0.6036521484895325,
+    "true": -0.12415877384971861,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "~2 mN.m at the held pose with the rig on its side: a fifth of the torque reading's noise and 1/50 of the breakaway, so no run of the schedule resolves it (its load sits in the chain's masses, below)",
+    "method": ""
+   },
+   {
+    "key": "can16.axis_inertia_kg_m2",
+    "title": "axis inertia at the held pose (armature + the links it turns)",
+    "unit": "kg\u00b7m\u00b2",
+    "display": "",
+    "nominal": 0.0010293386960019287,
+    "true": 0.0012852064352023142,
+    "recovered": 0.0012964117991177571,
+    "ci95": [
+     0.0010104082308171473,
+     0.0013024972015460397
+    ],
+    "error": 1.1205363915442945e-05,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 % (the it5 refit's own indirect-inference gap closed to < 1 %)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can16.armature_kg_m2",
+    "title": "armature (reflected rotor inertia)",
+    "unit": "kg\u00b7m\u00b2",
+    "display": "",
+    "nominal": 0.001,
+    "true": 0.00125,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only the axis inertia is seen (armature + the links it turns: can16.axis_inertia_kg_m2): the CAD links' inertia is a prior the hidden masses move, so any error in it lands in the armature one for one (on CAN 14 the links carry twice its armature); the fit sets it for the twin as the axis inertia less the links at the twin's masses",
+    "method": "",
+    "set_for_twin": 0.0012611748520404695
+   },
+   {
+    "key": "can16.coulomb_nm",
+    "title": "sliding (Coulomb) friction, the M2 frictionloss level",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.0413,
+    "true": 0.061131420379877066,
+    "recovered": 0.06567753808490322,
+    "ci95": [
+     0.05975451738201552,
+     0.06824606385622331
+    ],
+    "error": 0.004546117705026151,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, the pendulum oracle's frictionloss tolerance (sysid/acceptance.json)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can16.static_friction_nm",
+    "title": "breakaway (static) friction, the M3 frictionloss level",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.175,
+    "true": 0.21,
+    "recovered": 0.21030249999999892,
+    "ci95": [
+     0.20963749999998654,
+     0.21086250000000673
+    ],
+    "error": 0.0003024999999989286,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, as the sliding level"
+    },
+    "pass": true,
+    "routine": "servo.breakaway_two_sided",
+    "why_not": "",
+    "method": "two-sided breakaway at the rest pose, 3 cycles: up [0.2099, 0.2101, 0.2098] N.m, down [0.2107, 0.2106, 0.2105] N.m (the cap at which the output left the flank); the load there +0.4 mN.m; 95 % by a bootstrap over the cycles"
+   },
+   {
+    "key": "can16.damping_nm_s_rad",
+    "title": "viscous friction",
+    "unit": "N\u00b7m\u00b7s/rad",
+    "display": "",
+    "nominal": 0.005,
+    "true": 0.0,
+    "recovered": 0.0,
+    "ci95": [
+     0.0,
+     0.0018985010040718992
+    ],
+    "error": 0.0,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.001,
+     "source": "proposed: 1e-3 N.m.s/rad absolute (6 mN.m at the 6 rad/s ceiling; the truth may be 0)"
+    },
+    "pass": true,
+    "routine": "servo.dynamics_regression",
+    "why_not": "",
+    "method": "bam_ur_wrist.refit.fit (equation error, 18,400 sliding rows of 50 train runs) + 8 indirect-inference iterations at a gain of 0.7 on the twin (last gap [0.000663, 2.4e-05, 0.000512, 0.0, 0.0, 0.0, 0.000116, 2.9e-05, 3e-05, -0.000354, -2.3e-05, -0.001647, 4e-05]); 95 % from a run bootstrap of the equation-error fit, shifted by the inference"
+   },
+   {
+    "key": "can16.backlash_rad",
+    "title": "gear backlash (the full lost motion)",
+    "unit": "rad",
+    "display": "arcmin",
+    "nominal": 0.004363323129985824,
+    "true": 0.0037815467126543806,
+    "recovered": 0.0037248246482466346,
+    "ci95": [
+     0.003628950849003782,
+     0.0039165722467324054
+    ],
+    "error": -5.6722064407746e-05,
+    "tolerance": {
+     "kind": "rel",
+     "value": 0.1,
+     "source": "proposed: 10 %, the pendulum oracle's backlash tolerance (sysid/acceptance.json)"
+    },
+    "pass": true,
+    "routine": "servo.backlash_reversal_held",
+    "why_not": "",
+    "method": "held reversal under a 70 mN.m cap, read by bam_fb_test_rig.backlash.dead_band (the five-bar lane's estimator, threshold 49 mN.m): 5 flank-to-flank crossings, 0.049' windup off; 95 % by a bootstrap over the crossings"
+   },
+   {
+    "key": "can16.zero_offset_rad",
+    "title": "joint zero (cad = board + offset, this session's frame)",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": 0.0645771823237902,
+    "true": -0.5637413483941685,
+    "recovered": -0.565070570339668,
+    "ci95": [
+     -0.5651664441389108,
+     -0.5649746965404252
+    ],
+    "error": -0.001329221945499559,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.002617993877991494,
+     "source": "proposed: 0.15 deg, a third of the 1 mm tool gate at the holder's ~0.1 m lever"
+    },
+    "pass": true,
+    "routine": "homing.single_touch",
+    "why_not": "",
+    "method": "tview single touch at +165.0 deg, stall +1.01 N.m, corrected by half the gap (6.40 arcmin) and the gear's give (0.50 arcmin); the interval is the encoder's step"
+   },
+   {
+    "key": "can16.gravity_nm",
+    "title": "gravity torque amplitude at the held pose",
+    "unit": "N\u00b7m",
+    "display": "",
+    "nominal": 0.002022009227498587,
+    "true": 0.0024311838988400228,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "~2 mN.m at the held pose with the rig on its side: a fifth of the torque reading's noise and 1/50 of the breakaway, so no run of the schedule resolves it (its load sits in the chain's masses, below)",
+    "method": ""
+   },
+   {
+    "key": "can16.gravity_bottom_rad",
+    "title": "gravity's bottom at the held pose",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": 3.1128550834560738,
+    "true": 3.0686963587656733,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "~2 mN.m at the held pose with the rig on its side: a fifth of the torque reading's noise and 1/50 of the breakaway, so no run of the schedule resolves it (its load sits in the chain's masses, below)",
+    "method": ""
+   },
+   {
+    "key": "wrist.command_delay_s",
+    "title": "command delay (host -> board, every board)",
+    "unit": "s",
+    "display": "ms",
+    "nominal": 0.0055,
+    "true": 0.0005999999999999998,
+    "recovered": 0.0006000000000000001,
+    "ci95": [
+     0.0004,
+     0.0006000000000000001
+    ],
+    "error": 2.168404344971009e-19,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.0002,
+     "source": "proposed: one 0.2 ms physics step (the plant's own delay resolution)"
+    },
+    "pass": true,
+    "routine": "servo.command_delay_scan",
+    "why_not": "",
+    "method": "output error of the twin over 3 train chirps at 10 command delays (0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 3.0, 6.0 ms); the minimum, 95 % by a run bootstrap"
+   },
+   {
+    "key": "wrist.gravity_azimuth_rad",
+    "title": "real up's azimuth about the twin's z (CAN 14's axis)",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": -1.6234296691324173,
+    "true": -1.6670629004322755,
+    "recovered": -1.6669893213092348,
+    "ci95": null,
+    "error": 7.357912304062353e-05,
+    "tolerance": {
+     "kind": "abs",
+     "value": 0.017453292519943295,
+     "source": "proposed: 1 deg (turns CAN 14's ~0.27 N.m load's bottom 1 deg: 5 mN.m, 3 % of its breakaway)"
+    },
+    "pass": true,
+    "routine": "arm.gravity_direction",
+    "why_not": "",
+    "method": "CAN 14's identified load (274.6 mN.m, bottom 77.62 deg) on the CAD centres of mass: azimuth turned -2.50 deg from the description's, masses x 1.201 (check: 274.6 mN.m, 77.62 deg)"
+   },
+   {
+    "key": "wrist.gravity_polar_rad",
+    "title": "real up's angle from the twin's z (CAN 14's axis)",
+    "unit": "rad",
+    "display": "deg",
+    "nominal": 1.6536526814873729,
+    "true": 1.6798326202672877,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "CAN 14's load goes as sin(polar), flat at 94.7 deg: a 1.5 deg tilt moves it 0.2 %, which a mass does as well; CAN 15 and 16, which would see it, carry ~2 mN.m",
+    "method": ""
+   },
+   {
+    "key": "wrist.mass_hard_stop_kg",
+    "title": "hard_stop mass",
+    "unit": "kg",
+    "display": "",
+    "nominal": 0.293,
+    "true": 0.35159999999999997,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 0.35190471631617964
+   },
+   {
+    "key": "wrist.com_hard_stop_x_m",
+    "title": "hard_stop centre of mass x",
+    "unit": "m",
+    "display": "mm",
+    "nominal": -0.00157697,
+    "true": -0.00157697,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": -0.00157697
+   },
+   {
+    "key": "wrist.com_hard_stop_y_m",
+    "title": "hard_stop centre of mass y",
+    "unit": "m",
+    "display": "mm",
+    "nominal": 7.0397e-05,
+    "true": 7.0397e-05,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 7.0397e-05
+   },
+   {
+    "key": "wrist.com_hard_stop_z_m",
+    "title": "hard_stop centre of mass z",
+    "unit": "m",
+    "display": "mm",
+    "nominal": 0.0454404,
+    "true": 0.0454404,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 0.0454404
+   },
+   {
+    "key": "wrist.mass_hard_stop_2_kg",
+    "title": "hard_stop_2 mass",
+    "unit": "kg",
+    "display": "",
+    "nominal": 0.293,
+    "true": 0.35159999999999997,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 0.35190471631617964
+   },
+   {
+    "key": "wrist.com_hard_stop_2_x_m",
+    "title": "hard_stop_2 centre of mass x",
+    "unit": "m",
+    "display": "mm",
+    "nominal": 0.0454404,
+    "true": 0.0454404,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 0.0454404
+   },
+   {
+    "key": "wrist.com_hard_stop_2_y_m",
+    "title": "hard_stop_2 centre of mass y",
+    "unit": "m",
+    "display": "mm",
+    "nominal": 2.4348e-05,
+    "true": 2.4348e-05,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 2.4348e-05
+   },
+   {
+    "key": "wrist.com_hard_stop_2_z_m",
+    "title": "hard_stop_2 centre of mass z",
+    "unit": "m",
+    "display": "mm",
+    "nominal": -0.00157697,
+    "true": -0.00157697,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": -0.00157697
+   },
+   {
+    "key": "wrist.mass_hard_stop_3_kg",
+    "title": "hard_stop_3 mass",
+    "unit": "kg",
+    "display": "",
+    "nominal": 0.0874437,
+    "true": 0.10493244,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 0.10502338034859085
+   },
+   {
+    "key": "wrist.com_hard_stop_3_x_m",
+    "title": "hard_stop_3 centre of mass x",
+    "unit": "m",
+    "display": "mm",
+    "nominal": -0.00236654,
+    "true": -0.00236654,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": -0.00236654
+   },
+   {
+    "key": "wrist.com_hard_stop_3_y_m",
+    "title": "hard_stop_3 centre of mass y",
+    "unit": "m",
+    "display": "mm",
+    "nominal": 3.67627e-05,
+    "true": 3.67627e-05,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 3.67627e-05
+   },
+   {
+    "key": "wrist.com_hard_stop_3_z_m",
+    "title": "hard_stop_3 centre of mass z",
+    "unit": "m",
+    "display": "mm",
+    "nominal": 0.0274618,
+    "true": 0.0274618,
+    "recovered": null,
+    "ci95": null,
+    "error": null,
+    "tolerance": null,
+    "pass": null,
+    "routine": null,
+    "why_not": "only their gravity at a driven joint is seen (can14.gravity_nm, gravity_bottom_rad): with one joint moving at a time the chain's 12 first moments project onto two numbers per joint, and CAN 15's and 16's are below the noise",
+    "method": "",
+    "set_for_twin": 0.0274618
+   }
+  ],
+  "routines": [
+   {
+    "routine": "servo.backlash_reversal_held",
+    "identifies": [
+     "can14.backlash_rad",
+     "can15.backlash_rad",
+     "can16.backlash_rad"
+    ],
+    "runs": 3,
+    "seconds": 5.1,
+    "found": {
+     "can14.backlash_rad": 0.003533077049760923,
+     "can15.backlash_rad": 0.0052588054361323265,
+     "can16.backlash_rad": 0.0037248246482466346
+    }
+   },
+   {
+    "routine": "servo.breakaway_two_sided",
+    "identifies": [
+     "can14.static_friction_nm",
+     "can15.static_friction_nm",
+     "can16.static_friction_nm"
+    ],
+    "runs": 3,
+    "seconds": 10.8,
+    "found": {
+     "can14.static_friction_nm": 0.19995500000000827,
+     "can15.static_friction_nm": 0.14057749999999714,
+     "can16.static_friction_nm": 0.21030249999999892
+    }
+   },
+   {
+    "routine": "homing.single_touch",
+    "identifies": [
+     "can14.zero_offset_rad",
+     "can15.zero_offset_rad",
+     "can16.zero_offset_rad"
+    ],
+    "runs": 3,
+    "seconds": 3.0,
+    "found": {
+     "can14.zero_offset_rad": 1.4784801427188046,
+     "can15.zero_offset_rad": 0.5882756146624675,
+     "can16.zero_offset_rad": -0.565070570339668
+    }
+   },
+   {
+    "routine": "servo.dynamics_regression",
+    "identifies": [
+     "can14.coulomb_nm",
+     "can14.damping_nm_s_rad",
+     "can15.coulomb_nm",
+     "can15.damping_nm_s_rad",
+     "can16.coulomb_nm",
+     "can16.damping_nm_s_rad",
+     "can14.axis_inertia_kg_m2",
+     "can15.axis_inertia_kg_m2",
+     "can16.axis_inertia_kg_m2",
+     "can14.gravity_nm",
+     "can14.gravity_bottom_rad"
+    ],
+    "runs": 50,
+    "seconds": 389.7,
+    "found": {
+     "can14.coulomb_nm": 0.05185666087656504,
+     "can15.coulomb_nm": 0.06503735169485904,
+     "can16.coulomb_nm": 0.06567753808490322,
+     "can14.armature_kg_m2": 0.0011221129914901508,
+     "can15.armature_kg_m2": 0.001266894004280024,
+     "can16.armature_kg_m2": 0.0012673142729533102,
+     "can14.damping_nm_s_rad": 0.00213789277382447,
+     "can15.damping_nm_s_rad": 0.0007716871253269047,
+     "can16.damping_nm_s_rad": 0.0,
+     "can14.axis_inertia_kg_m2": 0.0035103328129541984,
+     "can15.axis_inertia_kg_m2": 0.00174144867034829,
+     "can16.axis_inertia_kg_m2": 0.0012964117991177571,
+     "wrist.mass_hard_stop_kg": 0.293,
+     "wrist.com_hard_stop_x_m": 0.005936344552112532,
+     "wrist.com_hard_stop_y_m": -0.0018063107268656959,
+     "wrist.com_hard_stop_z_m": 0.0454404,
+     "wrist.mass_hard_stop_2_kg": 0.29303079157063966,
+     "wrist.com_hard_stop_2_x_m": 0.05294815019475088,
+     "wrist.com_hard_stop_2_y_m": 8.945054058630827e-05,
+     "wrist.com_hard_stop_2_z_m": 0.002949364576165369,
+     "wrist.mass_hard_stop_3_kg": 0.08762514504962103,
+     "wrist.com_hard_stop_3_x_m": -0.0014679049415402665,
+     "wrist.com_hard_stop_3_y_m": -8.813742609325443e-06,
+     "wrist.com_hard_stop_3_z_m": 0.04254107933211649,
+     "wrist.command_delay_s": 0.0006344084113574872,
+     "can14.gravity_nm": 0.27459335281568426,
+     "can14.gravity_bottom_rad": 1.3547292259694297
+    }
+   },
+   {
+    "routine": "arm.gravity_direction",
+    "identifies": [
+     "wrist.gravity_azimuth_rad"
+    ],
+    "runs": 0,
+    "seconds": 1.1,
+    "found": {
+     "wrist.gravity_azimuth_rad": -1.6669893213092348,
+     "wrist.mass_hard_stop_kg": 0.35190471631617964,
+     "wrist.com_hard_stop_x_m": -0.00157697,
+     "wrist.com_hard_stop_y_m": 7.0397e-05,
+     "wrist.com_hard_stop_z_m": 0.0454404,
+     "wrist.mass_hard_stop_2_kg": 0.35190471631617964,
+     "wrist.com_hard_stop_2_x_m": 0.0454404,
+     "wrist.com_hard_stop_2_y_m": 2.4348e-05,
+     "wrist.com_hard_stop_2_z_m": -0.00157697,
+     "wrist.mass_hard_stop_3_kg": 0.10502338034859085,
+     "wrist.com_hard_stop_3_x_m": -0.00236654,
+     "wrist.com_hard_stop_3_y_m": 3.67627e-05,
+     "wrist.com_hard_stop_3_z_m": 0.0274618,
+     "can14.armature_kg_m2": 0.0011240277376968854,
+     "can15.armature_kg_m2": 0.0013298044912060736,
+     "can16.armature_kg_m2": 0.0012611748520404695
+    }
+   },
+   {
+    "routine": "servo.command_delay_scan",
+    "identifies": [
+     "wrist.command_delay_s"
+    ],
+    "runs": 3,
+    "seconds": 96.1,
+    "found": {
+     "wrist.command_delay_s": 0.0006000000000000001
+    }
+   }
+  ],
+  "truth_moved": {},
+  "seconds": 506.2,
+  "passed": true,
+  "failing": []
+ },
+ "report": {
+  "rig": "ur_wrist_test_rig",
+  "floor": {
+   "can14": 0.0038756488717629277,
+   "can15": 0.0031208098122929378,
+   "can16": 0.0025893398223586937
+  },
+  "errors": {
+   "nominal": {
+    "can14": 0.012108501083421002,
+    "can15": 0.14347442944232386,
+    "can16": 0.035015896331655395
+   },
+   "fitted": {
+    "can14": 0.0001140045494362586,
+    "can15": 0.0002161526053248094,
+    "can16": 0.00039489813295956835
+   }
+  },
+  "ratios": {
+   "nominal": {
+    "can14": 3.124251314829037,
+    "can15": 45.973461400042694,
+    "can16": 13.523098061249662
+   },
+   "fitted": {
+    "can14": 0.029415603221145527,
+    "can15": 0.06926170395689593,
+    "can16": 0.15250919541331037
+   }
+  },
+  "tool_stop_m": {
+   "floor": 1.411053076386773e-05,
+   "nominal": 0.06240492842937083,
+   "fitted": 4.576534142069724e-05
+  },
+  "runs": 16,
+  "per_run": {
+   "floor": {
+    "can15/jog-s5/fb": {
+     "can15": 0.0020807224901562772
+    },
+    "can15/jog-s3/fb": {
+     "can15": 0.0023414827428578327
+    },
+    "can15/jog-s4/fb": {
+     "can15": 0.0023289767309791045
+    },
+    "can15/sweep-s3/fb": {
+     "can15": 0.0031015538409302694
+    },
+    "can15/sweep-s4/fb": {
+     "can15": 0.0039218258931842465
+    },
+    "can15/sweep-s5/fb": {
+     "can15": 0.003965893278930357
+    },
+    "can16/jog-s3/fb": {
+     "can16": 0.0018014076855056252
+    },
+    "can16/sweep-s3/fb": {
+     "can16": 0.001790795367450149
+    },
+    "can16/sweep-s4/fb": {
+     "can16": 0.0031692689508320345
+    },
+    "can16/sweep-s5/fb": {
+     "can16": 0.0035424166811041102
+    },
+    "can14/jog-s4/fb": {
+     "can14": 0.002620396206476803
+    },
+    "can14/jog-s3/fb": {
+     "can14": 0.003117649659228492
+    },
+    "can14/jog-s5/fb": {
+     "can14": 0.002436821895408118
+    },
+    "can14/sweep-s3/fb": {
+     "can14": 0.004832829335905972
+    },
+    "can14/sweep-s5/fb": {
+     "can14": 0.004372433689366933
+    },
+    "can14/sweep-s4/fb": {
+     "can14": 0.004271781525433317
+    }
+   },
+   "nominal": {
+    "can15/jog-s5/fb": {
+     "can15": 0.0395732388831209
+    },
+    "can15/jog-s3/fb": {
+     "can15": 0.04305071462314508
+    },
+    "can15/jog-s4/fb": {
+     "can15": 0.044195362040483195
+    },
+    "can15/sweep-s3/fb": {
+     "can15": 0.160996920014858
+    },
+    "can15/sweep-s4/fb": {
+     "can15": 0.2362771683843236
+    },
+    "can15/sweep-s5/fb": {
+     "can15": 0.048137239779774466
+    },
+    "can16/jog-s3/fb": {
+     "can16": 0.038588733441752836
+    },
+    "can16/sweep-s3/fb": {
+     "can16": 0.02835445759253782
+    },
+    "can16/sweep-s4/fb": {
+     "can16": 0.039481886491259215
+    },
+    "can16/sweep-s5/fb": {
+     "can16": 0.037120274032828526
+    },
+    "can14/jog-s4/fb": {
+     "can14": 0.00802457045191229
+    },
+    "can14/jog-s3/fb": {
+     "can14": 0.008081541787780802
+    },
+    "can14/jog-s5/fb": {
+     "can14": 0.007723737530118173
+    },
+    "can14/sweep-s3/fb": {
+     "can14": 0.014004977143423655
+    },
+    "can14/sweep-s5/fb": {
+     "can14": 0.014230710405338192
+    },
+    "can14/sweep-s4/fb": {
+     "can14": 0.014257763802487703
+    }
+   },
+   "fitted": {
+    "can15/jog-s5/fb": {
+     "can15": 0.0001599189919348231
+    },
+    "can15/jog-s3/fb": {
+     "can15": 0.00026188752596643597
+    },
+    "can15/jog-s4/fb": {
+     "can15": 0.00029820269254068963
+    },
+    "can15/sweep-s3/fb": {
+     "can15": 0.00016222741003681278
+    },
+    "can15/sweep-s4/fb": {
+     "can15": 0.0001667992873915604
+    },
+    "can15/sweep-s5/fb": {
+     "can15": 0.00030192005756863373
+    },
+    "can16/jog-s3/fb": {
+     "can16": 0.00038558626364789387
+    },
+    "can16/sweep-s3/fb": {
+     "can16": 0.00034952101633030293
+    },
+    "can16/sweep-s4/fb": {
+     "can16": 0.00036253116724230207
+    },
+    "can16/sweep-s5/fb": {
+     "can16": 0.0004893404329044802
+    },
+    "can14/jog-s4/fb": {
+     "can14": 9.781449020545485e-05
+    },
+    "can14/jog-s3/fb": {
+     "can14": 0.00011110054127129275
+    },
+    "can14/jog-s5/fb": {
+     "can14": 0.00010057463184000404
+    },
+    "can14/sweep-s3/fb": {
+     "can14": 0.00013273920780545315
+    },
+    "can14/sweep-s5/fb": {
+     "can14": 0.00011732522201605919
+    },
+    "can14/sweep-s4/fb": {
+     "can14": 0.0001139359639059835
+    }
+   }
+  },
+  "seconds": 117.3,
+  "gates": [
+   {
+    "id": "twinned",
+    "title": "fitted twin's held-out error / floor, worst joint",
+    "value": "0.153",
+    "rule": "<= 1.5x",
+    "passed": true,
+    "source": "sim2real.cards.registry.TWINNED_LIMIT",
+    "violations": []
+   },
+   {
+    "id": "recovery",
+    "title": "every identified hidden value within its tolerance (the sim oracle only)",
+    "value": "22/22",
+    "rule": "all",
+    "passed": true,
+    "source": "sysid/examples/ur_wrist_test_rig/world.json + the rig's tolerances",
+    "violations": []
+   },
+   {
+    "id": "tool_at_stops",
+    "title": "fitted twin's tool vs the world's where the command rests, p95",
+    "value": "0.046 mm",
+    "rule": "<= 1 mm",
+    "passed": true,
+    "source": "Zach 2026-11-11: final tool error sub 1 mm",
+    "violations": []
+   }
+  ],
+  "passed": true
+ }
+}
