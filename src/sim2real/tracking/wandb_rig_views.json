@@ -1,0 +1,11 @@
+{
+ "reports": {
+  "fivebar": "https://wandb.ai/zach-yamaoka-independent/Sim2Real \u00b7 five-bar rig/reports/Sim2Real-\u00b7-five-bar-rig-\u00b7-versions-and-gates--VmlldzoxODI5MzczOA==",
+  "servo-across-rigs": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-servo-joints-across-rigs--VmlldzoxODI5Mzc0MA==",
+  "ur_wrist": "https://wandb.ai/zach-yamaoka-independent/Sim2Real \u00b7 wrist rig/reports/Sim2Real-\u00b7-wrist-rig-\u00b7-versions-and-gates--VmlldzoxODI5MzczNg=="
+ },
+ "views": {
+  "fivebar": "https://wandb.ai/zach-yamaoka-independent/Sim2Real \u00b7 five-bar rig?nw=62bp8rsp6h2",
+  "ur_wrist": "https://wandb.ai/zach-yamaoka-independent/Sim2Real \u00b7 wrist rig?nw=wb14q47ug7h"
+ }
+}
