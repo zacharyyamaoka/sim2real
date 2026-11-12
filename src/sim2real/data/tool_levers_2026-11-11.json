@@ -1,0 +1,32 @@
+{
+ "schema": "sim2real.rack.tool_levers/1",
+ "rigs": {
+  "ur_wrist": {
+   "tool": "the holder board #4-7's origin (ur_wrist_test_rig.rig._tool, bam_ur_wrist WristModel)",
+   "typical_pose_deg": {
+    "can14": 0.64,
+    "can15": -2.11,
+    "can16": 0.39
+   },
+   "typical_pose_source": "median of the multi3 runs' real poses (CAD), every 20th row",
+   "lever_mm_per_rad": {
+    "can14": 80.51746814471986,
+    "can15": 100.5993096923138,
+    "can16": 34.54873494393373
+   }
+  },
+  "fivebar": {
+   "tool": "the tool point (L2 tip) through bam_fivebar's forward_pose + tool_point on BENCH",
+   "typical_pose_deg": {
+    "j2": 77.64,
+    "c1": 119.71
+   },
+   "typical_pose_source": "median of every ladder_real_* rung's measured motors, every 50th tick",
+   "lever_mm_per_rad": {
+    "j2": 296.9890526379565,
+    "c1": 282.0659047534317
+   },
+   "note": "C1's lever is |d tool / d c1| through the closed loop (J2 held)"
+  }
+ }
+}

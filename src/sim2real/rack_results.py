@@ -229,6 +229,42 @@ REPEAT_FLOOR = WRIST / ".." / "repeat_floor"
 ONE_CLICK = Path(__file__).resolve().parent / "data" / "ur_wrist_one_click_2026-11-11.json"
 
 
+TOOL_LEVERS = Path(__file__).resolve().parent / "data" / "tool_levers_2026-11-11.json"   # tools/tool_levers.py, each rig's own FK
+SETTLED_AFTER_S = 0.3   # a row counts as settled once its target has rested this long (the seam's tool_error_at_stops rule)
+
+
+def joint_share_deg(lever_mm_per_rad: float, joints: int) -> float:
+    """The joint's share of the tool gate, an RSS split (proposed, Zach to confirm): TOOL_GATE_MM / (lever x sqrt(n_joints)), in degrees."""
+    return math.degrees(TOOL_GATE_MM / (lever_mm_per_rad * math.sqrt(joints)))
+
+
+def settled_errors_deg(t: np.ndarray, q: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """|q - target| (deg) on the rows whose target has not moved for SETTLED_AFTER_S."""
+    target = np.asarray(target, float)
+    moved = np.r_[True, np.abs(np.diff(np.nan_to_num(target))) > 1e-9] | ~np.isfinite(target)
+    since = np.zeros(t.size)
+    start = t[0]
+    for k in range(t.size):
+        if moved[k]:
+            start = t[k]
+        since[k] = t[k] - start
+    keep = (since >= SETTLED_AFTER_S) & np.isfinite(target) & np.isfinite(q)
+    return np.degrees(np.abs(q[keep] - target[keep]))
+
+
+def job_answer(share_deg: float, lever_mm: float, joints: int, settled_deg: list, where: str, soft: str) -> dict:
+    """A joint's Job: its settled error vs target (median, p95 beside it) against its share of the 1 mm tool gate. Unknown without data."""
+    gate = (f"settled error ≤ {share_deg:.3f}°: its share of the {TOOL_GATE_MM:g} mm tool gate, 1 mm ÷ (lever {lever_mm:.0f} mm/rad × "
+            f"√{joints}) (an RSS split, proposed, Zach to confirm)")
+    values = np.asarray([v for v in settled_deg if np.isfinite(v)], float)
+    if not values.size:
+        return {"own": "unknown", "numbers": f"no settled data; share {share_deg:.3f}°; {soft}", "gate": gate}
+    med, p95 = float(np.median(values)), float(np.percentile(values, 95))
+    return {"own": "yes" if med <= share_deg else "no",
+            "numbers": f"settled {med:.3f}° median, {p95:.3f}° p95 over {values.size} {where} vs its share {share_deg:.3f}° "
+                       f"({med / share_deg:.1f}×); {soft}", "gate": gate}
+
+
 def routines_from_rows(rows: list[dict], prefix: str, stress: str = "noise stress: pending (the stress lane is running)") -> dict:
     """A node's Routines answer from the one-click calibration's rows under `prefix` (can15. / wrist.): yes when every IDENTIFIABLE
     row recovers its hidden truth within tolerance at 1x noise; an unidentifiable one is listed "not identifiable (reason)", never a
@@ -312,6 +348,7 @@ def repeat_campaign() -> dict[int, dict]:
                 runs.append((t[keep] - start, _wrist_target(t, data["q"], data["q_target"], data["qd_target"])[keep], data["q"][keep]))
                 q_all.append(np.degrees(data["q"])); qd_all.append(np.degrees(data["qd"])); qdd_all.append(np.degrees(np.gradient(data["qd"], t)))
                 entry.setdefault("samples", []).append((data["q"], data["qd"], np.gradient(data["qd"], t)))
+                entry.setdefault("settled", []).append(("repeat campaign", settled_errors_deg(t, data["q"], data["q_target"])))
                 dts.append(float(np.median(np.diff(t))))
             floor = repeat_floor(runs)
             floor_deg = math.degrees(floor.value) if floor.value is not None else None
@@ -378,6 +415,7 @@ def ur_wrist() -> CalibrationResult:
     per_run: dict[int, list] = {can: [] for can in (14, 15, 16)}
     cover: dict[int, list] = {can: [[], [], []] for can in (14, 15, 16)}
     samples: dict[int, list] = {can: [] for can in (14, 15, 16)}   # real (q rad board, qd, qdd) for the Data question
+    settled: dict[int, list] = {can: [] for can in (14, 15, 16)}   # |q - target| (deg) where the target rests, for the Job question
     dt_of = {}
     for (session, name), row in scored[alias[order[-1]]].items():
         gainset = Path(session).parent.name
@@ -394,6 +432,7 @@ def ur_wrist() -> CalibrationResult:
         cover[can][1].append(np.degrees(qd))
         cover[can][2].append(np.degrees(np.gradient(qd, t)) if t.size > 2 else np.array([]))
         samples[can].append((q, qd, np.gradient(qd, t) if t.size > 2 else np.zeros_like(qd)))
+        settled[can].append((gainset, settled_errors_deg(t, q, data["q_target"])))
         # WHY (gain set, tape): a repeat is the same tape on the same controller config, compared like for like (T1 "per run kind");
         # pooling every tape let low-motion tapes (parks, holds) set a floor 5-20x under the dedicated campaign's (2026-11-11 review)
         kind = tape
@@ -512,6 +551,23 @@ def ur_wrist() -> CalibrationResult:
                             f"facing ≥ {thresholds['facing_pct_of_allowed']:g} % of the allowed mask ({status})"}
     else:
         arm_data = None
+    levers = json.loads(TOOL_LEVERS.read_text())["rigs"] if TOOL_LEVERS.exists() else {}
+    if "ur_wrist" in levers:
+        for can, node in joints.items():
+            lever = levers["ur_wrist"]["lever_mm_per_rad"][f"can{can}"]
+            # WHY per gain set, judged on the operating one (2026-11-11): a joint's Job is the controller in service; the stock kp 2 runs
+            # cannot hold a target against stiction (settled p95 ~10 deg) and would grade a controller nobody runs. The operating gains are
+            # the twin of record's (pick_sliding: kp 75 / kd 1 + the refit's sliding FF); CAN 14's driven data is its repeat campaign only
+            by_gains: dict[str, list] = defaultdict(list)
+            for gains, values in settled[can] + campaign.get(can, {}).get("settled", []):
+                by_gains[gains].append(values)
+            operating = "pick_sliding" if "pick_sliding" in by_gains else "repeat campaign"
+            others = "; ".join(f"{g}: {float(np.median(np.concatenate(v))):.3f}° median" for g, v in sorted(by_gains.items())
+                               if g != operating and np.concatenate(v).size)
+            values = np.concatenate(by_gains.get(operating) or [np.zeros(0)])
+            node.questions["Job"] = job_answer(joint_share_deg(lever, 3), lever, 3, values.tolist(),
+                                               f"settled rows (the target at rest ≥ 0.3 s) on the operating gains ({operating})",
+                                               (f"other gains: {others}; " if others else "") + node.questions["Job"]["numbers"])
     one_click = json.loads(ONE_CLICK.read_text()) if ONE_CLICK.exists() else None
     if one_click:
         rows = one_click["calibration"]["rows"]
@@ -706,6 +762,14 @@ def fivebar() -> CalibrationResult:
             coverage_text=f"angle {summary_rows[0]['value']}°, speed p99 {summary_rows[1]['value']}°/s, {summary_rows[3]['value']} min logged",
             routines="the five-bar mass ID's hidden-gravity test (bam_fivebar tests/test_massid.py) grades the gravity only")
         node.twin_ratio = twin_same / driven["floor_deg"] if driven["known"] and twin_same else None
+        fb_levers = json.loads(TOOL_LEVERS.read_text())["rigs"].get("fivebar") if TOOL_LEVERS.exists() else None
+        if fb_levers and DWELL.exists():
+            lever = fb_levers["lever_mm_per_rad"][joint]
+            dwell_rows = json.loads(DWELL.read_text())["rows"]
+            index = ("j2", "c1").index(joint)   # WHY by name: `k` is reused by the floors loop above
+            settled_deg = [abs(r["motor_error_deg"][index]) for r in dwell_rows if r.get("motor_error_deg")]
+            node.questions["Job"] = job_answer(joint_share_deg(lever, 2), lever, 2, settled_deg, "dwell holds (3 s, the last second)",
+                                               node.questions["Job"]["numbers"])
         if export:
             thresholds = export["good_data_thresholds"]
             can = {"j2": "12", "c1": "13"}[joint]
