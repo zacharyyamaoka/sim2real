@@ -403,8 +403,8 @@ class Twin:
 
     def __init__(self, description: Description, *, model: str | None = None, workers: int = 6):
         self.description = description
-        self.runner = SimRunner(description, workers=workers)
-        self.model = model or dm.current_models(self.runner.typed().type)[0].id
+        self.runner = _runner(description, workers)
+        self.model = model or (self.runner.default_model() if _is_rig(self.runner) else dm.current_models(self.runner.typed().type)[0].id)
 
     @classmethod
     def load(cls, name: str, *, model: str | None = None, workers: int = 6) -> Twin:
@@ -418,9 +418,11 @@ class Twin:
     def simulate(self, **options) -> Simulation:
         return self.runner.simulate(**options)
 
-    def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None) -> Twin:
+    def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None, noise=None) -> Twin:
         """A NEW twin, fitted: the type's routine schedule played `on` the simulator at the hidden truth (`truth="sealed"`: the fit never
-        sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test)."""
+        sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test).
+        `noise` (a rig on the one-click seam only): None = the rig's measured 1x, a number = every term at that level, or a
+        sim2real.rig.NoiseModel."""
         if on not in BACKENDS:
             raise ValueError(f"on must be one of {BACKENDS}, not {on!r}")
         if on == "real":
@@ -431,6 +433,20 @@ class Twin:
                 "floor (gate T1). Not wired in this lane.")
         if truth != "sealed":
             raise ValueError(f"on='sim' fits against a sealed hidden truth (truth='sealed'), not {truth!r}")
+        if _is_rig(self.runner):
+            from .rig import RigRunner  # noqa: PLC0415
+
+            calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, noise=noise)
+            fitted = Twin.__new__(Twin)
+            fitted.description, fitted.model = self.description, self.model
+            fitted.runner = RigRunner(self.description, self.runner.rig, workers=self.runner.workers, state=state)
+            fitted.values_ = calibration.values
+            fitted.intervals_ = {r["key"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
+            fitted.rungs_ = {step["routine"]: step["found"] for step in calibration.routines}
+            fitted.calibration_ = calibration
+            return fitted
+        if noise is not None:
+            raise NotImplementedError("the pendulum tracer sets its noise through sysid's ladder (sysid.world.noise_scale), not calibrate(noise=)")
         calibration, state = self.runner.calibrate(model=self.model, truth=move_truth)
         fitted = Twin.__new__(Twin)
         fitted.description, fitted.model = self.description, self.model
@@ -441,6 +457,20 @@ class Twin:
         fitted.calibration_ = calibration
         return fitted
 
+    def noise(self):
+        """The rig's measured 1x noise model (sim2real.rig.NoiseModel): .at(level) and .with_terms(...) make a stress lane's sweep."""
+        if not _is_rig(self.runner):
+            raise NotImplementedError("the pendulum tracer's noise is sysid's world.json noise block (sysid.world.noise_scale)")
+        return self.runner.noise()
+
+    def result(self):
+        """The fitted twin's calibration as one page: sim2real.result.CalibrationResult (its display() serves it)."""
+        if not self.fitted:
+            raise RuntimeError("result() needs a fitted twin: fitted = twin.calibrate(...), then fitted.result()")
+        if not _is_rig(self.runner):
+            raise NotImplementedError("the pendulum tracer's page is reports/one-click-tracer-2026-11-11.html")
+        return self.runner.result()
+
     def eval_twin(self) -> TwinReport:
         if not self.fitted:
             raise RuntimeError("eval_twin needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval_twin()")
@@ -448,6 +478,19 @@ class Twin:
 
     def summary(self) -> str:
         return self.calibration_.summary() if self.fitted else self.description.summary()
+
+
+def _runner(description: Description, workers: int):
+    """The rig's own runner when its description ships rig.py (the one-click seam, sim2real.rig), else the pendulum tracer's SimRunner.
+    WHY by the file and not a flag: a rig opts in by supplying the seam (docs/one-click-seam.md); the tracer's proven path is untouched."""
+    from . import rig as seam  # noqa: PLC0415
+
+    backend = seam.load_rig(description.id)
+    return SimRunner(description, workers=workers) if backend is None else seam.RigRunner(description, backend, workers=workers)
+
+
+def _is_rig(runner) -> bool:
+    return type(runner).__name__ == "RigRunner"
 
 
 def load(name: str, **options) -> Twin:
