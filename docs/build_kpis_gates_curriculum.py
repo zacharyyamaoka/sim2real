@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 from urllib.parse import quote
 
-from sim2real.rack_results import load
+from sim2real.rack_results import fivebar_job_configs, load
 from sim2real.result import QUESTIONS
 from sim2real.tracking import curriculum, rigs
 from sim2real.tracking.wandb_log import ENTITY, PROJECT, REGISTRY, code_version, records
@@ -324,9 +324,12 @@ def build(verify_log: str | None, rig_verify_log: str | None = None) -> str:
     # the brief's tool number (sim2real 662e64d): 9.6 mm at the 16 settled holds on the nominal gravity compensation
     tool_now = fivebar_tool.get("Job/tool_settled_mm", float("nan"))
     tool_moved = abs(tool_now - 9.5588) > 0.05
+    # WHY the config's name and file come from the Job history: rack_results judges the newest config that exists (identified comp +
+    # settle integrator since 2026-11-12), so a hard-coded "identified" label went stale the day the settle run landed
+    job_config, job_file, _, job_deployable = fivebar_job_configs()[-1]
     tool_bullet = (f"> - **Five-bar tool:** 9.6 mm at the 16 settled holds on the nominal gravity compensation → {tool_now:.1f} mm on the "
-                   "identified one (`data/fivebar_dwell_identified_2026-11-11.json`); the tool's Job now reads the operating config, the "
-                   "nominal run stays beside it.\n" if tool_moved else "")
+                   f"{job_config} (`data/{job_file.name}`; {job_deployable}); the tool's Job reads the newest config in the Job history, "
+                   "the older runs stay beside it as controller versions.\n" if tool_moved else "")
     tool_unchanged = "" if tool_moved else f", the tool's {tool_now:.1f} mm"
     ratios = {joint: f[joint]["history"][-1].get("Job/settled_over_share") for joint in ("j2", "c1")}
     if all(ratios.values()):
@@ -556,7 +559,7 @@ counts differ):
 **Five-bar**
 
 1. **J2 and C1, S1.** Only the gravity is graded on a hidden truth (`bam_fivebar tests/test_massid.py`). Port the wrist's one-click seam
-   (`Twin.load(...).calibrate(on='sim', truth='sealed')` at 1× noise) so friction, armature and delay are graded too; the arm's A1 and
+   (`RobotTwin(...).calibrate(on='sim', truth='sealed')` at 1× noise) so friction, armature and delay are graded too; the arm's A1 and
    the tool's T1 come with it.
 2. **Then S4.** The after twin is {num(f['j2'], 'Twin/ratio', '{:.2f}')}× (J2) and {num(f['c1'], 'Twin/ratio', '{:.2f}')}× (C1) its floor
    on the floor's own tape; the gate is 1.5×.

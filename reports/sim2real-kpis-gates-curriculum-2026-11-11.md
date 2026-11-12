@@ -1,6 +1,6 @@
 # Sim2Real: KPIs, gates and the curriculum
 
-*2026-11-11 · status as of sim2real `main` @ `2f2b68c0d` · written by `docs/build_kpis_gates_curriculum.py` from `sim2real.rack_results.load(...)` through
+*2026-11-11 · status as of sim2real `main` @ `7fac172b0` · written by `docs/build_kpis_gates_curriculum.py` from `sim2real.rack_results.load(...)` through
 `sim2real.tracking.wandb_log.records()`, the same records the W&B runs are made from · angles in degrees, lengths in mm*
 
 ## The answer
@@ -24,7 +24,7 @@
   one-click seam the wrist got today), then its twin (S4) and the tool gate.
 - **The gates, in Zach's order (2026-11-11 21:50), all from the joint encoders through FK:** target vs sim (the controller) →
   sim vs real (the twin, ≤ 1.5× the same-input floor on the tick clock) → target vs real (the tool ≤ 1 mm at a settled stop). ArUco is a
-  flag, never a gate. UR wrist: gate 1 (target vs sim at a stop) **passes**: the twin's tool settles 0.71 mm from its target on gains: pick_sliding · settled stops (multi3); gate 2 (twin) **fails**; gate 3 (tool at a stop) **fails**: 1.05 mm on gains: pick_sliding · settled stops (multi3). Five-bar: gate 1 (target vs sim at a stop) **fails**: the twin's tool settles 4.19 mm from its target on gravity comp: identified; gate 2 (twin) **fails**; gate 3 (tool at a stop) **fails**: 4.34 mm on gravity comp: identified.
+  flag, never a gate. UR wrist: gate 1 (target vs sim at a stop) **passes**: the twin's tool settles 0.71 mm from its target on gains: pick_sliding · settled stops (multi3); gate 2 (twin) **fails**; gate 3 (tool at a stop) **fails**: 1.05 mm on gains: pick_sliding · settled stops (multi3). Five-bar: gate 1 (target vs sim at a stop) **fails**: the twin's tool settles 1.54 mm from its target on gravity comp: identified + settle integrator (RAM only); gate 2 (twin) **fails**; gate 3 (tool at a stop) **fails**: 2.41 mm on gravity comp: identified + settle integrator (RAM only).
 - **W&B, live: one project per rig**, [Sim2Real · wrist rig](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig), [Sim2Real · five-bar rig](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig), on bam_ws's `bam_trackio.bbo` template (Zach's direction, relayed by the W1 sprint),
   with the same gate names on both and `type`, `joint` and `deployment` config on every run; one W&B run per version of what is fitted
   (each twin iteration, each controller configuration). The one-project layout I first recommended (proposal B) stays in `Sim2Real`
@@ -40,7 +40,7 @@
 > - **C1 coverage:** 34.1 % → 44.3 % after seven C1 swings (`coverage_real_031652`, `7f8d13b`), so
 >   C1 now stops at Routines like J2.
 > - **Wrist workspace:** the source says 60.55 % (`multi3/multi_scores.json` real_all); the page prints it to one place as 60.5 %.
-> - **Five-bar tool:** 9.6 mm at the 16 settled holds on the nominal gravity compensation → 2.4 mm on the identified one (`data/fivebar_dwell_identified_2026-11-11.json`); the tool's Job now reads the operating config, the nominal run stays beside it.
+> - **Five-bar tool:** 9.6 mm at the 16 settled holds on the nominal gravity compensation → 2.4 mm on the identified comp + settle integrator (`data/fivebar_dwell_settle_2026-11-11.json`; RAM only: the boards' integrator (ki 1000, ilimit 0.58 / 0.66 N·m) is not a board default; written for the run, restored after); the tool's Job reads the newest config in the Job history, the older runs stay beside it as controller versions.
 > - **Unchanged:** the floors (0.099 / 0.087 /
 >   0.241° wrist, 0.160 / 0.187° five-bar), the twin
 >   ratios (1.13× / 1.38× / 0.78×;
@@ -115,12 +115,12 @@ it: the latest twin for the twin gate, the last controller configuration that ra
 | Order | Metric (same name on both rigs) | Role | Limit | UR wrist today | Five-bar today |
 |---|---|---|---|---|---|
 | 1 · target vs sim (controller) | `target_vs_sim_tracking_deg` | kpi | — | 0.148° · gains: pick_sliding | 0.919° · winners + lumped comp |
-| 1 · target vs sim (controller) | `target_vs_sim_at_stop_mm` | gate | ≤ 1 mm (proposed) | 0.71 mm · **passes** · gains: pick_sliding · settled stops (multi3) | 4.19 mm · **fails** (4.2× the gate) · gravity comp: identified |
+| 1 · target vs sim (controller) | `target_vs_sim_at_stop_mm` | gate | ≤ 1 mm (proposed) | 0.71 mm · **passes** · gains: pick_sliding · settled stops (multi3) | 1.54 mm · **fails** (1.5× the gate) · gravity comp: identified + settle integrator (RAM only) |
 | 2 · sim vs real (twin) | `heldout_sim_vs_real_deg` | gate | ≤ 1.5× floor, per joint | 0.118° · **fails** (CAN 14 over 1.5× floor) · latest twin (it5 + gravity refit) | 0.559° · **fails** (J2, C1 over 1.5× floor) · latest twin (refit on the tick clock) |
 | 3 · target vs real | `tracking_rms_deg` | kpi | — | 0.340° · gains: pick_sliding | 0.785° · winners + lumped comp |
 | 3 · target vs real | `tracking_rms_tool_mm` | kpi | — | not measured | 5.65 mm · winners + lumped comp |
-| 3 · target vs real | `target_vs_real_at_stop_mm` | gate | ≤ 1 mm | 1.05 mm · **fails** (1.05× the gate) · gains: pick_sliding · settled stops (multi3) | 4.34 mm · **fails** (4.3× the gate) · gravity comp: identified |
-| 3 · target vs real | `tool_error_at_stop_mm` | gate | ≤ 1 mm | 1.05 mm · **fails** (1.05× the gate) · gains: pick_sliding · settled stops (multi3) | 4.34 mm · **fails** (4.3× the gate) · gravity comp: identified |
+| 3 · target vs real | `target_vs_real_at_stop_mm` | gate | ≤ 1 mm | 1.05 mm · **fails** (1.05× the gate) · gains: pick_sliding · settled stops (multi3) | 2.41 mm · **fails** (2.4× the gate) · gravity comp: identified + settle integrator (RAM only) |
+| 3 · target vs real | `tool_error_at_stop_mm` | gate | ≤ 1 mm | 1.05 mm · **fails** (1.05× the gate) · gains: pick_sliding · settled stops (multi3) | 2.41 mm · **fails** (2.4× the gate) · gravity comp: identified + settle integrator (RAM only) |
 | 3 · target vs real | `home_repeatability_deg` | kpi | — | not measured | not measured |
 | flag | `aruco_vs_fk_mm` | flag | — | not measured | not measured |
 
@@ -131,10 +131,10 @@ it: the latest twin for the twin gate, the last controller configuration that ra
   record), the real joints to 0.340°. At a stop the twin's holder passes 1 mm and the real one
   just misses it (1.05 mm; twin vs real 0.28 mm at the same stops), so the first fix is the twin (CAN 14's passive
   release) and a tool floor, not the controller.
-- **Five-bar:** gate 1 (target vs sim at a stop) **fails**: the twin's tool settles 4.19 mm from its target on gravity comp: identified; gate 2 (twin) **fails**; gate 3 (tool at a stop) **fails**: 4.34 mm on gravity comp: identified. Gate 1 fails first: the controller misses the tool gate in a sim that is right by
-  construction (4.19 mm vs the real arm's 4.34 mm), so
+- **Five-bar:** gate 1 (target vs sim at a stop) **fails**: the twin's tool settles 1.54 mm from its target on gravity comp: identified + settle integrator (RAM only); gate 2 (twin) **fails**; gate 3 (tool at a stop) **fails**: 2.41 mm on gravity comp: identified + settle integrator (RAM only). Gate 1 fails first: the controller misses the tool gate in a sim that is right by
+  construction (1.54 mm vs the real arm's 2.41 mm), so
   the tool gap is the controller's (gains, compensation, hold logic) before it is the twin's; the twin's tool is
-  3.30 mm from the real one at the same holds. Coulomb feed-forward is a controller change, and it shows first in gate 1: target vs sim
+  2.58 mm from the real one at the same holds. Coulomb feed-forward is a controller change, and it shows first in gate 1: target vs sim
   went 1.39° → 0.37°
   (worst joint) and the sim's tool 7.4 → 3.0 mm,
   before the real tool's 9.4 → 6.1 mm.
@@ -159,6 +159,7 @@ same plan, averaged over the rungs; the tool at a stop: the 16 three-second hold
 | 3 | Coulomb feed-forward: 0.70 / 0.78 N·m (winners) | 0.370° | 1.096° | J2 0.370° / 1.096°, C1 0.263° / 0.681° | 2.97 mm / 6.06 mm | — | — |
 | 4 | winners + lumped comp | 0.919° | 0.785° | J2 0.919° / 0.785°, C1 0.490° / 0.596° | 4.71 mm / 5.65 mm | — | — |
 | 5 | gravity comp: identified | — | — | — | — | 4.34 mm (fails 1 mm; p95 8.9); sim 4.19 mm (fails), sim vs real 3.30 mm | 19.87 mm |
+| 6 | gravity comp: identified + settle integrator (RAM only) | — | — | — | — | 2.41 mm (fails 1 mm; p95 7.1); sim 1.54 mm (fails), sim vs real 2.58 mm | — |
 
 ## 2 · The curriculum
 
@@ -298,7 +299,7 @@ counts differ):
 **Five-bar**
 
 1. **J2 and C1, S1.** Only the gravity is graded on a hidden truth (`bam_fivebar tests/test_massid.py`). Port the wrist's one-click seam
-   (`Twin.load(...).calibrate(on='sim', truth='sealed')` at 1× noise) so friction, armature and delay are graded too; the arm's A1 and
+   (`RobotTwin(...).calibrate(on='sim', truth='sealed')` at 1× noise) so friction, armature and delay are graded too; the arm's A1 and
    the tool's T1 come with it.
 2. **Then S4.** The after twin is 3.69× (J2) and 2.36× (C1) its floor
    on the floor's own tape; the gate is 1.5×.
@@ -400,7 +401,7 @@ criteria above did not weigh what it adds:
 | Project | Runs (latest evaluation) | Saved view | Report |
 |---|---|---|---|
 | [Sim2Real · wrist rig](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig) | 24 twin (6 nodes × 4 twin iterations) + 4 controller versions | [view](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig?nw=wb14q47ug7h) | [report](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig/reports/Sim2Real-%C2%B7-wrist-rig-%C2%B7-versions-and-gates--VmlldzoxODI5MzczNg==) |
-| [Sim2Real · five-bar rig](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig) | 20 twin (5 nodes × 4 twin iterations) + 5 controller versions | [view](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig?nw=62bp8rsp6h2) | [report](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig/reports/Sim2Real-%C2%B7-five-bar-rig-%C2%B7-versions-and-gates--VmlldzoxODI5MzczOA==) |
+| [Sim2Real · five-bar rig](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig) | 20 twin (5 nodes × 4 twin iterations) + 6 controller versions | [view](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig?nw=62bp8rsp6h2) | [report](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig/reports/Sim2Real-%C2%B7-five-bar-rig-%C2%B7-versions-and-gates--VmlldzoxODI5MzczOA==) |
 | [Sim2Real](https://wandb.ai/zach-yamaoka-independent/Sim2Real) (cross-rig) | the one-project runs below | — | [servo joints and the same-named gates across rigs](https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-%C2%B7-servo-joints-across-rigs--VmlldzoxODI5Mzc0MA==) |
 
 Each project also holds the rig's Weave evaluations and leaderboards (bam_ws `bam_trackio.bbo`: a version is a Weave model version scored on a fixed environment; one leaderboard per environment: twin versions on the held-out runs, controller versions on the coverage set, and on the five-bar the tool at the 16 settled holds): [UR wrist leaderboards](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig/weave/leaderboards), [five-bar leaderboards](https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig/weave/leaderboards).
@@ -419,7 +420,7 @@ Sim2Real · wrist rig: 4 twin-version runs -> 0 twin of record 11-10: heldout_si
   filter type=integrated_servo: ['CAN 14 wrist joint (revolute 11, moteus servo)', 'CAN 15 wrist joint (moteus servo)', 'CAN 16 wrist joint (moteus servo)']
   gate lines on every deployment run: [9] of 9
 Sim2Real · five-bar rig: 4 twin-version runs -> 0 study twin (nominal): heldout_sim_vs_real_deg 0.892; 1 + mass-ID gravity: heldout_sim_vs_real_deg 0.632; 2 + dynamics refit: heldout_sim_vs_real_deg 0.626; 3 refit on the tick clock: heldout_sim_vs_real_deg 0.559
-  5 controller-version runs -> 1 · gravity comp: nominal: tool_error_at_stop_mm 9.559; 2 · Coulomb feed-forward: none (stock): tracking_rms_tool_mm 9.380, tracking_rms_deg 1.701; 3 · Coulomb feed-forward: 0.70 / 0.78 N·m (winners): tracking_rms_tool_mm 6.058, tracking_rms_deg 1.096; 4 · winners + lumped comp: tracking_rms_tool_mm 5.648, tracking_rms_deg 0.785; 5 · gravity comp: identified: tool_error_at_stop_mm 4.343
+  6 controller-version runs -> 1 · gravity comp: nominal: tool_error_at_stop_mm 9.559; 2 · Coulomb feed-forward: none (stock): tracking_rms_tool_mm 9.380, tracking_rms_deg 1.701; 3 · Coulomb feed-forward: 0.70 / 0.78 N·m (winners): tracking_rms_tool_mm 6.058, tracking_rms_deg 1.096; 4 · winners + lumped comp: tracking_rms_tool_mm 5.648, tracking_rms_deg 0.785; 5 · gravity comp: identified: tool_error_at_stop_mm 4.343; 6 · gravity comp: identified + settle integrator (RAM only): tool_error_at_stop_mm 2.410
   filter type=integrated_servo: ['C1 crank (CAN 13, moteus)', 'J2 shoulder (CAN 12, moteus)']
   gate lines on every deployment run: [9] of 9
   gate keys on both rigs: ['heldout_sim_vs_real_deg', 'heldout_sim_vs_real_pass', 'objective', 'objective_is', 'target_vs_real_at_stop_mm', 'target_vs_real_at_stop_pass', 'target_vs_sim_at_stop_mm', 'target_vs_sim_at_stop_pass', 'target_vs_sim_tracking_deg', 'tool_error_at_stop_mm', 'tool_error_at_stop_p95_mm', 'tool_error_at_stop_pass', 'tracking_rms_deg']
