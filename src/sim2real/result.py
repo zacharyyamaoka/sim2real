@@ -58,6 +58,11 @@ TABLE_PROPERTIES = {
               "sim_real_deg": {"displayName": "sim→real after"}, "sim_real_before_deg": {"displayName": "sim→real before"},
               "target_real_deg": {"displayName": "target→real"}, "floor_deg": {"displayName": "Floor (driven)"},
               "kind": {"displayName": "Kind"}, "node": {"displayName": "Node"}, "parent": {"displayName": "Parent"}},
+    "floors": {"joint": {"displayName": "Joint"}, "kind": {"displayName": "Run kind (tape)"}, "mode": {"displayName": "Passive / driven"},
+               "floor_deg": {"displayName": "Floor (°)"}, "pairs": {"displayName": "Same-input pairs"}, "runs": {"displayName": "Runs"},
+               "twin_deg": {"displayName": "Twin vs real, same kind (°)"}, "twin_over_floor": {"displayName": "Twin ÷ floor"},
+               "verdict": {"displayName": "By the ruler", "colors": {"twinned": 3, "close": 4, "not twinned": 2, "floor unknown": 0, "no twin": 0}},
+               "source": {"displayName": "Source"}, "node": {"displayName": "Node"}, "known": {"displayName": "≥ 5 repeats"}},
     "questions": {"order": {"displayName": "#"}, "question": {"displayName": "Question"},
                   "passes": {"displayName": "Passes", "colors": ANSWER_COLORS}, "own": {"displayName": "At its own output", "colors": ANSWER_COLORS},
                   "numbers": {"displayName": "The numbers"}, "gate": {"displayName": "The gate"},
@@ -92,6 +97,8 @@ class Node:
     gate: dict | None = None                  # the tool gate's numbers, on the node that carries it
     # the five questions at this node's OWN output: {question: {own: yes|no|partial|unknown, numbers: the soft numbers, gate: its rule}}
     questions: dict = field(default_factory=dict)
+    # the floor per run kind (T1: like for like): {kind, mode, floor_deg, pairs, runs, known, twin_deg, twin_over_floor, verdict, source}
+    floors: list = field(default_factory=list)
     result: Any = field(default=None, repr=False, compare=False)   # set by CalibrationResult: node.show() asks it
 
     def show(self, *, held_out_only: bool = True, limit: int = 12):
@@ -228,6 +235,7 @@ class CalibrationResult:
         verdicts = self.verdicts()
         nodes, coverage, workspace, cover_sum, errors, error_stats, params, models, runs = [], [], [], [], [], [], [], [], []
         questions: list[dict] = []
+        floors: list[dict] = []
         for n in self.nodes:
             v = verdicts[n.id]
             gate = v.get("gate") or {}
@@ -251,6 +259,8 @@ class CalibrationResult:
                 # nothing for the wrist, whose 1300 plane cells come first; each table now has one row shape
                 for row in member.coverage:
                     (workspace if row["channel"] == "workspace" else coverage).append({"node": n.id, "joint": member.label, **row})
+                for row in member.floors:
+                    floors.append({"node": n.id, "joint": member.label, **row})
                 for row in member.coverage_summary:
                     cover_sum.append({"node": n.id, "of": member.label, **row})
                 for row in member.errors:
@@ -274,7 +284,7 @@ class CalibrationResult:
                         error_stats.append({"node": n.id, "stage": stage, "order": order, "label": f"{order + 1} · {stage}", "scope": scope,
                                             "median_deg": _r(_median(values), 3), "p95_deg": _r(_pct(values, 95), 3),
                                             "mean_deg": _r(sum(values) / len(values), 3), "runs": len(values)})
-        return {"nodes": nodes, "questions": questions, "coverage": coverage, "workspace": workspace, "coverage_summary": cover_sum, "errors": errors, "error_stats": error_stats,
+        return {"nodes": nodes, "questions": questions, "floors": floors, "coverage": coverage, "workspace": workspace, "coverage_summary": cover_sum, "errors": errors, "error_stats": error_stats,
                 "parameters": params, "models": models, "runs": runs}
 
     # ---------------------------------------------------------------------------------------------------------- the page
@@ -415,6 +425,7 @@ datasets:
     label: Tree
   node: data/nodes.json
   questions: data/questions.json
+  floors: data/floors.json
   coverage: data/coverage.json
   workspace: data/workspace.json
   coverage_summary: data/coverage_summary.json
@@ -431,6 +442,7 @@ datasets:
 links:
   - {{ from: nodes.node, to: node.node, direction: one-way }}
   - {{ from: nodes.node, to: questions.node, direction: one-way }}
+  - {{ from: nodes.node, to: floors.node, direction: one-way }}
   - {{ from: nodes.node, to: coverage.node, direction: one-way }}
   - {{ from: nodes.node, to: workspace.node, direction: one-way }}
   - {{ from: nodes.node, to: coverage_summary.node, direction: one-way }}
@@ -451,6 +463,7 @@ layout:
       w: 12
     - {{ view: Tree, w: 12, h: 4 }}
     - {{ view: Five questions, w: 12, h: 3 }}
+    - {{ view: Floors per run kind, w: 12, h: 3 }}
     - {{ view: Verdict, w: 3, h: 2 }}
     - {{ view: Twin ÷ floor, w: 3, h: 2 }}
     - {{ view: sim→real before → after, w: 3, h: 2 }}
@@ -506,6 +519,13 @@ properties:
   run_name: {{ displayName: Run }}
   run_view: {{ displayName: Run view }}
   rerun: {{ displayName: Open in Rerun }}
+  pairs: {{ displayName: Same-input pairs }}
+  runs: {{ displayName: Runs }}
+  twin_deg: {{ displayName: Twin vs real, same kind (°) }}
+  twin_over_floor: {{ displayName: Twin ÷ floor }}
+  mode: {{ displayName: Passive / driven }}
+  joint: {{ displayName: Joint }}
+  source: {{ displayName: Source }}
 views:
   - type: table
     name: Tree
@@ -516,6 +536,13 @@ views:
     fold: open
     order: [label, verdict, floor, data, routines, twin, job, why, ratio, sim_real_deg, sim_real_before_deg, target_real_deg, floor_deg, kind]
     display: {{ verdict: badge, floor: badge, data: badge, routines: badge, twin: badge, job: badge }}
+  - type: table
+    name: Floors per run kind
+    from: floors
+    order: [joint, kind, mode, floor_deg, twin_over_floor, verdict, twin_deg, pairs, runs, source]
+    display: {{ verdict: badge }}
+    sort:
+      - {{ property: pairs, direction: DESC }}
   - type: table
     name: Five questions
     from: questions

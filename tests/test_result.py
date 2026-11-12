@@ -76,3 +76,35 @@ def test_soft_numbers_still_roll_up_and_the_page_writes(tmp_path):
     index = result.write(tmp_path / "page")
     assert index.exists() and (tmp_path / "page" / "views.base").exists()
     assert json.loads((tmp_path / "page" / "data" / "nodes.json").read_text())["rows"][0]["node"] == "d"
+
+
+# ── the joint's Floor and Twin rules (rack_results.joint_questions; 2026-11-11 review, passive N/A proposed, Zach to confirm) ──
+
+def joint(driven_floor=0.1, twin=0.12, known=True, passive=None):
+    from sim2real.rack_results import joint_questions
+
+    return joint_questions(driven={"floor_deg": driven_floor, "pairs": 10, "runs": 5, "known": known, "kind": "tape", "twin_deg": twin},
+                           passive=passive or {"state": "na", "reason": "cannot move unpowered"}, before_deg=0.4, target_deg=0.3,
+                           coverage_text="c", routines="r")
+
+
+def test_passive_na_with_a_reason_lets_a_known_driven_floor_pass():
+    q = joint()
+    assert q["Floor"]["own"] == "yes" and "N/A: cannot move unpowered" in q["Floor"]["numbers"] and "Zach to confirm" in q["Floor"]["numbers"]
+    assert q["Twin"]["own"] == "yes"   # 1.2x its same-kind floor, passive N/A
+
+
+def test_no_passive_runs_fail_floor_and_a_passive_twin_far_off_fails_twin():
+    assert joint(passive={"state": "none"})["Floor"]["own"] == "no"
+    q = joint(passive={"state": "known", "floor_deg": 0.33, "twin_deg": 33.5, "note": "releases"})
+    assert q["Floor"]["own"] == "yes" and q["Twin"]["own"] == "no"
+
+
+def test_an_unknown_driven_floor_fails_floor_and_leaves_twin_unknown():
+    q = joint(known=False)
+    assert q["Floor"]["own"] == "no" and q["Twin"]["own"] == "unknown"
+
+
+def test_a_twin_under_the_floor_check_fails_floor_not_passes_twin():
+    q = joint(driven_floor=0.2, twin=0.1)   # 0.5x: the "repeats" were not repeats
+    assert q["Floor"]["own"] == "no" and q["Twin"]["own"] == "no"

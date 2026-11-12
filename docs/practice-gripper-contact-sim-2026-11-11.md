@@ -10,7 +10,7 @@
 
 Evidence behind it:
 - bam_ws `src/dev/bam_pick_worlds/research/grasp_contact_2026_11_11/` (R3 crab claw, an 80-run one-knob sweep, then the 96-episode gate);
-- the Menagerie gallery `reports/media/gripper-gallery-2026-11-11.html`, built by `docs/build_report_gripper_gallery.py`: 40 distinct set-ups, visual vs collision, settings read from the compiled models;
+- the Menagerie gallery `reports/media/gripper-gallery-2026-11-11.html`, built by `docs/build_report_gripper_gallery.py` + `docs/gripper_gallery_3d.py`: 40 distinct set-ups, each an animated 3D view (open/close through its own actuators) toggling visual vs collision, with settings read from the compiled models;
 - the MuJoCo docs and issues cited below.
 
 ## 1. Stiffness is per unit mass: size `solref` for the lightest object
@@ -48,7 +48,11 @@ What the Menagerie gallery shows (40 set-ups, Menagerie `370c439`, MuJoCo 4.0.1)
   - General convex colliders (GJK/MPR) return one point per pair unless multiccd is on. multiccd is on by default since 3.8, but a rounded hull still gives 1–3 points that jump around: R3's crab claw touched the cube at 2–6 flickering points on its edges.
   - A box face against a box face gives a stable patch of contacts with steady normals.
 - **Keep the primitives inside the collision mesh the planner checks.** Then the physics and the planner can't disagree about clearance; R3 holds its two jaw models within 0.2 mm.
-- **For a curved jaw, fit N boxes along the gripping contour.** Each box's outer face lies on the contour's chord and each is as deep as the mesh allows. The chord error per box is about L²/8R, so it shrinks with N². A lane is building and benchmarking this for R3 (mesh vs N = 1…16; bam_ws `research/box_pads_2026_11_11/`, to be linked here when it lands).
+- **For a curved jaw, fit N boxes along the gripping contour, but measure before adopting.** Each box's outer face lies on the contour's chord and is as deep as the mesh allows; the chord error per box is about L²/8R, so it shrinks with N². Measured on R3's crab claw (bam_ws `research/box_pads_2026_11_11/`, `fivebar_jaw_collision = "boxes:N"`, main @ `cbdcd6b58`):
+  - **Inscribed boxes can't fill a fingertip that rounds off in two directions.** The fingertip gap is 21.7 / 6.0 / 3.5 / 1.9 / 0.9 mm at N = 1 / 2 / 8 / 16 / 32. Small blocks are pinched by the last few mm, so the tip sets N, not the curvature: only N = 32 held all 12 benchmark picks at 0.5 ms pads.
+  - **With soft 4 ms pads, boxes alone fix the slip:** about 24 contacts share the squeeze, against about 3.4 for the mesh hull (5/12 → 12/12).
+  - **With stiff 0.5 ms pads, the mesh is already 93/93.** N = 32 cut the cube's worst slip (0.64 → 0.38 mm) but turned every block more in the grasp (median 2.7–4.1° vs 0.6–2.7°), and lost one gate episode (92/93, Wilson 0.942 < 0.95).
+  - **So the mesh stays R3's default.** Boxes are opt-in, and earn their keep for objects gripped deep in a concave throat, where the hull stands proud of the real surface by up to 6.8 mm.
 
 ## 3. The option set (copy this)
 
