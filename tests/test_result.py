@@ -150,3 +150,72 @@ def test_an_angle_logged_a_turn_away_lands_in_the_range():
 
     d = description(-304.0, -93.0)   # the five-bar's C1 is written -304..-93 and logged 64..255
     assert visited(joint_data(d, angles(64.0, 150.0, 255.0), 0.0, "test")) == visited(joint_data(d, angles(-296.0, -210.0, -105.0), 0.0, "test")) > 0
+
+
+# ---- Twin and Job check in order (Zach 2026-11-11 21:50): target vs sim -> sim vs real -> target vs real; a camera number is a flag
+
+from sim2real.rack_results import controller_check, order_twin_job  # noqa: E402
+from sim2real.result import check, ordered_answer, with_checks  # noqa: E402
+
+
+def ordered(target_sim: str, sim_real: str, target_real: str) -> dict:
+    """A joint whose Twin and Job are rebuilt from three checks, as rack_results does."""
+    questions = answers()
+    questions["Twin"] = {"own": sim_real, "numbers": "twin ratio", "gate": "≤ 1.5× floor"}
+    questions["Job"] = {"own": target_real, "numbers": "settled vs share", "gate": "≤ share"}
+    order_twin_job(questions, check("target vs sim", target_sim, "sim settled"))
+    return questions
+
+
+def test_a_controller_failing_in_sim_reads_controller_not_twin():
+    v = tree(ordered("no", "no", "no")).verdicts()
+    assert v["d/arm/j2"]["verdict"] == "stops at Twin (controller)"
+    assert v["d/arm/j2"]["answers"]["Job"]["cause"] == "controller"
+
+
+def test_the_twin_missing_on_its_own_reads_plain_twin():
+    v = tree(ordered("yes", "no", "no")).verdicts()
+    assert v["d/arm/j2"]["verdict"] == "stops at Twin"
+    assert v["d/arm/j2"]["answers"]["Job"]["own"] == "no" and v["d/arm/j2"]["answers"]["Job"]["cause"] == "twin"
+
+
+def test_a_job_miss_after_controller_and_twin_pass_is_plain_job():
+    v = tree(ordered("yes", "yes", "no")).verdicts()
+    assert v["d/arm/j2"]["verdict"] == "stops at Job"
+
+
+def test_the_controller_cause_is_carried_up_to_the_parent():
+    v = tree(ordered("no", "yes", "yes")).verdicts()
+    assert v["d/arm/j2"]["verdict"] == "stops at Twin (controller)"
+    assert v["d/arm"]["verdict"] == "stops at Twin" and v["d/arm"]["why"] == "a child stops here: joint 2 (controller)"
+
+
+def test_an_unmeasured_controller_never_passes_silently():
+    assert ordered_answer([check("target vs sim", "unknown", ""), check("sim vs real", "yes", "")]) == ("partial", None)
+    assert ordered_answer([check("target vs sim", "yes", ""), check("sim vs real", "unknown", "")]) == ("unknown", None)
+    # but a later "no" still fails, with no cause blamed on the unmeasured check
+    assert ordered_answer([check("target vs sim", "unknown", ""), check("sim vs real", "no", "")]) == ("no", None)
+
+
+def test_the_checks_table_lists_them_in_order_and_marks_the_one_that_decides():
+    rows = [r for r in tree(ordered("no", "no", "yes")).tables()["checks"] if r["node"] == "d/arm/j2"]
+    assert [(r["question"], r["check"], r["decides"]) for r in rows] == [
+        ("Twin", "target vs sim", "controller"), ("Twin", "sim vs real", ""),
+        ("Job", "target vs sim", "controller"), ("Job", "sim vs real", ""), ("Job", "target vs real", "")]
+
+
+def test_controller_check_judges_the_twin_settled_median_against_the_share():
+    assert controller_check(0.33, [0.2, 0.3, 0.4], "rows")["answer"] == "yes"
+    assert controller_check(0.25, [0.2, 0.3, 0.4], "rows")["answer"] == "no"
+    assert controller_check(0.33, [], "rows")["answer"] == "unknown"
+    assert controller_check(None, [0.1], "rows")["answer"] == "unknown"
+
+
+def test_a_camera_flag_never_gates():
+    job = with_checks({"own": "yes", "numbers": "", "gate": "", "flag": "camera vs FK: 20 mm"},
+                      [check("target vs sim", "yes", ""), check("sim vs real", "yes", ""), check("target vs real", "yes", "0.4 mm by FK")])
+    questions = answers()
+    questions["Job"] = job
+    v = tree(questions).verdicts()
+    assert v["d/arm/j2"]["verdict"] == "passes all five"
+    assert [r["flag"] for r in tree(questions).tables()["questions"] if r["node"] == "d/arm/j2" and r["question"] == "Job"] == ["camera vs FK: 20 mm"]

@@ -45,11 +45,50 @@ QUESTIONS = ("Floor", "Data", "Routines", "Twin", "Job")
 ANSWERS = ("yes", "no", "partial", "unknown")   # a question passes only on "yes"
 FLOOR_CHECK = 1 / math.sqrt(2)                 # twin / floor below 1/sqrt(2) means the "repeats" were not repeats: it fails Floor
 
+# Inside Twin and Job the checks run in this order (Zach 2026-11-11 21:50): target vs sim is the controller's own gate, so it goes first;
+# then sim vs real (the twin); then target vs real (the job). The first that fails names the cause, so a controller that cannot hold its
+# target in sim reads "controller", never "twin". Every gate is measured from the joint encoders (through FK at the tool); a camera
+# number is a flag beside the gate, never the gate (Zach 2026-11-11 21:50).
+CHECK_ORDER = ("target vs sim", "sim vs real", "target vs real")
+CHECK_CAUSE = {"target vs sim": "controller", "sim vs real": "twin", "target vs real": "job"}
+CAUSES = ("controller", "twin")
+RULING_2150 = "Zach 2026-11-11 21:50"
+
+
+def check(name: str, answer: str, numbers: str, gate: str = "") -> dict:
+    """One ordered sub-check of Twin or Job: name is one of CHECK_ORDER, answer yes | no | unknown."""
+    assert name in CHECK_ORDER and answer in ("yes", "no", "unknown"), (name, answer)
+    return {"check": name, "answer": answer, "numbers": numbers, "gate": gate}
+
+
+def ordered_answer(checks: list[dict]) -> tuple[str, str | None]:
+    """The question's own answer from its checks in CHECK_ORDER (Zach 2026-11-11 21:50). The first "no" decides; it names a cause only when
+    it is not the question's own (last) check, so "stops at Twin (controller)" but plain "stops at Twin" when the twin itself misses. With no
+    "no": the own check unknown -> unknown; an earlier check unknown -> partial (the order could not be completed); else yes."""
+    checks = sorted(checks, key=lambda c: CHECK_ORDER.index(c["check"]))
+    for k, c in enumerate(checks):
+        if c["answer"] == "no":
+            return "no", (CHECK_CAUSE[c["check"]] if k < len(checks) - 1 else None)
+    if checks[-1]["answer"] == "unknown":
+        return "unknown", None
+    return ("partial", None) if any(c["answer"] == "unknown" for c in checks) else ("yes", None)
+
+
+def with_checks(question: dict, checks: list[dict]) -> dict:
+    """A Twin or Job answer rebuilt from its ordered checks: own and cause from ordered_answer, the numbers led by the checks in order."""
+    checks = sorted(checks, key=lambda c: CHECK_ORDER.index(c["check"]))
+    own, cause = ordered_answer(checks)
+    lead = " → ".join(f"{k}. {c['check']} {c['answer']}" for k, c in enumerate(checks, 1))
+    return {**question, "own": own, "cause": cause, "checks": checks,
+            "numbers": f"{lead} ({RULING_2150} order)" + (f" — {cause} first" if cause else "") + "; " + "; ".join(
+                f"{c['check']}: {c['numbers']}" for c in checks)}
+
 
 # The answers' badge colours, data-ui palette slots (CONTRACT §4: 3 green, 2 red, 4 amber, 0 muted). WHY fixed: a hashed hue painted
 # "yes" orange and "unknown" green (2026-11-11 render); amber and red only where something is wrong (calm UI)
 ANSWER_COLORS = {"yes": 3, "no": 2, "partial": 4, "unknown": 0, "child": 0}
-VERDICT_COLORS = {"passes all five": 3, **{f"stops at {q}": 2 for q in QUESTIONS}}
+VERDICT_COLORS = {"passes all five": 3, **{f"stops at {q}": 2 for q in QUESTIONS},
+                  **{f"stops at {q} ({cause})": 2 for q in QUESTIONS for cause in CAUSES}}
 # WHY every shown column declared: a table that declares `properties` draws only those (data-ui, measured 2026-11-11)
 TABLE_PROPERTIES = {
     "nodes": {"label": {"displayName": "Level"}, "verdict": {"displayName": "Verdict", "colors": VERDICT_COLORS},
@@ -66,7 +105,11 @@ TABLE_PROPERTIES = {
     "questions": {"order": {"displayName": "#"}, "question": {"displayName": "Question"},
                   "passes": {"displayName": "Passes", "colors": ANSWER_COLORS}, "own": {"displayName": "At its own output", "colors": ANSWER_COLORS},
                   "numbers": {"displayName": "The numbers"}, "gate": {"displayName": "The gate"},
+                  "flag": {"displayName": "Flag (not a gate)"}, "cause": {"displayName": "Cause"},
                   "children_not_passing": {"displayName": "Children not passing"}, "node": {"displayName": "Node"}},
+    "checks": {"question": {"displayName": "Question"}, "step": {"displayName": "#"}, "check": {"displayName": "Check"},
+               "answer": {"displayName": "Answer", "colors": ANSWER_COLORS}, "decides": {"displayName": "Decides"},
+               "numbers": {"displayName": "The numbers"}, "gate": {"displayName": "The gate"}, "node": {"displayName": "Node"}},
 }
 
 
@@ -201,13 +244,18 @@ class CalibrationResult:
             for q in QUESTIONS:
                 own = n.questions.get(q, {"own": "unknown", "numbers": "not measured at this level"})
                 failing_children = [c.label for c, k in zip(self.children(n.id), kids) if not k["answers"][q]["passes"]]
-                answers[q] = {**own, "passes": own["own"] == "yes" and not failing_children, "failing_children": failing_children}
+                child_causes = [k["answers"][q].get("cause_rolled") for c, k in zip(self.children(n.id), kids) if not k["answers"][q]["passes"]]
+                answers[q] = {**own, "passes": own["own"] == "yes" and not failing_children, "failing_children": failing_children,
+                              # the cause carried up: the node's own when it answers no, else its first failing child's
+                              "cause_rolled": own.get("cause") if own["own"] != "yes" else next((x for x in child_causes if x), None)}
             stop = next((q for q in QUESTIONS if not answers[q]["passes"]), None)
             v["answers"] = answers
             v["stops_at"] = stop
-            v["verdict"] = "passes all five" if stop is None else f"stops at {stop}"
-            v["why"] = "" if stop is None else (answers[stop]["numbers"] if answers[stop]["own"] != "yes"
-                                                 else "a child stops here: " + ", ".join(answers[stop]["failing_children"]))
+            cause = answers[stop].get("cause") if stop and answers[stop]["own"] != "yes" else None
+            v["verdict"] = "passes all five" if stop is None else f"stops at {stop}" + (f" ({cause})" if cause else "")
+            v["why"] = "" if stop is None else (answers[stop]["numbers"] if answers[stop]["own"] != "yes" else "a child stops here: " + ", ".join(
+                f"{c.label} ({k['answers'][stop]['cause_rolled']})" if k["answers"][stop].get("cause_rolled") else c.label
+                for c, k in zip(self.children(n.id), kids) if not k["answers"][stop]["passes"]))
             if n.gate:
                 v["gate"] = n.gate
             out[n.id] = v
@@ -235,6 +283,7 @@ class CalibrationResult:
         verdicts = self.verdicts()
         nodes, coverage, workspace, cover_sum, errors, error_stats, params, models, runs = [], [], [], [], [], [], [], [], []
         questions: list[dict] = []
+        checks: list[dict] = []
         floors: list[dict] = []
         for n in self.nodes:
             v = verdicts[n.id]
@@ -251,8 +300,15 @@ class CalibrationResult:
             for order, q in enumerate(QUESTIONS, 1):
                 a = v["answers"][q]
                 questions.append({"node": n.id, "order": order, "question": q, "passes": "yes" if a["passes"] else "no",
-                                  "own": a["own"], "numbers": a["numbers"], "gate": a.get("gate", ""),
-                                  "children_not_passing": ", ".join(a["failing_children"])})
+                                  "own": a["own"], "numbers": a["numbers"], "gate": a.get("gate", ""), "flag": a.get("flag", ""),
+                                  "cause": a.get("cause") or "", "children_not_passing": ", ".join(a["failing_children"])})
+                decided = False
+                for step, c in enumerate(a.get("checks", []), 1):
+                    decides = c["answer"] == "no" and not decided
+                    decided = decided or decides
+                    checks.append({"node": n.id, "question": q, "step": step, "check": c["check"], "answer": c["answer"],
+                                   "decides": (CHECK_CAUSE[c["check"]] if step < len(a["checks"]) else q.lower()) if decides else "",
+                                   "numbers": c["numbers"], "gate": c.get("gate", "")})
             subtree = self.subtree(n.id)
             for member in subtree:
                 # WHY two tables (2026-11-11 render): one table mixing histogram rows (lo/hi) and workspace cells (x_lo/...) drew
@@ -284,7 +340,7 @@ class CalibrationResult:
                         error_stats.append({"node": n.id, "stage": stage, "order": order, "label": f"{order + 1} · {stage}", "scope": scope,
                                             "median_deg": _r(_median(values), 3), "p95_deg": _r(_pct(values, 95), 3),
                                             "mean_deg": _r(sum(values) / len(values), 3), "runs": len(values)})
-        return {"nodes": nodes, "questions": questions, "floors": floors, "coverage": coverage, "workspace": workspace, "coverage_summary": cover_sum, "errors": errors, "error_stats": error_stats,
+        return {"nodes": nodes, "questions": questions, "checks": checks, "floors": floors, "coverage": coverage, "workspace": workspace, "coverage_summary": cover_sum, "errors": errors, "error_stats": error_stats,
                 "parameters": params, "models": models, "runs": runs}
 
     # ---------------------------------------------------------------------------------------------------------- the page
@@ -425,6 +481,7 @@ datasets:
     label: Tree
   node: data/nodes.json
   questions: data/questions.json
+  checks: data/checks.json
   floors: data/floors.json
   coverage: data/coverage.json
   workspace: data/workspace.json
@@ -442,6 +499,7 @@ datasets:
 links:
   - {{ from: nodes.node, to: node.node, direction: one-way }}
   - {{ from: nodes.node, to: questions.node, direction: one-way }}
+  - {{ from: nodes.node, to: checks.node, direction: one-way }}
   - {{ from: nodes.node, to: floors.node, direction: one-way }}
   - {{ from: nodes.node, to: coverage.node, direction: one-way }}
   - {{ from: nodes.node, to: workspace.node, direction: one-way }}
@@ -459,10 +517,15 @@ layout:
         (hidden truth recovered in sim) → **Twin** (held-out sim→real ≤ {RULER_TWINNED}× floor, passive and driven) → **Job**
         (real vs target; tool ≤ {TOOL_GATE_MM:g} mm at a stop). Its verdict is the **first one it does not pass**; a level passes a
         question only if it does at its own output **and** every child does. The numbers beside each answer are soft.
+        Inside **Twin** and **Job** the checks run in order: **target vs sim** (the controller's own gate) → **sim vs real** →
+        **target vs real**; the first that fails names the cause, so "stops at Job (controller)" means the controller cannot hold
+        its target even in sim. Every gate is measured by the joint encoders (through FK at the tool); a camera number is a
+        **flag** beside it, never a gate ({RULING_2150}).
         **Before** = {before}, **after** = {after}. Pick any level in the tree.
       w: 12
     - {{ view: Tree, w: 12, h: 4 }}
     - {{ view: Five questions, w: 12, h: 3 }}
+    - {{ view: Twin and Job checks in order, w: 12, h: 3 }}
     - {{ view: Floors per run kind, w: 12, h: 3 }}
     - {{ view: Verdict, w: 3, h: 2 }}
     - {{ view: Twin ÷ floor, w: 3, h: 2 }}
@@ -504,6 +567,12 @@ properties:
   numbers: {{ displayName: The numbers }}
   gate: {{ displayName: The gate }}
   children_not_passing: {{ displayName: Children not passing }}
+  cause: {{ displayName: Cause }}
+  flag: {{ displayName: Flag (not a gate) }}
+  step: {{ displayName: "#" }}
+  check: {{ displayName: Check }}
+  answer: {{ displayName: Answer }}
+  decides: {{ displayName: Decides }}
   sim_real_deg: {{ displayName: sim→real after }}
   sim_real_before_deg: {{ displayName: sim→real before }}
   target_real_deg: {{ displayName: target→real }}
@@ -546,10 +615,15 @@ views:
   - type: table
     name: Five questions
     from: questions
-    order: [order, question, passes, own, numbers, gate, children_not_passing]
+    order: [order, question, passes, own, cause, numbers, flag, gate, children_not_passing]
     display: {{ passes: badge, own: badge }}
     sort:
       - {{ property: order, direction: ASC }}
+  - type: table
+    name: Twin and Job checks in order
+    from: checks
+    order: [question, step, check, answer, decides, numbers, gate]
+    display: {{ answer: badge }}
   - type: kpi
     name: Verdict
     from: node

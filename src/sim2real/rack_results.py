@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 
 from .metrics.series import SAME_INPUT_TOLERANCE_RAD, RepeatFloor, pair_rms, repeat_floor
-from .result import FLOOR_CHECK, RULER_TWINNED, TOOL_GATE_MM, CalibrationResult, Node, verdict_of
+from .result import FLOOR_CHECK, RULER_TWINNED, RULING_2150, TOOL_GATE_MM, CalibrationResult, Node, check, verdict_of, with_checks
 
 RACK = Path("/archive/datasets/bam_rig/rack_2026-11-10")
 WRIST = RACK / "ur_wrist" / "coverage"
@@ -265,6 +265,33 @@ def job_answer(share_deg: float, lever_mm: float, joints: int, settled_deg: list
                        f"({med / share_deg:.1f}×); {soft}", "gate": gate}
 
 
+def controller_check(share_deg: float | None, sim_settled_deg, where: str, soft: str = "") -> dict:
+    """target vs sim, the controller's own gate (Zach 2026-11-11 21:50, checked first inside Twin and Job): the TWIN's settled error vs
+    target (median) on the same rows the Job judges, against the same share of the tool gate. Unknown without a settled sim."""
+    gate = (f"the twin's settled error ≤ {share_deg:.3f}°, the joint's share (the controller's own gate, {RULING_2150})" if share_deg
+            else f"the twin's settled error inside the joint's share ({RULING_2150})")
+    values = np.asarray([v for v in (sim_settled_deg or []) if np.isfinite(v)], float)
+    if not values.size or not share_deg:
+        return check("target vs sim", "unknown", f"no settled sim on {where}" + (f"; {soft}" if soft else ""), gate)
+    med, p95 = float(np.median(values)), float(np.percentile(values, 95))
+    return check("target vs sim", "yes" if med <= share_deg else "no",
+                 f"the twin settles {med:.3f}° median, {p95:.3f}° p95 from its target over {values.size} {where} "
+                 f"({med / share_deg:.1f}× its share {share_deg:.3f}°)" + (f"; {soft}" if soft else ""), gate)
+
+
+def _as_check(name: str, question: dict) -> dict:
+    answer = question["own"] if question["own"] in ("yes", "no") else "unknown"
+    return check(name, answer, question["numbers"], question.get("gate", ""))
+
+
+def order_twin_job(questions: dict, controller: dict) -> None:
+    """Rebuild Twin and Job from their checks in order (Zach 2026-11-11 21:50): Twin = target vs sim -> sim vs real; Job = target vs sim
+    -> sim vs real -> target vs real. Call once, after Twin and Job hold their final sim-vs-real and target-vs-real answers."""
+    sim_real = _as_check("sim vs real", questions["Twin"])
+    questions["Twin"] = with_checks(questions["Twin"], [controller, sim_real])
+    questions["Job"] = with_checks(questions["Job"], [controller, sim_real, _as_check("target vs real", questions["Job"])])
+
+
 def routines_from_rows(rows: list[dict], prefix: str, stress: str = "noise stress: pending (the stress lane is running)") -> dict:
     """A node's Routines answer from the one-click calibration's rows under `prefix` (can15. / wrist.): yes when every IDENTIFIABLE
     row recovers its hidden truth within tolerance at 1x noise; an unidentifiable one is listed "not identifiable (reason)", never a
@@ -356,6 +383,7 @@ def repeat_campaign() -> dict[int, dict]:
                                "twin_deg": twin_deg, "note": f"the lane's own: {group['floor_rms_deg_median']:.3f}°"}
             entry["coverage"] = joint_coverage(np.concatenate(q_all), np.concatenate(qd_all), np.concatenate(qdd_all), float(np.median(dts)))
             entry["target_deg"] = _median([r.get("target_vs_real_deg") for r in twin_group.get("runs", [])])
+            entry["target_twin_deg"] = _median([r.get("target_vs_twin_deg") for r in twin_group.get("runs", [])])
             entry["rows"].append({"kind": f"{kind} (repeat campaign)", "mode": "driven", "floor_deg": _r(floor_deg, 4), "pairs": floor.pairs,
                                   "runs": floor.runs, "known": floor.known, "twin_deg": _r(twin_deg),
                                   "twin_over_floor": _r(twin_deg / floor_deg, 2) if twin_deg and floor_deg else None,
@@ -416,6 +444,7 @@ def ur_wrist() -> CalibrationResult:
     cover: dict[int, list] = {can: [[], [], []] for can in (14, 15, 16)}
     samples: dict[int, list] = {can: [] for can in (14, 15, 16)}   # real (q rad board, qd, qdd) for the Data question
     settled: dict[int, list] = {can: [] for can in (14, 15, 16)}   # |q - target| (deg) where the target rests, for the Job question
+    sim_settled: dict[int, list] = {can: [] for can in (14, 15, 16)}   # the it5 twin's |q - target| on the same tapes: target vs sim
     dt_of = {}
     for (session, name), row in scored[alias[order[-1]]].items():
         gainset = Path(session).parent.name
@@ -440,6 +469,10 @@ def ur_wrist() -> CalibrationResult:
         label = f"CAN {can} {gainset} {session_name.split('-')[0][6:]} {stem.split('_')[0]}"
         run_slug = slug(f"ur_wrist-{label}")
         files[run_slug] = ("ur_wrist", path, WRIST_TWIN_CACHE / f"{gainset}__{session_name}__{stem}.npz", (f"can{can}",))
+        twin_trace = WRIST_TWIN_CACHE / f"{gainset}__{session_name}__{stem}.npz"
+        if twin_trace.exists():
+            sim = np.load(twin_trace)
+            sim_settled[can].append((gainset, settled_errors_deg(sim["t"] - sim["t"][0], sim["q"], sim["q_target"])))
         values = {}
         for key, stage in zip(order, stages):
             r = scored[alias[key]].get((session, name))
@@ -552,6 +585,7 @@ def ur_wrist() -> CalibrationResult:
     else:
         arm_data = None
     levers = json.loads(TOOL_LEVERS.read_text())["rigs"] if TOOL_LEVERS.exists() else {}
+    controllers: dict[int, dict] = {can: controller_check(None, [], "this joint") for can in joints}
     if "ur_wrist" in levers:
         for can, node in joints.items():
             lever = levers["ur_wrist"]["lever_mm_per_rad"][f"can{can}"]
@@ -568,11 +602,19 @@ def ur_wrist() -> CalibrationResult:
             node.questions["Job"] = job_answer(joint_share_deg(lever, 3), lever, 3, values.tolist(),
                                                f"settled rows (the target at rest ≥ 0.3 s) on the operating gains ({operating})",
                                                (f"other gains: {others}; " if others else "") + node.questions["Job"]["numbers"])
+            sim_values = [v for gains, vals in sim_settled[can] if gains == operating for v in vals]
+            tracking = campaign.get(can, {}).get("target_twin_deg")
+            controllers[can] = controller_check(
+                joint_share_deg(lever, 3), sim_values, f"settled rows of the it5 twin replaying the same {operating} tapes",
+                ((f"repeat campaign tracking, target vs twin {tracking:.3f}° RMS" if sim_values else
+                  f"the repeat campaign kept no twin trace, only its tracking RMS: target vs twin {tracking:.3f}°") if tracking else ""))
     one_click = json.loads(ONE_CLICK.read_text()) if ONE_CLICK.exists() else None
     if one_click:
         rows = one_click["calibration"]["rows"]
         for can, node in joints.items():
             node.questions["Routines"] = routines_from_rows(rows, f"can{can}.")
+    for can, node in joints.items():
+        order_twin_job(node.questions, controllers[can])
     tapes = json.loads((WRIST / "multi" / "multi_scores.json").read_text())["tapes"]
     twin_multi = [j["twin_vs_real_deg"] for tape in tapes for j in tape["joints"].values() if j.get("twin_vs_real_deg") is not None]
     target_multi = [j["target_vs_real_deg"] for tape in tapes for j in tape["joints"].values() if j.get("target_vs_real_deg") is not None]
@@ -586,8 +628,10 @@ def ur_wrist() -> CalibrationResult:
         "Twin": {"own": "unknown", "numbers": f"coupled multi-joint runs: twin vs real {min(twin_multi):.2f}–{max(twin_multi):.2f}°, "
                  f"real vs target {min(target_multi):.2f}–{max(target_multi):.2f}° (no skill over the target yet); no tool floor to divide by",
                  "gate": "twin vs real tool pose ≤ 1.5× the tool floor"},
-        "Job": {"own": "unknown", "numbers": "the holder's pose is not measured at stops", "gate": f"tool ≤ {TOOL_GATE_MM:g} mm at a stop, by camera"},
+        "Job": {"own": "unknown", "numbers": "the holder's tool point by encoders + FK at stops is not computed yet (no FK seam on these runs)",
+                "gate": f"tool ≤ {TOOL_GATE_MM:g} mm at a stop, by the joint encoders through FK ({RULING_2150})"},
     }
+    order_twin_job(arm.questions, controller_check(None, [], "the arm's tool point"))
     tool.questions = {q: {"own": "no" if q == "Floor" else "unknown", "numbers": "no tool runs: the holder board is not tracked in these runs",
                           "gate": ""} for q in ("Floor", "Data", "Routines", "Twin", "Job")}
     root.questions = {
@@ -665,7 +709,7 @@ def fivebar() -> CalibrationResult:
     cover = {"j2": [[], [], []], "c1": [[], [], []]}
     workspace: dict[tuple[int, int], float] = defaultdict(float)
     repeats: dict = defaultdict(list)
-    stop_sim, stop_target = [], []
+    stop_sim, stop_target, stop_target_sim = [], [], []
     dt_all = []
     for ladder, gainset in FIVEBAR_LADDERS.items():
         summary = json.loads((FIVEBAR / ladder / "ladder" / "summary.json").read_text())
@@ -691,6 +735,7 @@ def fivebar() -> CalibrationResult:
             still = speed < 2.0
             if sim["measured_tool"].shape == real["measured_tool"].shape:
                 stop_sim += list(np.linalg.norm(sim["measured_tool"][still] * 1e3 - tool_xy[still], axis=1))
+                stop_target_sim += list(np.linalg.norm(sim["measured_tool"][still] * 1e3 - target[still], axis=1))
             stop_target += list(np.linalg.norm(target[still] - tool_xy[still], axis=1))
             # WHY the tick: the ladder logs one row per plan tick, so the row index is the tape's own clock; its t is host time, whose
             # ~1 ms jitter put identical tapes 1.6-3.1 deg apart on a wall clock (metrics.series.repeat_floor compares per tick)
@@ -778,6 +823,13 @@ def fivebar() -> CalibrationResult:
             node.questions["Job"] = job_answer(joint_share_deg(lever, 2), lever, 2, settled_of(operating),
                                                "dwell holds on the " + ("identified comp" if operating is DWELL_IDENTIFIED else "nominal comp"),
                                                before + node.questions["Job"]["numbers"])
+            share = joint_share_deg(lever, 2)
+        else:
+            share = None
+        tracking = _median([mdeg(r[f"target_sim_{joint}_mrad"]) for key, r in refits["tick"].items() if key not in train])
+        controller = controller_check(share, [], "the 16 dwell holds (the dwell run was not replayed on the twin)",
+                                      f"tracking on the held-out rungs, target vs the tick-clock twin: {tracking:.3f}° median" if tracking else "")
+        order_twin_job(node.questions, controller)
         if export:
             thresholds = export["good_data_thresholds"]
             can = {"j2": "12", "c1": "13"}[joint]
@@ -811,31 +863,40 @@ def fivebar() -> CalibrationResult:
     # mass-ID's 16 three-second holds are the settled accuracy the 1 mm gate asks about
     dwell = json.loads((DWELL_IDENTIFIED if DWELL_IDENTIFIED.exists() else DWELL).read_text()) if DWELL.exists() else None
     nominal = json.loads(DWELL.read_text()) if DWELL.exists() and DWELL_IDENTIFIED.exists() else None
+    # WHY encoders only (Zach 2026-11-11 21:50): every gate is the joint encoders through FK; the D435 / ArUco number is a "camera vs FK"
+    # flag beside it, never the gate (its hub fit fails on 3 of 16 holds and reads 2-5x the encoders where it fits)
+    camera_flag = ""
     if dwell:
         enc, cam = dwell["summary"]["encoders_fk_mm"], dwell["summary"]["camera_vs_commanded_mm"]
         built = dwell["summary"].get("camera_vs_as_built_lever_mm") or {}
         job = "no" if enc["median"] > TOOL_GATE_MM else "yes"
         job_text = (f"settled at {enc['n']} three-second holds on the {'identified' if nominal else 'nominal'} comp: {enc['median']:.1f} mm "
-                    f"median, {enc['p95']:.1f} mm p95 by encoders + FK; {cam['median']:.1f} mm median by the D435 ({cam['n']} holds)"
-                    + (f", {built['median']:.1f} mm against the as-built lever's target" if built.get("median") else "")
-                    + (f"; before (nominal comp): {nominal['summary']['encoders_fk_mm']['median']:.1f} mm by encoders, "
-                       f"{nominal['summary']['camera_vs_commanded_mm']['median']:.1f} mm by the D435" if nominal else "")
-                    + f"; raster turnarounds (tracking, not settled) {job_p95:.1f} mm p95 by encoders")
+                    f"median, {enc['p95']:.1f} mm p95 by the joint encoders through FK"
+                    + (f"; before (nominal comp): {nominal['summary']['encoders_fk_mm']['median']:.1f} mm by encoders + FK" if nominal else "")
+                    + f"; raster turnarounds (tracking, not settled) {job_p95:.1f} mm p95 by encoders + FK")
+        j2_gap = _median([r.get("camera_minus_encoder_j2_deg") for r in dwell["rows"]])
+        camera_flag = (f"camera vs FK ({RULING_2150}: a flag, never a gate): the D435 puts the tool {cam['median']:.1f} mm median from commanded "
+                       f"on {cam['n']} of {enc['n']} holds where encoders + FK say {enc['median']:.1f} mm"
+                       + (f" ({built['median']:.1f} mm on the as-built lever)" if built.get("median") else "")
+                       + (f"; camera − encoder at J2 {j2_gap:+.2f}° median" if j2_gap is not None else "")
+                       + "; the camera disagrees with FK by more than the gate, so check the stickers / hub fit before trusting it")
     else:
         job = "no" if job_p95 is not None and job_p95 > TOOL_GATE_MM else ("yes" if job_p95 is not None else "unknown")
         job_text = f"real vs commanded {job_p95:.1f} mm p95 at raster stops, by encoder kinematics"
     tool.gate = {"gate_mm": TOOL_GATE_MM, "sim_real_mm": sim_p95,
                  "target_real_mm": dwell["summary"]["encoders_fk_mm"]["median"] if dwell else job_p95,
                  "verdict": f"Job {job}: " + job_text.split(';')[0] + f" (gate {TOOL_GATE_MM:g} mm)"}
-    tool.note = "stops = where the commanded tool point rests (< 2 mm/s); the tool by encoder kinematics (bam_fivebar FK, as logged), not by camera"
+    tool.note = ("stops = where the commanded tool point rests (< 2 mm/s); every tool gate is the joint encoders through FK (bam_fivebar FK, "
+                 f"as logged); the D435 is a camera-vs-FK flag beside it ({RULING_2150})")
     tool.questions = {
-        "Floor": {"own": "no", "numbers": "no tool revisits of one commanded stop", "gate": "the tool at the same stop, revisited, by camera"},
+        "Floor": {"own": "no", "numbers": "no tool revisits of one commanded stop (the 16 holds are 16 different poses)",
+                  "gate": "the tool at the same stop, revisited, by encoders + FK"},
         "Data": {"own": "unknown", "numbers": f"{len(stop_target)} stop samples over every rung", "gate": "the TCP seen from spread poses"},
         "Routines": {"own": "unknown", "numbers": "no TCP / payload routine graded", "gate": "mass 5 %, CoM 3 mm, TCP 0.5 / 1 mm"},
         "Twin": {"own": "unknown", "numbers": f"study (before) twin vs real {sim_p95:.1f} mm p95 at stops; the after twin's tool is not computed "
                  "(the refits kept joint scores only); no tool floor to divide by", "gate": "tool twin vs real at stops ÷ the tool floor, on the after twin"},
         "Job": {"own": job, "numbers": job_text + (f" (source: {dwell['source'].split(',')[0]})" if dwell else ""),
-                "gate": f"≤ {TOOL_GATE_MM:g} mm at a stop, measured at the tool"},
+                "gate": f"≤ {TOOL_GATE_MM:g} mm at a stop, by the joint encoders through FK ({RULING_2150})", "flag": camera_flag},
     }
     if export:
         thresholds, today = export["good_data_thresholds"], export["good_data_thresholds"]["pass_today"]
@@ -857,15 +918,20 @@ def fivebar() -> CalibrationResult:
                                                        for rung, m, f in tool_rows) + " (the five repeats, tick clock)",
                                   "gate": "tool twin vs real ≤ 1.5× the tool floor, on the after twin"}
         tool.questions["Floor"] = {"own": "no", "numbers": "the tool's driven floor is known on the repeats ("
-                                   + ", ".join(f"{f:.1f} mm" for _r, _m, f in tool_rows) + "); no settled revisit of one stop by camera",
-                                   "gate": "the tool at the same stop, revisited, by camera"}
+                                   + ", ".join(f"{f:.1f} mm" for _r, _m, f in tool_rows) + "); no settled revisit of one stop",
+                                   "gate": "the tool at the same stop, revisited, by encoders + FK"}
+    tool_target_sim = _median(stop_target_sim)
+    order_twin_job(tool.questions, controller_check(
+        None, [], "the 16 dwell holds (the dwell run was not replayed on the twin)",
+        f"tracking at raster turnarounds, the study twin's tool vs commanded {tool_target_sim:.1f} mm median" if tool_target_sim else ""))
     arm.questions = {
         "Floor": {"own": "no", "numbers": "no tool-pose repeats (ISO 9283 RP)", "gate": "repeatability at the tool"},
         "Data": arm_data,
         "Routines": {"own": "unknown", "numbers": "no arm-level routine graded on a hidden truth", "gate": "per routine"},
         "Twin": {"own": "unknown", "numbers": "the coupled arm's twin is scored per joint only", "gate": "twin vs real tool pose ≤ 1.5× the tool floor"},
-        "Job": {"own": job, "numbers": tool.questions["Job"]["numbers"], "gate": tool.questions["Job"]["gate"]},
+        "Job": {"own": job, "numbers": job_text, "gate": tool.questions["Job"]["gate"], "flag": camera_flag},
     }
+    order_twin_job(arm.questions, tool.questions["Job"]["checks"][0])
     root.questions = {
         "Floor": {"own": "no", "numbers": "no repeat of the deployment's own output", "gate": "children's floors exist; its output repeated"},
         "Data": {"own": "yes", "numbers": "physical ladder runs; held-out rungs fixed by refit_both's split", "gate": "physical runs, split sealed"},
@@ -879,8 +945,11 @@ def fivebar() -> CalibrationResult:
              "Floors: same-input repeats only (sim2real.metrics.series.repeat_floor), compared per plan tick: the five repeat ladders of the "
              "0.05 m/s rungs (identical tapes); the earlier ladders' runs of those rungs start from other homings and are rejected. The twin "
              "ratio divides the after twin's held-out rungs by that floor (the repeats were scored on the study twin only).",
-             "Tool: Twin = the study twin's tool vs the real tool at raster stops; Job = the settled tool at the mass-ID's 16 dwell holds "
-             "(data/fivebar_dwell_2026-11-11.json, from the five-bar lane's repeat-floor report), by encoders + FK and by the D435.",
+             "Tool: Twin = the after twin's tool vs the real tool on the repeats; Job = the settled tool at the 16 dwell holds on the identified "
+             "comp (data/fivebar_dwell_identified_2026-11-11.json), by the joint encoders through FK; the D435 is a camera-vs-FK flag, never "
+             f"a gate ({RULING_2150}).",
+             f"Twin and Job check in order: target vs sim (the controller), then sim vs real, then target vs real ({RULING_2150}); the "
+             "dwell holds were not replayed on the twin, so their target vs sim is unknown.",
              "Passive: N/A for J2 and C1 (proposed, Zach to confirm): the rest sits at the closure fold, and no limp release is both safe and alive."]
     return CalibrationResult("fivebar-2026-11-11", "Five-bar calibration · One Dof Test Rack · 2026-11-11", stages,
                              [root, arm, joints["j2"], joints["c1"], tool], source=str(FIVEBAR), notes=notes, messages=_messages(files))
