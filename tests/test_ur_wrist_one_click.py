@@ -162,6 +162,14 @@ def test_gravity_is_the_measured_up_and_the_truth_tilts_it(twin):
     assert 0.2 < truth["can14.gravity_nm"] < 0.35, "on its side CAN 14 carries the wrist (the real lane: ~0.23 N.m)"
 
 
+def test_can14s_frozen_plans_are_the_coverage_builders(twin):
+    """CAN 14's plans (plans_can14.json) are exactly what bam_ur_wrist_coverage.plans builds with CAN 14 let move: frozen, never edited."""
+    from sysid.examples.ur_wrist_test_rig import rig as wr  # noqa: PLC0415
+
+    frozen = json.loads((EXAMPLE / "plans_can14.json").read_text())["steps"]
+    assert frozen == json.loads(json.dumps(wr.can14_plans_built()))
+
+
 def test_the_noise_model_at_one_is_the_real_wrists(twin):
     noise = twin.noise()
     assert isinstance(noise, seam.NoiseModel) and noise.level == 1.0

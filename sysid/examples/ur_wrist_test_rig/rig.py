@@ -212,13 +212,26 @@ def _can14_driven():
 def _steps() -> dict[str, dict]:
     """Every scheduled step of the house schedule's plans, keyed "can15/<schedule run>": CAN 15 and 16's as the real lane ran them (the
     coverage plans), CAN 14's built the same way by the same builder (bam_ur_wrist_coverage.plans: describe, schedule, ladders, plans)."""
-    from bam_ur_wrist_coverage import describe, plans  # noqa: PLC0415
-
     out = {}
     for path in sorted(PLANS.glob("can1[56]_*.json")):
         for step in json.loads(path.read_text()).get("steps", []):
             if "schedule" in step and "can_id" in step:
                 out[f"can{step['can_id']}/{step['schedule']['run']}"] = {**step, "plan": path.stem}
+    frozen = HERE / "plans_can14.json"
+    if frozen.exists():
+        # WHY frozen (2026-11-11): building them needs the coverage lane's describe(14), a full WristModel with 948 contact pairs (~1 GB in
+        # the parent every worker forks from); the file is that builder's output, stamped with the commit it ran at (can14_plans_built)
+        out.update(json.loads(frozen.read_text())["steps"])
+        return out
+    out.update(can14_plans_built())
+    return out
+
+
+def can14_plans_built() -> dict[str, dict]:
+    """CAN 14's scheduled steps as the coverage lane's builder makes them, CAN 14 let move (what plans_can14.json freezes)."""
+    from bam_ur_wrist_coverage import describe, plans  # noqa: PLC0415
+
+    out = {}
     with _can14_driven():
         description = describe.describe(14)
         document = plans.schedule(14, description)
