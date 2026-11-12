@@ -151,7 +151,7 @@ def far_truth(truth: Mapping[str, float], nominal: Mapping[str, float | None], l
 
 
 @contextlib.contextmanager
-def motor_friction(friction_nm: float):
+def motor_friction(friction_nm: float, *, dry: bool = False):
     """Each geared joint's MOTOR hinge given a Coulomb friction (MuJoCo frictionloss, the plant's own 2 ms friction solref) in every plant
     that measures the world (rig.build_plant called with a seed), never in the twin's replays (no seed). In this process only; the pool's
     workers fork from it, so they carry it. Restored on exit.
@@ -170,6 +170,10 @@ def motor_friction(friction_nm: float):
             motors = plant.wrist.dof_adr[plant.wrist.wrapped]
             plant.model.dof_frictionloss[motors] = float(friction_nm)
             plant.model.dof_solref[motors] = (0.002, 1.0)
+            if dry:
+                # WHY (measured 2026-11-11, probe_motor_friction): at MuJoCo's default impedance the friction leaks ~10 % of a sub-friction
+                # torque, so a rotor under a 25 mN.m cap still crept across the gap against 40 mN.m of friction; d -> 1 makes it hold
+                plant.model.dof_solimp[motors] = (0.9999, 0.9999, 0.001, 0.5, 2.0)
         return plant
 
     wr.build_plant = build_plant
@@ -1208,6 +1212,56 @@ def probe_dynamics_fix(seed: int = SEEDS[0], workers: int = 4, out: Path | None 
     return doc
 
 
+def crossing_torque(rec: dict, threshold_nm: float) -> float:
+    """The board torque the motor needs to cross the gear's gap, from a held reversal's own trace: the median |torque| over the samples
+    where the motor moves inside the gap (below the dead band's threshold, the encoder stepping)."""
+    import numpy as np  # noqa: PLC0415
+
+    tau, q = np.asarray(rec["tau"], float), np.asarray(rec["q"], float)
+    moving = np.r_[False, np.abs(np.diff(q)) > 0.0]
+    inside = moving & (np.abs(tau) < threshold_nm)
+    return float(np.median(np.abs(tau[inside]))) if inside.any() else 0.0
+
+
+def probe_breakaway_fix(levels_mnm=(0, 20, 40), workers: int = 1) -> list[dict]:
+    """servo.breakaway_two_sided on a world whose motor hinges carry a DRY friction (motor_friction(dry=True)), noise-free, read two ways:
+    as committed (the walk's cap 0.6 x the Coulomb prior) and with the walk's cap raised by the gap-crossing torque the held reversal
+    measured on the same world (crossing_torque): the output then still sees at most the committed cap, the motor's friction taking the rest."""
+    import importlib  # noqa: PLC0415
+
+    import sim2real  # noqa: PLC0415
+
+    twin = sim2real.Twin.load(NAME, workers=1)
+    wr = importlib.import_module(RIG_MODULE)
+    world, nominal = _world(twin)
+    gaps = {k: world[k] for k in world if k.endswith(".backlash_rad")}
+    reversal = {r.spec["can"]: r for r in wr.BacklashReversal().runs(dict(nominal))}
+    walks = {r.spec["can"]: r for r in wr.Breakaway().runs({**nominal, **gaps})}
+    out = []
+    for level in levels_mnm:
+        patch = motor_friction(level * 1e-3, dry=True) if level else contextlib.nullcontext()
+        with patch:
+            for can in wr.MOVING:
+                i = wr.INSTANCE[can]
+                rev = wr.play({"kind": "reversal", "spec": reversal[can].spec, "values": dict(world), "noise": {}, "seed": [0, 2, can]})
+                threshold = wr.DEAD_BAND_THRESHOLD_FRACTION * rev["cap_nm"]
+                crossing = crossing_torque(rev, threshold)
+                row = {"motor_friction_mnm": level, "can": can, "static_truth_mnm": world[f"{i}.static_friction_nm"] * 1e3,
+                       "crossing_mnm": crossing * 1e3}
+                for name, extra in (("committed", 0.0), ("fixed", crossing)):
+                    spec = {**walks[can].spec, "low_cap_nm": walks[can].spec["low_cap_nm"] + extra}
+                    rec = wr.play({"kind": "breakaway", "spec": spec, "values": dict(world), "noise": {}, "seed": [0, 3, can]})
+                    try:
+                        static = wr.Breakaway().fit({"r": rec}, dict(nominal), None)[f"{i}.static_friction_nm"].value
+                        row[name] = {"low_cap_mnm": spec["low_cap_nm"] * 1e3, "static_mnm": static * 1e3,
+                                     "err_over_tol": abs(static - world[f"{i}.static_friction_nm"]) / (0.1 * world[f"{i}.static_friction_nm"])}
+                    except ValueError as exc:
+                        row[name] = {"low_cap_mnm": spec["low_cap_nm"] * 1e3, "static_mnm": None, "err_over_tol": None, "why": str(exc)[:100]}
+                out.append(row)
+                print(json.dumps(row, default=_plain), flush=True)
+    return out
+
+
 # --- the CLI -----------------------------------------------------------------------------------------------------------------------------
 
 
@@ -1233,7 +1287,7 @@ def _cli(argv: Sequence[str] | None = None) -> int:
     rep = sub.add_parser("report", help="the ladder table and one plot per ladder, from the cells written")
     rep.add_argument("--out", type=Path, default=None)
     pro = sub.add_parser("probe", help="the known risks' estimators on a routine's own recordings (dead_band, reading_noise)")
-    pro.add_argument("which", choices=["dead_band", "reading_noise", "motor_friction", "dynamics_fix"])
+    pro.add_argument("which", choices=["dead_band", "reading_noise", "motor_friction", "dynamics_fix", "breakaway_fix"])
     pro.add_argument("--seed", type=int, default=SEEDS[0])
     pro.add_argument("--multipliers", type=float, nargs="*", default=None, help="dead_band: the torque-noise multipliers (default 0 1 2 3 5 10)")
     pro.add_argument("--name", default=None, help="the probe's file name under probes/ (default: the probe's)")
@@ -1272,7 +1326,8 @@ def _cli(argv: Sequence[str] | None = None) -> int:
             rows = probe_dead_band(multipliers=tuple(args.multipliers), workers=args.workers)
             name = args.name or "dead_band_fine"
         else:
-            rows = {"dead_band": probe_dead_band, "reading_noise": probe_reading_noise, "motor_friction": probe_motor_friction}[args.which](workers=args.workers)
+            rows = {"dead_band": probe_dead_band, "reading_noise": probe_reading_noise, "motor_friction": probe_motor_friction,
+                    "breakaway_fix": probe_breakaway_fix}[args.which](workers=args.workers)
             name = args.name or args.which
         (out / "probes").mkdir(parents=True, exist_ok=True)
         (out / "probes" / f"{name}.json").write_text(json.dumps(rows, indent=1, default=_plain))
