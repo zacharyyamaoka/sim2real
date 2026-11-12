@@ -5,7 +5,8 @@ status per rig and the three W&B tracker proposals (Zach, 2026-11-11).
 
 WHY generated: every status number on the page comes from sim2real.tracking.wandb_log.records(), the same records the W&B runs are
 made from, so the page and the tracker cannot disagree; the prose around them is written here. --verify-log embeds the output of
-`python -m sim2real.tracking.wandb_log --verify` (the W&B read-back), when given.
+`python -m sim2real.tracking.wandb_log --verify` (the W&B read-back), when given; --rig-verify-log the per-rig projects' read-back
+(`python -m sim2real.tracking.rigs --verify`).
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from pathlib import Path
 
 from sim2real.rack_results import load
 from sim2real.result import QUESTIONS
-from sim2real.tracking import curriculum
+from sim2real.tracking import curriculum, rigs
 from sim2real.tracking.wandb_log import ENTITY, PROJECT, REGISTRY, code_version, records
 
 REPO = Path(__file__).resolve().parents[1]
@@ -88,6 +89,131 @@ def cell(record: dict, q: str) -> str:
     return mark
 
 
+# ---------------------------------------------------------------------------------------------------------------- the per-rig gates
+
+STAGE_TITLE = {"target_vs_sim": "1 · target vs sim (controller)", "sim_vs_real": "2 · sim vs real (twin)",
+               "target_vs_real": "3 · target vs real", None: "flag"}
+
+
+def joint_label(joint: str) -> str:
+    """'can14' -> 'CAN 14', 'j2' -> 'J2'."""
+    return f"CAN {joint[3:]}" if joint.startswith("can") else joint.upper()
+
+
+def unit(name: str, value: float) -> str:
+    return f"{value:.3f}°" if name.endswith("_deg") else f"{value:.2f} mm" if name.endswith("_mm") else f"{value:.3g}"
+
+
+def rig_data(results: dict, sha: str, dirty: bool) -> dict:
+    """Per rig: its twin versions (the records the per-rig project gets) and its controller versions, as rigs.py builds them."""
+    out = {}
+    for name, rig in rigs.RIGS.items():
+        result = results[name]
+        twin = rigs.twin_records(result, rig, sha=sha, dirty=dirty)
+        versions = sorted(rigs.controller_versions(result, rig), key=lambda v: v["order"])
+        root = [r for r in twin if r["config"]["level"] == "deployment"]
+        out[name] = {"rig": rig, "twin": twin, "versions": versions, "twin_after": next(r for r in root if r["config"]["stage_role"] == "after"),
+                     "controller": rigs.controller_records(result, rig, versions, sha=sha, dirty=dirty)}
+    return out
+
+
+def latest(data: dict, key: str):
+    """The latest controller version (by the order it ran) that measures `key`: (value, its title) or (None, None)."""
+    for version in reversed(data["versions"]):
+        if version["numbers"].get(key) is not None:
+            return version["numbers"][key], version["title"]
+    return None, None
+
+
+def gate_cell(data: dict, name: str) -> str:
+    if name == rigs.OBJECTIVE:
+        numbers = data["twin_after"]["history"][-1]
+        value = numbers.get(name)
+        if value is None:
+            return "not measured"
+        verdict = "passes" if numbers.get("heldout_sim_vs_real_pass") else "fails"
+        failing = [j for j in data["rig"].joints if numbers.get(f"heldout_sim_vs_real_pass_{j}") == 0]
+        return f"{unit(name, value)} · **{verdict}**" + (f" ({', '.join(joint_label(j) for j in failing)} over 1.5× floor)" if failing else "") \
+            + f" · latest twin ({data['twin_after']['config']['twin_iteration']})"
+    value, title = latest(data, name)
+    if value is None:
+        return "not measured"
+    limit = rigs.GATES[name]["limit"]
+    verdict = "" if limit is None else (" · **passes**" if value <= limit else f" · **fails** ({value / limit:.1f}× the gate)")
+    return f"{unit(name, value)}{verdict} · {title}"
+
+
+def gates_table(rd: dict) -> str:
+    lines = ["| Order | Metric (same name on both rigs) | Role | Limit | UR wrist today | Five-bar today |", "|---|---|---|---|---|---|"]
+    order = {stage: k for k, stage in enumerate(rigs.GATE_ORDER)}
+    for name, gate in sorted(rigs.GATES.items(), key=lambda item: order.get(item[1]["stage"], 9)):
+        limit = (f"≤ {gate['limit']:g} mm" + (" (proposed)" if "proposed" in gate["rule"] else "")) if gate["limit"] is not None \
+            else ("≤ 1.5× floor, per joint" if name == rigs.OBJECTIVE else "—")
+        lines.append(f"| {STAGE_TITLE[gate['stage']]} | `{name}` | {gate['role']} | {limit} | {gate_cell(rd['ur_wrist'], name)} | "
+                     f"{gate_cell(rd['fivebar'], name)} |")
+    return "\n".join(lines)
+
+
+def controller_table(data: dict) -> str:
+    joints = data["rig"].joints
+    head = ("| # | Controller version | target vs sim, worst joint | target vs real, worst joint | per joint, sim / real | tool tracking, sim / "
+            "real | tool at a settled stop (encoders + FK) | camera vs commanded (flag) |")
+    lines = [head, "|---|---|---|---|---|---|---|---|"]
+    for version in data["versions"]:
+        n = version["numbers"]
+        fmt = lambda key, u="°": "—" if n.get(key) is None else (f"{n[key]:.3f}°" if u == "°" else f"{n[key]:.2f} mm")
+        per = ", ".join(f"{joint_label(j)} {fmt('target_vs_sim_tracking_deg_' + j)} / {fmt('tracking_rms_deg_' + j)}" for j in joints
+                        if n.get(f"tracking_rms_deg_{j}") is not None or n.get(f"target_vs_sim_tracking_deg_{j}") is not None) or "—"
+        tool = (f"{fmt('target_vs_sim_tracking_tool_mm', 'mm')} / {fmt('tracking_rms_tool_mm', 'mm')}"
+                if n.get("tracking_rms_tool_mm") is not None else "—")
+        stop = "—" if n.get("tool_error_at_stop_mm") is None else \
+            f"{n['tool_error_at_stop_mm']:.2f} mm ({'passes' if n['tool_error_at_stop_mm'] <= 1.0 else 'fails'} 1 mm; p95 {n['tool_error_at_stop_p95_mm']:.1f})"
+        lines.append(f"| {version['order']} | {version['title']} | {fmt('target_vs_sim_tracking_deg')} | {fmt('tracking_rms_deg')} | {per} | "
+                     f"{tool} | {stop} | {fmt('flag_camera_vs_commanded_mm', 'mm')} |")
+    return "\n".join(lines)
+
+
+def first_open(data: dict) -> str:
+    """Zach's order, read for one rig: the first stage whose gate fails or is not yet measured."""
+    after = data["twin_after"]["history"][-1]
+    stop_sim, _ = latest(data, "target_vs_sim_at_stop_mm")
+    stop_real, title = latest(data, "tool_error_at_stop_mm")
+    if stop_sim is None:
+        one = "gate 1 (target vs sim at a stop) is **not measured**: no sim replay of settled holds"
+    else:
+        one = f"gate 1 {'passes' if stop_sim <= 1 else 'fails'} ({stop_sim:.2f} mm)"
+    two = f"gate 2 (twin) **{'passes' if after.get('heldout_sim_vs_real_pass') else 'fails'}**"
+    three = ("gate 3 (tool at a stop) is **not measured** (the tool is not tracked)" if stop_real is None
+             else f"gate 3 (tool at a stop) **{'passes' if stop_real <= 1 else 'fails'}**: {stop_real:.2f} mm on {title}")
+    return f"{one}; {two}; {three}"
+
+
+def rig_wandb_section(rd: dict, verify_log: str | None) -> str:
+    urls = json.loads(rigs.REGISTRY.read_text()) if rigs.REGISTRY.exists() else {"reports": {}, "views": {}}
+    lines = ["| Project | Runs (latest evaluation) | Saved view | Report |", "|---|---|---|---|"]
+    for name, data in rd.items():
+        rig = data["rig"]
+        link = f"https://wandb.ai/{ENTITY}/{rig.project.replace(' ', '%20')}"
+        lines.append(f"| [{rig.project}]({link}) | {len(data['twin'])} twin ({len({r['config']['node'] for r in data['twin']})} nodes × "
+                     f"{data['twin'][0]['config']['iterations']} twin iterations) + {len(data['controller'])} controller versions | "
+                     + (f"[view]({urls['views'][name]})" if name in urls.get("views", {}) else "—") + " | "
+                     + (f"[report]({urls['reports'][name]})" if name in urls.get("reports", {}) else "—") + " |")
+    if "servo-across-rigs" in urls.get("reports", {}):
+        lines.append(f"| [{rigs.HUB}](https://wandb.ai/{ENTITY}/{rigs.HUB}) (cross-rig) | the one-project runs below | — | "
+                     f"[servo joints and the same-named gates across rigs]({urls['reports']['servo-across-rigs']}) |")
+    lines += ["", "Each project also holds the rig's Weave evaluations and leaderboards (bam_ws `bam_trackio.bbo`: a version is a Weave "
+              "model version scored on a fixed environment; one leaderboard per environment: twin versions on the held-out runs, "
+              "controller versions on the coverage set, and on the five-bar the tool at the 16 settled holds).", "",
+              "Log both rigs (idempotent; new numbers supersede, nothing is deleted), rebuild the reports and views, read it all back:", "",
+              "```bash",
+              "env -u VIRTUAL_ENV uv run --isolated --project /home/bam/sim2real --extra tracking python -m sim2real.tracking.rigs --log --views --verify",
+              "```"]
+    if verify_log:
+        kept = [line for line in verify_log.splitlines() if line.startswith(("Sim2Real", "  ", "VERIFY"))]
+        lines += ["", "The read-back through W&B's API (`rigs --verify`), as run for this page:", "", "```text", *kept, "```"]
+    return "\n".join(lines)
+
+
 def status_table(after: list[dict], rungs: list[dict]) -> str:
     lines = ["| Node | Verdict | Floor | Data | Routines | Twin | Job | Next rung |", "|---|---|---|---|---|---|---|---|"]
     for record in after:
@@ -131,7 +257,8 @@ def wandb_section(batches: dict, verify_log: str | None) -> str:
     lines = [f"- **Project:** [{ENTITY}/{PROJECT}]({project}) (wandb.ai redirects to forge.coreweave.com/wandb/).",
              f"- **Runs:** {n_runs} = " + " + ".join(f"{len(b)} ({rid}: {len({r['config']['node'] for r in b})} nodes × "
                                                      f"{b[0]['config']['iterations']} twin iterations)" for rid, b in batches.items())
-             + f"; one group per evaluation: {groups}.",
+             + f"; one group per evaluation: {groups}. Runs of earlier evaluations stay in the project as `superseded` (never "
+             "deleted) and every view filters them out; logging refuses a src/ with uncommitted changes, so each evaluation is a commit.",
              "- **Config on every run** (filter and group on any): `type`, `type_group`, `level`, `deployment`, `deployment_kind`, `rig`, "
              "`node`, `instance`, `can_id`, `twin_iteration`, `iteration`, `stage_role` (before / between / after), `model_rung`, "
              "`floor_kind`, `gains`, `split`, `evaluation`, `evaluation_state` (latest / superseded), `sim2real_sha`, `result_id`.",
@@ -160,9 +287,12 @@ def wandb_section(batches: dict, verify_log: str | None) -> str:
     return "\n".join(lines)
 
 
-def build(verify_log: str | None) -> str:
+def build(verify_log: str | None, rig_verify_log: str | None = None) -> str:
     sha, dirty = code_version(REPO)
     results = {name: load(name) for name in ("ur_wrist", "fivebar")}
+    rd = rig_data(results, sha, dirty)
+    rig_urls = json.loads(rigs.REGISTRY.read_text()) if rigs.REGISTRY.exists() else {"reports": {}, "views": {}}
+    rig_links = ", ".join(f"[{rig.project}](https://wandb.ai/{ENTITY}/{rig.project.replace(' ', '%20')})" for rig in rigs.RIGS.values())
     batches, afters, rungs = {}, {}, {}
     for name, result in results.items():
         batch = records(result, sha=sha, dirty=dirty, extra_config=RIG)
@@ -224,10 +354,14 @@ def build(verify_log: str | None) -> str:
 - **Next rungs:** the wrist's holder board (T1: its TCP and payload graded in sim; T2: one stop revisited by camera), then CAN 14's
   passive twin (S4) and CAN 15's settled stop (S5). The five-bar's S1: grade friction, armature and delay in sim at 1× noise (the
   one-click seam the wrist got today), then its twin (S4) and the tool gate.
-- **W&B: one project, `{PROJECT}`, filtered by config** (proposal B, 89 / 100; one project per deployment 61, one per type 46). It holds
-  {sum(len(b) for b in batches.values())} runs (one per node per twin iteration); the filter `type = integrated_servo` returns the
-  {len(servo)} servo joints of both rigs ({', '.join(servo)}); a saved view and a report per type and per deployment, plus an overview.
-  [Open the project](https://wandb.ai/{ENTITY}/{PROJECT}).
+- **The gates, in Zach's order (2026-11-11 21:50), all from the joint encoders through FK:** target vs sim (the controller) →
+  sim vs real (the twin, ≤ 1.5× the same-input floor on the tick clock) → target vs real (the tool ≤ 1 mm at a settled stop). ArUco is a
+  flag, never a gate. UR wrist: {first_open(rd['ur_wrist'])}. Five-bar: {first_open(rd['fivebar'])}.
+- **W&B, live: one project per rig**, {rig_links}, on bam_ws's `bam_trackio.bbo` template (Zach's direction, relayed by the W1 sprint),
+  with the same gate names on both and `type`, `joint` and `deployment` config on every run; one W&B run per version of what is fitted
+  (each twin iteration, each controller configuration). The one-project layout I first recommended (proposal B) stays in `{PROJECT}`
+  ({sum(len(b) for b in batches.values())} runs; the filter `type = integrated_servo` returns the {len(servo)} servo joints of both rigs),
+  and its filter-by-type view now lives on as the cross-rig report there.
 
 > [!note] What moved since the brief (its numbers were sim2real `662e64d`)
 > - **Wrist Routines:** the one-click seam (sim2real `82f14db`, wired in `7f8d13b`) recovers CAN 14 8/8, CAN 15 6/6, CAN 16 6/6 and the
@@ -291,6 +425,45 @@ and `rack_results.py` implement it tonight.
 - `cards/domain_v3.json`: `arm.tool_error_at_stop.gate`, `pick.grasp_pose_error.gate` and `conveyor.object_position.gate` are ≤ 5 mm.
 - `cards/servo_gates.py`: `STOP_ALLOCATION_MRAD` and T4's rule text allocate "the 5 mm tool gate" (about 3 mm RSS inside 5 mm).
 - `sysid/acceptance.json`: tolerances are set for "a 5 mm tool budget"; the ur5e examples' held-out tool is 5 mm.
+
+### 1.1 Zach's gate rulings (2026-11-11 21:50) and the same-named gates
+
+- **Every gate and tracking error comes from the joint encoders through FK, never the camera.** The five-bar's tool at a stop is the
+  16 settled holds through the encoders and the CAD lever (`encoders_fk_mm`); the D435's number (camera vs the commanded target) is kept
+  beside it as a flag only, under a name no gate reads.
+- **ArUco is a 6-DOF tracked point logged as a flag, never a gate** (`aruco_vs_fk_mm`: the tag vs the encoders' FK at the same instant;
+  a large value says look at the stickers or the as-built geometry, it passes or fails nothing). Not measured yet on either rig.
+- **The gate order: target vs sim first, then sim vs real, then target vs real.** Target vs sim is the controller alone (does the
+  controller do the job in a sim that is right by construction?); sim vs real is the twin (held-out, ≤ 1.5× the same-input repeat floor
+  on the tick clock, the tree's Twin answer); target vs real is the job. A later gate is read only after the earlier ones: a real tool
+  error cannot be blamed on the twin until the controller passes in sim.
+- **Tool gate 1 mm at a settled stop.** `target_vs_real_at_stop_mm` is the same number as `tool_error_at_stop_mm` under its gate-order
+  name; `target_vs_sim_at_stop_mm` holds the controller to the same 1 mm in sim (proposed: the sim must pass before the real rig can).
+
+**The gates, one metric name each on both rig projects** (`sim2real.tracking.rigs.GATES`; "today" is the latest version that measures
+it: the latest twin for the twin gate, the last controller configuration that ran for the rest):
+
+{gates_table(rd)}
+
+**Read in that order, today:**
+
+- **UR wrist:** {first_open(rd['ur_wrist'])}. The controller in sim on the operating gains (pick_sliding) tracks to
+  {rd['ur_wrist']['versions'][-1]['numbers'].get('target_vs_sim_tracking_deg', float('nan')):.3f}° (worst joint, held-out runs on the twin of
+  record), the real joints to {rd['ur_wrist']['versions'][-1]['numbers'].get('tracking_rms_deg', float('nan')):.3f}°.
+- **Five-bar:** {first_open(rd['fivebar'])}. Coulomb feed-forward is a controller change, and it shows first in gate 1: target vs sim
+  went {rd['fivebar']['versions'][1]['numbers']['target_vs_sim_tracking_deg']:.2f}° → {rd['fivebar']['versions'][2]['numbers']['target_vs_sim_tracking_deg']:.2f}°
+  (worst joint) and the sim's tool {rd['fivebar']['versions'][1]['numbers']['target_vs_sim_tracking_tool_mm']:.1f} → {rd['fivebar']['versions'][2]['numbers']['target_vs_sim_tracking_tool_mm']:.1f} mm,
+  before the real tool's {rd['fivebar']['versions'][1]['numbers']['tracking_rms_tool_mm']:.1f} → {rd['fivebar']['versions'][2]['numbers']['tracking_rms_tool_mm']:.1f} mm.
+
+**Controller versions, UR wrist** (target vs sim: bam_ur_wrist_coverage's own score on the twin of record, held-out runs, CAN 15 and 16
+only; target vs real: each coverage run's RMS per joint, averaged):
+
+{controller_table(rd['ur_wrist'])}
+
+**Controller versions, five-bar** (tracking: each coverage rung's own metrics, the real run and the sim the ladder ran beside it on the
+same plan, averaged over the rungs; the tool at a stop: the 16 three-second holds, last second scored):
+
+{controller_table(rd['fivebar'])}
 
 ## 2 · The curriculum
 
@@ -437,11 +610,22 @@ of models or something…"
 | Sharing outside (5) | 2 | 3 | **5** |
 | **Total (of 100)** | **46** | **89** | **61** |
 
-**Recommendation: B, as built.** It takes A's per-type view and C's per-deployment view and tree without splitting the data. Decision
-record: `docs/decision-wandb-one-project-2026-11-11.md`.
+**My recommendation on these criteria was B** (89), and it was built first. **What is live is C, per rig, with B's config on every
+run**, because you set the direction tonight (relayed by the W1 sprint): bottom-up per sub-assembly, each rig introspected through W&B
+and Rerun, in projects named "Sim2Real · five-bar rig" and "Sim2Real · wrist rig" on the house black-box template (bam_ws
+`bam_trackio.bbo`: one W&B project per black-box family, its versions on leaderboards). Your call outranks my scoring, and the
+criteria above did not weigh what it adds:
 
-- **The reversible default:** everything goes through `wandb_log.PROJECT`. A customer cell that must be shared on its own gets
-  `log(result, project="<customer> cell")`: C for that one deployment, B for the rest.
+- **One leaderboard per sub-assembly.** A rig is the black box being optimised; its twin iterations and controller configurations are
+  its versions, ranked on the same environment. In one shared project those leaderboards would sit side by side with no owner.
+- **What C costs against B, and how it is paid:** a workspace cannot filter across rigs, so "every servo on every rig" is a report, not
+  a filter: the cross-rig report in `{PROJECT}` takes one runset per rig, each filtered `type = integrated_servo`, and charts the
+  same-named gates side by side. Every run carries `type`, `level`, `deployment` and `joint`, so any new cross-rig report is one filter.
+- **Decision record:** `docs/decision-wandb-one-project-2026-11-11.md`, amended: B is superseded as the home by C per rig; B's runs stay
+  in `{PROJECT}` (nothing is deleted) and `wandb_log` still logs that layout.
+
+- **Reversible either way:** the per-rig projects are `rigs.RIGS[...].project`, the one-project layout is `wandb_log.PROJECT`; both are
+  written from the same records, so going back to B is one command and no data moves.
 - **Steelman for A:** you split the pick-place ladder into two projects today because "we are optimizing them separately". That split
   is between two products with a contract between them and two scoreboards; sim2real has one scoreboard at every level, and splitting it
   by type would break the roll-up the scoreboard is made of.
@@ -450,6 +634,12 @@ record: `docs/decision-wandb-one-project-2026-11-11.md`.
   W&B filters slowing down at scale (untested past a few hundred runs).
 
 ### What is in W&B now
+
+**The per-rig projects (live, proposal C):**
+
+{rig_wandb_section(rd, rig_verify_log)}
+
+**The one-project layout (proposal B), kept in `{PROJECT}`:**
 
 {wandb_section(batches, verify_log)}
 
@@ -510,9 +700,11 @@ def render_html(markdown: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--verify-log", type=Path, help="the output of `python -m sim2real.tracking.wandb_log --verify`, embedded on the page")
+    parser.add_argument("--rig-verify-log", type=Path, help="the output of `python -m sim2real.tracking.rigs --verify`, embedded on the page")
     args = parser.parse_args()
     verify_log = args.verify_log.read_text() if args.verify_log and args.verify_log.exists() else None
-    text = build(verify_log)
+    rig_verify_log = args.rig_verify_log.read_text() if args.rig_verify_log and args.rig_verify_log.exists() else None
+    text = build(verify_log, rig_verify_log)
     OUT.write_text(text)
     COPY.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(OUT, COPY)

@@ -1,6 +1,6 @@
 # Decision: sim2real tracks every type and deployment in ONE W&B project, sliced by config (2026-11-11)
 
-**Status:** accepted as the default (proposal B). Zach asked for a W&B tracker and three proposals for it on 2026-11-11, with the worry
+**Status:** superseded as the home by per-rig projects (proposal C, amendment below), 2026-11-11 late; the one-project runs stay. Was: accepted as the default (proposal B). Zach asked for a W&B tracker and three proposals for it on 2026-11-11, with the worry
 in his words: "Should we have one weights and biases project per generic type? This could be a lot of projects. But I guess for each one
 it's a bit unique, no? OK, having it in one location could work, if we can filter that data to show it for particular types of models or
 something…". Overrule it by pointing `sim2real.tracking.wandb_log.PROJECT` (or a `project=` argument) elsewhere; nothing else changes.
@@ -33,3 +33,19 @@ something…". Overrule it by pointing `sim2real.tracking.wandb_log.PROJECT` (or
   its verdicts stay here.
 - Do not re-split by type to "clean up" the workspace: the per-type saved views already show one type alone, and a split would scatter
   each rig's tree, so the roll-up could no longer be seen in any one place.
+
+## Amendment (2026-11-11, late): the home is one project per rig
+
+- **What changed:** Zach's direction tonight, relayed by the W1 sprint agent: bottom-up per sub-assembly, each rig introspected through
+  W&B and Rerun, in the projects **"Sim2Real · wrist rig"** and **"Sim2Real · five-bar rig"**, on bam_ws `bam_trackio.bbo` (the house
+  black-box template: one W&B project per black-box family, its versions on Weave leaderboards). That is proposal C (one project per
+  deployment) with proposal B's slice config kept on every run. His direction outranks the 89 / 61 scoring in
+  `docs/KPIS_GATES_CURRICULUM.md` §3; the page keeps all three proposals and says what C costs and how it is paid.
+- **Live:** `sim2real.tracking.rigs` writes each rig's project: one run per twin iteration (every node, from `wandb_log.records()`) and
+  one per controller configuration that changed what the real rig does, the gates as metrics with the same names on both rigs
+  (`rigs.GATES`, in Zach's 21:50 order: target vs sim, then sim vs real, then target vs real; encoders through FK only; ArUco a flag), and
+  `type`, `level`, `deployment` and `joint` on every run.
+- **B's view survives as a report:** the cross-rig report in `Sim2Real` takes one runset per rig project filtered by `type` and charts the
+  same-named gates side by side. A workspace cannot filter across projects; a report can.
+- **Kept, not deleted:** the one-project runs in `Sim2Real` (44 latest + superseded) and `wandb_log`, which still writes that layout from the
+  same records. Going back is one command.
