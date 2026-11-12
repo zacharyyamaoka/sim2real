@@ -54,3 +54,28 @@ robot_msgs  ←  robot_description  ←  sim2real (types, models, schedules, fit
   would be sterile, robotparts is already too big, and next to the fitting and eval pages is where the models mean something.
   Revisit this when a third package (five_bar, pid_tuna) needs the model types without sim2real's fitting. Then the type contract
   (`cards/` + the model definitions) moves down into `robot_description`, not into a new repo.
+
+## Addendum 2, same day: sim2real sits *below* robot_description (supersedes addendum 1's order)
+
+Zach: "robot_description should hold the parameters no? but those parameters come from the sim2real models... I almost feel like
+sim2real is below robot_description... What does sim2real depend on? not much honestly... sim2real then doesn't know about
+RobotDescription... The robotDescription does .to_twin or from_twin(). Sim2real just knows about the twin."
+
+```
+robot_msgs  ←  sim2real  ←  robot_description  ←  robotparts, cad2robot, five_bar, scripts
+ (Value…)      (types, models,     (a robot: topology + typed instances
+               Twin, fit, sim)      holding parameter Values; .to_twin() / .from_twin())
+```
+
+- **sim2real knows nothing about RobotDescription.** Its public noun is `Twin`: typed instances, a model rung chosen for each,
+  and parameter `Value`s. A Twin is built directly (`Twin(instances=…)`), not loaded by a name string. sim2real has no registry
+  of robots. The oracle examples become `sim2real.examples.<name>()` fixtures.
+- **The models are the vocabulary.** Every type (rigid body chain, integrated servo, gearbox, camera…) and its model ladder live
+  in sim2real. A kinematic chain is a model too: `rigid_body_chain`'s kinematics rungs.
+- **robot_description holds the parameters** of one robot, typed by sim2real's types. `description.to_twin(models=…)` builds a
+  Twin, and `description.from_twin(fitted)` returns a new description with the calibrated values (functional update; saving stays
+  explicit).
+- **What robot_description may import:** only sim2real's light core (types, models, `Twin`; robot_msgs + numpy). MuJoCo stays the
+  `sim` extra, so a package that only describes robots never installs a simulator. sim2real must keep that core free of its app,
+  site and heavy dependencies.
+- **This changes Zach's Nov 10 order** (robot_msgs ← robot_description ← everything): sim2real is now the one package between them.
