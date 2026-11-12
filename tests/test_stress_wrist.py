@@ -203,6 +203,58 @@ def test_the_breaking_point_is_the_first_level_where_any_seed_misses():
     assert broken["level"] == 2 and broken["params"] == ["raised in servo.backlash_reversal_held"]
 
 
+# --- three seeds at every level: run, or named as not run with why ------------------------------------------------------------------------
+
+
+def test_the_front_pass_plans_every_seed_at_every_level():
+    """The brief: 3 fixed seeds a level. The front pass is ~2 min a cell, so it plays every seed of every level, the noise-free one too
+    (its seeds' equality is then measured, not assumed); the whole plan may stand one 0x run for all three."""
+    front = sw.plan(front=True)
+    for name, spec in sw.LADDERS.items():
+        for level in spec.levels:
+            if level == spec.baseline:
+                continue
+            seeds = sorted(c.seed for c in front if c.ladder == name and c.level == level)
+            assert seeds == sorted(sw.SEEDS), (name, level, seeds)
+    whole = sw.plan()
+    assert [c.seed for c in whole if c.ladder == "overall" and c.level == 0] == [sw.SEEDS[0]]
+
+
+def _front_record(label: str, cell: dict, recovered: float) -> dict:
+    rows = [{"key": f"can{c}.backlash_rad", "pass": True, "routine": "servo.backlash_reversal_held", "error": 0.0, "true": 1e-3,
+             "tolerance": {"kind": "rel", "value": 0.1}, "recovered": recovered} for c in (14, 15, 16)]
+    return {"schema": sw.SCHEMA, "label": label, "cell": cell, "front": True, "calibration": {"rows": rows, "passed": True}}
+
+
+def test_coverage_names_every_seed_of_every_level(tmp_path, twin):
+    """Every (ladder, level, seed) of the brief is in the coverage: run whole, run as a front pass, or a whole cell named as not run with
+    its reason. The 0x's other seeds are not run whole only because their front passes equal seed 20261111's to the bit; when one does not,
+    the coverage must not claim it."""
+    base = twin.noise()
+    for seed in sw.SEEDS:
+        cell = sw.Cell("overall", 0, seed)
+        sw.write_record(tmp_path, _front_record(cell.label(base), {"ladder": "overall", "level": 0, "seed": seed}, 1e-3), "front")
+    cov = sw.coverage(tmp_path, base)
+    dropped = {d["label"]: d["why"] for d in cov["dropped"]}
+    rows = {(r["ladder"], r["level"]): r for r in cov["rows"]}
+    for name, spec in sw.LADDERS.items():
+        for level in spec.levels:
+            row = rows[(name, level)]
+            for seed in sw.SEEDS:
+                label = sw.Cell(name, level, seed).label(base)
+                assert label in row["whole"] or label.startswith("baseline-") or label in dropped, (name, level, seed)
+    zero = rows[("overall", 0)]
+    assert sorted(zero["front"]) == sorted(sw.Cell("overall", 0, s).label(base) for s in sw.SEEDS)
+    for seed in sw.SEEDS[1:]:
+        assert "bit-equal" in dropped[sw.Cell("overall", 0, seed).label(base)]
+    # mutated: seed 20261113's front pass differs, so its whole cell is not excused by seed 20261111's
+    odd = sw.Cell("overall", 0, sw.SEEDS[2])
+    sw.write_record(tmp_path, _front_record(odd.label(base), {"ladder": "overall", "level": 0, "seed": sw.SEEDS[2]}, 2e-3), "front")
+    dropped = {d["label"]: d["why"] for d in sw.coverage(tmp_path, base)["dropped"]}
+    assert "bit-equal" not in dropped[odd.label(base)]
+    assert "bit-equal" in dropped[sw.Cell("overall", 0, sw.SEEDS[1]).label(base)]
+
+
 # --- the 1x pin, three seeds (slow) ------------------------------------------------------------------------------------------------------
 
 
