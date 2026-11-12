@@ -396,7 +396,7 @@ and `rack_results.py` implement it tonight.
 | 2 | **Data** | Is the data enough? | joint: ≥ 40 % of its reachable (angle, speed, acceleration) cells visited by real runs; arm: joint cube ≥ 90 %, workspace ≥ 50 %, facing or heading ≥ 90 % of the allowed mask; held-out split sealed before fitting; physical runs for a physical deployment | coverage %, samples, minutes logged | thresholds proposed |
 | 3 | **Routines** | Does each calibration routine get a hidden truth back, in sim? | every identifiable value within its tolerance of a sealed truth at 1× the real sensor noise, the truth off the search grid; the nominal value fails its own tolerance; then the stress ladder (3×, 10×, delay and quantisation variants) | k of n identifiable recovered; error ÷ tolerance; wall and operator time | decided |
 | 4 | **Twin** | Is the twin as good as reality allows? | held-out sim vs real ≤ 1.5× the floor **of the same run kind**, passive and driven (≤ 3× reads "close") | the ratio per run kind; before → after; how many times better than "it follows its target" | decided |
-| 5 | **Job** | Does the real thing do its job? | joint: settled stop error within its share of the tool gate; tool: **≤ 1 mm at a stop**, on settled holds, measured at the tool | real vs target; feedback-torque share, RMS(τ − τ_ff) ÷ RMS(τ), falling (≤ 0.3 proposed); the sim predicting its own tracking | 1 mm decided (Zach); joint share proposed |
+| 5 | **Job** | Does the real thing do its job? | joint: settled stop error within its share of the tool gate; tool: **≤ 1 mm at a stop**, on settled holds, at the tool by the joint encoders through FK (Zach, 21:50) | real vs target; feedback-torque share, RMS(τ − τ_ff) ÷ RMS(τ), falling (≤ 0.3 proposed); the sim predicting its own tracking | 1 mm decided (Zach); joint share proposed |
 
 **How it rolls up**
 
@@ -592,7 +592,7 @@ of models or something…"
   report; every new type is a new project with its own views.
 - *Scores:* one place 1 · like with like 3 (across rigs 5, within a rig 1) · tree 1 · growth 2 · honest numbers 5 · house 4 · sharing 2.
 
-**B · One project, `{PROJECT}`, every run configured and filtered** (recommended, built)
+**B · One project, `{PROJECT}`, every run configured and filtered** (recommended on these criteria and built first; superseded as the home by C per rig, below)
 
 - *For:* filter `type = integrated_servo` and get every servo on every rig; `deployment = fivebar` and get its whole tree; group by
   either; one overview over everything. A new type or deployment is a new config value; its view and report are generated from the runs
