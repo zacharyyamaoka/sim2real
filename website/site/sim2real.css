@@ -1,0 +1,68 @@
+/* sim2real's accent over robotmsgs.com's pinned site.css (PINNED.json): BAM green (brand/icons/README.md), plus the calibration tables.
+   WHY a separate file: site.css stays byte-for-byte robot_msgs b4c8d36, so a diff against it is always zero. */
+:root {
+  --accent: #2f6f4f; --accent-bg: rgba(47, 111, 79, 0.1);
+  --pass: #15803d; --pass-bg: rgba(21, 128, 61, 0.08); --fail: #b91c1c; --fail-bg: rgba(185, 28, 28, 0.07);
+  --tune: #7c3aed; --configure: #0369a1; --fit: #2f6f4f; --measure: #a16207;
+}
+:root[data-theme="dark"] {
+  --accent: #35de95; --accent-bg: rgba(53, 222, 149, 0.1);
+  --pass: #4ade80; --pass-bg: rgba(74, 222, 128, 0.08); --fail: #f87171; --fail-bg: rgba(248, 113, 113, 0.08);
+  --tune: #c4b5fd; --configure: #7dd3fc; --fit: #35de95; --measure: #fcd34d;
+}
+
+/* tables: numbers right-aligned and tabular, ids small under their titles */
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rid { margin-top: 2px; }
+.rid code { font-size: 12px; color: var(--muted); }
+table.routines th[scope="row"] { min-width: 200px; width: 260px; max-width: 280px; font-weight: 500; white-space: normal; }
+table.routines td, table.routines th { padding: 8px 10px; }
+table.routines thead th { white-space: nowrap; }
+td.needs { font-family: var(--mono); font-size: 12px; color: var(--fg2); min-width: 120px; }
+.rung { font-family: var(--mono); font-weight: 500; }
+table.rungs td:first-child { white-space: nowrap; }
+tr[data-current="true"] > td { background: var(--accent-bg); }
+.badge.current { border-color: var(--accent); color: var(--accent); }
+.chip.on { border-color: var(--accent); color: var(--accent); }
+
+/* recovery cells: the ratio, then the verdict; unknown stays quiet */
+td.rec { white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.rec.pass { background: var(--pass-bg); }
+td.rec.fail { background: var(--fail-bg); }
+td.rec.none { color: var(--faint); font-size: 12px; }
+td.rec .verdict, .rec-word { font-size: 12px; font-weight: 500; }
+td.rec.pass .verdict, .rec-word.pass { color: var(--pass); }
+td.rec.fail .verdict, .rec-word.fail { color: var(--fail); }
+
+/* the routine kinds: configure -> fit -> tune -> measure */
+.kind { font: 500 12px/18px var(--mono); }
+.kind-configure { color: var(--configure); }
+.kind-fit { color: var(--fit); }
+.kind-tune { color: var(--tune); }
+.kind-measure, .kind-use { color: var(--measure); }
+.status { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.status-implemented { color: var(--pass); }
+
+/* pages */
+.prose .eq { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+dl.facts { margin: 8px 0 0; }
+dl.facts dt { font-weight: 600; margin-top: 14px; }
+dl.facts dd { margin: 4px 0 0; color: var(--fg2); }
+.plain-list { padding-left: 18px; }
+.plain-list li { margin: 4px 0; }
+.warn { border: 1px solid var(--fail); color: var(--fail); border-radius: 8px; padding: 8px 12px; }
+.xref { text-decoration: underline dotted var(--border-strong); text-underline-offset: 3px; }
+.md blockquote { margin: 12px 0; padding: 2px 16px; border-left: 3px solid var(--accent); color: var(--fg2); }
+section.api { margin-top: 40px; scroll-margin-top: calc(var(--header-h) + 16px); }
+section.api h2 .badge { vertical-align: 3px; }
+.fn h3 { margin: 0; font-size: 15px; }
+.prose.wide-table { max-width: none; }
+.meta-v .chip { margin: 2px 4px 2px 0; }
+.table-wrap .chip { font-size: 12px; padding: 1px 7px; margin: 1px 2px 1px 0; }
+table.rungs td:nth-child(4), table.rungs td:nth-child(5) { min-width: 180px; }
+body.docs.wide-page .shell { grid-template-columns: 240px minmax(0, 1fr); }
+@media (max-width: 1100px) { body.docs.wide-page .shell { grid-template-columns: 220px minmax(0, 1fr); } }
+@media (max-width: 767px) {
+  body.docs.wide-page .shell { grid-template-columns: minmax(0, 1fr); }
+  table.routines th[scope="row"] { min-width: 180px; }
+}
