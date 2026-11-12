@@ -39,3 +39,21 @@ Choices, each with its why:
 2. **No gravity comp.** A blind homing run does not know its zero, so the host cannot compute a gravity torque. The real home button's comp works because it carries a homed frame by receipt. The boards are bare PDs at the rack record's kp 200 / kd 4 N·m per rev.
 3. **Starts settle unpowered.** The real arm powers up where gravity and friction left it, so the bench records the settled pose and its assembly per start.
 4. **A start is walked onto its assembly.** Gauss-Newton straight from the export pose does not converge, so the walk follows the exporter's (J2, C1) map, the mirror from its toggle seed. Each pose is checked by the passive dyad's orientation, which is the exporter's branch rule.
+
+## Ground truth first: the real home button on the MuJoCo rung (2026-11-12, third pass)
+
+The second pass failed every row because recover_first's step 3 never completed under gravity, while the real arm's home button (bam_rack_twin `fivebar_home -f`) recovered it repeatedly. Zach's rule is to prove in sim against ground truth, and here reality is the ground truth, so the plant was checked against the real runs before any procedure was judged on it.
+
+| Where | What |
+|---|---|
+| `tools/extract_home_button_real.py` → `data/fivebar_home_button_real_2026-11-12.json` | every complete real `stage: home` receipt (t1 from the closure fold, gate-1 from a working rest, repeat-floor from home): the start, each step's outcome / seconds / end pose read off the tick rows, the comp each walked on. |
+| `sim2real.sim.homing.home_button` | `bam_fivebar_recovery.home.return_home` itself, through `PlantBackend`, on the real bench (`bench_real`), the run's comp and the homed map's home, with `MujocoRigPlant` behind bam_fivebar's `Plant` seam in Craig angles (`RigBoards`). `verdict`: complete, same steps in order, end within the button's own reach (3.44°). |
+| `sim2real.sim.homing.sag_proof` | what `RecoverFirst(sag_proof=True)` wraps the whole sequence in on the MuJoCo rung (`mujoco_bench.make`): a `Reached` move may also end still at its target within cap / kp; a seek that begins at a step re-holds first (the home button's settle) and stalls only past cap / kp. |
+
+Findings and choices, each with its why:
+
+1. **The plant was not the gap.** The home button's sequences complete in the sim from all three real starts on B0 / B1 / B2 and end within 1.1° of the real ends (`data/fivebar_home_button_replay_2026-11-12.json`). The real arm never ran blind_recovery: its references are the July bench's. The second pass compared two different sequences.
+2. **The boards are now the real record.** The runs' config checks show CAN 12 (J2) at kp 144 / kd 8 N·m per output rev, not 200 / 4 (`mujoco_plant.REAL_BOARD_RECORD`, the default). The integrator never acts on either: `PlantBackend` sends `ilimit_scale` 0, so the real boards are PDs as the sim's were. The coordinator's guess that the real boards carried an integrator does not hold for the home button.
+3. **sag_proof is on only where gravity is.** The kinematic rung keeps its results as run (`RecoverFirst.sag_proof` defaults off). sag_proof changes when a seek may call itself stalled and lets a move end short of a target gravity will not let it reach, with the pose recorded per step (`mujoco_bench.step_ends`). It changes no define, press, `Elapsed`, zero arithmetic or gate.
+4. **robot_msgs needed one fix.** `JointCommandSequenceController` kept one dwell timer per joint, so a tight `Reached` that never held reset a looser one on the same joint every tick. It now keeps one per (condition, joint) (robot_msgs 9acaa74, regression test red first).
+5. **The fold start is replayed on both assemblies.** t1's rest does not close on the real bench, and on the CAD it closes about 2° short of the reading on either side of the fold. Both are replayed from the nearest closed pose (`home_button.nearest_closed_pose`), and the report says how far short.

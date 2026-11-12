@@ -9,7 +9,8 @@ What MuJoCo adds over ``KinematicStopPlant`` (the decision report: "kinematic pr
   across the toggle by gravity (or not) - the thing the kinematic rung cannot judge (the coordinator's 2026-11-12 ruling);
 * the hidden backlash as gear_backlash's double joint, J1 3.5' / J2 2.5' / C1 4.0' (``bam_fb_test_rig.backlash.HIDDEN_ARCMIN``): B0 none,
   B1 ``method="deadzone"`` (the ElastoBacklash torque), B2 ``method="passive_joint"`` (a limited hinge tuned to the mesh's 13 N.m/arcmin);
-* the boards: one ``moteus_servo`` position loop per drive at the rack record's gains (kp 200, kd 4 per output rev), fed every 10 ms;
+* the boards: one ``moteus_servo`` position loop per drive at the real arm's record (``REAL_BOARD_RECORD``: J1 / C1 kp 200, kd 4; J2 kp 144,
+  kd 8 per output rev - what CAN 11/12/13 ran when the home button recovered the arm), fed every 10 ms;
 * JMC cogging on J2 and C1 (``bam_fivebar.plant.JMC_COGGING``, sim2real bldc_motor M4.dynamics.cogging, fitted 2026-11-12 on the real
   arm's board torque) in each drive's Craig frame (``bam_fb_test_rig.gravity.CraigMap``: the fit's phase is in Craig, and Craig = URDF +
   90.00 / 137.46 deg shifts a 50 / rev ripple by half a period). J1 has no fitted cogging (its CAN 11 drive was never in the fit), so it
@@ -58,6 +59,25 @@ BAM_WS_PATHS = (
     "core/mdp/env/cad2robot_payload",
 )
 ROLE_OF = {J1: "J1", J2: "J2", C1: "C1"}
+# The real arm's boards when the home button ran (2026-11-11 22:27Z and 2026-11-12 01:20Z / 08:56Z): each run's own config check against
+# records/fivebar-bench/deployment.json, in its log beside the receipt (/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/
+# home_real_222746_t1.log, home_real_repeatfloor_012056.log, home_real_after_gate1_085634.log): CAN 11 (J1) kp 200 / ki 16000 / kd 4 /
+# ilimit 0.5, CAN 12 (J2) kp 144 / ki 16000 / kd 8 / ilimit 0.8, CAN 13 (C1) kp 200 / ki 16000 / kd 4 / ilimit 0.8 (N.m per output rev,
+# moteus native). WHY J2 is not RACK_BOARD's 200 / 4: CAN 12 was retuned on the five-bar (bam_fivebar pid_tuna 2026-11-10) - softer and
+# twice the damping. The integrator is off either way: the rack runner sends ilimit_scale 0 (PlantBackend), so ki and ilimit never act.
+REAL_BOARD_RECORD = {"J1": {"kp": 200.0, "ki": 16000.0, "kd": 4.0, "ilimit": 0.5},
+                     "J2": {"kp": 144.0, "ki": 16000.0, "kd": 8.0, "ilimit": 0.8},
+                     "C1": {"kp": 200.0, "ki": 16000.0, "kd": 4.0, "ilimit": 0.8}}
+
+
+def real_boards() -> dict:
+    """``REAL_BOARD_RECORD`` as bam_fb_test_rig ``BoardConfig`` s (max torque as RACK_BOARD's: 17.5 A on the 60ASM200 + 10:1)."""
+    bam_ws_path()
+    from bam_fb_test_rig.homing import RACK_BOARD  # noqa: PLC0415
+    from bam_fb_test_rig.sim import BoardConfig  # noqa: PLC0415
+
+    return {role: BoardConfig(max_torque_nm=RACK_BOARD.max_torque_nm, **gains) for role, gains in REAL_BOARD_RECORD.items()}
+
 BACKLASH_METHOD = {"B0": None, "B1": "deadzone", "B2": "passive_joint"}
 SETTLE_S = 2.0
 CONTROL_DT = 0.01
@@ -162,7 +182,7 @@ class MujocoRigPlant:
 
     joint_names = DRIVES
 
-    def __init__(self, kind: str, *, cogging: bool = True, settle_s: float = SETTLE_S, log_every: int = 1):
+    def __init__(self, kind: str, *, cogging: bool = True, settle_s: float = SETTLE_S, log_every: int = 1, boards: Mapping | None = None):
         if kind not in BACKLASH_METHOD:
             raise ValueError(f"backlash kind must be B0, B1 or B2, not {kind!r}")
         bam_ws_path()
@@ -173,6 +193,9 @@ class MujocoRigPlant:
         self.rig = RigCache.get(kind)
         self.signs = board_signs(self.rig.bundle, self.rig)
         self.board = RACK_BOARD
+        # WHY the real record by default (2026-11-12, the home button's ground truth): the boards the real arm ran on, cited above
+        boards = real_boards() if boards is None else boards
+        self.boards = {ROLE_OF[j]: boards[ROLE_OF[j]] for j in DRIVES}
         self.backlash = hidden_backlash(kind)  # the truth the metrics score (same gaps as the twin's, RigCache checks)
         self.cogging = cogging_terms(self.rig) if cogging else {}
         self.settle_s = float(settle_s)
@@ -278,7 +301,7 @@ class MujocoRigPlant:
 
         self.branch = start.branch
         q = self._closed_pose(start)
-        sim = RigSim(self.rig, tuple(Drive(ROLE_OF[j], self.signs[ROLE_OF[j]], self.board) for j in DRIVES), log_hz=1e-6)
+        sim = RigSim(self.rig, tuple(Drive(ROLE_OF[j], self.signs[ROLE_OF[j]], self.boards[ROLE_OF[j]]) for j in DRIVES), log_hz=1e-6)
         sim.data.qpos[:] = q
         if self.rig.backlash is not None:
             wrapped = self.rig.backlash

@@ -85,8 +85,11 @@ class TimedRecoverFirst(RecoverFirst):
 
 
 def make(name: str):
+    """A row by name. WHY sag_proof on every recover_first row here (2026-11-12): gravity on PD boards, sag_proof.py's docstring."""
     if name.startswith(TIMED):
-        return TimedRecoverFirst(inner=PROCEDURES[name.removeprefix(TIMED)]())
+        return TimedRecoverFirst(inner=PROCEDURES[name.removeprefix(TIMED)](), sag_proof=True)
+    if name.startswith(RECOVER_PREFIX_NAME):
+        return RecoverFirst(inner=PROCEDURES[name.removeprefix(RECOVER_PREFIX_NAME)](), sag_proof=True)
     from .bench import make_procedure  # noqa: PLC0415
 
     return make_procedure(name)
@@ -113,10 +116,26 @@ def recovery_landing(plant: MujocoRigPlant, phase, geometry: FivebarGeometry) ->
     return out
 
 
+def step_ends(plant: MujocoRigPlant, phase) -> list[dict]:
+    """Every step's end: its outcome, time, and per drive the motor angle minus the setpoint it was commanded to (deg; None when limp).
+    WHY (sag_proof): a move may end still short of a target gravity will not let it reach, so where it actually stopped is recorded,
+    never assumed to be the target."""
+    out = []
+    offset = phase.log["plant_offset"]
+    for event in phase.events:
+        k = min(offset + int(round(event.finished / 0.01)), len(plant.log["motor"]) - 1)
+        motor, setpoint = plant.log["motor"][k], plant.log["setpoint"][k]
+        out.append({"step": event.index + 1, "name": event.name, "outcome": event.outcome, "t_s": round(event.finished, 3),
+                    "motor_minus_setpoint_deg": {ROLE[j]: (None if math.isnan(sp) else round(math.degrees(m - sp), 3))
+                                                 for j, m, sp in zip(DRIVES, motor, setpoint, strict=True)}})
+    return out
+
+
 def run_one(name: str, plant: MujocoRigPlant, start, prior, geometry, environment: str):
     episode = run_episode(name, plant, start, prior, environment, procedure=make(name))
     if episode.phases:
         episode.notes["recovery_landing"] = recovery_landing(plant, episode.phases[0], geometry)
+        episode.notes["step_ends"] = step_ends(plant, episode.phases[0])
     episode.notes["start"] = plant.start_settled
     return episode
 
@@ -256,7 +275,9 @@ def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers
         "backlash_methods": {m: BACKLASH_METHOD[m] for m in models},
         "cogging": ({"drives": sorted(any_plant.cogging), "source": "bam_fivebar.plant.JMC_COGGING (sim2real bldc_motor M4.dynamics.cogging)",
                      "not": "J1: no fitted cogging (CAN 11 was never in the fit)"} if cogging else None),
-        "board": {"kp_nm_per_rev": any_plant.board.kp, "kd_nm_s_per_rev": any_plant.board.kd, "ilimit_scale": 0.0,
+        "board": {"per_drive": {role: {"kp_nm_per_rev": cfg.kp, "kd_nm_s_per_rev": cfg.kd, "ki": cfg.ki, "ilimit": cfg.ilimit}
+                                for role, cfg in any_plant.boards.items()},
+                  "ilimit_scale": 0.0, "record": "mujoco_plant.REAL_BOARD_RECORD (the real runs' config checks)",
                   "why": "bam_fivebar_recovery.backend.PlantBackend: the rack runner's adapter (PD, no velocity target)"},
         "settle_s": any_plant.settle_s,
         "models": list(models),

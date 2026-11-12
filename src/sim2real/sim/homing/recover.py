@@ -28,6 +28,7 @@ from robot_msgs.control import JointCommand, JointCommandSequence, JointCommandS
 
 from .geometry import C1, DRIVES, J1, J2
 from .procedures import HOLD_CAP_NM, PROCEDURES, Procedure
+from .sag_proof import sag_proof
 
 RECOVERY_JSON = Path(__file__).resolve().parents[2] / "data" / "fivebar_blind_recovery_v11.json"
 RENAME = {"j2": J2, "c1": C1}
@@ -84,6 +85,9 @@ class RecoverFirst(Procedure):
     inner: Procedure = None
     recovery_path: Path = RECOVERY_JSON
     provenance: dict = field(default_factory=dict)
+    # WHY off by default (2026-11-12): the kinematic rung is weightless and its results stand as run; the MuJoCo rung turns it on
+    # (mujoco_bench.make), where gravity on PD boards makes a Reached move hang and a seek stall falsely (sag_proof's docstring)
+    sag_proof: bool = False
 
     def __post_init__(self):
         if self.inner is None:
@@ -95,7 +99,8 @@ class RecoverFirst(Procedure):
             return None
         recovery, self.provenance = load_recovery(self.recovery_path)
         inner = self.inner.plan(prior, [])
-        return with_prefix(recovery_steps(recovery), inner, max_speed=recovery.max_speed)
+        sequence = with_prefix(recovery_steps(recovery), inner, max_speed=recovery.max_speed)
+        return sag_proof(sequence) if self.sag_proof else sequence
 
     def observe(self, prior: Prior, phases: Sequence[Phase]) -> HomingResult:
         result = self.inner.observe(prior, phases)
@@ -104,9 +109,9 @@ class RecoverFirst(Procedure):
         return result
 
 
-def recover_first(name: str) -> RecoverFirst:
-    """A leaderboard procedure by name with the recovery in front."""
-    return RecoverFirst(inner=PROCEDURES[name]())
+def recover_first(name: str, *, sag_proof: bool = False) -> RecoverFirst:
+    """A leaderboard procedure by name with the recovery in front (``sag_proof``: sag_proof.py's completion, the MuJoCo rung's)."""
+    return RecoverFirst(inner=PROCEDURES[name](), sag_proof=sag_proof)
 
 
 __all__ = ["PREFIX", "RECOVERY_JSON", "RECOVER_PREFIX_NAME", "RecoverFirst", "load_recovery", "recover_first", "recovery_steps", "with_prefix"]
