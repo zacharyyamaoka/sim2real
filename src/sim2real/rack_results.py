@@ -152,28 +152,141 @@ def twin_ratio(floor: RepeatFloor | None, twin_deg) -> float | None:
     return twin_deg / math.degrees(floor.value) if floor is not None and floor.known and twin_deg else None
 
 
-def joint_questions(floors: dict, key, floor: RepeatFloor | None, twin_deg, before_deg, target_deg, coverage_text: str, routines: str) -> dict:
-    """A joint's own answers (proposal C). Floor needs same-input repeats passive AND driven; neither rig has a passive run tonight, so
-    Floor is "no" with the driven number beside it. Twin's driven ratio is shown either way, judged only on a known floor."""
-    ratio = twin_ratio(floor, twin_deg)
-    floor_note = floor_text(floors, key, floor)
-    if ratio is not None and ratio < FLOOR_CHECK:
-        floor_note += f"; twin ÷ floor {ratio:.2f}× < {FLOOR_CHECK:.2f}: these repeats were not repeats"
-    skill = target_deg / twin_deg if twin_deg and target_deg else None
-    driven = (f"driven held-out {twin_deg:.3f}° (was {before_deg:.3f}°)" if twin_deg is not None and before_deg is not None else "driven: —")
-    driven += (f" = {ratio:.1f}× floor ({verdict_of(ratio)})" if ratio is not None else "; no known floor to divide by")
+PASSIVE_NA_RULE = "proposed, Zach to confirm"   # a joint that cannot move unpowered answers passive "N/A" with its reason
+
+
+def joint_questions(*, driven: dict, passive: dict, before_deg, target_deg, coverage_text: str, routines: str,
+                    routines_own: str = "partial") -> dict:
+    """A joint's own answers (proposal C), from its driven and passive evidence.
+
+    driven  = {floor_deg, pairs, runs, known, kind, twin_deg, note}: the floor of ONE run kind and the twin on that same kind (T1).
+    passive = {state: known | na | none, floor_deg, twin_deg, reason, note}. WHY "na" (coordinator, 2026-11-11, proposed, Zach to
+    confirm): a joint whose gravity torque is under its breakaway cannot move unpowered, so no free response exists to repeat; it
+    answers "N/A, with the reason" instead of failing Floor forever. Floor = driven known AND passive known or N/A; a twin below
+    1/sqrt(2) of its floor fails Floor (those repeats were not repeats)."""
+    tol = math.degrees(SAME_INPUT_TOLERANCE_RAD)
+    d_ratio = driven["twin_deg"] / driven["floor_deg"] if driven.get("known") and driven.get("twin_deg") else None
+    p_ratio = (passive["twin_deg"] / passive["floor_deg"]) if passive["state"] == "known" and passive.get("twin_deg") else None
+    if driven.get("floor_deg") is not None:
+        d_text = (f"driven {driven['floor_deg']:.3f}° on {driven['kind']} ({'known' if driven['known'] else 'unknown'}: "
+                  f"{driven['pairs']} same-input pairs over {driven['runs']} runs{', ' + driven['note'] if driven.get('note') else ''})")
+    else:
+        d_text = f"driven: floor unknown ({driven.get('note') or 'no same-input pair within ' + format(tol, 'g') + '°'})"
+    p_text = {"known": f"passive {passive.get('floor_deg', 0):.3f}° ({passive.get('note', '')})",
+              "na": f"passive N/A: {passive.get('reason', '')} ({PASSIVE_NA_RULE})",
+              "none": "passive: no free-response runs"}[passive["state"]]
+    too_low = [r for r in (d_ratio, p_ratio) if r is not None and r < FLOOR_CHECK]
+    floor_ok = bool(driven.get("known")) and passive["state"] in ("known", "na") and not too_low
+    floor_note = d_text + "; " + p_text + ("; twin ÷ floor below 0.71×: those repeats were not repeats" if too_low else "")
+    twin_parts = [f"driven {driven['twin_deg']:.3f}°" + (f" = {d_ratio:.2f}× floor ({verdict_of(d_ratio)})" if d_ratio is not None
+                                                          else " (no known floor to divide by)") if driven.get("twin_deg") is not None
+                  else "driven: no twin on this kind"]
+    if before_deg is not None:
+        twin_parts.append(f"held-out twin before the refit {before_deg:.3f}°")
+    twin_parts.append({"known": (f"passive {passive['twin_deg']:.2f}° = {p_ratio:.1f}× floor ({verdict_of(p_ratio)})" if p_ratio is not None
+                                 else "passive: no twin replay"),
+                       "na": "passive N/A", "none": "passive: none"}[passive["state"]])
+    if d_ratio is None:
+        twin_own = "unknown"
+    else:
+        driven_ok = FLOOR_CHECK <= d_ratio <= RULER_TWINNED
+        passive_ok = passive["state"] == "na" or (p_ratio is not None and p_ratio <= RULER_TWINNED)
+        twin_own = "yes" if driven_ok and passive_ok else "no"
+    skill = target_deg / driven["twin_deg"] if driven.get("twin_deg") and target_deg else None
     return {
-        "Floor": {"own": "no", "numbers": floor_note, "gate": f"≥ 5 repeats of one input (within {math.degrees(SAME_INPUT_TOLERANCE_RAD):g}°), passive and driven"},
+        "Floor": {"own": "yes" if floor_ok else "no", "numbers": floor_note,
+                  "gate": f"≥ 5 repeats of one input (within {tol:g}°) per run kind, passive and driven (passive N/A when it cannot move unpowered)"},
         "Data": {"own": "unknown", "numbers": coverage_text, "gate": "≥ 40 % of reachable (angle, speed, acceleration) cells; no reachable mask committed"},
-        "Routines": {"own": "partial", "numbers": routines, "gate": "hidden values within tolerance at 1× noise, truth off the grid"},
-        "Twin": {"own": "no", "numbers": driven + "; passive: none", "gate": f"held-out sim→real ≤ {RULER_TWINNED:g}× floor, passive and driven"},
+        "Routines": {"own": routines_own, "numbers": routines, "gate": "hidden values within tolerance at 1× noise, truth off the grid"},
+        "Twin": {"own": twin_own, "numbers": "; ".join(twin_parts), "gate": f"held-out sim→real ≤ {RULER_TWINNED:g}× floor of the same run kind, passive and driven"},
         "Job": {"own": "unknown", "numbers": (f"real vs target {target_deg:.3f}°" if target_deg else "real vs target —")
                 + (f"; the twin predicts the real joint {skill:.1f}× better than its target does" if skill else ""),
                 "gate": "stop error inside this joint's share of the 1 mm tool gate (share not set); feedback share (not logged)"},
     }
 
 
+def floors_rows(floors: dict, twins: dict, mode: str, source: str) -> list[dict]:
+    """The page's per-kind floor table: every group with a same-input pair, its floor, and the twin on that same kind."""
+    rows = []
+    for key, f in sorted(floors.items(), key=lambda kv: -kv[1].pairs):
+        if not f.pairs:
+            continue
+        floor_deg = math.degrees(f.value)
+        twin = twins.get(key)
+        rows.append({"kind": " / ".join(map(str, key)), "mode": mode, "floor_deg": _r(floor_deg, 4), "pairs": f.pairs, "runs": f.runs,
+                     "known": f.known, "twin_deg": _r(twin), "twin_over_floor": _r(twin / floor_deg, 2) if twin else None,
+                     "verdict": verdict_of(twin / floor_deg) if twin and f.known else ("floor unknown" if not f.known else "no twin"),
+                     "source": source})
+    return rows
+
+
 # ------------------------------------------------------------------------------------------------------------------- UR wrist
+
+REPEAT_FLOOR = WRIST / ".." / "repeat_floor"
+# WHY N/A (the real lane, 2026-11-11; proposed, Zach to confirm): CAN 15 and 16 carry at most 0.012 N·m of gravity against 0.14-0.19 N·m
+# of breakaway (refit_rig it5 static friction), so released they do not move: no passive response exists to repeat
+PASSIVE_NA = {15: "it cannot move unpowered: ≤ 0.012 N·m of gravity against 0.140 N·m breakaway (refit_rig it5)",
+              16: "it cannot move unpowered: ≤ 0.012 N·m of gravity against 0.186 N·m breakaway (refit_rig it5)"}
+
+
+def repeat_campaign() -> dict[int, dict]:
+    """The real lane's dedicated repeat-floor campaign (ur_wrist/repeat_floor: 5 identical repeats per joint, floor_scores.json and the
+    twin of record's replays, twin_scores.json). Driven floors are recomputed with metrics.series.repeat_floor on the lane's own
+    same-input window (every run shifted by one constant, never by its own first sample); the passive release's floor is the lane's
+    (its input is a release from a start that varies ~1°, which no command check can compare)."""
+    root = REPEAT_FLOOR.resolve()
+    if not (root / "floor_scores.json").exists():
+        return {}
+    floor_scores = json.loads((root / "floor_scores.json").read_text())["groups"]
+    twin_groups = {(g["can_id"], g["trajectory"], g["mode"]): g for g in json.loads((root / "twin_scores.json").read_text())["groups"]}
+    out: dict[int, dict] = defaultdict(lambda: {"rows": [], "errors": [], "runs": []})
+    for group in floor_scores:
+        can, kind, mode = group["can_id"], group["trajectory"], group["mode"]
+        twin_group = twin_groups.get((can, kind, mode), {})
+        twin_deg = (twin_group.get("summary") or {}).get("twin_vs_real_deg_median")
+        entry = out[can]
+        if mode == "driven":
+            start = group.get("same_input_from_s", 0.0)
+            runs, q_all, qd_all, qdd_all, dts = [], [], [], [], []
+            for run in group["runs"]:
+                data = np.load(Path(run["file"]).with_suffix(".npz"))
+                t = data["t"] - data["t"][0]
+                keep = t >= start
+                runs.append((t[keep] - start, _wrist_target(t, data["q"], data["q_target"], data["qd_target"])[keep], data["q"][keep]))
+                q_all.append(np.degrees(data["q"])); qd_all.append(np.degrees(data["qd"])); qdd_all.append(np.degrees(np.gradient(data["qd"], t)))
+                dts.append(float(np.median(np.diff(t))))
+            floor = repeat_floor(runs)
+            floor_deg = math.degrees(floor.value) if floor.value is not None else None
+            entry["driven"] = {"floor_deg": floor_deg, "pairs": floor.pairs, "runs": floor.runs, "known": floor.known, "kind": f"{kind} (driven)",
+                               "twin_deg": twin_deg, "note": f"the lane's own: {group['floor_rms_deg_median']:.3f}°"}
+            entry["coverage"] = joint_coverage(np.concatenate(q_all), np.concatenate(qd_all), np.concatenate(qdd_all), float(np.median(dts)))
+            entry["target_deg"] = _median([r.get("target_vs_real_deg") for r in twin_group.get("runs", [])])
+            entry["rows"].append({"kind": f"{kind} (repeat campaign)", "mode": "driven", "floor_deg": _r(floor_deg, 4), "pairs": floor.pairs,
+                                  "runs": floor.runs, "known": floor.known, "twin_deg": _r(twin_deg),
+                                  "twin_over_floor": _r(twin_deg / floor_deg, 2) if twin_deg and floor_deg else None,
+                                  "verdict": verdict_of(twin_deg / floor_deg) if twin_deg and floor.known else "floor unknown",
+                                  "source": "ur_wrist/repeat_floor (floor: repeat_floor; twin: twin_scores.json, it5)"})
+        else:
+            floor_deg = group["floor_rms_deg_median"]
+            entry["passive"] = {"state": "known", "floor_deg": floor_deg, "twin_deg": twin_deg,
+                                "note": f"{group['repeats']} releases of {kind}, the lane's floor; the twin's rest is "
+                                        f"{(twin_group.get('summary') or {}).get('rest_deg', {}).get('twin_minus_real_median', float('nan')):.1f}° off"}
+            entry["rows"].append({"kind": f"{kind} (repeat campaign)", "mode": "passive", "floor_deg": _r(floor_deg, 4), "pairs": len(group.get("pairs", [])),
+                                  "runs": group["repeats"], "known": group["repeats"] >= 5, "twin_deg": _r(twin_deg),
+                                  "twin_over_floor": _r(twin_deg / floor_deg, 2) if twin_deg else None,
+                                  "verdict": verdict_of(twin_deg / floor_deg) if twin_deg else "no twin",
+                                  "source": "ur_wrist/repeat_floor floor_scores.json / twin_scores.json (the lane's)"})
+        for run in twin_group.get("runs", []):
+            label = f"CAN {can} {kind} {mode} {run['run'].split('/')[-1]}"
+            entry["errors"].append({"run": label, "stage": WRIST_TITLES["it5"], "held_out": True, "sim_real_deg": run.get("twin_vs_real_deg"),
+                                    "target_real_deg": run.get("target_vs_real_deg"), "phase": "after", "kind": kind})
+            entry["runs"].append({"run": slug(f"ur_wrist-{label}"), "label": label, "held_out": True, "gains": "repeat campaign", "tape": f"{kind} ({mode})",
+                                  "target_real_deg": _r(run.get("target_vs_real_deg")), "sim_real_deg": _r(run.get("twin_vs_real_deg")),
+                                  "sim_real_before_deg": None, "run_view": None})
+    for can, reason in PASSIVE_NA.items():
+        out[can].setdefault("passive", {"state": "na", "reason": reason})
+    return dict(out)
+
 
 
 WRIST_TITLES = {"record": "twin of record 11-10", "it2": "it2 Karnopp refit", "it3": "it3 refit", "it5": "it5 + gravity refit"}
@@ -194,16 +307,18 @@ def ur_wrist() -> CalibrationResult:
 
     root = Node("ur-wrist", "UR wrist on the One Dof Test Rack", "deployment", "Deployment", "structure",
                 note="CAN 14 (revolute 11) held at ~87.45° for every run (Zach's cable check)")
-    arm = Node("ur-wrist/wrist", "UR wrist (CAN 15 + CAN 16)", "arm", "robot arm", "ur wrist", parent=root.id)
+    arm = Node("ur-wrist/wrist", "UR wrist (CAN 14 + 15 + 16)", "arm", "robot arm", "ur wrist", parent=root.id)
     tool = Node("ur-wrist/wrist/holder", "holder board #4-7 (tool)", "tool", "Tool (payload + TCP)", "tool", parent=arm.id,
                 note="no tool gate yet: the wrist's runs log the joints; the holder's camera fit is not in these runs")
     joints = {can: Node(f"ur-wrist/wrist/can{can}", f"CAN {can} wrist joint (moteus servo)", "joint", "integrated_servo", "moteus servo",
-                        parent=arm.id) for can in (15, 16)}
+                        parent=arm.id) for can in (14, 15, 16)}
+    joints[14].label = "CAN 14 wrist joint (revolute 11, moteus servo)"
+    joints[14].note = "held at ~87.45° in the coverage runs; driven and released only in the repeat-floor campaign"
 
     files: dict = {}
-    groups: dict[int, dict] = {15: defaultdict(list), 16: defaultdict(list)}
-    per_run: dict[int, list] = {15: [], 16: []}
-    cover: dict[int, list] = {15: [[], [], []], 16: [[], [], []]}
+    groups: dict[int, dict] = {can: defaultdict(list) for can in (14, 15, 16)}
+    per_run: dict[int, list] = {can: [] for can in (14, 15, 16)}
+    cover: dict[int, list] = {can: [[], [], []] for can in (14, 15, 16)}
     dt_of = {}
     for (session, name), row in scored[alias[order[-1]]].items():
         gainset = Path(session).parent.name
@@ -219,8 +334,9 @@ def ur_wrist() -> CalibrationResult:
         cover[can][0].append(np.degrees(q))
         cover[can][1].append(np.degrees(qd))
         cover[can][2].append(np.degrees(np.gradient(qd, t)) if t.size > 2 else np.array([]))
-        kind = stem.split("_", 2)[-1]
-        # WHY (gain set, run kind): a repeat is the same input on the same controller config (T1); same input is checked per pair
+        # WHY (gain set, tape): a repeat is the same tape on the same controller config, compared like for like (T1 "per run kind");
+        # pooling every tape let low-motion tapes (parks, holds) set a floor 5-20x under the dedicated campaign's (2026-11-11 review)
+        kind = tape
         groups[can][(gainset, kind)].append((t, _wrist_target(t, q, data["q_target"], data["qd_target"]), q))
         label = f"CAN {can} {gainset} {session_name.split('-')[0][6:]} {stem.split('_')[0]}"
         run_slug = slug(f"ur_wrist-{label}")
@@ -240,19 +356,33 @@ def ur_wrist() -> CalibrationResult:
                                  "target_real_deg": _r(values.get(stages[-1], (None, None))[1]), "sim_real_deg": _r(values.get(stages[-1], (None, None))[0]),
                                  "sim_real_before_deg": _r(values.get(stages[0], (None, None))[0]), "run_view": run_view(run_slug)})
 
+    campaign = repeat_campaign()
     for can, node in joints.items():
         floors = {key: repeat_floor(runs) for key, runs in groups[can].items()}
-        key, floor = best_floor(floors)
-        node.floor_deg = math.degrees(floor.value) if floor is not None and floor.known else None
-        rows, summary_rows = joint_coverage(*(np.concatenate(c) for c in cover[can]), dt_of[can])
+        twins = {key: _median([r[2] for r in per_run[can] if r[0] == key]) for key in floors}
+        node.floors = floors_rows(floors, twins, "driven", "coverage runs (summary_real it5 twin)")
+        own = campaign.get(can, {})
+        node.floors = own.get("rows", []) + node.floors
+        driven = own.get("driven") or {"floor_deg": None, "known": False, "note": "no dedicated repeat campaign"}
+        node.floor_deg = driven["floor_deg"] if driven.get("known") else None
+        if cover[can][0]:
+            rows, summary_rows = joint_coverage(*(np.concatenate(c) for c in cover[can]), dt_of[can])
+        else:
+            rows, summary_rows = own.get("coverage", ([], [{"value": "—"}] * 4))
         node.coverage, node.coverage_summary = rows, summary_rows
-        # the twin judged on the floor's own group: held-out runs of the same run kind on the same gains
-        same = [r for r in per_run[can] if r[0] == key and r[1]] or [r for r in per_run[can] if r[1]]
+        held_out = [r for r in per_run[can] if r[1]]
         node.questions = joint_questions(
-            floors, key, floor, _median([r[2] for r in same]), _median([r[3] for r in same]), _median([r[4] for r in same]),
-            f"angle {summary_rows[0]['value']}°, speed p99 {summary_rows[1]['value']}°/s, {summary_rows[3]['value']} min logged",
-            "the wrist refit's own test hides the truth on its search grid without noise (bam_ur_wrist_coverage tests/test_refit.py)")
-        node.twin_ratio = twin_ratio(floor, _median([r[2] for r in same]))
+            driven=driven, passive=own.get("passive", {"state": "none"}),
+            before_deg=_median([r[3] for r in held_out]), target_deg=own.get("target_deg") or _median([r[4] for r in held_out]),
+            coverage_text=f"angle {summary_rows[0]['value']}°, speed p99 {summary_rows[1]['value']}°/s, {summary_rows[3]['value']} min logged",
+            routines=("CAN 14's friction is not fitted (refit_rig moved CAN 15 and 16 only)" if can == 14 else
+                      "the wrist refit's own test hides the truth on its search grid without noise (bam_ur_wrist_coverage tests/test_refit.py)"),
+            routines_own="no" if can == 14 else "partial")
+        node.twin_ratio = driven["twin_deg"] / driven["floor_deg"] if driven.get("known") and driven.get("twin_deg") else None
+        node.errors += own.get("errors", [])
+        node.runs += own.get("runs", [])
+        if can not in WRIST_BOARD:
+            continue
         index = WRIST_BOARD[can]
         for key, title, unit, scale in WRIST_PARAMS:
             node.parameters.append({"parameter": title, "unit": unit, "before": refit["base"][key][index] * scale,
@@ -324,7 +454,7 @@ def ur_wrist() -> CalibrationResult:
              "the joint's floor is the group with the most repeats, and its twin is judged on held-out runs of that group.",
              "Models: refit_rig/it5/refit.json's ladder, held-out RMS per joint; the delay row is the it5 delay scan's pick."]
     return CalibrationResult("ur-wrist-2026-11-10", "UR wrist calibration · One Dof Test Rack · 2026-11-10/11", stages,
-                             [root, arm, joints[15], joints[16], tool], source=str(WRIST), notes=notes, messages=_messages(files))
+                             [root, arm, joints[14], joints[15], joints[16], tool], source=str(WRIST), notes=notes, messages=_messages(files))
 
 
 # ------------------------------------------------------------------------------------------------------------------- five-bar
@@ -420,15 +550,29 @@ def fivebar() -> CalibrationResult:
         key, floor = best_floor(floors)
         node.floor_deg = math.degrees(floor.value) if floor is not None and floor.known else None
         node.coverage, node.coverage_summary = joint_coverage(*(np.concatenate(c) for c in cover[joint]), dt)
-        # the twin on the floor's own group when the after twin scored it, else on every held-out rung the after twin scored
-        same = ([r for r in per_run[joint] if r[0] == key and r[1] and r[2] is not None]
-                or [r for r in per_run[joint] if r[1] and r[2] is not None])
+        # WHY the same kind (T1, 2026-11-11 review): the twin is judged on the floor's own tape; only the study (before) twin replayed the
+        # repeat rungs, so the driven ratio uses it there and says so; the after twin's held-out rungs stay beside it as soft numbers
+        def one_twin(rows):
+            """One twin over a whole group, never a blend: the after twin when it replayed every run, else the study twin for all."""
+            if rows and all(r[2] is not None for r in rows):
+                return _median([r[2] for r in rows]), "after twin"
+            return _median([r[3] for r in rows]), "study (before) twin: the after twin did not replay every run of this kind"
+
+        same = [r for r in per_run[joint] if r[0] == key]
+        twin_same, which = one_twin(same)
+        twins = {k: one_twin([r for r in per_run[joint] if r[0] == k])[0] for k in floors}
+        node.floors = floors_rows(floors, twins, "driven", "ladder rungs per plan tick (twin: after where it scored, else the study twin)")
+        held_after = [r for r in per_run[joint] if r[1] and r[2] is not None]
         summary_rows = node.coverage_summary
+        driven = {"floor_deg": math.degrees(floor.value) if floor is not None else None, "pairs": floor.pairs if floor else 0,
+                  "runs": floor.runs if floor else 0, "known": bool(floor and floor.known), "kind": " / ".join(map(str, key)) if key else "—",
+                  "twin_deg": twin_same, "note": f"twin = the {which}; after twin on held-out rungs {_median([r[2] for r in held_after]):.3f}°"}
         node.questions = joint_questions(
-            floors, key, floor, _median([r[2] for r in same]), _median([r[3] for r in same]), _median([r[4] for r in same]),
-            f"angle {summary_rows[0]['value']}°, speed p99 {summary_rows[1]['value']}°/s, {summary_rows[3]['value']} min logged",
-            "the five-bar mass ID's hidden-gravity test (bam_fivebar tests/test_massid.py) grades the gravity only")
-        node.twin_ratio = twin_ratio(floor, _median([r[2] for r in same]))
+            driven=driven, passive={"state": "none"}, before_deg=_median([r[3] for r in held_after]),
+            target_deg=_median([r[4] for r in held_after]),
+            coverage_text=f"angle {summary_rows[0]['value']}°, speed p99 {summary_rows[1]['value']}°/s, {summary_rows[3]['value']} min logged",
+            routines="the five-bar mass ID's hidden-gravity test (bam_fivebar tests/test_massid.py) grades the gravity only")
+        node.twin_ratio = twin_same / driven["floor_deg"] if driven["known"] and twin_same else None
         for rung, (folder, which, title) in enumerate(FIVEBAR_MODELS):
             per_rung = json.loads((FIVEBAR / folder / "refit.json").read_text())[which]["per_rung"]
             values = [mdeg(r[f"sim_real_{joint}_mrad"]) for key, r in per_rung.items() if key not in train]
