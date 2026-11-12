@@ -30,6 +30,8 @@ class Rung:
 
 TOOL_GATE = "1 mm at a stop"   # result.TOOL_GATE_MM (Zach, 2026-11-11: "final tool error sub 1mm")
 
+# WHY the tool rungs say "the joint encoders through FK" (Zach, 2026-11-11 21:50): every gate and tracking error is the encoders through
+# FK, never the camera; an ArUco tag is a tracked point logged as a flag beside it (rigs.GATES["aruco_vs_fk_mm"]), never a gate
 LADDERS: dict[str, tuple[Rung, ...]] = {
     # every actuator or sensor type (the joint is the integrated servo; a camera, conveyor or gearbox climbs the same rungs, its own
     # numbers in each gate: docs/KPIS_GATES_CURRICULUM.md, "per type")
@@ -52,18 +54,18 @@ LADDERS: dict[str, tuple[Rung, ...]] = {
         Rung("A0", "Described", None, "the chain, its mounts and a committed reachable mask"),
         Rung("A1", "Arm routines recover the truth in sim", "Routines",
              "kinematics, mounts, joint zeros, delay and the gravity direction at 1× noise, truth sealed"),
-        Rung("A2", "Tool repeats", "Floor", "the same commanded tool pose revisited (ISO 9283 RP: 5 poses × 30 cycles), seen by camera"),
+        Rung("A2", "Tool repeats", "Floor", "the same commanded tool pose revisited (ISO 9283 RP: 5 poses × 30 cycles), the tool by the joint encoders through FK"),
         Rung("A3", "Arm coverage", "Data", "joint cube ≥ 90 %, workspace ≥ 50 %, facing or heading ≥ 90 % of the allowed mask (proposed)"),
         Rung("A4", "Coupled twin", "Twin", "twin vs real tool pose ≤ 1.5× the tool floor on coupled multi-joint moves"),
-        Rung("A5", "Tool gate", "Job", f"tool ≤ {TOOL_GATE}, on settled holds (not raster turnarounds), measured at the tool"),
+        Rung("A5", "Tool gate", "Job", f"tool ≤ {TOOL_GATE}, on settled holds (not raster turnarounds), at the tool by the joint encoders through FK"),
     ),
     "tool": (
         Rung("T0", "Described", None, "the TCP and payload, with their tolerances"),
         Rung("T1", "Tool routines recover the truth in sim", "Routines", "payload mass 5 %, centre of mass 3 mm, TCP 0.5 mm across and 1 mm along"),
-        Rung("T2", "Tool repeats", "Floor", "the tool at the same commanded stop, revisited, seen by camera"),
+        Rung("T2", "Tool repeats", "Floor", "the tool at the same commanded stop, revisited, by the joint encoders through FK"),
         Rung("T3", "Tool seen widely", "Data", "the TCP seen from spread poses; payload classes"),
         Rung("T4", "Tool twin", "Twin", "the after twin's tool vs the real tool at stops ≤ 1.5× the tool floor"),
-        Rung("T5", "Tool gate", "Job", f"real tool vs commanded ≤ {TOOL_GATE}, settled, measured at the tool"),
+        Rung("T5", "Tool gate", "Job", f"real tool vs commanded ≤ {TOOL_GATE}, settled, at the tool by the joint encoders through FK"),
     ),
     "deployment": (
         Rung("D0", "Described", None, "physical or virtual, with its schedule of routines"),

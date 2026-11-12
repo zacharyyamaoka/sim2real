@@ -149,3 +149,11 @@ def test_the_evaluation_id_follows_the_numbers_the_page_shows():
     assert of(tree()) == of(tree())
     assert of(tree(j2_after=0.25000001)) == of(tree())     # below the page's rounding: the same evaluation
     assert of(tree(j2_after=0.3)) != of(tree())            # a shown number moved: a new one
+
+
+def test_tool_rungs_read_the_encoders_through_fk_never_the_camera():
+    # Zach, 2026-11-11 21:50: every gate and tracking error comes from the joint encoders through FK, never the camera; ArUco is a
+    # tracked point logged as a flag, never a gate. The tool rungs (repeats and the gate) must say so, not "seen by camera".
+    for rung in (r for ladder in curriculum.LADDERS.values() for r in ladder if r.id in ("A2", "A5", "T2", "T5")):
+        assert "camera" not in rung.gate.lower(), rung
+        assert "encoders through FK" in rung.gate, rung

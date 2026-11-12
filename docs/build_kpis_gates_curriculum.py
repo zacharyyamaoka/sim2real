@@ -55,7 +55,7 @@ def cell(record: dict, q: str) -> str:
                 out += "; passive N/A"
             return f"{mark} {out}"
         if "driven floor is known" in text:
-            return f"{mark} driven {' / '.join(re.findall(r'(\d+(?:\.\d+)?) mm', text))} mm; no settled camera revisit"
+            return f"{mark} driven {' / '.join(re.findall(r'(\d+(?:\.\d+)?) mm', text))} mm; no settled tool revisit"
         return f"{mark} " + ("no tool runs" if "no tool runs" in text else "no tool-pose repeats" if "ISO" in text
                              else "no output repeat" if "deployment" in text else text[:40])
     if q == "Data":
@@ -359,7 +359,7 @@ def build(verify_log: str | None, rig_verify_log: str | None = None) -> str:
 - **The curriculum is the same five answers climbed in work order:** S0 described → S1 routines recover a hidden truth in sim → S2 real
   floor → S3 coverage → S4 twin ≤ 1.5× floor → S5 job, at every joint; A0–A5 for an arm (tool repeats, the 1 mm tool gate), T0–T5 for
   a tool, D0–D5 for a deployment. A rung passes exactly when its question does.
-- **Next rungs:** the wrist's holder board (T1: its TCP and payload graded in sim; T2: one stop revisited by camera), then CAN 14's
+- **Next rungs:** the wrist's holder board (T1: its TCP and payload graded in sim; T2: one stop revisited, the tool by encoders + FK), then CAN 14's
   passive twin (S4) and CAN 15's settled stop (S5). The five-bar's S1: grade friction, armature and delay in sim at 1× noise (the
   one-click seam the wrist got today), then its twin (S4) and the tool gate.
 - **The gates, in Zach's order (2026-11-11 21:50), all from the joint encoders through FK:** target vs sim (the controller) →
@@ -494,7 +494,7 @@ gates are `cards/domain_v3.json`'s; *proposed* marks a number no code holds yet.
 |---|---|---|---|---|---|
 | **integrated_servo** | gravity 2 %, gravity zero 0.29°, armature 5 %, Coulomb 10 %, Stribeck drop 25 % and speed 30 %, viscous 20 %, backlash 10 % (pendulum_can11) | one tape ×5, per run kind and gains | (angle, speed, acceleration) at the output | held-out angle, passive and driven; current ≤ 2× its scatter in closed loop (T3) | settled stop within its share of the 1 mm tool gate (T4); feedback share |
 | **bldc_motor** | torque per amp, phase resistance (Kt ≤ 2 %, proposed) | dyno shaft torque, or current scatter | (angle, speed, acceleration) at the shaft | shaft torque; winding ≤ 5 °C | Kt within 5 % (T6); share of the datasheet speed-torque curve |
-| **gearbox** | backlash 0.033° (2 arcmin) or 10 % | the hysteresis loop's 95 % half-width (T5) | (angle, speed, acceleration) at the output | output angle for the same input (needs an output encoder or a camera tag) | lost motion ≤ 0.033° (2 arcmin) |
+| **gearbox** | backlash 0.033° (2 arcmin) or 10 % | the hysteresis loop's 95 % half-width (T5) | (angle, speed, acceleration) at the output | output angle for the same input (needs an output encoder; a camera tag only as a flag) | lost motion ≤ 0.033° (2 arcmin) |
 | **foc_controller** | command delay (≤ 1 ms, proposed); current-loop bandwidth | q-current scatter on one command | (q-current, speed) map | q-current ≤ 2× scatter; board temperature ≤ 5 °C | torque-cap share (≤ 1 %, proposed); loop rate ±10 % |
 | **encoder** | quantisation known; eccentricity 10 % (proposed) | standstill spread; homing repeats | (angle, speed) | noise and quantisation spectrum | homing repeatability |
 | **rigid_body_chain** | joint zeros 0.029°, armature 10 %, damping 20 %, friction 10 %, mounts 1 mm / 0.057° | the same tool pose revisited (ISO 9283 RP) | joint cube ≥ 90 %, workspace ≥ 50 %, facing ≥ 90 % (proposed) | tool pose ≤ 1.5× the tool floor | tool ≤ 1 mm at a stop, settled, at the tool |
@@ -503,7 +503,7 @@ gates are `cards/domain_v3.json`'s; *proposed* marks a number no code holds yet.
 | **camera** | pose 2 mm / 0.11°, focal 0.5 %, principal point 2 px | a static scene frame to frame; corner jitter | distance × incidence × light × material × exposure | sim overlay ≤ 1.5× | reprojection ≤ 0.5 px |
 | **depth_camera** | depth scale 0.2 %, depth offset 1 mm, plus the camera's | temporal noise on a flat target | as the camera | cloud vs sim ≤ 1.5× | Z within 1 % of Z, plane RMS ≤ 0.4 % of Z, fill ≥ 99 % |
 | **hyperspectral_camera** | focal 1 %, principal point 1 px, height 3 mm, across 1 mm, scan line 1 mm, scan yaw 0.11°, gain 2 %, dark 2 counts | the spectral angle between repeat cubes | × wavelength band × material class | rendered cube ≤ 1.5× | smile and keystone ≤ 1 px |
-| **tool** (structural) | mass 5 %, centre of mass 3 mm, TCP 0.5 mm across, 1 mm along | the same stop revisited, by camera | the TCP seen from spread poses | the after twin's tool ≤ 1.5× the tool floor | ≤ 1 mm at a stop, settled |
+| **tool** (structural) | mass 5 %, centre of mass 3 mm, TCP 0.5 mm across, 1 mm along | the same stop revisited, encoders + FK | the TCP seen from spread poses | the after twin's tool ≤ 1.5× the tool floor | ≤ 1 mm at a stop, settled |
 | **deployment** (structural) | every child's routines | its output repeated: the same scene twice | physical runs from every routine in its schedule | sim ranks policies like reality (r > 0.9, proposed) | picks per minute; tool ≤ 1 mm |
 
 ### 2.3 Today, per rig
@@ -535,7 +535,8 @@ counts differ):
 
 1. **The holder board, T1 and T2.** It is the one node with no evidence at all ("no tool runs: the holder board is not tracked"), and
    it holds back the arm (A1, A2) and the deployment (D1, D2). T1: grade its TCP and payload on a sealed truth in sim, the way the
-   one-click seam already grades the joints. T2: revisit one commanded stop ≥ 5 times and see the holder by camera (ISO 9283 RP).
+   one-click seam already grades the joints. T2: revisit one commanded stop ≥ 5 times, the holder's point by the joint encoders through FK (ISO 9283 RP); a tag on it is
+   logged beside it as a flag.
 2. **CAN 14, S4 (passive twin).** Driven it is {num(w['can14'], 'Twin/ratio', '{:.2f}')}× its floor. On its passive release
    (`release60`: let go near 142°, the real joint swings and rests near 80°) the twin rests 34.5° away from the real joint, which is
    {num(w['can14'], 'Twin/passive_ratio', '{:.1f}')}× its {num(w['can14'], 'Floor/passive_floor_deg')}° passive floor: the released
