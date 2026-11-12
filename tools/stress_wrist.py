@@ -757,7 +757,9 @@ def plot_ladder(name: str, records: Sequence[dict], base, path: Path, tolerance_
     seeds = sorted({int(r["cell"]["seed"]) for r in mine})
     import textwrap  # noqa: PLC0415
 
-    ax.set_title(f"{spec.title}: {head}", loc="left", fontsize=11, color=INK, pad=30)
+    # WHY wrapped: three parameter names overran the figure's right edge (the encoder ladder's title was cut mid-name, 2026-11-11)
+    title = textwrap.fill(f"{spec.title}: {head}", 105)
+    ax.set_title(title, loc="left", fontsize=11, color=INK, pad=30 + 14 * title.count("\n"))
     note = (f"{len(series)} identified parameters, the median of {len(seeds)} seeds (each a dot; hollow = the front pass only, the routines "
             f"before the dynamics). Colour = {'the first to leave the band' if leaving else 'the two closest to their tolerance'}, gray = the rest"
             f"{(' (' + str(len(leaving) - 3) + (' more leaves)' if len(leaving) == 4 else ' more leave)')) if len(leaving) > 3 else ''}. {tolerance_note}")
@@ -1212,6 +1214,121 @@ def probe_dynamics_fix(seed: int = SEEDS[0], workers: int = 4, out: Path | None 
     return doc
 
 
+def probe_dynamics_downstream(label: str, front: str = "truth", velocity: str = "reading", workers: int = 4,
+                              out: Path | None = None) -> dict:
+    """Is a whole cell's dynamics miss its own, or the front routines' (backlash, breakaway, zero) carried into it? servo.dynamics_regression
+    measured and fitted again at the cell's noise (its ladder, level and seed; same stream and run ids) with the values before it either the
+    cell's own (``front="found"``: reproduces the cell's dynamics rows, the probe's check on itself) or the hidden truth's (``"truth"``: as if
+    the front routines had recovered perfectly); ``velocity="quiet"`` also takes the replays' velocity noise from the rests. Noise-only
+    ladders (overall, torque, encoder, timing) only."""
+    import importlib  # noqa: PLC0415
+
+    import sim2real  # noqa: PLC0415
+    from sim2real import rig as seam  # noqa: PLC0415
+
+    out = Path(out or default_out())
+    cell_record = json.loads((out / "cells" / f"{label}.json").read_text())
+    cell = Cell(**cell_record["cell"])
+    if variant_for(cell.ladder, cell.level):
+        raise ValueError(f"{label}: the downstream probe plays the committed world only (noise-only ladders)")
+    twin = sim2real.Twin.load(NAME, workers=workers)
+    wr = importlib.import_module(RIG_MODULE)
+    rig, base = twin.runner.rig, twin.noise()
+    world, nominal = _world(twin)
+    values = dict(nominal)
+    found_front = {}
+    for step in cell_record["calibration"]["routines"][:3]:
+        found_front.update({k: float(v) for k, v in step["found"].items() if v is not None})
+    values.update(found_front if front == "found" else {k: world[k] for k in found_front})
+    noise = noise_for(cell.ladder, cell.level, cell.seed, base)
+    began = time.monotonic()
+    measured = rig.measure(list(wr.Dynamics().runs(dict(values))), world, noise, "routine:servo.dynamics_regression", workers=workers)
+    original = wr.reading_noise
+    read = original(measured)
+    quiet = quiet_velocity_sigma(measured)
+    if velocity == "quiet":
+        def patched(recordings):
+            sig = original(recordings)
+            sig["qd"] = quiet
+            return sig
+        wr.reading_noise = patched
+    try:
+        with seam._hidden().sealed():
+            found = wr.Dynamics().fit(measured, dict(values), seam.TwinHandle(rig, workers))
+    finally:
+        wr.reading_noise = original
+    params = {p.key: p for p in rig.parameters()}
+    theirs = {r["key"]: r["recovered"] for r in cell_record["calibration"]["rows"]}
+    rows = []
+    for key in wr.Dynamics.identifies:
+        p, truth = params[key], world[key]
+        kind, tol = p.tolerance
+        limit = tol if kind == "abs" else tol * abs(truth)
+        mine, committed = float(found[key].value), theirs.get(key)
+        rows.append({"key": key, "truth": truth, "cell": committed, "probe": mine,
+                     "cell_err_over_tol": None if committed is None else abs(committed - truth) / limit,
+                     "probe_err_over_tol": abs(mine - truth) / limit})
+    doc = {"label": label, "front": front, "velocity": velocity,
+           "front_values": {k: {"cell": found_front[k], "used": values[k], "truth": world[k]} for k in found_front},
+           "velocity_sigma": {"true": noise.effective()["velocity_noise_rad_s"], "reading_noise": read["qd"], "quiet": quiet},
+           "seconds": round(time.monotonic() - began, 1), "rows": rows}
+    print(json.dumps(doc, indent=1, default=_plain), flush=True)
+    return doc
+
+
+def probe_encoder_fix(multiplier: float = 10.0, seeds=SEEDS, workers: int = 4) -> list[dict]:
+    """The encoder ladder's break, on the routines' own recordings at the encoder ladder's noise (the encoder's step and the velocity's noise
+    x ``multiplier``, the rest at 1x; the cells' streams): servo.breakaway_two_sided as committed (leave the flank by 0.05 deg) and with the
+    leave at three encoder steps (a single step's flip, the flank's windup crossing a step boundary, no longer reads as a departure), and
+    servo.backlash_reversal_held's crossings read by their median (committed) and by their mean (the crossings land at different phases of the
+    step, so their mean is not stuck on a whole step as the median is)."""
+    import importlib  # noqa: PLC0415
+
+    import numpy as np  # noqa: PLC0415
+    import sim2real  # noqa: PLC0415
+
+    twin = sim2real.Twin.load(NAME, workers=workers)
+    wr = importlib.import_module(RIG_MODULE)
+    from bam_fb_test_rig.backlash import dead_band  # noqa: PLC0415
+
+    rig, base = twin.runner.rig, twin.noise()
+    world, nominal = _world(twin)
+    gaps = {k: world[k] for k in world if k.endswith(".backlash_rad")}
+    out = []
+    for seed in seeds:
+        noise = noise_for("encoder", multiplier, seed, base)
+        step = noise.effective()["encoder_quantum_rad"]
+        reversal = rig.measure(list(wr.BacklashReversal().runs(dict(nominal))), world, noise, "routine:servo.backlash_reversal_held", workers=workers)
+        walks = list(wr.Breakaway().runs({**nominal, **gaps}))
+        wide = [dataclasses.replace(r, spec={**r.spec, "leave_rad": max(r.spec["leave_rad"], 3.0 * step)}) for r in walks]
+        committed = rig.measure(walks, world, noise, "routine:servo.breakaway_two_sided", workers=workers)
+        fixed = rig.measure(wide, world, noise, "routine:servo.breakaway_two_sided", workers=workers)
+        for can in wr.MOVING:
+            i = wr.INSTANCE[can]
+            rev = next(r for r in reversal.values() if r["can"] == can)
+            threshold = wr.DEAD_BAND_THRESHOLD_FRACTION * rev["cap_nm"]
+            band = dead_band(rev["q"], rev["tau"], threshold_nm=threshold, mesh_stiffness_nm_per_rad=wr.MESH_STIFFNESS_NM_PER_RAD)
+            windup = 2.0 * threshold / wr.MESH_STIFFNESS_NM_PER_RAD
+            truth_gap, truth_static = world[f"{i}.backlash_rad"], world[f"{i}.static_friction_nm"]
+            row = {"multiplier": multiplier, "seed": int(seed), "can": can, "step_arcmin": step / ARCMIN, "gap_truth_arcmin": truth_gap / ARCMIN,
+                   "widths_arcmin": [w / ARCMIN for w in band.widths_rad]}
+            for name, value in (("median", band.backlash_rad), ("mean", float(np.mean(band.widths_rad)) - windup if band.widths_rad else None)):
+                row[f"gap_{name}"] = {"arcmin": None if value is None else value / ARCMIN,
+                                      "err_over_tol": None if value is None else abs(value - truth_gap) / (0.1 * truth_gap)}
+            row["static_truth_mnm"] = truth_static * 1e3
+            for name, measured in (("committed", committed), ("leave_3_steps", fixed)):
+                rec = next(r for r in measured.values() if r["can"] == can)
+                try:
+                    value = wr.Breakaway().fit({"r": rec}, dict(nominal), None)[f"{i}.static_friction_nm"].value
+                    row[f"static_{name}"] = {"mnm": value * 1e3, "err_over_tol": abs(value - truth_static) / (0.1 * truth_static),
+                                             "pushes_mnm": [round(p["cap_nm"] * 1e3, 1) for p in rec["pushes"]]}
+                except ValueError as exc:
+                    row[f"static_{name}"] = {"mnm": None, "err_over_tol": None, "why": str(exc)[:100]}
+            out.append(row)
+            print(json.dumps(row, default=_plain), flush=True)
+    return out
+
+
 def crossing_torque(rec: dict, threshold_nm: float) -> float:
     """The board torque the motor needs to cross the gear's gap, from a held reversal's own trace: the median |torque| over the samples
     where the motor moves inside the gap (below the dead band's threshold, the encoder stepping)."""
@@ -1223,10 +1340,11 @@ def crossing_torque(rec: dict, threshold_nm: float) -> float:
     return float(np.median(np.abs(tau[inside]))) if inside.any() else 0.0
 
 
-def probe_breakaway_fix(levels_mnm=(0, 20, 40), workers: int = 1) -> list[dict]:
+def probe_breakaway_fix(levels_mnm=(0, 20, 40), workers: int = 1, dry: bool = True) -> list[dict]:
     """servo.breakaway_two_sided on a world whose motor hinges carry a DRY friction (motor_friction(dry=True)), noise-free, read two ways:
     as committed (the walk's cap 0.6 x the Coulomb prior) and with the walk's cap raised by the gap-crossing torque the held reversal
-    measured on the same world (crossing_torque): the output then still sees at most the committed cap, the motor's friction taking the rest."""
+    measured on the same world (crossing_torque): the output then still sees at most the committed cap, the motor's friction taking the rest.
+    ``dry=False``: the mismatch cells' own world (MuJoCo's default friction impedance)."""
     import importlib  # noqa: PLC0415
 
     import sim2real  # noqa: PLC0415
@@ -1239,7 +1357,7 @@ def probe_breakaway_fix(levels_mnm=(0, 20, 40), workers: int = 1) -> list[dict]:
     walks = {r.spec["can"]: r for r in wr.Breakaway().runs({**nominal, **gaps})}
     out = []
     for level in levels_mnm:
-        patch = motor_friction(level * 1e-3, dry=True) if level else contextlib.nullcontext()
+        patch = motor_friction(level * 1e-3, dry=dry) if level else contextlib.nullcontext()
         with patch:
             for can in wr.MOVING:
                 i = wr.INSTANCE[can]
@@ -1287,11 +1405,15 @@ def _cli(argv: Sequence[str] | None = None) -> int:
     rep = sub.add_parser("report", help="the ladder table and one plot per ladder, from the cells written")
     rep.add_argument("--out", type=Path, default=None)
     pro = sub.add_parser("probe", help="the known risks' estimators on a routine's own recordings (dead_band, reading_noise)")
-    pro.add_argument("which", choices=["dead_band", "reading_noise", "motor_friction", "dynamics_fix", "breakaway_fix"])
+    pro.add_argument("which", choices=["dead_band", "reading_noise", "motor_friction", "dynamics_fix", "breakaway_fix", "dynamics_downstream", "encoder_fix"])
+    pro.add_argument("--label", default=None, help="dynamics_downstream: the whole cell (e.g. overall-2-s20261111)")
+    pro.add_argument("--front-values", choices=["truth", "found"], default="truth", help="dynamics_downstream: the values before the dynamics")
+    pro.add_argument("--velocity", choices=["reading", "quiet"], default="reading", help="dynamics_downstream: the replays' velocity noise")
     pro.add_argument("--seed", type=int, default=SEEDS[0])
     pro.add_argument("--multipliers", type=float, nargs="*", default=None, help="dead_band: the torque-noise multipliers (default 0 1 2 3 5 10)")
     pro.add_argument("--name", default=None, help="the probe's file name under probes/ (default: the probe's)")
     pro.add_argument("--workers", type=int, default=4)
+    pro.add_argument("--soft-friction", action="store_true", help="breakaway_fix: the mismatch cells' own (soft) motor friction, not the dry one")
     pro.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
     out = args.out or default_out()
@@ -1322,12 +1444,18 @@ def _cli(argv: Sequence[str] | None = None) -> int:
         if args.which == "dynamics_fix":
             rows = probe_dynamics_fix(seed=args.seed, workers=args.workers, out=out)
             name = f"dynamics_fix-s{args.seed}"
+        elif args.which == "dynamics_downstream":
+            rows = probe_dynamics_downstream(args.label, front=args.front_values, velocity=args.velocity, workers=args.workers, out=out)
+            name = args.name or f"dynamics_downstream-{args.label}-{args.front_values}-{args.velocity}"
+        elif args.which == "breakaway_fix" and args.soft_friction:
+            rows = probe_breakaway_fix(workers=args.workers, dry=False)
+            name = args.name or "breakaway_fix_soft"
         elif args.which == "dead_band" and args.multipliers:
             rows = probe_dead_band(multipliers=tuple(args.multipliers), workers=args.workers)
             name = args.name or "dead_band_fine"
         else:
             rows = {"dead_band": probe_dead_band, "reading_noise": probe_reading_noise, "motor_friction": probe_motor_friction,
-                    "breakaway_fix": probe_breakaway_fix}[args.which](workers=args.workers)
+                    "breakaway_fix": probe_breakaway_fix, "encoder_fix": probe_encoder_fix}[args.which](workers=args.workers)
             name = args.name or args.which
         (out / "probes").mkdir(parents=True, exist_ok=True)
         (out / "probes" / f"{name}.json").write_text(json.dumps(rows, indent=1, default=_plain))
