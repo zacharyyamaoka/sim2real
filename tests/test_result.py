@@ -219,3 +219,8 @@ def test_a_camera_flag_never_gates():
     v = tree(questions).verdicts()
     assert v["d/arm/j2"]["verdict"] == "passes all five"
     assert [r["flag"] for r in tree(questions).tables()["questions"] if r["node"] == "d/arm/j2" and r["question"] == "Job"] == ["camera vs FK: 20 mm"]
+
+
+def test_controller_check_at_the_tool_reads_in_mm_against_the_tool_gate():
+    out = controller_check(1.0, [4.2, 3.9, 4.5], "holds", unit=" mm")
+    assert out["answer"] == "no" and "4.20 mm median" in out["numbers"] and "≤ 1.00 mm, the tool gate" in out["gate"]
