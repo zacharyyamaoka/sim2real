@@ -349,6 +349,11 @@ def _x(value) -> str:
     return "—" if value is None else f"{value:.3g}"
 
 
+def _say(text: str) -> None:
+    """Progress of a long calibration on stderr (a whole sequence runs tens of minutes)."""
+    print(f"[sim2real.rig {time.strftime('%H:%M:%S')}] {text}", file=sys.stderr, flush=True)
+
+
 # --- the runner ----------------------------------------------------------------------------------------------------------------------------
 
 
@@ -447,8 +452,10 @@ class RigRunner:
             if fresh:
                 played.update(self.rig.measure(fresh, world_values, noise, f"routine:{routine.id}", workers=self.workers))
             measured = {run.id: played[run.id] for run in runs}
+            _say(f"{routine.id}: {len(runs)} runs ({len(fresh)} played) in {time.monotonic() - began:.0f} s; fitting")
             with hidden.sealed():
                 found = dict(routine.fit(measured, dict(values), TwinHandle(self.rig, self.workers)))
+            _say(f"{routine.id}: done in {time.monotonic() - began:.0f} s")
             adjusts = tuple(getattr(routine, "adjusts", ()))
             extra = sorted(set(found) - set(routine.identifies) - set(adjusts))
             if extra:
@@ -518,6 +525,7 @@ class RigRunner:
         leaked = sorted({r.id for r in held if r.split != "held_out" or r.id in s["trained"]})
         if leaked:
             raise ValueError(f"eval_twin scores held-out runs only; these are training runs: {leaked[:5]}")
+        _say(f"eval_twin: {len(held)} held-out runs, measured twice")
         measured = self.rig.measure(held, s["world_values"], s["noise"], "held_out", workers=self.workers)
         repeat = self.rig.measure(held, s["world_values"], s["noise"], "repeat", workers=self.workers)
         floor = self.rig.score(repeat, measured)

@@ -675,7 +675,7 @@ class Dynamics:
             theta = np.maximum(theta + gap, 0.0)
             delay = max(0.0, delay + lag_gap)
         found = _from_theta(theta)
-        boot = _bootstrap(runs, prior, theta - target)
+        boot = _bootstrap(runs, prior, theta - target, gravity_vector(values), workers=getattr(twin, "workers", 1))
         links = _link_inertia(prior)   # the CAD links' inertia about each axis at the held pose: what the regression's own model holds
         for can in MOVING:
             i = INSTANCE[can]
@@ -782,21 +782,32 @@ def _from_theta(theta) -> dict:
     return out
 
 
-def _bootstrap(runs, prior, shift) -> dict:
-    """95 % intervals: the equation-error fit over runs resampled with replacement, each draw shifted by the inference's correction."""
+def _boot_one(job) -> np.ndarray | None:
     from bam_ur_wrist.refit import fit as refit_fit  # noqa: PLC0415
+
+    sample, prior, gravity = job
+    try:
+        with wrist_models(gravity):
+            return _theta(refit_fit(wp.stripped_bundle(), sample, masses=prior, fit_gravity=True), {})
+    except (np.linalg.LinAlgError, ValueError):
+        return None
+
+
+def _bootstrap(runs, prior, shift, gravity, workers: int = 1) -> dict:
+    """95 % intervals: the equation-error fit over runs resampled with replacement, each draw shifted by the inference's correction.
+    WHY in the worker pool (measured 2026-11-11 at load ~95): forty fits in one process got 5 % of a core and took longer than the replays."""
+    import multiprocessing  # noqa: PLC0415
 
     if BOOTSTRAP <= 0 or len(runs) < 4:
         return {}
     rng = np.random.default_rng(20261111)
-    draws = []
-    b = wp.stripped_bundle()
-    for _ in range(BOOTSTRAP):
-        sample = [runs[i] for i in rng.integers(0, len(runs), len(runs))]
-        try:
-            draws.append(_theta(refit_fit(b, sample, masses=prior, fit_gravity=True), {}) + shift)
-        except (np.linalg.LinAlgError, ValueError):
-            continue
+    jobs = [([runs[i] for i in rng.integers(0, len(runs), len(runs))], prior, np.asarray(gravity, float)) for _ in range(BOOTSTRAP)]
+    if workers > 1:
+        with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("fork")) as pool:
+            results = list(pool.map(_boot_one, jobs))
+    else:
+        results = [_boot_one(job) for job in jobs]
+    draws = [r + shift for r in results if r is not None]
     if len(draws) < 10:
         return {}
     draws = np.asarray(draws)
