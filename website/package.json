@@ -1,0 +1,10 @@
+{
+  "name": "sim2real-docs-website",
+  "private": true,
+  "scripts": {
+    "build": "env -u VIRTUAL_ENV PYTHONPATH=../src:.. ../.venv/bin/python build/build.py",
+    "test": "env -u VIRTUAL_ENV PYTHONPATH=../src:.. ../.venv/bin/python -m pytest -q ../tests/test_docs_site.py",
+    "serve": "pnpm run build && python3 build/serve.py 4731",
+    "record": "systemd-run --user --scope -p MemoryMax=16G -p OOMPolicy=continue -- env -u VIRTUAL_ENV PYTHONPATH=../src:/home/bam/dataclass_values/src:.. /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python build/record_examples.py"
+  }
+}

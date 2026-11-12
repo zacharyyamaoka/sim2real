@@ -1,0 +1,14 @@
+{
+  "commit": "b4c8d364c05805f6bb64e656ff54e1ef5a11fdb4",
+  "source": "git -C /home/bam/robot_msgs show <commit>:<path> (robotmsgs.com's shared styles; copied byte for byte, never edited here: sim2real.css overrides)",
+  "files": {
+    "site.css": {
+      "path": "website/site/site.css",
+      "sha256": "85254c7516284e587ea9595c36e8d9579591cc74593efbf4202c90bcee410796"
+    },
+    "site.js": {
+      "path": "website/site/site.js",
+      "sha256": "7f0349b97e216839bfc9b4fa06241c862f16de210a817cc1b6829caac9d93aa6"
+    }
+  }
+}
