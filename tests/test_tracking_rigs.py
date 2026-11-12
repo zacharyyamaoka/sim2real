@@ -113,6 +113,26 @@ def test_target_vs_sim_at_a_stop_reads_the_twin_replay_of_the_same_holds():
     assert numbers["target_vs_sim_at_stop_pass"] == int(numbers["target_vs_sim_at_stop_mm"] <= 1.0)
 
 
+def test_the_fivebars_controller_versions_follow_the_job_history():
+    # rack_results.fivebar_job_configs() is the Job's history and its newest config is the one judged (identified comp + settle
+    # integrator since 2026-11-12); the W&B controller versions must end on that same config, or the project's newest tool number
+    # (4.34 mm) disagrees with the page's Job (2.41 mm). Every dwell config in the history is a version, in its order.
+    import statistics
+
+    from sim2real.rack_results import fivebar_job_configs, load
+
+    configs = fivebar_job_configs()
+    dwell = [v for v in rigs.controller_versions(load("fivebar"), rigs.RIGS["fivebar"]) if v["environment"] == "five-bar · dwell holds"]
+    assert len(dwell) == len(configs)
+    assert [v["order"] for v in dwell] == sorted(v["order"] for v in dwell)
+    _, real, twin, _ = configs[-1]
+    newest = dwell[-1]["numbers"]
+    assert newest["tool_error_at_stop_mm"] == pytest.approx(json.loads(real.read_text())["summary"]["encoders_fk_mm"]["median"])
+    if twin is not None:
+        rows = json.loads(twin.read_text())["rows"]
+        assert newest["target_vs_sim_at_stop_mm"] == pytest.approx(statistics.median(r["target_sim_tool_mm"] for r in rows))
+
+
 def test_the_wrist_tool_at_a_stop_is_the_holder_by_encoder_fk_on_multi3():
     # the holder board by WristModel FK at settled stops of the multi3 runs (all three joints logged, pick_sliding gains); the
     # single-joint stops see the moving joint only, so they never judge (tools/wrist_twin_extra.py)

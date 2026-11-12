@@ -355,8 +355,15 @@ def _wrist_gains(result, gains: str, order: int) -> dict:
 def controller_versions(result, rig: Rig) -> list[dict]:
     """The controller configurations that changed what the real rig does, in the order they ran."""
     if rig.name == "fivebar":
-        from ..rack_results import DWELL, DWELL_IDENTIFIED, DWELL_TWIN
+        from ..rack_results import DWELL, DWELL_IDENTIFIED, DWELL_SETTLE, DWELL_SETTLE_TWIN, DWELL_TWIN
 
+        # WHY the settle config is a version of its own (2026-11-12): rack_results judges the five-bar's Job on the newest config in
+        # its Job history (identified comp + the boards' settle integrator, RAM only); without it here the project's newest tool
+        # number disagreed with the page's Job (4.34 vs 2.41 mm)
+        settle = ([_fivebar_dwell(DWELL_SETTLE, "comp-identified-settle", "gravity comp: identified + settle integrator (RAM only)",
+                                  "the same 16 holds on the identified comp with the boards' integrator (ki 1000, ilimit 0.58 / 0.66 N·m)"
+                                  " written in RAM for the run and restored after, not a board default; and on the after twin",
+                                  6, twin=DWELL_SETTLE_TWIN)] if DWELL_SETTLE.exists() else [])
         return [
             _fivebar_dwell(DWELL, "comp-nominal", "gravity comp: nominal", "the 16 holds of the mass-ID run, on the nominal gravity", 1),
             _fivebar_ladder(result, "ladder_real_101015", "ff-stock", "Coulomb feed-forward: none (stock)",
@@ -366,8 +373,9 @@ def controller_versions(result, rig: Rig) -> list[dict]:
             _fivebar_ladder(result, "ladder_real_124755", "ff-winners-lumped", "winners + lumped comp",
                             "the coverage raster with the lumped compensation (5 rungs: no 0.05 m/s)", 4),
             _fivebar_dwell(DWELL_IDENTIFIED, "comp-identified", "gravity comp: identified",
-                           "the same 16 holds on the identified gravity (the operating config), and on the after twin", 5, twin=DWELL_TWIN),
-        ]
+                           "the same 16 holds on the identified gravity (the deployable host-side comp), and on the after twin", 5,
+                           twin=DWELL_TWIN),
+        ] + settle
     from ..rack_results import WRIST_EXTRA
 
     versions = [_wrist_gains(result, gains, order) for order, gains in enumerate(("stock", "ram", "pick_sliding"), 1)]
