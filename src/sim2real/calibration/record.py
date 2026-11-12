@@ -5,6 +5,7 @@ tests/fixtures/calibration_record_v1.json (the UR wrist's real run in this shape
     fitted.record_.to_dict()          # {"schema": "sim2real.calibration/1", "twin", "backend", "model", "written", "seconds", "noise",
                                       #  "plan", "parameters", "routines", "passed", "failing", "evaluation"}
     CalibrationRecord.from_rig(doc["calibration"], report=doc["report"], description=describe("ur_wrist_test_rig"))
+    CalibrationRecord.from_sysid(...)  # the pendulum tracer: one plan step per model rung sysid's identify() fitted (sysid_plan)
 
 WHY plain dicts inside a frozen record and not a tree of dataclasses: the record is the JSON a page, a notebook or another machine reads;
 the typed objects (CalibrationPlan, RigCalibration) stay on the fitted twin beside it (plan_, calibration_).
@@ -112,6 +113,28 @@ class CalibrationRecord:
                    noise=dict(calibration.get("noise") or {}), plan=plan_doc, parameters=parameters, routines=routines, passed=bool(passed),
                    failing=failing, evaluation=evaluation_from_report(report))
 
+    @classmethod
+    def from_sysid(cls, calibration: Mapping[str, Any], *, fits: Sequence[Mapping[str, Any]], plan: Any, runs: int, noise: Mapping[str, Any],
+                   twin: str, description: Any = None, report: Mapping[str, Any] | None = None, written: str | None = None) -> CalibrationRecord:
+        """A sysid pipeline's calibration (the pendulum tracer's sim2real.twin.Calibration.to_dict()) as a record, losing no row. `fits`:
+        the model rungs identify() fitted, in the order it fitted them, each {"rung", "model", "found": {key: value}} with only the values
+        that rung estimated; `plan`: sysid_plan() over the same fits; `runs`: the train runs every rung's fit drew on (one shared
+        collection); `noise`: the world's noise block as it was played. Each parameter row names the step of the rung the twin runs
+        (calibration["rung"]) as its routine. WHY a converter onto from_rig's shape and not a second record builder: one code path writes
+        every sim2real.calibration/1 record, so the two backends cannot drift apart."""
+        rung = calibration["rung"]
+        chosen = next((f for f in fits if f["rung"] == rung), None)
+        if chosen is None:
+            raise ValueError(f"the twin runs rung {rung}, which none of the fits ran ({[f['rung'] for f in fits]})")
+        step_id = sysid_step_id(twin, rung)
+        rows = [{**r, "routine": step_id if r["key"] in chosen["found"] else None} for r in calibration["rows"]]
+        routines = [{"routine": sysid_step_id(twin, f["rung"]), "identifies": list(f["found"]), "runs": runs, "seconds": None,
+                     "found": dict(f["found"])} for f in fits]
+        seam = {"rig": twin, "backend": calibration.get("backend", "sim"), "model": calibration.get("model", ""),
+                "seconds": calibration.get("seconds"), "noise": dict(noise), "rows": rows, "routines": routines,
+                "passed": calibration.get("passed"), "failing": list(calibration.get("failing", []))}
+        return cls.from_rig(seam, report=report, description=description, plan=plan, written=written)
+
     def summary(self) -> str:
         identified = [p for p in self.parameters if p["pass"] is not None]
         lines = [f"{self.twin} on {self.backend}: {len(self.routines)} routines, {self.seconds} s; "
@@ -120,6 +143,36 @@ class CalibrationRecord:
         if self.evaluation:
             lines.append(f"  eval: {self.evaluation['summary']}")
         return "\n".join(lines)
+
+
+def sysid_step_id(twin: str, rung: str) -> str:
+    """The plan-step id of one model rung a sysid pipeline fitted: sysid.<example>.<rung>. Never a catalog routine id: the catalog's
+    routines did not run, so a record naming one would claim a routine nobody played."""
+    return f"sysid.{twin}.{rung}"
+
+
+def sysid_plan(twin: str, fits: Sequence[Mapping[str, Any]], *, level: str = "1x", wall_time_s: float | None = None,
+               description: Any = None) -> Any:
+    """The CalibrationPlan a sysid pipeline ran (the pendulum tracer: sysid/examples/<twin>/pipeline.py identify()): one fit step per
+    model rung it fitted, in the order it fitted them, each identifying the values that rung estimated. Source "sysid", nothing dropped,
+    nothing assumed. Each rung's fit is an independent regression over the same train runs, so no step requires, uses or refines another.
+    Per-step wall time is None: identify() fits every rung in one call and times none of them apart (unknown stays unknown); the plan's
+    totals carry the whole run's wall time. An instance parameter no rung estimated is listed uncovered."""
+    from .plan import CalibrationPlan, PlanStep  # noqa: PLC0415
+
+    steps = []
+    for f in fits:
+        steps.append(PlanStep(
+            routine=sysid_step_id(twin, f["rung"]), title=f"{f['model']} fitted by sysid/examples/{twin} identify() (rung {f['rung']})",
+            kind="identify", setting="bench", identifies=tuple(f["found"]), requires=(), uses=(), refines=(), after=(),
+            why_here=f"identify() fits rung {f['rung']} here, an independent regression over the same train runs: nothing it needs comes "
+                     "from another rung",
+            wall_time_s=None, operator_time_s=0.0, equipment_usd=0.0, recovery=None, source="sysid"))
+    found = {k for f in fits for k in f["found"]}
+    uncovered = tuple((i.id, n, "sysid's identify() does not estimate it: the description's value serves")
+                      for i in (description.instances if description is not None else ()) for n in i.parameters if f"{i.id}.{n}" not in found)
+    return CalibrationPlan(tuple(s.routine for s in steps), tuple(steps), (), uncovered, (), "sysid",
+                           {"wall_time_s": wall_time_s, "operator_time_s": 0.0, "equipment_usd": 0.0}, level, twin)
 
 
 def _plan_from_steps(steps: Sequence[Mapping[str, Any]], description: Any, twin: str | None) -> dict:

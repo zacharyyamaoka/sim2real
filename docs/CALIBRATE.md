@@ -131,7 +131,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `written` | the day the record was written (ISO date) |
 | `seconds` | how long the run took |
 | `noise` | the noise model it was played at (each term, its level, seed and sources) |
-| `plan` | the plan that ran: `twin`, `source` (`"planner"` or `"config.order"`), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` |
+| `plan` | the plan that ran: `twin`, `source` (`"planner"`, `"config.order"`, or `"sysid"` for the pendulum tracer, whose plan lists the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` |
 | `parameters` | one row per parameter (below) |
 | `routines` | one row per routine as it ran (below) |
 | `passed` | every graded value within its tolerance, and at least one graded |
@@ -185,10 +185,12 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `operator_time_s` | a person's hands-on share of it |
 | `equipment_usd` | the cost of the equipment it needs |
 | `recovery` | `{level, pass, worst_error_over_tolerance}` at the plan's level, or null when nobody graded it |
-| `source` | `"rig"` (the rig's implementation), `"custom"` (injected through the config) or `"catalog"` (planned for picked models; no implementation here) |
+| `source` | `"rig"` (the rig's implementation), `"custom"` (injected through the config), `"catalog"` (planned for picked models; no implementation here) or `"sysid"` (a model rung a sysid pipeline fitted, id `sysid.<example>.<rung>`; its `wall_time_s` is null because `identify()` times no rung apart) |
 
 `CalibrationRecord.from_rig(calibration, report=, description=)` turns a rig's `RigCalibration.to_dict()` into this record without losing
-a row, and `CalibrationRecord.from_dict(record.to_dict())` gives back the same record.
+a row, and `CalibrationRecord.from_dict(record.to_dict())` gives back the same record. The pendulum tracer runs sysid's pipeline rather than
+planned routines; `CalibrationRecord.from_sysid(...)` records it in the same schema, its plan (`sysid_plan`) one fit step per model rung
+`identify()` actually fitted, never a catalog routine that did not run.
 
 ## Errors
 
