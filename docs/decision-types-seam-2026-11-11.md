@@ -79,3 +79,14 @@ robot_msgs  ←  sim2real  ←  robot_description  ←  robotparts, cad2robot, f
   `sim` extra, so a package that only describes robots never installs a simulator. sim2real must keep that core free of its app,
   site and heavy dependencies.
 - **This changes Zach's Nov 10 order** (robot_msgs ← robot_description ← everything): sim2real is now the one package between them.
+
+## Addendum 3, same day: RobotTwin, and the dependency is the point
+
+- **The class is `RobotTwin`**, "a digital twin for an electromechanical device." RobotDescription stays bare-bones: it holds the
+  information, and `description.to_robot_twin()` / `description.from_robot_twin(fitted)` cross the seam (snake_case for
+  Zach's `to_RobotTwin()`, per PEP 8).
+- **Depending on sim2real is intended, not a cost.** Zach: "yes 100% actually all robot descriptions we want sim2real. the whole
+  point of robotics is to like actually do something in reality! We are making this first class. Right above the robot_msgs so
+  basically its baked into the very nature of this entire software." So addendum 2's "light core only" condition is about install
+  size, not principle: MuJoCo stays the `sim` extra so a headless box needn't install a simulator, and sim2real's app and site stay
+  out of the package.
