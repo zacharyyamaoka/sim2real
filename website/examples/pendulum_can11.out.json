@@ -3,12 +3,12 @@
  "source": "website/examples/pendulum_can11.py",
  "source_sha256": "c0925aa31dc6c6acfda9ea76b69e8ca86ff0e36486407d82f67bd95e22f68234",
  "schema": "sim2real.twin.Calibration.to_dict",
- "recorded": "2026-11-12T02:03:52-07:00",
- "seconds": 4276.4,
+ "recorded": "2026-11-12T02:54:32-07:00",
+ "seconds": 2068.1,
  "model": "M4.dynamics.twin",
  "passed": true,
  "failing": [],
- "stdout": "calibrate(on='sim', truth='sealed'): 46 train runs fitted rungs M0, M2, M3, M4; the fitted twin runs M4.dynamics.twin (M4); 3689 s\n  parameter                                nominal      hidden   recovered     error       tol  verdict\n  can11.gravity_nm                           4.661        5.05       5.066   0.01622       2 %  pass\n  can11.gravity_bottom_rad                 -0.3737       -0.35     -0.3501 -5.857e-05     0.005  pass\n  can11.armature_kg_m2                      0.1219        0.14      0.1386 -0.001364       5 %  pass\n  can11.frictionloss_nm                     0.8331        1.05       1.051  0.001433      10 %  pass\n  can11.damping_nm_s_rad                      0.15         0.3      0.3047  0.004681      20 %  pass\n  can11.friction_stribeck_drop_nm                0        0.35      0.3566  0.006587      25 %  pass\n  can11.friction_stribeck_speed_rad_s            —         0.1      0.1041  0.004136      30 %  pass\n  can11.backlash_rad                             0       0.002    0.001957 -4.292e-05      10 %  pass\n  => PASS: 8/8 within tolerance of the hidden truth\neval: 29 held-out runs (424.5 s of motion), floor 0.426 mrad (two camera draws of one run)\n  held-out link error / floor: nominal 17.5x, M0 73.2x, M2 16.5x, M3 25.1x, M4 1.34x\n  the selection rule picks M4; the twin is M4.dynamics.twin (M4)\n  gate twinned                  pass  M4.dynamics.twin held-out link error / floor: 1.34 (<= 1.5x; sim2real.cards.registry.TWINNED_LIMIT)\n  gate held_out_link_fidelity   pass  held-out link error, nominal / calibrated: 13.1 (>= 4x; sysid/acceptance.json)\n  gate recovery                 pass  every hidden value within its tolerance (the sim oracle only): 8/8 (all; sysid/examples/<id>/world.json + sysid/acceptance.json)\n  => PASS: 3/3 gates\n",
+ "stdout": "calibrate(on='sim', truth='sealed'): 46 train runs fitted rungs M0, M2, M3, M4; the fitted twin runs M4.dynamics.twin (M4); 1795 s\n  parameter                                nominal      hidden   recovered     error       tol  verdict\n  can11.gravity_nm                           4.661        5.05       5.066   0.01622       2 %  pass\n  can11.gravity_bottom_rad                 -0.3737       -0.35     -0.3501 -5.857e-05     0.005  pass\n  can11.armature_kg_m2                      0.1219        0.14      0.1386 -0.001364       5 %  pass\n  can11.frictionloss_nm                     0.8331        1.05       1.051  0.001433      10 %  pass\n  can11.damping_nm_s_rad                      0.15         0.3      0.3047  0.004681      20 %  pass\n  can11.friction_stribeck_drop_nm                0        0.35      0.3566  0.006587      25 %  pass\n  can11.friction_stribeck_speed_rad_s            —         0.1      0.1041  0.004136      30 %  pass\n  can11.backlash_rad                             0       0.002    0.001957 -4.292e-05      10 %  pass\n  => PASS: 8/8 within tolerance of the hidden truth\neval: 29 held-out runs (424.5 s of motion), floor 0.426 mrad (two camera draws of one run)\n  held-out link error / floor: nominal 17.5x, M0 73.2x, M2 16.5x, M3 25.1x, M4 1.34x\n  the selection rule picks M4; the twin is M4.dynamics.twin (M4)\n  gate twinned                  pass  M4.dynamics.twin held-out link error / floor: 1.34 (<= 1.5x; sim2real.cards.registry.TWINNED_LIMIT)\n  gate held_out_link_fidelity   pass  held-out link error, nominal / calibrated: 13.1 (>= 4x; sysid/acceptance.json)\n  gate recovery                 pass  every hidden value within its tolerance (the sim oracle only): 8/8 (all; sysid/examples/<id>/world.json + sysid/acceptance.json)\n  => PASS: 3/3 gates\n",
  "parameters": [
   {
    "key": "can11.gravity_nm",
@@ -396,7 +396,7 @@
    }
   },
   "truth_moved": {},
-  "seconds": 3688.7,
+  "seconds": 1794.9,
   "plan": {
    "train_runs": 46,
    "held_out_runs": 29,
