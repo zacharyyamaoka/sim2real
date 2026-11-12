@@ -174,6 +174,9 @@ def controller_table(data: dict) -> str:
                 if n.get("tracking_rms_tool_mm") is not None else "—")
         stop = "—" if n.get("tool_error_at_stop_mm") is None else \
             f"{n['tool_error_at_stop_mm']:.2f} mm ({'passes' if n['tool_error_at_stop_mm'] <= 1.0 else 'fails'} 1 mm; p95 {n['tool_error_at_stop_p95_mm']:.1f})"
+        if n.get("target_vs_sim_at_stop_mm") is not None:
+            stop += (f"; sim {n['target_vs_sim_at_stop_mm']:.2f} mm ({'passes' if n['target_vs_sim_at_stop_mm'] <= 1.0 else 'fails'}), "
+                     f"sim vs real {n['sim_vs_real_at_stop_mm']:.2f} mm")
         lines.append(f"| {version['order']} | {version['title']} | {fmt('target_vs_sim_tracking_deg')} | {fmt('tracking_rms_deg')} | {per} | "
                      f"{tool} | {stop} | {fmt('flag_camera_vs_commanded_mm', 'mm')} |")
     return "\n".join(lines)
@@ -182,12 +185,13 @@ def controller_table(data: dict) -> str:
 def first_open(data: dict) -> str:
     """Zach's order, read for one rig: the first stage whose gate fails or is not yet measured."""
     after = data["twin_after"]["history"][-1]
-    stop_sim, _ = latest(data, "target_vs_sim_at_stop_mm")
+    stop_sim, sim_title = latest(data, "target_vs_sim_at_stop_mm")
     stop_real, title = latest(data, "tool_error_at_stop_mm")
     if stop_sim is None:
         one = "gate 1 (target vs sim at a stop) is **not measured**: no sim replay of settled holds"
     else:
-        one = f"gate 1 {'passes' if stop_sim <= 1 else 'fails'} ({stop_sim:.2f} mm)"
+        one = (f"gate 1 (target vs sim at a stop) **{'passes' if stop_sim <= 1 else 'fails'}**: the twin's tool settles {stop_sim:.2f} mm "
+               f"from its target on {sim_title}")
     two = f"gate 2 (twin) **{'passes' if after.get('heldout_sim_vs_real_pass') else 'fails'}**"
     three = ("gate 3 (tool at a stop) is **not measured** (the tool is not tracked)" if stop_real is None
              else f"gate 3 (tool at a stop) **{'passes' if stop_real <= 1 else 'fails'}**: {stop_real:.2f} mm on {title}")
@@ -456,9 +460,14 @@ it: the latest twin for the twin gate, the last controller configuration that ra
 **Read in that order, today:**
 
 - **UR wrist:** {first_open(rd['ur_wrist'])}. The controller in sim on the operating gains (pick_sliding) tracks to
-  {rd['ur_wrist']['versions'][-1]['numbers'].get('target_vs_sim_tracking_deg', float('nan')):.3f}° (worst joint, held-out runs on the twin of
-  record), the real joints to {rd['ur_wrist']['versions'][-1]['numbers'].get('tracking_rms_deg', float('nan')):.3f}°.
-- **Five-bar:** {first_open(rd['fivebar'])}. Coulomb feed-forward is a controller change, and it shows first in gate 1: target vs sim
+  {latest(rd['ur_wrist'], 'target_vs_sim_tracking_deg')[0]:.3f}° (worst joint, held-out runs on the twin of
+  record), the real joints to {latest(rd['ur_wrist'], 'tracking_rms_deg')[0]:.3f}°. At a stop the twin's holder passes 1 mm and the real one
+  misses it by a hair ({latest(rd['ur_wrist'], 'sim_vs_real_at_stop_mm')[0]:.2f} mm between them), so the first fix is the twin (CAN 14's passive
+  release) and a tool floor, not the controller.
+- **Five-bar:** {first_open(rd['fivebar'])}. Gate 1 fails first: the controller misses the tool gate in a sim that is right by
+  construction ({latest(rd['fivebar'], 'target_vs_sim_at_stop_mm')[0]:.2f} mm vs the real arm's {latest(rd['fivebar'], 'tool_error_at_stop_mm')[0]:.2f} mm), so
+  the tool gap is the controller's (gains, compensation, hold logic) before it is the twin's; the twin's tool is
+  {latest(rd['fivebar'], 'sim_vs_real_at_stop_mm')[0]:.2f} mm from the real one at the same holds. Coulomb feed-forward is a controller change, and it shows first in gate 1: target vs sim
   went {rd['fivebar']['versions'][1]['numbers']['target_vs_sim_tracking_deg']:.2f}° → {rd['fivebar']['versions'][2]['numbers']['target_vs_sim_tracking_deg']:.2f}°
   (worst joint) and the sim's tool {rd['fivebar']['versions'][1]['numbers']['target_vs_sim_tracking_tool_mm']:.1f} → {rd['fivebar']['versions'][2]['numbers']['target_vs_sim_tracking_tool_mm']:.1f} mm,
   before the real tool's {rd['fivebar']['versions'][1]['numbers']['tracking_rms_tool_mm']:.1f} → {rd['fivebar']['versions'][2]['numbers']['tracking_rms_tool_mm']:.1f} mm.

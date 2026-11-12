@@ -80,7 +80,7 @@ GATES = {
         "stage": "target_vs_sim", "role": "gate", "limit": 1.0,
         "rule": "the sim's tool at a settled stop vs its target, by FK, <= 1 mm (proposed: the controller must pass the tool gate in sim "
                 "before the real rig can)",
-        "missing": "not measured on either rig yet: the five-bar's settled holds have no twin replay, the wrist's tool is not tracked"},
+        "missing": "no twin replay of this version's settled stops"},
     "heldout_sim_vs_real_deg": {
         "stage": "sim_vs_real", "role": "gate", "limit": None,
         "rule": "held-out sim vs real median, joint encoders; passes when every joint's twin is <= 1.5x the same-input repeat floor of "
@@ -94,16 +94,16 @@ GATES = {
     "tracking_rms_tool_mm": {
         "stage": "target_vs_real", "role": "kpi", "limit": None,
         "rule": "the same at the tool, encoders through FK, mean over the coverage set's runs; no threshold decided",
-        "missing": "the tool is not tracked on this rig (no FK tool on the wrist's coverage runs)"},
+        "missing": "no tool by FK on this version's coverage runs (the wrist's coverage runs log one joint each)"},
     "target_vs_real_at_stop_mm": {
         "stage": "target_vs_real", "role": "gate", "limit": 1.0,
         "rule": "the real tool at a settled stop vs its target, encoders through FK, <= 1 mm: the same number as tool_error_at_stop_mm "
                 "under its gate-order name",
-        "missing": "no settled holds on this version (the wrist's tool is not tracked)"},
+        "missing": "no settled stops on this version"},
     "tool_error_at_stop_mm": {
         "stage": "target_vs_real", "role": "gate", "limit": 1.0,
         "rule": "<= 1 mm at a stop, on settled holds, at the tool, encoders through FK (Zach, 2026-11-11)",
-        "missing": "no settled holds on this version (the wrist's tool is not tracked)"},
+        "missing": "no settled stops on this version"},
     "home_repeatability_deg": {
         "stage": "target_vs_real", "role": "kpi", "limit": None,
         "rule": "the spread of the homed angle over >= 5 homings from the joint encoders (proposed)",
@@ -258,8 +258,9 @@ def _fivebar_ladder(result, folder: str, key: str, title: str, what: str, order:
                              "lumped": summary.get("lumped")}}
 
 
-def _fivebar_dwell(path: Path, key: str, title: str, what: str, order: int) -> dict:
-    """A five-bar controller version from its 16 three-second holds (the lane's dwell json): the tool at a stop."""
+def _fivebar_dwell(path: Path, key: str, title: str, what: str, order: int, twin: Path | None = None) -> dict:
+    """A five-bar controller version from its 16 three-second holds (the lane's dwell json): the tool at a stop. `twin`: the same holds
+    replayed on the after twin (tools/fivebar_dwell_twin.py), which gives gate 1 at a stop (target vs sim) on the identical moves."""
     data = json.loads(path.read_text())
     summary = data["summary"]
     value = summary["encoders_fk_mm"]["median"]
@@ -273,6 +274,17 @@ def _fivebar_dwell(path: Path, key: str, title: str, what: str, order: int) -> d
                "tool_error_at_stop_p95_mm": summary["encoders_fk_mm"]["p95"], "holds": len(episodes)}
     if summary.get("camera_vs_commanded_mm", {}).get("median") is not None:
         numbers["flag_camera_vs_commanded_mm"] = summary["camera_vs_commanded_mm"]["median"]
+    if twin is not None and twin.exists():
+        # WHY the twin's own replay of these holds: target vs sim is the controller alone on the identical input (Zach's gate 1), and
+        # the twin's tool vs the real tool on the same holds says how far the twin is from reality at a stop; both by FK, no camera
+        rows = json.loads(twin.read_text())["rows"]
+        sim = statistics.median(r["target_sim_tool_mm"] for r in rows)
+        numbers.update({"target_vs_sim_at_stop_mm": sim, "target_vs_sim_at_stop_pass": int(sim <= GATES["target_vs_sim_at_stop_mm"]["limit"]),
+                        "sim_vs_real_at_stop_mm": statistics.median(r["sim_real_tool_mm"] for r in rows)})
+        by_pose = {r["pose"]: r for r in rows}
+        for episode in episodes:
+            if episode["hold"] in by_pose:
+                episode["sim_tool_error_mm"] = round(by_pose[episode["hold"]]["target_sim_tool_mm"], 3)
     return {"key": key, "title": title, "order": order, "what": what, "environment": "five-bar · dwell holds",
             "source": data.get("source", str(path)), "numbers": numbers, "episodes": episodes}
 
@@ -289,6 +301,32 @@ def wrist_target_vs_sim(gains: str, twin: str = "record", split: str = "held_out
     rows = json.loads(path.read_text()).get("target_vs_sim", [])
     return {f"can{row['can_id']}": math.degrees(row["pos_rms_mrad_median"] * 1e-3) for row in rows
             if row["twin"] == twin and row["gains"] == gains and row["split"] == split and row.get("pos_rms_mrad_median") is not None}
+
+
+def _wrist_stops(path: Path, order: int) -> dict:
+    """The wrist's tool at a stop: the holder board by WristModel FK from the joint encoders at the settled stops (target at rest
+    >= 0.3 s) of the multi3 runs, all three joints on the pick_sliding gains, and the same stops of their it5 twin
+    (tools/wrist_twin_extra.py). WHY multi3 and not the single-joint pick_sliding stops: those log the moving joint only, the held
+    two are not logged, so they understate the tool error (rack_results judges the holder's Job the same way)."""
+    data = json.loads(path.read_text())
+    runs = data["tool"]["multi3"]["runs"]
+    pooled = {key: [v for run in runs for v in run[key]] for key in ("target_real_mm", "target_sim_mm", "sim_real_mm")}
+    real, sim = statistics.median(pooled["target_real_mm"]), statistics.median(pooled["target_sim_mm"])
+    limit = GATES["tool_error_at_stop_mm"]["limit"]
+    real_sorted = sorted(pooled["target_real_mm"])
+    numbers = {"tool_error_at_stop_mm": real, "tool_error_at_stop_pass": int(real <= limit),
+               "target_vs_real_at_stop_mm": real, "target_vs_real_at_stop_pass": int(real <= limit),
+               "tool_error_at_stop_p95_mm": real_sorted[min(len(real_sorted) - 1, round(0.95 * (len(real_sorted) - 1)))],
+               "target_vs_sim_at_stop_mm": sim, "target_vs_sim_at_stop_pass": int(sim <= GATES["target_vs_sim_at_stop_mm"]["limit"]),
+               "sim_vs_real_at_stop_mm": statistics.median(pooled["sim_real_mm"]), "holds": len(pooled["target_real_mm"])}
+    episodes = [{"run": run["run"], "stops": len(run["target_real_mm"]),
+                 "tool_error_mm": round(statistics.median(run["target_real_mm"]), 4),
+                 "sim_tool_error_mm": round(statistics.median(run["target_sim_mm"]), 4),
+                 "sim_vs_real_tool_mm": round(statistics.median(run["sim_real_mm"]), 4), "rerun": ""} for run in runs]
+    return {"key": "pick_sliding-stops", "title": "gains: pick_sliding · settled stops (multi3)", "order": order,
+            "what": "the holder board at the settled stops of the multi3 runs (all three joints, pick_sliding gains), encoders through FK, "
+                    "and the same stops of their it5 twin",
+            "environment": "UR wrist · settled stops", "source": str(path), "numbers": numbers, "episodes": episodes}
 
 
 def _wrist_gains(result, gains: str, order: int) -> dict:
@@ -317,7 +355,7 @@ def _wrist_gains(result, gains: str, order: int) -> dict:
 def controller_versions(result, rig: Rig) -> list[dict]:
     """The controller configurations that changed what the real rig does, in the order they ran."""
     if rig.name == "fivebar":
-        from ..rack_results import DWELL, DWELL_IDENTIFIED
+        from ..rack_results import DWELL, DWELL_IDENTIFIED, DWELL_TWIN
 
         return [
             _fivebar_dwell(DWELL, "comp-nominal", "gravity comp: nominal", "the 16 holds of the mass-ID run, on the nominal gravity", 1),
@@ -328,9 +366,12 @@ def controller_versions(result, rig: Rig) -> list[dict]:
             _fivebar_ladder(result, "ladder_real_124755", "ff-winners-lumped", "winners + lumped comp",
                             "the coverage raster with the lumped compensation (5 rungs: no 0.05 m/s)", 4),
             _fivebar_dwell(DWELL_IDENTIFIED, "comp-identified", "gravity comp: identified",
-                           "the same 16 holds on the identified gravity (the operating config)", 5),
+                           "the same 16 holds on the identified gravity (the operating config), and on the after twin", 5, twin=DWELL_TWIN),
         ]
-    return [_wrist_gains(result, gains, order) for order, gains in enumerate(("stock", "ram", "pick_sliding"), 1)]
+    from ..rack_results import WRIST_EXTRA
+
+    versions = [_wrist_gains(result, gains, order) for order, gains in enumerate(("stock", "ram", "pick_sliding"), 1)]
+    return versions + ([_wrist_stops(WRIST_EXTRA, 4)] if WRIST_EXTRA.exists() else [])
 
 
 def controller_records(result, rig: Rig, versions: list[dict], *, sha: str, dirty: bool) -> list[dict]:
@@ -380,7 +421,7 @@ def scored_runs(bbo, result, rig: Rig, versions: list[dict], twin_batch: list[di
             attributes={"run_id": record["id"], "sim2real_sha": record["config"]["sim2real_sha"], "evaluation": record["config"]["evaluation"]}))
     for version in versions:
         score_keys = sorted({k for e in version["episodes"] for k, v in e.items() if isinstance(v, (int, float)) and not isinstance(v, bool)
-                             and k not in ("hold", "speed_m_s", "camera_frames")})
+                             and k not in ("hold", "speed_m_s", "camera_frames", "stops")})
         episodes = [bbo.Episode(inputs={k: e[k] for k in ("run", "rung", "hold", "joint", "tape") if k in e},
                                 output={"rerun": e.get("rerun", "")},
                                 scores={k: float(e[k]) for k in score_keys if e.get(k) is not None})
@@ -409,9 +450,11 @@ def log_weave(bbo, rig: Rig, groups: dict[str, tuple[list, list[str]]]) -> dict[
             metrics += [bbo.Metric(f"{joint} held-out (°)", f"{OBJECTIVE}_{joint}", minimize=True) for joint in rig.joints
                         if f"{OBJECTIVE}_{joint}" in keys]
             name, what = f"{rig.label} · twin versions", "each twin version on the rig's held-out runs: the objective, held-out sim vs real"
-        elif "dwell" in environment:
+        elif "dwell" in environment or "stops" in environment:
             metrics = [bbo.Metric("Tool error at a stop (mm, gate 1 mm)", "tool_error_at_stop_mm", minimize=True),
                        bbo.Metric("Passes the 1 mm gate", "tool_error_at_stop_pass")]
+            metrics += [bbo.Metric("Target vs sim at a stop (mm): the controller in sim", "target_vs_sim_at_stop_mm", minimize=True)
+                        ] if "target_vs_sim_at_stop_mm" in keys else []
             name, what = f"{rig.label} · tool at a stop", "each controller version on the 16 settled holds"
         else:
             metrics = ([bbo.Metric("Tool tracking RMS (mm)", "tracking_rms_tool_mm", minimize=True)] if "tracking_rms_tool_mm" in keys else [])

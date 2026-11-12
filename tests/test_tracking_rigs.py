@@ -97,3 +97,35 @@ def test_the_house_template_loads_by_file():
     # not registered there raised AttributeError on the first --log with Weave (2026-11-11)
     bbo = rigs.load_bbo()
     assert hasattr(bbo, "ScoredRun") and hasattr(bbo, "log_evaluations") and hasattr(bbo, "publish_leaderboard")
+
+
+def test_target_vs_sim_at_a_stop_reads_the_twin_replay_of_the_same_holds():
+    # the five-bar's 16 dwell holds replayed on the after twin (tools/fivebar_dwell_twin.py): gate 1 at a stop is the twin's tool vs
+    # its target by FK, the median over the holds; the twin's tool vs the real tool sits beside it
+    import statistics
+
+    from sim2real.rack_results import DWELL_IDENTIFIED, DWELL_TWIN
+
+    rows = json.loads(DWELL_TWIN.read_text())["rows"]
+    numbers = rigs._fivebar_dwell(DWELL_IDENTIFIED, "k", "t", "w", 1, twin=DWELL_TWIN)["numbers"]
+    assert numbers["target_vs_sim_at_stop_mm"] == pytest.approx(statistics.median(r["target_sim_tool_mm"] for r in rows))
+    assert numbers["sim_vs_real_at_stop_mm"] == pytest.approx(statistics.median(r["sim_real_tool_mm"] for r in rows))
+    assert numbers["target_vs_sim_at_stop_pass"] == int(numbers["target_vs_sim_at_stop_mm"] <= 1.0)
+
+
+def test_the_wrist_tool_at_a_stop_is_the_holder_by_encoder_fk_on_multi3():
+    # the holder board by WristModel FK at settled stops of the multi3 runs (all three joints logged, pick_sliding gains); the
+    # single-joint stops see the moving joint only, so they never judge (tools/wrist_twin_extra.py)
+    import statistics
+
+    from sim2real.rack_results import WRIST_EXTRA
+
+    runs = json.loads(WRIST_EXTRA.read_text())["tool"]["multi3"]["runs"]
+    version = rigs._wrist_stops(WRIST_EXTRA, 4)
+    real = statistics.median(v for run in runs for v in run["target_real_mm"])
+    sim = statistics.median(v for run in runs for v in run["target_sim_mm"])
+    n = version["numbers"]
+    assert n["tool_error_at_stop_mm"] == n["target_vs_real_at_stop_mm"] == pytest.approx(real)
+    assert n["target_vs_sim_at_stop_mm"] == pytest.approx(sim)
+    assert n["holds"] == sum(len(run["target_real_mm"]) for run in runs)
+    assert "dwell" in version["environment"] or "stops" in version["environment"]
