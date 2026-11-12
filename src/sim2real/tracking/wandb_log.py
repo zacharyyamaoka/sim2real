@@ -172,10 +172,12 @@ def summary_numbers(node, verdict: dict, questions: tuple[str, ...]) -> tuple[di
     return numbers, text
 
 
-def records(result, *, sha: str = "unknown", dirty: bool = False, extra_config: dict | None = None, now: str | None = None) -> list[dict]:
+def records(result, *, sha: str = "unknown", dirty: bool = False, extra_config: dict | None = None, now: str | None = None,
+            add=None) -> list[dict]:
     """The W&B runs one CalibrationResult makes, as plain dicts (no wandb needed): one per node x twin iteration.
 
-    Each: {id, name, group, job_type, tags, notes, config, history: [step dicts], summary: {text}, tables: {name: rows}}."""
+    Each: {id, name, group, job_type, tags, notes, config, history: [step dicts], summary: {text}, tables: {name: rows}}.
+    `add(node, k, role)` may return (numbers, text, tables) to add to that run (the per-rig projects' gates, tracking/rigs.py)."""
     from ..result import QUESTIONS, RULER_TWINNED, TOOL_GATE_MM
 
     verdicts = result.verdicts()
@@ -245,6 +247,11 @@ def records(result, *, sha: str = "unknown", dirty: bool = False, extra_config: 
                 if node.parent is None:
                     record["tables"].update({"tree": tables["nodes"], "questions_all": tables["questions"], "curriculum_all": rungs,
                                              "trend_all": tables["error_stats"]})
+            if add is not None:
+                more_numbers, more_text, more_tables = add(node, k, role)
+                record["history"] = record["history"][:-1] + [{**record["history"][-1], **more_numbers}]
+                record["summary"].update(more_text)
+                record["tables"].update(more_tables)
             out.append(record)
     return out
 
@@ -298,15 +305,24 @@ def _table_rows(rows: list[dict]) -> tuple[list[str], list[list]]:
 
 
 def log(result, *, entity: str = ENTITY, project: str = PROJECT, extra_config: dict | None = None, sha: str | None = None,
-        dirty: bool | None = None, retire_older: bool = True) -> list[dict]:
+        dirty: bool | None = None, retire_older: bool = True, add=None) -> list[dict]:
     """Log one CalibrationResult (one evaluation) as W&B runs. Idempotent: the same numbers resume the same runs and add only the keys
     a run lacks (a logger that learned a new number patches it in; a second rebuild adds nothing); new numbers make a new evaluation
     and mark the result's older runs `evaluation_state: superseded` (never deleted)."""
-    import wandb
-
     if sha is None:
         sha, dirty = code_version()
-    batch = records(result, sha=sha, dirty=bool(dirty), extra_config=extra_config)
+    batch = records(result, sha=sha, dirty=bool(dirty), extra_config=extra_config, add=add)
+    logged = push(batch, entity=entity, project=project)
+    if retire_older:
+        retire(result.id, batch[0]["config"]["evaluation"], entity=entity, project=project)
+    return logged
+
+
+def push(batch: list[dict], *, entity: str = ENTITY, project: str = PROJECT) -> list[dict]:
+    """Write records (records()'s shape) as W&B runs: a new id makes a run; an existing one gets only what it lacks or holds
+    differently, as one more step (see log)."""
+    import wandb
+
     WANDB_DIR.mkdir(parents=True, exist_ok=True)
     api = wandb.Api(timeout=60)
     logged = []
@@ -340,8 +356,6 @@ def log(result, *, entity: str = ENTITY, project: str = PROJECT, extra_config: d
         logged.append({"id": run.id, "url": run.url, "name": record["name"], "resumed": have is not None, "group": record["group"],
                        "patched": sorted(steps[-1]) if (have is not None and steps) else []})
         run.finish()
-    if retire_older:
-        retire(result.id, batch[0]["config"]["evaluation"], entity=entity, project=project)
     return logged
 
 
