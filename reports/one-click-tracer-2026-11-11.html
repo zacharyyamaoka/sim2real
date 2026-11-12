@@ -16,7 +16,7 @@ figure { margin:10px 0; } figure img { border:1px solid var(--rule); display:blo
 .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:760px) { .two { grid-template-columns:1fr; } }
 ul li { margin:3px 0; }
 </style></head><body><main>
-<h1>One-click tracer: types first, then Twin.load → simulate → calibrate → eval_twin</h1>
+<h1>One-click tracer: types first, then examples.pendulum_can11 → simulate → calibrate → eval</h1>
 <p class="verdict"><b>The home opens on the 11 types, and the pendulum oracle runs end to end through four calls.</b> Green run: <b>PASS</b> (every hidden
 value within its tolerance; the twin passes its gates). Truth moved 10 % on gravity: <b>RED as it must be</b>. <code>on="real"</code> raises, naming the rack path.</p>
 
@@ -31,18 +31,22 @@ from 768 to 1440 px (measured). They're still in the Account menu and on the hom
 <h2>Part 2 · The API</h2>
 <pre>import sim2real
 
-twin = sim2real.Twin.load(&quot;pendulum_can11&quot;)          # typed instances, parameters as robot_msgs Values
+twin = sim2real.examples.pendulum_can11()            # a RobotTwin: typed instances, parameters as robot_msgs Values
 twin.simulate()                                      # MuJoCo, headless
 fitted = twin.calibrate(on=&quot;sim&quot;, truth=&quot;sealed&quot;)    # a NEW twin: values_, intervals_, rungs_, calibration_
-fitted.eval_twin().summary()                         # held-out runs only: error / floor and the gates
+fitted.eval().summary()                              # held-out runs only: error / floor and the gates
+fitted.parameters                                    # the calibrated values, for description.from_robot_twin (not built yet)
 
 # the level below: fitted.runner (SimRunner: plan -&gt; RealWorld.measure -&gt; identify (sealed) -&gt; score -&gt; assemble)
 # the mutation test of the ruler: twin.calibrate(on=&quot;sim&quot;, truth=&quot;sealed&quot;, move_truth={&quot;can11.gravity_nm&quot;: 5.555})
 # twin.calibrate(on=&quot;real&quot;) -&gt; NotImplementedError naming the rack path</pre>
+<p class="mut">Updated the same evening: <code>eval_twin()</code> is <code>eval()</code>, <code>Twin</code> is <code>RobotTwin</code> and is built directly
+(<code>sim2real.examples.pendulum_can11()</code>, no <code>Twin.load</code>), and sim2real sits below robot_description (decision addendum 2). The terminal logs
+below are the runs as they ran, so they still print <code>eval_twin:</code>. The current reference is <code>docs/API.md</code> (report <code>sim2real-api-2026-11-11.html</code>).</p>
 <p>This follows the API prior-art note's verdict (vault: <i>Sim2Real API Prior Art (2026-11-11)</i>):</p>
-<ul><li><b>The verbs are on a sim2real <code>Twin</code>, not on the description.</b> The description lives in robot_description, below sim2real, so verbs on it would bring back the cycle.</li>
+<ul><li><b>The verbs are on a sim2real <code>RobotTwin</code>, not on the description.</b> (Then: the description lives in robot_description, below sim2real, so verbs on it would bring back the cycle. Since addendum 2 sim2real sits below robot_description, which builds its twin with <code>to_robot_twin()</code>.)</li>
 <li><b><code>calibrate()</code> returns a new fitted twin</b> (scikit-learn style): learned values end in <code>_</code>, and nothing is written to robotparts.</li>
-<li><b><code>eval_twin()</code> refuses a training run.</b> Identification runs sealed from the truth, and both guards live in the runner.</li>
+<li><b><code>eval()</code> refuses a training run.</b> Identification runs sealed from the truth, and both guards live in the runner.</li>
 <li><b>The fitting is sysid's existing oracle code, not <code>mujoco.sysid</code>.</b> The pendulum's twin is bam_rack_twin's 30 kHz moteus PID with a gear-gap hinge (its Replayer), not a plain MJCF rollout. <code>mujoco.sysid</code> is in the pinned 3.11.0, but its extra's packages (colorama…) aren't installed. It's <code>fit/</code>'s engine for a type whose twin is plain MJCF.</li></ul>
 
 <h2>The four calls, end to end (green)</h2>
@@ -76,8 +80,8 @@ eval_twin: 29 held-out runs (424.5 s of motion), floor 0.426 mrad (two camera dr
   =&gt; PASS: 3/3 gates
 1 passed, 10 deselected in 1615.38s (0:26:55)
 green exit 0</pre>
-<h3>Recovered vs hidden</h3><div class='scroll'><table><thead><tr><th>parameter</th><th>unit</th><th>nominal (description)</th><th>hidden truth (world.json)</th><th>recovered</th><th>error</th><th>tolerance</th><th>verdict</th></tr></thead><tbody><tr class=''><th scope='row'><code>can11.gravity_nm</code></th><td>N·m</td><td>4.661</td><td>5.05</td><td><b>5.066</b></td><td>+0.32 %</td><td>±2 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.gravity_bottom_rad</code></th><td>rad</td><td>-0.3737</td><td>-0.35</td><td><b>-0.3501</b></td><td>-0.02 %</td><td>±0.005</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.armature_kg_m2</code></th><td>kg·m²</td><td>0.1219</td><td>0.14</td><td><b>0.1386</b></td><td>-0.97 %</td><td>±5 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.frictionloss_nm</code></th><td>N·m</td><td>0.8331</td><td>1.05</td><td><b>1.051</b></td><td>+0.14 %</td><td>±10 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.damping_nm_s_rad</code></th><td>N·m·s/rad</td><td>0.15</td><td>0.3</td><td><b>0.3047</b></td><td>+1.56 %</td><td>±20 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_drop_nm</code></th><td>N·m</td><td>0</td><td>0.35</td><td><b>0.3566</b></td><td>+1.88 %</td><td>±25 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_speed_rad_s</code></th><td>rad/s</td><td>—</td><td>0.1</td><td><b>0.1041</b></td><td>+4.14 %</td><td>±30 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.backlash_rad</code></th><td>rad</td><td>0</td><td>0.002</td><td><b>0.001957</b></td><td>-2.15 %</td><td>±10 %</td><td>pass</td></tr></tbody></table></div><p>8 of 8 recovered values equal sysid's committed <code>results/pendulum_can11.json</code> bit for bit: the Twin calls the oracle's own pipeline and adds no fitting of its own.</p>
-<h3>eval_twin's gates</h3><p>Held-out link error ÷ floor (29 runs, floor 0.426 mrad): nominal 17.5× · M0 73.2× · M2 16.5× · M3 25.1× · M4 1.34×. The selection rule picks <b>M4</b>.</p><div class='scroll'><table><thead><tr><th>gate</th><th>what</th><th>value</th><th>rule</th><th>verdict</th><th>from</th></tr></thead><tbody><tr class=''><th scope='row'><code>twinned</code></th><td>M4.dynamics.twin held-out link error / floor</td><td>1.34</td><td>&lt;= 1.5x</td><td>pass</td><td class='mut'>sim2real.cards.registry.TWINNED_LIMIT</td></tr><tr class=''><th scope='row'><code>held_out_link_fidelity</code></th><td>held-out link error, nominal / calibrated</td><td>13.1</td><td>&gt;= 4x</td><td>pass</td><td class='mut'>sysid/acceptance.json</td></tr><tr class=''><th scope='row'><code>recovery</code></th><td>every hidden value within its tolerance (the sim oracle only)</td><td>8/8</td><td>all</td><td>pass</td><td class='mut'>sysid/examples/&lt;id&gt;/world.json + sysid/acceptance.json</td></tr></tbody></table></div>
+<h3>Recovered vs hidden</h3><div class='scroll'><table><thead><tr><th>parameter</th><th>unit</th><th>nominal (description)</th><th>hidden truth (world.json)</th><th>recovered</th><th>error</th><th>tolerance</th><th>verdict</th></tr></thead><tbody><tr class=''><th scope='row'><code>can11.gravity_nm</code></th><td>N·m</td><td>4.661</td><td>5.05</td><td><b>5.066</b></td><td>+0.32 %</td><td>±2 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.gravity_bottom_rad</code></th><td>rad</td><td>-0.3737</td><td>-0.35</td><td><b>-0.3501</b></td><td>-0.02 %</td><td>±0.005</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.armature_kg_m2</code></th><td>kg·m²</td><td>0.1219</td><td>0.14</td><td><b>0.1386</b></td><td>-0.97 %</td><td>±5 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.frictionloss_nm</code></th><td>N·m</td><td>0.8331</td><td>1.05</td><td><b>1.051</b></td><td>+0.14 %</td><td>±10 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.damping_nm_s_rad</code></th><td>N·m·s/rad</td><td>0.15</td><td>0.3</td><td><b>0.3047</b></td><td>+1.56 %</td><td>±20 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_drop_nm</code></th><td>N·m</td><td>0</td><td>0.35</td><td><b>0.3566</b></td><td>+1.88 %</td><td>±25 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.friction_stribeck_speed_rad_s</code></th><td>rad/s</td><td>—</td><td>0.1</td><td><b>0.1041</b></td><td>+4.14 %</td><td>±30 %</td><td>pass</td></tr><tr class=''><th scope='row'><code>can11.backlash_rad</code></th><td>rad</td><td>0</td><td>0.002</td><td><b>0.001957</b></td><td>-2.15 %</td><td>±10 %</td><td>pass</td></tr></tbody></table></div><p>8 of 8 recovered values equal sysid's committed <code>results/pendulum_can11.json</code> bit for bit: the RobotTwin calls the oracle's own pipeline and adds no fitting of its own.</p>
+<h3>eval's gates</h3><p>Held-out link error ÷ floor (29 runs, floor 0.426 mrad): nominal 17.5× · M0 73.2× · M2 16.5× · M3 25.1× · M4 1.34×. The selection rule picks <b>M4</b>.</p><div class='scroll'><table><thead><tr><th>gate</th><th>what</th><th>value</th><th>rule</th><th>verdict</th><th>from</th></tr></thead><tbody><tr class=''><th scope='row'><code>twinned</code></th><td>M4.dynamics.twin held-out link error / floor</td><td>1.34</td><td>&lt;= 1.5x</td><td>pass</td><td class='mut'>sim2real.cards.registry.TWINNED_LIMIT</td></tr><tr class=''><th scope='row'><code>held_out_link_fidelity</code></th><td>held-out link error, nominal / calibrated</td><td>13.1</td><td>&gt;= 4x</td><td>pass</td><td class='mut'>sysid/acceptance.json</td></tr><tr class=''><th scope='row'><code>recovery</code></th><td>every hidden value within its tolerance (the sim oracle only)</td><td>8/8</td><td>all</td><td>pass</td><td class='mut'>sysid/examples/&lt;id&gt;/world.json + sysid/acceptance.json</td></tr></tbody></table></div>
 
 <h2>The red run: truth moved past its tolerance</h2>
 <p>The world plays gravity at 5.555 N·m, 10 % above the committed 5.05 and five times its 2 % tolerance. The ruler stays <code>world.json</code>'s.
@@ -145,7 +149,7 @@ which hold strings, not Values with a unit and source.</li>
 The tracer's model is bam_rack_twin's MJCF, named by sysid's manifest.</li>
 <li><b>A lowering that applies typed values.</b> MJCF <code>armature</code>, <code>damping</code> and <code>frictionloss</code> should come from the instance's
 parameter Values, so a calibrated parameter set produces the twin's model.</li>
-<li><b>Until then</b>, <code>sim2real.describe()</code> is the thin adapter: it reads the sysid manifest and returns typed instances.</li>
+<li><b>Until then</b>, <code>sim2real.twin.describe()</code> (internal, behind <code>sim2real.examples</code>) is the thin adapter: it reads the sysid manifest and returns typed instances.</li>
 <li><b>A contract gap, for the type card.</b> <code>integrated_servo</code> has no parameter named <code>gravity_bottom_rad</code> or <code>friction_stribeck_speed_rad_s</code>.
 The oracle recovers both, and <code>Instance.on_type</code> carries and flags them.</li></ul>
 
@@ -155,31 +159,59 @@ The oracle recovers both, and <code>Instance.on_type</code> carries and flags th
 <li>Score held-out runs against the rack's own run-to-run floor (gate T1), not two camera draws.</li>
 <li>Bind with <code>binding=</code>: the description stays address-free, and CAN ids and bus serials come from the deployment record.</li></ul>
 
-<h2>The Twin's code</h2><p class="mut"><code>src/sim2real/twin.py</code>, from <code>class Twin</code> on:</p><pre>class Twin:
-    &quot;&quot;&quot;A description&#x27;s twin: its typed instances, the model each runs (the type&#x27;s current model unless `model=` picks a rung), and, once
-    calibrated, its learned values (scikit-learn&#x27;s convention: values_, intervals_, rungs_, calibration_ exist only on a fitted twin).
-    Each verb is a thin call into its runner (self.runner), the level to drop to.&quot;&quot;&quot;
+<h2>The RobotTwin's code</h2><p class="mut"><code>src/sim2real/twin.py</code>, from <code>class RobotTwin</code> on:</p><pre>class RobotTwin:
+    &quot;&quot;&quot;A digital twin for an electromechanical device: its typed instances (each a sim2real type with parameter Values), the model each runs
+    (the type&#x27;s current model unless `models` picks a rung), and, once calibrated, its learned values (scikit-learn&#x27;s convention: values_,
+    intervals_, rungs_, calibration_ exist only on a fitted twin). Each verb is a thin call into its runner (self.runner), the level to drop
+    to. `self.description` is the twin&#x27;s own record of its instances (sim2real&#x27;s, internal), never robot_description&#x27;s RobotDescription.&quot;&quot;&quot;
 
-    def __init__(self, description: Description, *, model: str | None = None, workers: int = 6):
-        self.description = description
-        self.runner = SimRunner(description, workers=workers)
-        self.model = model or dm.current_models(self.runner.typed().type)[0].id
-
-    @classmethod
-    def load(cls, name: str, *, model: str | None = None, workers: int = 6) -&gt; Twin:
-        &quot;&quot;&quot;A twin from its description&#x27;s name (today the sysid oracle examples&#x27; manifests: sysid/examples/&lt;name&gt;/description.json).&quot;&quot;&quot;
-        return cls(describe(name), model=model, workers=workers)
+    def __init__(self, instances: Sequence[Instance], *, name: str, model_file: str | Path | None = None,
+                 models: Mapping[str, str] | None = None, title: str = &quot;&quot;, source: str = &quot;&quot;, workers: int = 6):
+        &quot;&quot;&quot;Built directly, never loaded by a name from a registry (sim2real has none). `name` binds the runner: calibrate() plays the
+        sysid/examples/&lt;name&gt; world, through its rig.py when it ships one. `model_file` is the simulation model (MJCF) simulate() opens.
+        `models` picks a rung by instance id ({&quot;can11&quot;: &quot;M3.dynamics.stribeck&quot;}); an instance it leaves out runs its type&#x27;s current model.&quot;&quot;&quot;
+        self.description = Description(name, title or name, None if model_file is None else Path(model_file), tuple(instances), source)
+        self.models = dict(models or {})
+        self.runner = _runner(self.description, workers)
+        if _is_rig(self.runner):
+            if self.models:
+                raise NotImplementedError(f&quot;{name}&#x27;s twin is its rig.py&#x27;s ({self.runner.default_model()}); &quot;
+                                          &quot;models= picks a rung on the tracer only&quot;)
+            self.model = self.runner.default_model()
+        else:
+            servo = self.runner.typed()
+            self.model = self.models.get(servo.id) or dm.current_models(servo.type)[0].id
 
     @property
     def fitted(self) -&gt; bool:
         return hasattr(self, &quot;values_&quot;)
 
+    @property
+    def instances(self) -&gt; tuple[Instance, ...]:
+        return self.description.instances
+
+    @property
+    def parameters(self) -&gt; dict[str, dict[str, Value | None]]:
+        &quot;&quot;&quot;Every instance&#x27;s parameter Values, {instance: {name: Value}}. On a loaded twin, the priors. On a fitted twin, the calibrated
+        values (MEASURED, the 95 % interval as low/high, a source naming the calibration and the day) and, for what nothing fitted, the
+        priors with their own source. A new dict each call: editing it changes nothing (use with_values).&quot;&quot;&quot;
+        return {i.id: dict(i.parameters) for i in self.description.instances if i.parameters}
+
+    def with_values(self, values: Mapping[str, Mapping[str, Value | None]]) -&gt; RobotTwin:
+        &quot;&quot;&quot;A NEW, unfitted twin with these parameters replaced, {instance: {name: Value}}, everything else carried over; this twin is
+        unchanged. A parameter the twin does not carry is refused, never added.&quot;&quot;&quot;
+        d = self.description.with_values({f&quot;{instance}.{name}&quot;: v for instance, named in values.items() for name, v in named.items()})
+        return RobotTwin(d.instances, name=d.id, model_file=d.model, models=self.models, title=d.title, source=d.source,
+                         workers=self.runner.workers)
+
     def simulate(self, **options) -&gt; Simulation:
         return self.runner.simulate(**options)
 
-    def calibrate(self, on: str = &quot;sim&quot;, *, truth: str = &quot;sealed&quot;, move_truth: Mapping[str, float] | None = None) -&gt; Twin:
+    def calibrate(self, on: str = &quot;sim&quot;, *, truth: str = &quot;sealed&quot;, move_truth: Mapping[str, float] | None = None, noise=None) -&gt; RobotTwin:
         &quot;&quot;&quot;A NEW twin, fitted: the type&#x27;s routine schedule played `on` the simulator at the hidden truth (`truth=&quot;sealed&quot;`: the fit never
-        sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test).&quot;&quot;&quot;
+        sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test).
+        `noise` (a rig on the one-click seam only): None = the rig&#x27;s measured 1x, a number = every term at that level, or a
+        sim2real.rig.NoiseModel.&quot;&quot;&quot;
         if on not in BACKENDS:
             raise ValueError(f&quot;on must be one of {BACKENDS}, not {on!r}&quot;)
         if on == &quot;real&quot;:
@@ -190,9 +222,27 @@ The oracle recovers both, and <code>Instance.on_type</code> carries and flags th
                 &quot;floor (gate T1). Not wired in this lane.&quot;)
         if truth != &quot;sealed&quot;:
             raise ValueError(f&quot;on=&#x27;sim&#x27; fits against a sealed hidden truth (truth=&#x27;sealed&#x27;), not {truth!r}&quot;)
+        if _is_rig(self.runner):
+            from .rig import RigRunner  # noqa: PLC0415
+
+            calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, noise=noise)
+            fitted = RobotTwin.__new__(RobotTwin)
+            fitted.description = self.description.with_values(_identified(calibration, calibration.model))
+            fitted.model, fitted.models = self.model, self.models
+            fitted.runner = RigRunner(self.description, self.runner.rig, workers=self.runner.workers, state=state)
+            fitted.values_ = calibration.values
+            fitted.intervals_ = {r[&quot;key&quot;]: tuple(r[&quot;ci95&quot;]) for r in calibration.rows if r[&quot;ci95&quot;]}
+            fitted.rungs_ = {step[&quot;routine&quot;]: step[&quot;found&quot;] for step in calibration.routines}
+            fitted.calibration_ = calibration
+            return fitted
+        if noise is not None:
+            raise NotImplementedError(&quot;the pendulum tracer sets its noise through sysid&#x27;s ladder (sysid.world.noise_scale), not calibrate(noise=)&quot;)
         calibration, state = self.runner.calibrate(model=self.model, truth=move_truth)
-        fitted = Twin.__new__(Twin)
-        fitted.description, fitted.model = self.description, self.model
+        servo = self.runner.typed().id
+        fitted = RobotTwin.__new__(RobotTwin)
+        fitted.description = self.description.with_values(_identified(calibration, calibration.rung, lambda name: f&quot;{servo}.{name}&quot;))
+        fitted.model, fitted.models = self.model, self.models
+        # WHY the runner keeps the loaded description: the sim pipeline reads its priors from the manifest and refuses edited values
         fitted.runner = SimRunner(self.description, workers=self.runner.workers, state=state)
         fitted.values_ = calibration.values
         fitted.intervals_ = {k: tuple(r[&quot;ci95&quot;]) for k, r in ((r[&quot;name&quot;], r) for r in calibration.rows) if r[&quot;ci95&quot;]}
@@ -200,17 +250,59 @@ The oracle recovers both, and <code>Instance.on_type</code> carries and flags th
         fitted.calibration_ = calibration
         return fitted
 
-    def eval_twin(self) -&gt; TwinReport:
+    def noise(self):
+        &quot;&quot;&quot;The rig&#x27;s measured 1x noise model (sim2real.rig.NoiseModel): .at(level) and .with_terms(...) make a stress lane&#x27;s sweep.&quot;&quot;&quot;
+        if not _is_rig(self.runner):
+            raise NotImplementedError(&quot;the pendulum tracer&#x27;s noise is sysid&#x27;s world.json noise block (sysid.world.noise_scale)&quot;)
+        return self.runner.noise()
+
+    def result(self):
+        &quot;&quot;&quot;The fitted twin&#x27;s calibration as one page: sim2real.result.CalibrationResult (its display() serves it).&quot;&quot;&quot;
         if not self.fitted:
-            raise RuntimeError(&quot;eval_twin needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval_twin()&quot;)
-        return self.runner.eval_twin()
+            raise RuntimeError(&quot;result() needs a fitted twin: fitted = twin.calibrate(...), then fitted.result()&quot;)
+        if not _is_rig(self.runner):
+            raise NotImplementedError(&quot;the pendulum tracer&#x27;s page is reports/one-click-tracer-2026-11-11.html&quot;)
+        return self.runner.result()
+
+    def eval(self) -&gt; TwinReport:
+        &quot;&quot;&quot;The fitted twin on held-out runs only: error / floor per model and the gates (TwinReport, or the rig&#x27;s RigReport).&quot;&quot;&quot;
+        if not self.fitted:
+            raise RuntimeError(&quot;eval needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval()&quot;)
+        return self.runner.eval()
 
     def summary(self) -&gt; str:
         return self.calibration_.summary() if self.fitted else self.description.summary()
 
 
-def load(name: str, **options) -&gt; Twin:
-    &quot;&quot;&quot;sim2real.load(name) is Twin.load(name): the brief&#x27;s spelling, the same call.&quot;&quot;&quot;
-    return Twin.load(name, **options)
+def _identified(calibration, rung: str, key=lambda name: name) -&gt; dict[str, Value]:
+    &quot;&quot;&quot;A calibration&#x27;s fitted values as description parameters, by key &lt;instance&gt;.&lt;parameter&gt;: the fitted value and unit, MEASURED, its 95 %
+    interval as low/high (kept in the notes instead when it does not bracket the value), and a source naming the calibration and the day.
+    `key` maps a calibration&#x27;s value name to its description key (the tracer&#x27;s are the servo&#x27;s parameter names).&quot;&quot;&quot;
+    stamp = f&quot;sim2real calibrate · on={calibration.backend} · {rung} · {date.today().isoformat()}&quot;
+    intervals = {r[&quot;key&quot;]: r[&quot;ci95&quot;] for r in calibration.rows if r.get(&quot;ci95&quot;)}
+    out = {}
+    for name, fitted in calibration.values.items():
+        if fitted is None:
+            continue
+        low, high = intervals.get(key(name)) or (None, None)
+        bracketed = low is not None and high is not None and low &lt;= float(fitted) &lt;= high
+        notes = &quot;; &quot;.join(filter(None, [fitted.source, fitted.notes if not bracketed else &quot;&quot;]))
+        out[key(name)] = Value(float(fitted), fitted.unit, low=low if bracketed else None, high=high if bracketed else None,
+                               basis=Basis.MEASURED, source=stamp, measured_by=fitted.measured_by, notes=notes)
+    return out
+
+
+def _runner(description: Description, workers: int):
+    &quot;&quot;&quot;The rig&#x27;s own runner when its description ships rig.py (the one-click seam, sim2real.rig), else the pendulum tracer&#x27;s SimRunner.
+    WHY by the file and not a flag: a rig opts in by supplying the seam (docs/one-click-seam.md); the tracer&#x27;s proven path is untouched.&quot;&quot;&quot;
+    from . import rig as seam  # noqa: PLC0415
+
+    backend = seam.load_rig(description.id)
+    return SimRunner(description, workers=workers) if backend is None else seam.RigRunner(description, backend, workers=workers)
+
+
+def _is_rig(runner) -&gt; bool:
+    return type(runner).__name__ == &quot;RigRunner&quot;
+
 </pre>
 </main></body></html>

@@ -11,14 +11,19 @@ The site, dashboards and catalog are app folders beside this package, not in it.
 sim2real.metrics never loads cards.
 """
 
-FRONT_DOOR = ("Twin", "load", "describe")
+FRONT_DOOR = ("RobotTwin", "examples")
 
 
 def __getattr__(name: str):
-    """The front door, loaded on first use (sim2real.Twin.load(...), sim2real.load(...), sim2real.describe(...); src/sim2real/twin.py).
+    """The front door, loaded on first use (sim2real.RobotTwin(...), sim2real.examples.pendulum_can11(); src/sim2real/twin.py, examples.py).
     WHY lazy: `import sim2real` must load no layer; twin.py imports cards and metrics."""
-    if name in FRONT_DOOR:
+    if name == "RobotTwin":
         from . import twin  # noqa: PLC0415
 
-        return getattr(twin, name)
+        return twin.RobotTwin
+    if name == "examples":
+        import importlib  # noqa: PLC0415
+
+        # WHY import_module, not `from . import examples`: that form asks this __getattr__ for the attribute first, and recurses
+        return importlib.import_module(f"{__name__}.examples")
     raise AttributeError(f"module 'sim2real' has no attribute {name!r}")

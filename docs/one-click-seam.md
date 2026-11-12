@@ -1,7 +1,7 @@
 # The one-click seam: what a rig supplies
 
-`sim2real.Twin.load(name).calibrate(on="sim", truth="sealed")` runs a rig's whole calibration sequence against a sealed hidden truth and
-returns a new, fitted twin; `.eval_twin()` scores it on held-out runs over the sim's own repeat floor; `.result().display()` shows it.
+`sim2real.RobotTwin(...).calibrate(on="sim", truth="sealed")` (e.g. `sim2real.examples.ur_wrist_test_rig()`) runs a rig's whole calibration sequence against a sealed hidden truth and
+returns a new, fitted twin; `.eval()` scores it on held-out runs over the sim's own repeat floor; `.result().display()` shows it.
 Zach, 2026-11-11: *"my goal is to just export then have the one click .calibrate() and then just see the results. So get that fully
 working in sim first, and once you can prove that the entire routine recovers perfectly (and you stress test it with different levels of
 noise) then we run that routine in reality."* His rule: a routine recovers the hidden values to within a tolerance.
@@ -16,9 +16,9 @@ One folder, `sysid/examples/<name>/`, in the existing description format:
 
 | file | what |
 |---|---|
-| `description.json` | `sysid.description/1`: the model file, the typed components (each a sim2real type through its word: `moteus_servo`, `motor`, `gearbox`, `driver`, `encoder`, `arm_subassembly`, `tool`, `deployment`), and every parameter `<instance>.<name>` with its unit and where its nominal value comes from. `Twin.load` reads it unchanged (`twin.describe`). |
+| `description.json` | `sysid.description/1`: the model file, the typed components (each a sim2real type through its word: `moteus_servo`, `motor`, `gearbox`, `driver`, `encoder`, `arm_subassembly`, `tool`, `deployment`), and every parameter `<instance>.<name>` with its unit and where its nominal value comes from. `sim2real.examples` reads it unchanged (`twin.describe`, the internal adapter). |
 | `world.json` | `sysid.world/1`: the hidden truth, `{"truth": {key: value}}` with a source for every value. Only the runner reads it, outside the seal. A key it leaves out plays at its nominal. |
-| `rig.py` | `rig() -> RigBackend`. Its presence is the opt-in: `Twin.load` uses `RigRunner` when it exists, else the pendulum tracer's `SimRunner`. |
+| `rig.py` | `rig() -> RigBackend`. Its presence is the opt-in: a `RobotTwin` named for the folder uses `RigRunner` when it exists, else the pendulum tracer's `SimRunner`. |
 
 ## The RigBackend (all a rig implements)
 
@@ -60,7 +60,7 @@ Records: `Parameter(key, unit, tolerance=("rel"|"abs", SI value), tolerance_sour
    by `noise.truth_offset` (1: as committed). `move_truth={key: value}` moves the world only, so the row turns red: the mutation test.
    A derived value is held to what the ruled values give, and cannot be moved on its own.
 4. **One play per run.** A run two routines both read is measured once and shared (the dynamics fit's chirps are the delay scan's).
-5. **Held out is held out.** `eval_twin` refuses a run any routine measured or not split `held_out`. Its floor is the sim's own repeat
+5. **Held out is held out.** `eval` refuses a run any routine measured or not split `held_out`. Its floor is the sim's own repeat
    spread: every held-out run measured twice under the same noise (streams `held_out` and `repeat`), scored against each other.
 6. **Gates:** `twinned` (the fitted twin's held-out error / floor at most `TWINNED_LIMIT`, 1.5x, worst joint), `recovery` (every identified
    value within tolerance), and `tool_at_stops` (p95 at most 1 mm, Zach 2026-11-11) when the rig scores a tool.

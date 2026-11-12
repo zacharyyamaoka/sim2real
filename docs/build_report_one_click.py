@@ -1,4 +1,4 @@
-"""The one-click tracer report (2026-11-11): the types on the home page, and Twin.load -> simulate -> calibrate -> eval_twin on the
+"""The one-click tracer report (2026-11-11): the types on the home page, and examples.pendulum_can11 -> simulate -> calibrate -> eval on the
 one-DOF pendulum oracle, green on the hidden truth and red on a moved one.
 
     python3 /home/bam/sim2real/docs/build_report_one_click.py
@@ -86,12 +86,12 @@ def same_as_oracle(run: dict | None) -> str:
     committed = {p["key"]: p["recovered"] for p in json.loads(path.read_text(encoding="utf-8"))["parameters"]}
     same = [r["key"] for r in run["calibration"]["rows"] if committed.get(r["key"]) == r["recovered"]]
     return (f"<p>{len(same)} of {len(run['calibration']['rows'])} recovered values equal sysid's committed <code>results/pendulum_can11.json</code> "
-            "bit for bit: the Twin calls the oracle's own pipeline and adds no fitting of its own.</p>")
+            "bit for bit: the RobotTwin calls the oracle's own pipeline and adds no fitting of its own.</p>")
 
 
 def twin_source() -> str:
     text = TWIN.read_text(encoding="utf-8")
-    start = text.index("class Twin:")
+    start = text.index("class RobotTwin:")
     return text[start:]
 
 
@@ -106,10 +106,11 @@ def main() -> None:
     rv = "RED as it must be" if red and not red["report"]["passed"] and not red["calibration"]["passed"] else ("did not go red" if red else "not run")
     usage = '''import sim2real
 
-twin = sim2real.Twin.load("pendulum_can11")          # typed instances, parameters as robot_msgs Values
+twin = sim2real.examples.pendulum_can11()            # a RobotTwin: typed instances, parameters as robot_msgs Values
 twin.simulate()                                      # MuJoCo, headless
 fitted = twin.calibrate(on="sim", truth="sealed")    # a NEW twin: values_, intervals_, rungs_, calibration_
-fitted.eval_twin().summary()                         # held-out runs only: error / floor and the gates
+fitted.eval().summary()                              # held-out runs only: error / floor and the gates
+fitted.parameters                                    # the calibrated values, for description.from_robot_twin (not built yet)
 
 # the level below: fitted.runner (SimRunner: plan -> RealWorld.measure -> identify (sealed) -> score -> assemble)
 # the mutation test of the ruler: twin.calibrate(on="sim", truth="sealed", move_truth={"can11.gravity_nm": 5.555})
@@ -132,7 +133,7 @@ figure {{ margin:10px 0; }} figure img {{ border:1px solid var(--rule); display:
 .two {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }} @media (max-width:760px) {{ .two {{ grid-template-columns:1fr; }} }}
 ul li {{ margin:3px 0; }}
 </style></head><body><main>
-<h1>One-click tracer: types first, then Twin.load → simulate → calibrate → eval_twin</h1>
+<h1>One-click tracer: types first, then examples.pendulum_can11 → simulate → calibrate → eval</h1>
 <p class="verdict"><b>The home opens on the 11 types, and the pendulum oracle runs end to end through four calls.</b> Green run: <b>{e(gv)}</b> (every hidden
 value within its tolerance; the twin passes its gates). Truth moved 10 % on gravity: <b>{e(rv)}</b>. <code>on="real"</code> raises, naming the rack path.</p>
 
@@ -146,17 +147,20 @@ from 768 to 1440 px (measured). They're still in the Account menu and on the hom
 
 <h2>Part 2 · The API</h2>
 <pre>{e(usage)}</pre>
+<p class="mut">Updated the same evening: <code>eval_twin()</code> is <code>eval()</code>, <code>Twin</code> is <code>RobotTwin</code> and is built directly
+(<code>sim2real.examples.pendulum_can11()</code>, no <code>Twin.load</code>), and sim2real sits below robot_description (decision addendum 2). The terminal logs
+below are the runs as they ran, so they still print <code>eval_twin:</code>. The current reference is <code>docs/API.md</code> (report <code>sim2real-api-2026-11-11.html</code>).</p>
 <p>This follows the API prior-art note's verdict (vault: <i>Sim2Real API Prior Art (2026-11-11)</i>):</p>
-<ul><li><b>The verbs are on a sim2real <code>Twin</code>, not on the description.</b> The description lives in robot_description, below sim2real, so verbs on it would bring back the cycle.</li>
+<ul><li><b>The verbs are on a sim2real <code>RobotTwin</code>, not on the description.</b> (Then: the description lives in robot_description, below sim2real, so verbs on it would bring back the cycle. Since addendum 2 sim2real sits below robot_description, which builds its twin with <code>to_robot_twin()</code>.)</li>
 <li><b><code>calibrate()</code> returns a new fitted twin</b> (scikit-learn style): learned values end in <code>_</code>, and nothing is written to robotparts.</li>
-<li><b><code>eval_twin()</code> refuses a training run.</b> Identification runs sealed from the truth, and both guards live in the runner.</li>
+<li><b><code>eval()</code> refuses a training run.</b> Identification runs sealed from the truth, and both guards live in the runner.</li>
 <li><b>The fitting is sysid's existing oracle code, not <code>mujoco.sysid</code>.</b> The pendulum's twin is bam_rack_twin's 30 kHz moteus PID with a gear-gap hinge (its Replayer), not a plain MJCF rollout. <code>mujoco.sysid</code> is in the pinned 3.11.0, but its extra's packages (colorama…) aren't installed. It's <code>fit/</code>'s engine for a type whose twin is plain MJCF.</li></ul>
 
 <h2>The four calls, end to end (green)</h2>
 <p class="mut">The slow acceptance test's own terminal output: <code>SIM2REAL_SLOW=1 pytest -s tests/test_one_click.py -k recovers_the_hidden_truth</code></p>
 <pre>{e(log_lines("green.log"))}</pre>
 <h3>Recovered vs hidden</h3>{rows_table(green)}{same_as_oracle(green)}
-<h3>eval_twin's gates</h3>{gates_table(green)}
+<h3>eval's gates</h3>{gates_table(green)}
 
 <h2>The red run: truth moved past its tolerance</h2>
 <p>The world plays gravity at 5.555 N·m, 10 % above the committed 5.05 and five times its 2 % tolerance. The ruler stays <code>world.json</code>'s.
@@ -178,7 +182,7 @@ which hold strings, not Values with a unit and source.</li>
 The tracer's model is bam_rack_twin's MJCF, named by sysid's manifest.</li>
 <li><b>A lowering that applies typed values.</b> MJCF <code>armature</code>, <code>damping</code> and <code>frictionloss</code> should come from the instance's
 parameter Values, so a calibrated parameter set produces the twin's model.</li>
-<li><b>Until then</b>, <code>sim2real.describe()</code> is the thin adapter: it reads the sysid manifest and returns typed instances.</li>
+<li><b>Until then</b>, <code>sim2real.twin.describe()</code> (internal, behind <code>sim2real.examples</code>) is the thin adapter: it reads the sysid manifest and returns typed instances.</li>
 <li><b>A contract gap, for the type card.</b> <code>integrated_servo</code> has no parameter named <code>gravity_bottom_rad</code> or <code>friction_stribeck_speed_rad_s</code>.
 The oracle recovers both, and <code>Instance.on_type</code> carries and flags them.</li></ul>
 
@@ -188,7 +192,7 @@ The oracle recovers both, and <code>Instance.on_type</code> carries and flags th
 <li>Score held-out runs against the rack's own run-to-run floor (gate T1), not two camera draws.</li>
 <li>Bind with <code>binding=</code>: the description stays address-free, and CAN ids and bus serials come from the deployment record.</li></ul>
 
-<h2>The Twin's code</h2><p class="mut"><code>src/sim2real/twin.py</code>, from <code>class Twin</code> on:</p><pre>{e(twin_source())}</pre>
+<h2>The RobotTwin's code</h2><p class="mut"><code>src/sim2real/twin.py</code>, from <code>class RobotTwin</code> on:</p><pre>{e(twin_source())}</pre>
 </main></body></html>"""
     OUT.write_text(page, encoding="utf-8")
     print(f"wrote {OUT} ({OUT.stat().st_size:,} bytes)")

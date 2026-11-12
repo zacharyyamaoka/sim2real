@@ -1,4 +1,4 @@
-"""The one-click API over types: a twin loaded from a description, then .simulate(), .calibrate() and .eval_twin() (Zach, 2026-11-11).
+"""The one-click API over types: a RobotTwin of typed instances, then .simulate(), .calibrate() and .eval() (Zach, 2026-11-11).
 
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real/src:/home/bam/dataclass_values/src /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -p no:cacheprovider /home/bam/sim2real/tests/test_one_click.py
     env -u VIRTUAL_ENV SIM2REAL_SLOW=1 PYTHONPATH=/home/bam/sim2real/src:/home/bam/dataclass_values/src /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -s -p no:cacheprovider /home/bam/sim2real/tests/test_one_click.py
@@ -6,18 +6,22 @@
 Zach: "So you start with a robotDescription. Honestly it should just be like .calibrate() and .eval_twin()... so you set the model, you
 calibrate it and then you eval it", plus .simulate(). Decided the same day (docs/decision-types-seam-2026-11-11.md): sim2real owns the
 types; a description is a composition of typed instances with parameter values, wherever the values came from. The API prior-art note's
-verdict the same day (vault: "Sim2Real API Prior Art (2026-11-11)"): the verbs live on a sim2real Twin, never on the description (that
-would be the cycle); calibrate(on="sim"|"real") returns a NEW fitted twin, scikit-learn style (learned values end in `_`); eval_twin()
-scores held-out runs only and refuses a training run; guards live in the runner.
+verdict the same day (vault: "Sim2Real API Prior Art (2026-11-11)"): the verbs live on a sim2real RobotTwin, never on the description (that
+would be the cycle); calibrate(on="sim"|"real") returns a NEW fitted twin, scikit-learn style (learned values end in `_`); eval()
+scores held-out runs only and refuses a training run; guards live in the runner. Renamed from eval_twin() the same evening (Zach: "I think
+twin.eval() no need to do eval_twin() that's redundant"). Addendum 2 the same evening (sim2real below robot_description): sim2real knows
+only the twin, built directly, the oracle a fixture (sim2real.examples.pendulum_can11()); fitted.parameters carries the calibrated values
+(a new twin; the loaded one is untouched; calibrate() writes nothing) for robot_description's from_robot_twin (not built yet). Twin was
+renamed RobotTwin the same evening, no alias.
 
 The tracer is the one-DOF pendulum oracle (sysid's pendulum_can11): CAN 11's own test schedule played on its twin at a HIDDEN truth set
 apart from the description's values, with sensor noise. Zach's rule for robotics algorithms: prove in sim that the fit recovers a hidden
-ground truth, committed as the acceptance test, before any hardware. Written before sim2real.load existed (red first); moved onto Twin when the prior-art verdict landed, before any run.
+ground truth, committed as the acceptance test, before any hardware. Written before sim2real.load existed (red first); moved onto RobotTwin when the prior-art verdict landed, before any run; onto sim2real.examples with addendum 2.
 
 The oracles are read here, never from the code under test: the hidden truth from sysid/examples/pendulum_can11/world.json, the
 tolerances and the held-out factor from sysid/acceptance.json (pinned by digest in sysid/tests/test_oracle.py), the units from the
 description's own manifest, and the types from sim2real.cards.domain. A recovery that hands the description back unchanged fails (every
-nominal value fails its tolerance), and a truth moved past a tolerance must turn calibrate and eval_twin red: the ruler can fail.
+nominal value fails its tolerance), and a truth moved past a tolerance must turn calibrate and eval red: the ruler can fail.
 
 The slow half (SIM2REAL_SLOW=1) runs the four calls end to end, twice: on the committed truth (green) and on a truth whose gravity is
 moved 10 % (five times its 2 % tolerance; red). Each takes the CAN 11 oracle's minutes (the rack twin replays at 30 kHz).
@@ -37,7 +41,7 @@ import pytest
 pytest.importorskip("bam_rack_twin", reason="the pendulum oracle runs under bam_rack_twin's venv (sysid's runtime)")
 pytest.importorskip("mujoco", reason="simulate() needs the sim extra")
 
-from robot_msgs.space import Value  # noqa: E402
+from robot_msgs.space import Basis, Value  # noqa: E402
 from robot_msgs.trajectory import JointTrajectory  # noqa: E402
 
 import sim2real  # noqa: E402
@@ -70,7 +74,7 @@ def within(value, truth, rule) -> bool:
 
 @pytest.fixture(scope="module")
 def robot():
-    return sim2real.Twin.load(EXAMPLE)
+    return sim2real.examples.pendulum_can11()
 
 
 # --- the description: typed instances with parameter values -------------------------------------------------------------------------
@@ -130,26 +134,89 @@ def test_an_unknown_backend_or_an_unsealed_truth_is_refused(robot):
         robot.calibrate(on="sim", truth="open")
 
 
-def test_eval_twin_needs_a_fitted_twin(robot):
+def test_eval_needs_a_fitted_twin(robot):
     assert not robot.fitted and not hasattr(robot, "values_")
     with pytest.raises(RuntimeError, match="calibrate"):
-        robot.eval_twin()
-    assert sim2real.load is not None and type(sim2real.load(EXAMPLE)) is sim2real.Twin
+        robot.eval()
+    assert type(sim2real.examples.pendulum_can11()) is sim2real.RobotTwin
+    assert not hasattr(sim2real, "load") and not hasattr(sim2real.RobotTwin, "load"), "no loading by a name string (addendum 2)"
+    assert not hasattr(sim2real, "Twin"), "renamed RobotTwin, no alias"
 
 
-def test_eval_twin_refuses_a_training_run(robot):
+def test_eval_refuses_a_training_run(robot):
     from types import SimpleNamespace  # noqa: PLC0415
 
     plan = SimpleNamespace(held_out=[{"run": "r1", "split": "held_out"}, {"run": "r2", "split": "train"}])
     runner = sim2real.twin.SimRunner(robot.description, state={"plan": plan, "measured": SimpleNamespace(train={"r1": None})})
     with pytest.raises(ValueError, match="held-out runs only") as caught:
-        runner.eval_twin()
+        runner.eval()
     assert "r1" in str(caught.value) and "r2" in str(caught.value)
+
+
+# --- fitted.parameters: the calibrated values on a new twin ------------------------------------------------------------------------
+
+
+def _stub_calibration():
+    """A calibration result the fast tests stand in for the slow fit with: two of the green run's recovered values (reports/media/
+    one-click-tracer-2026-11-11/green.json), gravity with its 95 % interval and the Stribeck speed the description states no prior for."""
+    measured = {"basis": Basis.MEASURED, "measured_by": "sim2real.RobotTwin.calibrate(on='sim', truth='sealed'), M4.dynamics.twin"}
+    values = {"gravity_nm": Value(5.066218703821104, "N·m", source="the gap: ...", **measured),
+              "friction_stribeck_speed_rad_s": Value(0.10413582256883064, "rad/s", source="Nelder-Mead ...", **measured)}
+    rows = [{"key": "can11.gravity_nm", "name": "gravity_nm", "ci95": [5.063042470338151, 5.076815092995939], "pass": True},
+            {"key": "can11.friction_stribeck_speed_rad_s", "name": "friction_stribeck_speed_rad_s", "ci95": None, "pass": True}]
+    return sim2real.twin.Calibration("sim", "M4.dynamics.twin", "M4", values, {"M4": {k: float(v) for k, v in values.items()}}, rows, {}, 0.0,
+                                     {"train_runs": 0})
+
+
+def test_the_fitted_twin_carries_the_calibrated_values_and_keeps_the_rest(robot, monkeypatch, tmp_path):
+    from datetime import date  # noqa: PLC0415
+
+    before = {i: {n: (v, getattr(v, "source", None)) for n, v in named.items()} for i, named in robot.parameters.items()}
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(robot.runner, "calibrate", lambda **_: (_stub_calibration(), {}))
+    fitted = robot.calibrate(on="sim")
+    assert fitted is not robot and isinstance(fitted, sim2real.RobotTwin)
+    servo, prior = fitted.parameters["can11"], robot.parameters["can11"]
+    gravity = servo["gravity_nm"]
+    assert float(gravity) == 5.066218703821104 and gravity.unit == "N·m"
+    assert (gravity.low, gravity.high) == (5.063042470338151, 5.076815092995939)
+    assert gravity.basis == Basis.MEASURED, "identified, not taken from a datasheet"
+    assert gravity.source == f"sim2real calibrate · on=sim · M4 · {date.today().isoformat()}"
+    assert gravity.measured_by and "the gap" in gravity.notes
+    stribeck = servo["friction_stribeck_speed_rad_s"]
+    assert prior["friction_stribeck_speed_rad_s"] is None and float(stribeck) == 0.10413582256883064 and stribeck.low is None
+    # untouched parameters keep their prior and its source; untouched instances are carried over as they are
+    assert servo["frictionloss_nm"] is prior["frictionloss_nm"] and servo["frictionloss_nm"].basis == Basis.ASSUMED
+    assert set(fitted.parameters) == set(robot.parameters) == {"can11"}
+    assert [i.id for i in fitted.instances] == [i.id for i in robot.instances]
+    # the loaded twin is unchanged, the fitted runner keeps its priors (the sim pipeline reads them from the manifest), nothing written
+    assert {i: {n: (v, getattr(v, "source", None)) for n, v in named.items()} for i, named in robot.parameters.items()} == before
+    assert fitted.runner.description is robot.description
+    assert list(tmp_path.iterdir()) == [], "calibrate() writes nothing"
+
+
+def test_with_values_is_a_functional_update(robot):
+    assert robot.with_values({}).parameters == robot.parameters
+    moved = robot.with_values({"can11": {"gravity_nm": Value(5.0, "N·m", basis=Basis.CHOSEN, source="a test")}})
+    assert isinstance(moved, sim2real.RobotTwin) and moved is not robot and not moved.fitted
+    assert float(moved.parameters["can11"]["gravity_nm"]) == 5.0 and float(robot.parameters["can11"]["gravity_nm"]) != 5.0
+    assert moved.parameters["can11"]["frictionloss_nm"] is robot.parameters["can11"]["frictionloss_nm"]
+    with pytest.raises(KeyError, match="can11.no_such_parameter"):
+        robot.with_values({"can11": {"no_such_parameter": 1.0}})
+    with pytest.raises(KeyError, match="nobody"):
+        robot.with_values({"nobody": {"gravity_nm": 1.0}})
+
+
+def test_a_twin_is_built_directly_from_its_instances(robot):
+    d = robot.description
+    twin = sim2real.RobotTwin(robot.instances, name=EXAMPLE, model_file=d.model, models={"can11": "M3.dynamics.stribeck"})
+    assert twin.parameters == robot.parameters and twin.model == "M3.dynamics.stribeck"
+    assert robot.model == dm.current_models("integrated_servo")[0].id
 
 
 def test_importing_sim2real_loads_no_layer():
     code = ("import sys, sim2real; loaded = sorted(m for m in sys.modules if m.startswith('sim2real.')); "
-            "assert sim2real.Twin.load and 'sim2real.twin' in sys.modules; print(loaded)")
+            "assert sim2real.RobotTwin and sim2real.examples.pendulum_can11 and 'sim2real.twin' in sys.modules; print(loaded)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env={**os.environ}, check=True).stdout
     assert out.strip() == "[]"
 
@@ -175,7 +242,7 @@ def test_simulate_drops_the_description_toward_its_bottom_and_friction_holds_it(
     assert "can11_hinge" in sim.summary()
 
 
-# --- the tracer: load -> simulate -> calibrate -> eval_twin, green on the hidden truth, red on a moved one --------------------------------
+# --- the tracer: load -> simulate -> calibrate -> eval, green on the hidden truth, red on a moved one -------------------------------------
 
 
 def _capture(name: str, cal, report) -> None:
@@ -188,13 +255,13 @@ def _capture(name: str, cal, report) -> None:
 
 @pytest.mark.skipif(not SLOW, reason="the CAN 11 oracle takes minutes: SIM2REAL_SLOW=1")
 def test_one_click_recovers_the_hidden_truth_and_the_twin_passes_its_gates():
-    twin = sim2real.Twin.load(EXAMPLE)
+    twin = sim2real.examples.pendulum_can11()
     print(twin.description.summary(), flush=True)
     print(twin.simulate().summary(), flush=True)
     fitted = twin.calibrate(on="sim", truth="sealed")
     cal = fitted.calibration_
     print(cal.summary(), flush=True)
-    report = fitted.eval_twin()
+    report = fitted.eval()
     print(report.summary(), flush=True)
     _capture("green", cal, report)
     truth, rules = hidden_truth(), tolerances()
@@ -209,14 +276,21 @@ def test_one_click_recovers_the_hidden_truth_and_the_twin_passes_its_gates():
     assert fidelity["before"] / fidelity["after"] >= rules["metrics"]["held_out_link_fidelity"]
     assert report.selected == rules["selected_rung"]
     assert all(isinstance(v, Value) for v in cal.values.values() if v is not None)
+    # the calibrated values on the fitted twin: every recovered value replaces its prior, with its unit, interval and provenance
+    calibrated = fitted.parameters["can11"]
+    assert {k: float(v) for k, v in calibrated.items() if v is not None} == {k: float(v) for k, v in fitted.values_.items() if v is not None}
+    for name, value in calibrated.items():
+        assert value.basis == Basis.MEASURED and value.source.startswith(f"sim2real calibrate · on=sim · {cal.rung} · "), name
+        assert value.unit == manifest()["parameters"][f"can11.{name}"]["unit"], name
+    assert twin.parameters["can11"]["gravity_nm"].basis == Basis.ASSUMED  # the loaded twin is untouched
 
 
 @pytest.mark.skipif(not SLOW, reason="the CAN 11 oracle takes minutes: SIM2REAL_SLOW=1")
-def test_a_truth_moved_past_its_tolerance_turns_calibrate_and_eval_twin_red():
-    fitted = sim2real.Twin.load(EXAMPLE).calibrate(on="sim", truth="sealed", move_truth=MOVED)
+def test_a_truth_moved_past_its_tolerance_turns_calibrate_and_eval_red():
+    fitted = sim2real.examples.pendulum_can11().calibrate(on="sim", truth="sealed", move_truth=MOVED)
     cal = fitted.calibration_
     print(cal.summary(), flush=True)
-    report = fitted.eval_twin()
+    report = fitted.eval()
     print(report.summary(), flush=True)
     _capture("red", cal, report)
     assert not cal.passed and "can11.gravity_nm" in cal.failing

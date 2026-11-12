@@ -1,5 +1,5 @@
 """The UR wrist test rig on the one-click seam (sim2real.rig): its parameters, its measured 1x noise, its calibration sequence and its own
-MuJoCo twin, so ``sim2real.Twin.load("ur_wrist_test_rig").calibrate(on="sim", truth="sealed")`` recovers a sealed hidden truth.
+MuJoCo twin, so ``sim2real.examples.ur_wrist_test_rig().calibrate(on="sim", truth="sealed")`` recovers a sealed hidden truth.
 
 The sequence (each a cards.calibration routine; each uses what the ones before it found):
 

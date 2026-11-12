@@ -1,5 +1,5 @@
-"""The one-click seam (sim2real.rig, docs/one-click-seam.md): what a rig supplies so Twin.load(name).calibrate(on="sim", truth="sealed")
-runs its whole calibration sequence against a sealed hidden truth, and eval_twin() scores the fitted twin held out.
+"""The one-click seam (sim2real.rig, docs/one-click-seam.md): what a rig supplies so RobotTwin(...).calibrate(on="sim", truth="sealed")
+runs its whole calibration sequence against a sealed hidden truth, and eval() scores the fitted twin held out.
 
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real/src:/home/bam/dataclass_values/src /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -p no:cacheprovider /home/bam/sim2real/tests/test_one_click_seam.py
 
@@ -15,7 +15,7 @@ The rules held here, each one a way the oracle could lie:
 - every parameter the rig carries is a row: identified ones with a routine from cards.calibration ROUTINES and a tolerance, the others with
   the reason nothing identifies them (never a made-up number);
 - the noise model is explicit, seeded and set by level: level 0 is noise-free, k scales every term, the same seed draws the same noise;
-- eval_twin scores held-out runs only; its floor is the sim's own repeat spread under the same noise (two draws of each held-out run).
+- eval scores held-out runs only; its floor is the sim's own repeat spread under the same noise (two draws of each held-out run).
 """
 
 from __future__ import annotations
@@ -224,7 +224,7 @@ def test_a_rig_must_say_why_a_parameter_is_unidentified_and_name_real_routines()
         runner(Invented()).calibrate()
 
 
-# --- eval_twin: held out, over the sim's own repeat floor ------------------------------------------------------------------------------
+# --- eval: held out, over the sim's own repeat floor -----------------------------------------------------------------------------------
 
 
 def test_a_routine_may_set_a_value_for_the_twin_without_claiming_it():
@@ -254,11 +254,11 @@ def test_a_routine_may_set_a_value_for_the_twin_without_claiming_it():
         runner(toy).calibrate()
 
 
-def test_eval_twin_scores_held_out_runs_over_the_repeat_floor():
+def test_eval_scores_held_out_runs_over_the_repeat_floor():
     r = runner()
     cal, state = r.calibrate()
     fitted = seam.RigRunner(r.description, r.rig, world=world_doc, state=state)
-    report = fitted.eval_twin()
+    report = fitted.eval()
     # two noise draws of one run differ by sqrt(2) sigma; a perfect twin misses a draw by sigma: the ratio sits near 1/sqrt(2)
     assert report.floor["toy"] == pytest.approx(math.sqrt(2) * 0.05, rel=0.15)
     assert report.ratios["fitted"]["toy"] == pytest.approx(1 / math.sqrt(2), rel=0.15)
@@ -267,9 +267,27 @@ def test_eval_twin_scores_held_out_runs_over_the_repeat_floor():
     assert gates["twinned"].passed and gates["recovery"].passed and report.passed, report.summary()
 
 
-def test_eval_twin_needs_a_fitted_twin_and_refuses_a_training_run():
+def test_the_fitted_twins_description_carries_what_the_routines_identified():
+    from robot_msgs.space import Basis  # noqa: PLC0415
+
+    from sim2real.twin import RobotTwin  # noqa: PLC0415
+
+    twin = RobotTwin(toy_description().instances, name="toy")
+    twin.runner, twin.model = runner(), "toy twin"  # the toy ships no sysid/examples/toy/rig.py: its runner is handed in
+    fitted = twin.calibrate(on="sim")
+    params, prior = fitted.parameters["toy"], twin.parameters["toy"]
+    for key in ("gain", "offset"):
+        row = {r["key"]: r for r in fitted.calibration_.rows}[f"toy.{key}"]
+        assert float(params[key]) == row["recovered"] and params[key].basis == Basis.MEASURED
+        assert params[key].source.startswith("sim2real calibrate · on=sim · toy twin · ")
+        assert (params[key].low, params[key].high) == tuple(row["ci95"])
+    # the unidentified parameter keeps its prior; the loaded toy is untouched
+    assert params["hidden"] is prior["hidden"] and float(prior["gain"]) == NOMINAL["toy.gain"]
+
+
+def test_eval_needs_a_fitted_twin_and_refuses_a_training_run():
     with pytest.raises(RuntimeError, match="calibrate"):
-        runner().eval_twin()
+        runner().eval()
 
     class Leaky(ToyRig):
         def held_out(self, values=None):
@@ -278,4 +296,4 @@ def test_eval_twin_needs_a_fitted_twin_and_refuses_a_training_run():
     r = runner(Leaky())
     _, state = r.calibrate()
     with pytest.raises(ValueError, match="held-out runs only"):
-        seam.RigRunner(r.description, r.rig, world=world_doc, state=state).eval_twin()
+        seam.RigRunner(r.description, r.rig, world=world_doc, state=state).eval()

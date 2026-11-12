@@ -123,7 +123,7 @@ def build(rig, description, calibration, report, state) -> CalibrationResult:
     notes = [f"Routines, in order: {', '.join(step['routine'] for step in calibration.routines)} ({calibration.seconds:.0f} s).",
              f"Recovered {sum(r['pass'] is True for r in rows)}/{sum(r['pass'] is not None for r in rows)} identified values within tolerance of the "
              f"hidden truth; not identified: {len(calibration.unidentified)} ({'; '.join(sorted({r['why_not'] for r in calibration.unidentified}))}).",
-             "Floors: the sim's own repeat spread, two noise draws of every held-out run (sim2real.rig, eval_twin).",
+             "Floors: the sim's own repeat spread, two noise draws of every held-out run (sim2real.rig, eval).",
              "Before = the description's nominal twin replaying each held-out run's commands; after = the fitted twin."]
     return CalibrationResult(f"{rig.name}-one-click", f"{description.title} · one-click calibration (sim oracle)", list(STAGES),
                              [root, wrist, joints[14], joints[15], joints[16], tool], source=f"sysid/examples/{rig.name}", notes=notes)

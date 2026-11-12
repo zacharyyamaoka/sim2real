@@ -1,5 +1,5 @@
-"""The UR wrist test rig on the one-click seam: Twin.load("ur_wrist_test_rig").calibrate(on="sim", truth="sealed") runs the wrist's whole
-calibration sequence in sim against a sealed hidden truth, and recovers it; eval_twin() scores the fitted twin held out over the sim's own
+"""The UR wrist test rig on the one-click seam: sim2real.examples.ur_wrist_test_rig().calibrate(on="sim", truth="sealed") runs the wrist's whole
+calibration sequence in sim against a sealed hidden truth, and recovers it; eval() scores the fitted twin held out over the sim's own
 repeat floor; result().display() shows it.
 
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real/src:/home/bam/dataclass_values/src /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -p no:cacheprovider /home/bam/sim2real/tests/test_ur_wrist_one_click.py
@@ -72,7 +72,7 @@ def within(value, truth, rule) -> bool:
 
 @pytest.fixture(scope="module")
 def twin():
-    return sim2real.Twin.load(NAME, workers=WORKERS)
+    return sim2real.examples.ur_wrist_test_rig(workers=WORKERS)
 
 
 # --- the description: typed instances, every value with its unit and source ----------------------------------------------------------
@@ -262,7 +262,7 @@ def green(twin):
         pytest.skip("the wrist's whole sequence takes tens of minutes: SIM2REAL_SLOW=1")
     fitted = twin.calibrate(on="sim", truth="sealed")
     print(fitted.calibration_.summary(), flush=True)
-    report = fitted.eval_twin()
+    report = fitted.eval()
     print(report.summary(), flush=True)
     _capture("green", fitted, report)
     return fitted, report
@@ -327,7 +327,7 @@ def test_a_moved_truth_turns_its_row_and_the_recovery_gate_red(twin):
     fitted = twin.calibrate(on="sim", truth="sealed", move_truth={MOVED_KEY: truth * 1.5})
     cal = fitted.calibration_
     print(cal.summary(), flush=True)
-    report = fitted.eval_twin()
+    report = fitted.eval()
     print(report.summary(), flush=True)
     _capture("red", fitted, report)
     assert MOVED_KEY in cal.failing and not cal.passed

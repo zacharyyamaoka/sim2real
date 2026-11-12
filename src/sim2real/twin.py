@@ -1,24 +1,38 @@
-"""The front door: a twin loaded from a description, then .simulate(), .calibrate() and .eval_twin() (Zach, 2026-11-11).
+"""The front door: a RobotTwin, a digital twin for an electromechanical device, built from typed instances, then .simulate(),
+.calibrate() and .eval() (Zach, 2026-11-11).
 
     import sim2real
-    twin = sim2real.Twin.load("pendulum_can11")          # typed instances with parameter values (robot_msgs Value)
-    twin.simulate()                                      # MuJoCo, headless: the description's model swung from off its bottom
+    twin = sim2real.examples.pendulum_can11()            # a RobotTwin: typed instances with parameter values (robot_msgs Value)
+    twin.simulate()                                      # MuJoCo, headless: the model swung from off its bottom
     fitted = twin.calibrate(on="sim", truth="sealed")    # the type's routine schedule on a hidden truth; a NEW, fitted twin
-    fitted.eval_twin().summary()                         # held-out runs only: error / floor, the gates
+    fitted.eval().summary()                              # held-out runs only: error / floor, the gates
+    fitted.parameters                                    # {instance: {name: Value}}: the calibrated values replace the priors
 
 Zach: "So you start with a robotDescription. Honestly it should just be like .calibrate() and .eval_twin()... so you set the model, you
 calibrate it and then you eval it", plus .simulate(). Each verb is a thin call over a runner (SimRunner: plan, measure, identify, score),
-so there is always a level to drop to.
+so there is always a level to drop to. eval(), not eval_twin() (Zach, the same evening: "I think twin.eval() no need to do eval_twin()
+that's redundant").
 
-WHY the verbs on a sim2real Twin and not on RobotDescription (vault: "Sim2Real API Prior Art (2026-11-11)", its verdict): the description
-lives in robot_description, below sim2real; verbs on it would make it import sim2real, the cycle docs/decision-types-seam-2026-11-11.md's
-addendum removed. The description stays a pure value. The fit follows scikit-learn's estimator contract: calibrate() returns a new twin
-whose learned values end in `_` (values_, intervals_, rungs_), and it never writes to robotparts (publishing is a later, separate step).
-Sim or real is an argument (on=), not another verb; eval_twin() refuses a training run; guards live in the runner, never in callbacks.
+WHY sim2real knows only the RobotTwin (docs/decision-types-seam-2026-11-11.md, addenda 2 and 3: robot_msgs <- sim2real <- robot_description <-
+robotparts): Zach, "sim2real then doesn't know about RobotDescription... The robotDescription does .to_twin or from_twin(). Sim2real just
+knows about the twin." That order is the design, not a cost: every robot description should come with a twin, so sim2real sits right above
+robot_msgs (MuJoCo stays the `sim` extra only for install size). Renamed RobotTwin the same evening ("a digital twin for an
+electromechanical device"); robot_description's side is description.to_robot_twin() / description.from_robot_twin(fitted), and the
+description stays bare-bones, holding only the information. So a RobotTwin is built directly from its instances, never loaded by a name
+string (no registry of robots here; the oracle examples are fixtures, sim2real.examples), and the calibrated values come back on the twin,
+fitted.parameters, for robot_description's from_robot_twin(fitted) to take (robot_description side: not built yet). The fit follows
+scikit-learn's estimator contract: calibrate() returns a new twin whose learned values end in `_` (values_, intervals_, rungs_), and it
+writes nothing anywhere. Sim or real is an argument (on=), not another verb; eval() refuses a training run; guards live in the runner, never
+in callbacks.
+
+WHY the calibrated values are a new twin and never an edit in place (Zach, the same evening: "we can almost like update the values of the
+RobotDescription in place... with the calibrated twin"): the in-place feel is a functional update. Each fitted value comes back as a
+robot_msgs Value, MEASURED, its interval as low/high and its source naming the calibration; the parameters nothing fitted keep their
+prior and its source; twin.with_values({...}) is the same update by hand.
 
 WHY over types (docs/decision-types-seam-2026-11-11.md): sim2real owns the generic types (cards.domain: parameters, model ladders,
-routines, gates), and a description is a composition of typed instances with parameter values, wherever those values came from (a
-robotparts part, a CAD export, a guess). sim2real never imports robotparts.
+routines, gates), and a twin is a composition of typed instances with parameter values, wherever those values came from (a
+robot_description, a robotparts part, a CAD export, a guess). sim2real imports neither robot_description nor robotparts.
 
 WHY sysid's oracle code in place, not mujoco.sysid and not a rewrite: the tracer is the one-DOF pendulum oracle
 (sysid/examples/pendulum_can11), whose plan, hidden-truth world, fit and held-out score are proven there (sysid/tests/test_oracle.py),
@@ -35,8 +49,9 @@ import dataclasses
 import json
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -84,11 +99,11 @@ class Instance:
 
 @dataclass(frozen=True)
 class Description:
-    """A robot as a composition of typed instances with parameter values. `model` is the simulation model the description names (today an
-    MJCF; a robot_description model once robot_description can carry typed values: see the one-click report's proposal)."""
+    """A RobotTwin's own record of its typed instances with parameter values (internal: the runners take it; never robot_description's
+    RobotDescription, which sim2real does not know). `model` is the simulation model file (an MJCF), or None."""
     id: str
     title: str
-    model: Path
+    model: Path | None
     instances: tuple[Instance, ...]
     source: str
 
@@ -102,8 +117,20 @@ class Description:
         """Every parameter value by its key, <instance>.<parameter>."""
         return {f"{i.id}.{name}": v for i in self.instances for name, v in i.parameters.items()}
 
+    def with_values(self, values: Mapping[str, Value | None]) -> Description:
+        """A NEW description with these parameters replaced, by key <instance>.<parameter> (the keys values() gives); every other
+        parameter and instance is carried over as it is. A key the description does not carry is refused, never added."""
+        unknown = sorted(set(values) - set(self.values()))
+        if unknown:
+            raise KeyError(f"{self.id} carries no parameter {unknown}")
+        instances = []
+        for i in self.instances:
+            mine = {key.split(".", 1)[1]: v for key, v in values.items() if key.split(".", 1)[0] == i.id}
+            instances.append(dataclasses.replace(i, parameters={**i.parameters, **mine}) if mine else i)
+        return dataclasses.replace(self, instances=tuple(instances))
+
     def summary(self) -> str:
-        lines = [f"{self.title} ({self.id}): {len(self.instances)} instances, model {self.model.name}"]
+        lines = [f"{self.title} ({self.id}): {len(self.instances)} instances" + (f", model {self.model.name}" if self.model else "")]
         for i in self.instances:
             kind = i.type or f"({i.structural})"
             lines.append(f"  {i.id:14s} {kind:18s} {i.title}" + (f"  [{len(i.parameters)} parameters]" if i.parameters else ""))
@@ -121,7 +148,7 @@ def _type_of(ref) -> tuple[str | None, str | None]:
 
 
 def describe(name: str) -> Description:
-    """The thinnest adapter (2026-11-11): a sysid description manifest (sysid/examples/<name>/description.json) as typed instances whose
+    """Internal: the adapter behind sim2real.examples (addendum 2), not public API. A sysid description manifest (sysid/examples/<name>/description.json) as typed instances whose
     parameters are robot_msgs Values carrying the manifest's own unit and source. WHY here and not in robot_description: robot_description
     cannot yet name a component's sim2real type or carry parameter Values (its Actuator/Sensor tags are string pairs), and this lane does
     not change its contract."""
@@ -215,7 +242,7 @@ class Gate:
 
 @dataclass(frozen=True)
 class TwinReport:
-    """eval_twin's report: held-out fidelity per model (link-camera RMS twin vs real ÷ the floor), the selection rule's pick and the gates."""
+    """eval's report: held-out fidelity per model (link-camera RMS twin vs real ÷ the floor), the selection rule's pick and the gates."""
     model: str
     rung: str
     selected: str | None
@@ -231,7 +258,7 @@ class TwinReport:
         return all(g.passed for g in self.gates)
 
     def summary(self) -> str:
-        lines = [f"eval_twin: {self.runs} held-out runs ({self.seconds:g} s of motion), floor {self.floor_mrad:.3f} mrad (two camera draws of one run)",
+        lines = [f"eval: {self.runs} held-out runs ({self.seconds:g} s of motion), floor {self.floor_mrad:.3f} mrad (two camera draws of one run)",
                  "  held-out link error / floor: " + ", ".join(f"{k} {_g(v, 3)}x" for k, v in self.ratios.items()),
                  f"  the selection rule picks {self.selected}; the twin is {self.model} ({self.rung})"]
         for g in self.gates:
@@ -259,7 +286,7 @@ class SimRunner:
     """The sim backend: the description's oracle pipeline (sysid/examples/<id>/pipeline.py: plan, RealWorld, identify, score, assemble)
     played on the simulator at the hidden truth. `truth` moves named hidden values for a run (the mutation test of the ruler: the world
     plays the moved truth, the parameter rows still compare with world.json's). Its guards are its own, never a callback's: identification
-    runs sealed from the truth, and eval_twin scores held-out runs only. `state` is a fitted twin's (plan, measurements, fit)."""
+    runs sealed from the truth, and eval scores held-out runs only. `state` is a fitted twin's (plan, measurements, fit)."""
 
     def __init__(self, description: Description, *, workers: int = 6, state: dict | None = None):
         self.description = description
@@ -307,7 +334,7 @@ class SimRunner:
         for name, value in fit.values[rung].items():
             unit = d.nominal[f"{servo.id}.{name}"].unit if f"{servo.id}.{name}" in d.nominal else None
             ci = fit.ci95[rung].get(name)
-            values[name] = None if value is None else Value(float(value), unit, basis=Basis.MEASURED, measured_by=f"sim2real.Twin.calibrate(on='sim', truth='sealed'), {model}",
+            values[name] = None if value is None else Value(float(value), unit, basis=Basis.MEASURED, measured_by=f"sim2real.RobotTwin.calibrate(on='sim', truth='sealed'), {model}",
                                                            source=fit.methods[rung], notes=f"95 % interval [{ci[0]:.6g}, {ci[1]:.6g}]" if ci else "")
         state = {"d": d, "plan": plan, "measured": measured, "fit": fit, "ruler": ruler, "model": model, "rung": rung, "module": module,
                  "servo": servo}
@@ -316,16 +343,16 @@ class SimRunner:
                            {"train_runs": len(plan.train), "held_out_runs": len(plan.held_out), "digest": plan.digest,
                             "coverage_train_pct": plan.coverage["train"]["pct"]}), state
 
-    def eval_twin(self) -> TwinReport:
+    def eval(self) -> TwinReport:
         if not self.state:
-            raise RuntimeError("eval_twin needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval_twin()")
+            raise RuntimeError("eval needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval()")
         _, _, result, _ = _sysid()
         s = self.state
         # WHY refused, not filtered (the held-out split is the only judge; sklearn's leakage rule): score() replays plan.held_out, so a run
         # there that the fit saw, or one the schedule marks train, would grade the twin on its own training data
         leaked = sorted({r["run"] for r in s["plan"].held_out if r["split"] != "held_out" or r["run"] in s["measured"].train})
         if leaked:
-            raise ValueError(f"eval_twin scores held-out runs only; these are training runs: {leaked[:5]}")
+            raise ValueError(f"eval scores held-out runs only; these are training runs: {leaked[:5]}")
         scores = s["module"].score(s["d"], s["plan"], s["fit"], s["measured"], workers=self.workers)
         doc = s["module"].assemble(s["d"], s["plan"], s["fit"], scores, truth=s["ruler"])
         ratios = {k: v["ratio"] for k, v in scores["models"].items()}
@@ -396,29 +423,55 @@ class SimRunner:
         return keys[0]
 
 
-class Twin:
-    """A description's twin: its typed instances, the model each runs (the type's current model unless `model=` picks a rung), and, once
-    calibrated, its learned values (scikit-learn's convention: values_, intervals_, rungs_, calibration_ exist only on a fitted twin).
-    Each verb is a thin call into its runner (self.runner), the level to drop to."""
+class RobotTwin:
+    """A digital twin for an electromechanical device: its typed instances (each a sim2real type with parameter Values), the model each runs
+    (the type's current model unless `models` picks a rung), and, once calibrated, its learned values (scikit-learn's convention: values_,
+    intervals_, rungs_, calibration_ exist only on a fitted twin). Each verb is a thin call into its runner (self.runner), the level to drop
+    to. `self.description` is the twin's own record of its instances (sim2real's, internal), never robot_description's RobotDescription."""
 
-    def __init__(self, description: Description, *, model: str | None = None, workers: int = 6):
-        self.description = description
-        self.runner = _runner(description, workers)
-        self.model = model or (self.runner.default_model() if _is_rig(self.runner) else dm.current_models(self.runner.typed().type)[0].id)
-
-    @classmethod
-    def load(cls, name: str, *, model: str | None = None, workers: int = 6) -> Twin:
-        """A twin from its description's name (today the sysid oracle examples' manifests: sysid/examples/<name>/description.json)."""
-        return cls(describe(name), model=model, workers=workers)
+    def __init__(self, instances: Sequence[Instance], *, name: str, model_file: str | Path | None = None,
+                 models: Mapping[str, str] | None = None, title: str = "", source: str = "", workers: int = 6):
+        """Built directly, never loaded by a name from a registry (sim2real has none). `name` binds the runner: calibrate() plays the
+        sysid/examples/<name> world, through its rig.py when it ships one. `model_file` is the simulation model (MJCF) simulate() opens.
+        `models` picks a rung by instance id ({"can11": "M3.dynamics.stribeck"}); an instance it leaves out runs its type's current model."""
+        self.description = Description(name, title or name, None if model_file is None else Path(model_file), tuple(instances), source)
+        self.models = dict(models or {})
+        self.runner = _runner(self.description, workers)
+        if _is_rig(self.runner):
+            if self.models:
+                raise NotImplementedError(f"{name}'s twin is its rig.py's ({self.runner.default_model()}); "
+                                          "models= picks a rung on the tracer only")
+            self.model = self.runner.default_model()
+        else:
+            servo = self.runner.typed()
+            self.model = self.models.get(servo.id) or dm.current_models(servo.type)[0].id
 
     @property
     def fitted(self) -> bool:
         return hasattr(self, "values_")
 
+    @property
+    def instances(self) -> tuple[Instance, ...]:
+        return self.description.instances
+
+    @property
+    def parameters(self) -> dict[str, dict[str, Value | None]]:
+        """Every instance's parameter Values, {instance: {name: Value}}. On a loaded twin, the priors. On a fitted twin, the calibrated
+        values (MEASURED, the 95 % interval as low/high, a source naming the calibration and the day) and, for what nothing fitted, the
+        priors with their own source. A new dict each call: editing it changes nothing (use with_values)."""
+        return {i.id: dict(i.parameters) for i in self.description.instances if i.parameters}
+
+    def with_values(self, values: Mapping[str, Mapping[str, Value | None]]) -> RobotTwin:
+        """A NEW, unfitted twin with these parameters replaced, {instance: {name: Value}}, everything else carried over; this twin is
+        unchanged. A parameter the twin does not carry is refused, never added."""
+        d = self.description.with_values({f"{instance}.{name}": v for instance, named in values.items() for name, v in named.items()})
+        return RobotTwin(d.instances, name=d.id, model_file=d.model, models=self.models, title=d.title, source=d.source,
+                         workers=self.runner.workers)
+
     def simulate(self, **options) -> Simulation:
         return self.runner.simulate(**options)
 
-    def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None, noise=None) -> Twin:
+    def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None, noise=None) -> RobotTwin:
         """A NEW twin, fitted: the type's routine schedule played `on` the simulator at the hidden truth (`truth="sealed"`: the fit never
         sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test).
         `noise` (a rig on the one-click seam only): None = the rig's measured 1x, a number = every term at that level, or a
@@ -437,8 +490,9 @@ class Twin:
             from .rig import RigRunner  # noqa: PLC0415
 
             calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, noise=noise)
-            fitted = Twin.__new__(Twin)
-            fitted.description, fitted.model = self.description, self.model
+            fitted = RobotTwin.__new__(RobotTwin)
+            fitted.description = self.description.with_values(_identified(calibration, calibration.model))
+            fitted.model, fitted.models = self.model, self.models
             fitted.runner = RigRunner(self.description, self.runner.rig, workers=self.runner.workers, state=state)
             fitted.values_ = calibration.values
             fitted.intervals_ = {r["key"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
@@ -448,8 +502,11 @@ class Twin:
         if noise is not None:
             raise NotImplementedError("the pendulum tracer sets its noise through sysid's ladder (sysid.world.noise_scale), not calibrate(noise=)")
         calibration, state = self.runner.calibrate(model=self.model, truth=move_truth)
-        fitted = Twin.__new__(Twin)
-        fitted.description, fitted.model = self.description, self.model
+        servo = self.runner.typed().id
+        fitted = RobotTwin.__new__(RobotTwin)
+        fitted.description = self.description.with_values(_identified(calibration, calibration.rung, lambda name: f"{servo}.{name}"))
+        fitted.model, fitted.models = self.model, self.models
+        # WHY the runner keeps the loaded description: the sim pipeline reads its priors from the manifest and refuses edited values
         fitted.runner = SimRunner(self.description, workers=self.runner.workers, state=state)
         fitted.values_ = calibration.values
         fitted.intervals_ = {k: tuple(r["ci95"]) for k, r in ((r["name"], r) for r in calibration.rows) if r["ci95"]}
@@ -471,13 +528,32 @@ class Twin:
             raise NotImplementedError("the pendulum tracer's page is reports/one-click-tracer-2026-11-11.html")
         return self.runner.result()
 
-    def eval_twin(self) -> TwinReport:
+    def eval(self) -> TwinReport:
+        """The fitted twin on held-out runs only: error / floor per model and the gates (TwinReport, or the rig's RigReport)."""
         if not self.fitted:
-            raise RuntimeError("eval_twin needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval_twin()")
-        return self.runner.eval_twin()
+            raise RuntimeError("eval needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval()")
+        return self.runner.eval()
 
     def summary(self) -> str:
         return self.calibration_.summary() if self.fitted else self.description.summary()
+
+
+def _identified(calibration, rung: str, key=lambda name: name) -> dict[str, Value]:
+    """A calibration's fitted values as description parameters, by key <instance>.<parameter>: the fitted value and unit, MEASURED, its 95 %
+    interval as low/high (kept in the notes instead when it does not bracket the value), and a source naming the calibration and the day.
+    `key` maps a calibration's value name to its description key (the tracer's are the servo's parameter names)."""
+    stamp = f"sim2real calibrate · on={calibration.backend} · {rung} · {date.today().isoformat()}"
+    intervals = {r["key"]: r["ci95"] for r in calibration.rows if r.get("ci95")}
+    out = {}
+    for name, fitted in calibration.values.items():
+        if fitted is None:
+            continue
+        low, high = intervals.get(key(name)) or (None, None)
+        bracketed = low is not None and high is not None and low <= float(fitted) <= high
+        notes = "; ".join(filter(None, [fitted.source, fitted.notes if not bracketed else ""]))
+        out[key(name)] = Value(float(fitted), fitted.unit, low=low if bracketed else None, high=high if bracketed else None,
+                               basis=Basis.MEASURED, source=stamp, measured_by=fitted.measured_by, notes=notes)
+    return out
 
 
 def _runner(description: Description, workers: int):
@@ -492,7 +568,3 @@ def _runner(description: Description, workers: int):
 def _is_rig(runner) -> bool:
     return type(runner).__name__ == "RigRunner"
 
-
-def load(name: str, **options) -> Twin:
-    """sim2real.load(name) is Twin.load(name): the brief's spelling, the same call."""
-    return Twin.load(name, **options)

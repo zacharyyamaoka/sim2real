@@ -1,11 +1,11 @@
-"""The one-click seam: what a rig supplies so ``Twin.load(name).calibrate(on="sim", truth="sealed")`` runs its whole calibration sequence
-against a sealed hidden truth, and ``eval_twin()`` scores the fitted twin held out over the sim's own repeat floor (Zach, 2026-11-11).
+"""The one-click seam: what a rig supplies so ``RobotTwin(...).calibrate(on="sim", truth="sealed")`` runs its whole calibration sequence
+against a sealed hidden truth, and ``eval()`` scores the fitted twin held out over the sim's own repeat floor (Zach, 2026-11-11).
 
     import sim2real
-    twin = sim2real.Twin.load("ur_wrist_test_rig")        # sysid/examples/ur_wrist_test_rig: description.json, world.json, rig.py
+    twin = sim2real.examples.ur_wrist_test_rig()          # sysid/examples/ur_wrist_test_rig: description.json, world.json, rig.py
     fitted = twin.calibrate(on="sim", truth="sealed")      # every routine of the rig's sequence, in order; a NEW, fitted twin
     fitted.calibration_.summary()                          # per parameter: truth / recovered / error / tolerance / pass, and what is not identified
-    fitted.eval_twin().summary()                           # held-out error / floor per joint, the tool at stops, the gates
+    fitted.eval().summary()                                # held-out error / floor per joint, the tool at stops, the gates
     fitted.result().display()                              # the typed tree as one page (sim2real.result)
     twin.calibrate(noise=twin.noise().at(3.0))             # the stress lane: every noise term x3 (or .with_terms(torque_noise_nm=...))
 
@@ -22,11 +22,11 @@ values, with the noise drawn), ``predict`` (the twin at given values replaying e
 WHY a second runner beside twin.SimRunner, and not a rewrite of it (2026-11-11): SimRunner hosts ONE servo through sysid's five-function
 pipeline (plan, RealWorld, identify, score, assemble), proven on the pendulum tracer; a rig is a chain of servos calibrated by a SEQUENCE of
 routines, each using what the earlier ones found (homing corrects its stall by the backlash the reversal measured; the dynamics run in the
-homed frame). The pendulum keeps its proven path untouched; a rig ships rig.py beside its description and the Twin picks this runner.
+homed frame). The pendulum keeps its proven path untouched; a rig ships rig.py beside its description and the RobotTwin picks this runner.
 
 WHY the guards here and never in a rig (scikit-learn's estimator contract, the API prior-art note): the runner alone reads the truth
 (world.json, outside the seal), every fit runs inside sysid.world.sealed(), the ruler is world.json's (moved only by the noise model's
-truth_offset, never by move_truth), and eval_twin refuses a run any routine measured.
+truth_offset, never by move_truth), and eval refuses a run any routine measured.
 
 Layer: like twin.py, right of every folder (tests/test_layers.py); a rig's module is an app folder (sysid/examples/<name>/rig.py), imported
 lazily from this checkout, so nothing here imports bam_ws.
@@ -223,7 +223,7 @@ class RigBackend(Protocol):
 
 
 def load_rig(name: str):
-    """The rig a description ships (sysid/examples/<name>/rig.py, its ``rig()``), or None (then the Twin keeps twin.SimRunner)."""
+    """The rig a description ships (sysid/examples/<name>/rig.py, its ``rig()``), or None (then the RobotTwin keeps twin.SimRunner)."""
     if not (REPO / "sysid" / "examples" / name / "rig.py").exists():
         return None
     if str(REPO) not in sys.path:
@@ -311,7 +311,7 @@ class RigCalibration:
 
 @dataclass(frozen=True)
 class RigReport:
-    """eval_twin on the seam: per joint the held-out RMS error of each twin (nominal, fitted) and the floor (two draws of each held-out
+    """eval on the seam: per joint the held-out RMS error of each twin (nominal, fitted) and the floor (two draws of each held-out
     run under the same noise), their ratios, the tool at stops, and the gates."""
     rig: str
     floor: dict[str, float]
@@ -328,7 +328,7 @@ class RigReport:
         return all(g.passed for g in self.gates)
 
     def summary(self) -> str:
-        lines = [f"eval_twin on {self.rig}: {self.runs} held-out runs; floor = the sim's own repeat spread (two noise draws of each run)"]
+        lines = [f"eval on {self.rig}: {self.runs} held-out runs; floor = the sim's own repeat spread (two noise draws of each run)"]
         for joint, floor in self.floor.items():
             fit, nom = self.errors["fitted"].get(joint), self.errors["nominal"].get(joint)
             lines.append(f"  {joint:8s} floor {math.degrees(floor):.4f}°  fitted {math.degrees(fit):.4f}° ({_x(self.ratios['fitted'][joint])}x floor)  "
@@ -481,7 +481,7 @@ class RigRunner:
             p = params[key]
             note = f"95 % interval [{estimate.ci95[0]:.6g}, {estimate.ci95[1]:.6g}]" if estimate.ci95 else ""
             fitted_values[key] = Value(float(estimate.value), p.unit, basis=Basis.MEASURED, source=estimate.method,
-                                       measured_by=f"sim2real.Twin.calibrate(on='sim', truth='sealed'), {p.routine}", notes=note)
+                                       measured_by=f"sim2real.RobotTwin.calibrate(on='sim', truth='sealed'), {p.routine}", notes=note)
         calibration = RigCalibration("sim", self.rig.name, model or self.default_model(), noise, fitted_values, estimates, rows, steps, moved,
                                      round(time.monotonic() - started, 1))
         state = {"values": values, "nominal": {k: v for k, v in nominal.items() if v is not None}, "world_values": world_values, "noise": noise,
@@ -510,15 +510,15 @@ class RigRunner:
                          "pass": ok, "routine": p.routine, "why_not": p.why_not, "method": "" if e is None else e.method})
         return rows
 
-    # ---- eval_twin
+    # ---- eval
 
-    def eval_twin(self) -> RigReport:
+    def eval(self) -> RigReport:
         from .cards import registry as reg  # noqa: PLC0415
         from .metrics.gate import at_most, gate, required  # noqa: PLC0415
         from .twin import Gate  # noqa: PLC0415
 
         if not self.state:
-            raise RuntimeError("eval_twin needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval_twin()")
+            raise RuntimeError("eval needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval()")
         s = self.state
         if "report" in s:
             return s["report"]
@@ -527,8 +527,8 @@ class RigRunner:
         # WHY refused, not filtered (the held-out split is the only judge; sklearn's leakage rule)
         leaked = sorted({r.id for r in held if r.split != "held_out" or r.id in s["trained"]})
         if leaked:
-            raise ValueError(f"eval_twin scores held-out runs only; these are training runs: {leaked[:5]}")
-        _say(f"eval_twin: {len(held)} held-out runs, measured twice")
+            raise ValueError(f"eval scores held-out runs only; these are training runs: {leaked[:5]}")
+        _say(f"eval: {len(held)} held-out runs, measured twice")
         measured = self.rig.measure(held, s["world_values"], s["noise"], "held_out", workers=self.workers)
         repeat = self.rig.measure(held, s["world_values"], s["noise"], "repeat", workers=self.workers)
         floor = self.rig.score(repeat, measured)
@@ -563,7 +563,7 @@ class RigRunner:
 
     def result(self):
         """The calibration as one page (sim2real.result.CalibrationResult), the description's typed tree with its sections."""
-        report = self.eval_twin()
+        report = self.eval()
         build = getattr(self.rig, "result", None)
         if build is None:
             raise NotImplementedError(f"{self.rig.name} supplies no result() tree yet")
