@@ -31,6 +31,7 @@ import json
 import math
 import os
 import statistics
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -137,6 +138,9 @@ def load_bbo():
     """bam_trackio.bbo as a private module object (see BBO)."""
     spec = importlib.util.spec_from_file_location("sim2real_tracking_bbo", BBO)
     module = importlib.util.module_from_spec(spec)
+    # WHY registered before exec: bbo's frozen dataclasses (with `from __future__ import annotations`) look their module up in
+    # sys.modules to resolve string annotations; an unregistered module object fails at class creation
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -447,7 +451,11 @@ def log_rig(name: str, *, sha: str, dirty: bool, weave: bool = True) -> dict:
     control_batch = controller_records(result, rig, versions, sha=sha, dirty=dirty)
     control = push(control_batch, project=rig.project)
     retire(f"{result.id}-controller", control_batch[0]["config"]["evaluation"], project=rig.project)
-    boards = log_weave(load_bbo(), rig, scored_runs(load_bbo(), result, rig, versions, twin_batch)) if weave else {}
+    if weave:
+        bbo = load_bbo()
+        boards = log_weave(bbo, rig, scored_runs(bbo, result, rig, versions, twin_batch))
+    else:
+        boards = {}
     return {"rig": name, "project": rig.project, "twin_runs": len(twin), "twin_new": sum(1 for x in twin if not x["resumed"]),
             "controller_runs": len(control), "controller_new": sum(1 for x in control if not x["resumed"]), "leaderboards": boards}
 

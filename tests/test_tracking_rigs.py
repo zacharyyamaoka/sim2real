@@ -89,3 +89,11 @@ def test_both_real_rigs_share_the_gate_names_and_lines():
     assert {"heldout_sim_vs_real_deg", "tracking_rms_deg", "target_vs_sim_tracking_deg"} <= shared
     assert "tool_error_at_stop_mm" in numeric["fivebar"]
     assert lines["fivebar"] == lines["ur_wrist"] == {frozenset(f"gate/{g}" for g in rigs.GATES)}
+
+
+@pytest.mark.skipif(not rigs.BBO.exists(), reason="bam_ws bam_trackio/bbo.py not present")
+def test_the_house_template_loads_by_file():
+    # bbo.py's frozen dataclasses resolve their string annotations through sys.modules[cls.__module__]; a module object that is
+    # not registered there raised AttributeError on the first --log with Weave (2026-11-11)
+    bbo = rigs.load_bbo()
+    assert hasattr(bbo, "ScoredRun") and hasattr(bbo, "log_evaluations") and hasattr(bbo, "publish_leaderboard")
