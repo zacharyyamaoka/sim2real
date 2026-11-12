@@ -66,6 +66,8 @@ def type_of(node, known: dict[str, str]) -> str:
 _LEADING_PCT = re.compile(r"^\s*(\d+(?:\.\d+)?) % of (\d+) reachable")
 _NAMED_PCT = re.compile(r"(joint cube|workspace|facing|heading)\b[^;%]*?(\d+(?:\.\d+)?) % of allowed")
 _RATIO = re.compile(r"= (\d+(?:\.\d+)?)×")
+_SETTLED = re.compile(r"settled (\d+(?:\.\d+)?)° median, (\d+(?:\.\d+)?)° p95 over (\d+) .*? vs its share (\d+(?:\.\d+)?)°"
+                      r"(?: \((\d+(?:\.\d+)?)×\))?")
 
 
 def percentages(text: str) -> dict[str, float]:
@@ -85,6 +87,18 @@ def worst_ratio(text: str) -> float | None:
     """The largest "= N×" in an answer's text (the tool's Twin lists one ratio per run kind); None when it has none."""
     found = [float(v) for v in _RATIO.findall(text or "")]
     return max(found) if found else None
+
+
+def settled(text: str) -> dict[str, float]:
+    """A joint's Job numbers from its own text ("settled 0.339° median, 0.551° p95 over 9812 settled rows ... vs its share 0.329°"):
+    the settled stop error against its share of the tool gate. Empty when the answer has none (same WHY as percentages)."""
+    found = _SETTLED.search(text or "")
+    if not found:
+        return {}
+    median, p95, n, share = float(found.group(1)), float(found.group(2)), int(found.group(3)), float(found.group(4))
+    # WHY the text's own ratio: it divides the unrounded numbers; dividing the printed ones gave 18.7× for the tree's 18.6×
+    return {"settled_median_deg": median, "settled_p95_deg": p95, "settled_n": n, "share_deg": share,
+            "settled_over_share": float(found.group(5)) if found.group(5) else None}
 
 
 def digest(result, tables: dict) -> str:
@@ -147,6 +161,8 @@ def summary_numbers(node, verdict: dict, questions: tuple[str, ...]) -> tuple[di
     numbers["Twin/sim_real_before_deg"] = verdict.get("sim_real_before_deg")
     numbers["Twin/held_out_runs"] = verdict.get("held_out_runs")
     numbers["Job/target_real_deg"] = verdict.get("target_real_deg")
+    if not answers["Job"].get("metrics"):
+        numbers.update({f"Job/{key}": value for key, value in settled(answers["Job"].get("numbers", "")).items()})
     gate = node.gate or {}
     if gate:
         numbers["Job/tool_settled_mm"] = gate.get("target_real_mm")
@@ -243,6 +259,13 @@ def code_version(repo: Path = REPO) -> tuple[str, bool]:
         return os.environ.get("SIM2REAL_SHA", "unknown"), os.environ.get("SIM2REAL_DIRTY", "") == "1"
 
 
+def _differs(stored, value) -> bool:
+    """Whether a run's stored summary value is not `value` (numbers compared to 1e-9; W&B hands back ints and floats alike)."""
+    if isinstance(value, (int, float)) and isinstance(stored, (int, float)) and not isinstance(value, bool):
+        return abs(float(stored) - float(value)) > 1e-9
+    return stored != value
+
+
 def _clean(values: dict) -> dict:
     """Drop None and non-finite numbers (W&B charts skip them anyway; a NaN in history breaks the run's summary sort)."""
     return {k: v for k, v in values.items() if v is not None and not (isinstance(v, float) and not math.isfinite(v))}
@@ -275,34 +298,46 @@ def _table_rows(rows: list[dict]) -> tuple[list[str], list[list]]:
 
 def log(result, *, entity: str = ENTITY, project: str = PROJECT, extra_config: dict | None = None, sha: str | None = None,
         dirty: bool | None = None, retire_older: bool = True) -> list[dict]:
-    """Log one CalibrationResult (one evaluation) as W&B runs. Idempotent: the same numbers resume the same runs and log nothing new;
-    new numbers make a new evaluation and mark the result's older runs `evaluation_state: superseded` (never deleted)."""
+    """Log one CalibrationResult (one evaluation) as W&B runs. Idempotent: the same numbers resume the same runs and add only the keys
+    a run lacks (a logger that learned a new number patches it in; a second rebuild adds nothing); new numbers make a new evaluation
+    and mark the result's older runs `evaluation_state: superseded` (never deleted)."""
     import wandb
 
     if sha is None:
         sha, dirty = code_version()
     batch = records(result, sha=sha, dirty=bool(dirty), extra_config=extra_config)
     WANDB_DIR.mkdir(parents=True, exist_ok=True)
+    api = wandb.Api(timeout=60)
     logged = []
     for record in batch:
+        try:
+            have = dict(api.run(f"{entity}/{project}/{record['id']}").summary)
+        except Exception:   # wandb raises CommError / ValueError for a run that does not exist yet
+            have = None
         run = wandb.init(entity=entity, project=project, id=record["id"], name=record["name"], group=record["group"],
                          job_type=record["job_type"], tags=record["tags"], notes=record["notes"], config=record["config"],
                          resume="allow", reinit="create_new", allow_val_change=True, dir=str(WANDB_DIR),
                          settings=wandb.Settings(silent=True, console="off"))
-        # WHY skip on resume: the run id is the evaluation's content id, so a resumed run already holds exactly these numbers
-        # (and W&B drops history steps that do not increase)
-        resumed = bool(getattr(run, "resumed", False)) and run.step > 0
-        if not resumed:
-            for index, step in enumerate(record["history"]):
-                values = _clean(step)
-                if index == len(record["history"]) - 1:
-                    for name, rows in record["tables"].items():
-                        if rows:
-                            columns, data = _table_rows(rows)
-                            values[name] = wandb.Table(columns=columns, data=data, allow_mixed_types=True)
+        steps = [_clean(step) for step in record["history"]]
+        tables = {name: rows for name, rows in record["tables"].items() if rows}
+        if have is not None:
+            # WHY only what is missing or changed: the run id is the evaluation's content id, so the run already holds this
+            # evaluation; re-logging its trend would add steps W&B drops (a step must increase) and duplicate points. A logger that
+            # learned a number (or fixed how it reads one) patches just that key in, as one more step
+            last = {k: v for k, v in steps[-1].items()
+                    if k != "iteration" and not k.startswith("trend/") and (k not in have or _differs(have[k], v))}
+            tables = {name: rows for name, rows in tables.items() if name not in have}
+            steps = [last] if (last or tables) else []
+        for index, values in enumerate(steps):
+            if index == len(steps) - 1:
+                for name, rows in tables.items():
+                    columns, data = _table_rows(rows)
+                    values[name] = wandb.Table(columns=columns, data=data, allow_mixed_types=True)
+            if values:
                 run.log(values)
         run.summary.update(record["summary"])
-        logged.append({"id": run.id, "url": run.url, "name": record["name"], "resumed": resumed, "group": record["group"]})
+        logged.append({"id": run.id, "url": run.url, "name": record["name"], "resumed": have is not None, "group": record["group"],
+                       "patched": sorted(steps[-1]) if (have is not None and steps) else []})
         run.finish()
     if retire_older:
         retire(result.id, batch[0]["config"]["evaluation"], entity=entity, project=project)
@@ -403,6 +438,8 @@ def _panels(wr, slice_: dict) -> list:
     if slice_["by"] == "deployment" or "joint" in slice_["levels"]:
         panels.append(wr.BarPlot(title="Data: reachable (angle, speed, acceleration) cells visited (%, gate ≥ 40 % proposed)",
                                  metrics=["Data/coverage_pct"], orientation="h", layout=L(x=0, y=16, w=12, h=8)))
+        panels.append(wr.BarPlot(title="Job: settled stop error vs its share of the 1 mm tool gate (°)",
+                                 metrics=["Job/settled_median_deg", "Job/share_deg"], orientation="h", layout=L(x=12, y=24, w=12, h=8)))
     if slice_["by"] == "deployment" or "arm" in slice_["levels"]:
         panels.append(wr.BarPlot(title="Data at the arm: cube / workspace / facing or heading (% of the allowed mask)",
                                  metrics=["Data/cube_pct", "Data/workspace_pct", "Data/facing_pct", "Data/heading_pct"], orientation="h",
@@ -589,7 +626,9 @@ def main(argv: list[str] | None = None) -> int:
         for result in results:
             logged = log(result, project=args.project, extra_config=rig)
             fresh = sum(1 for item in logged if not item["resumed"])
-            print(f"{result.id}: {len(logged)} runs ({fresh} new, {len(logged) - fresh} already there), group {logged[0]['group']}")
+            patched = sorted({key for item in logged for key in item["patched"]})
+            print(f"{result.id}: {len(logged)} runs ({fresh} new, {len(logged) - fresh} already there"
+                  + (f"; patched in {', '.join(patched)}" if patched else "") + f"), group {logged[0]['group']}")
     if args.views:
         urls = build_views(results, project=args.project, registry=args.registry)
         for kind, items in urls.items():

@@ -1,0 +1,19 @@
+{
+ "reports": {
+  "deployment-fivebar": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-Deployment-\u00b7-Five-bar-on-the-One-Dof-Test-Rack--VmlldzoxODI5MzMyMA==",
+  "deployment-ur-wrist": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-Deployment-\u00b7-UR-wrist-on-the-One-Dof-Test-Rack--VmlldzoxODI5MzMxOA==",
+  "overview": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-Overview--VmlldzoxODI5MzMyMQ==",
+  "type-deployment": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-Type-\u00b7-deployment--VmlldzoxODI5MzMwOA==",
+  "type-integrated_servo": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-Type-\u00b7-integrated_servo--VmlldzoxODI5MzMxMQ==",
+  "type-rigid_body_chain": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-Type-\u00b7-rigid_body_chain--VmlldzoxODI5MzMxMw==",
+  "type-tool": "https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-\u00b7-Type-\u00b7-tool--VmlldzoxODI5MzMxNQ=="
+ },
+ "views": {
+  "deployment-fivebar": "https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=syjerxnd294",
+  "deployment-ur-wrist": "https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=ony77qilvxw",
+  "type-deployment": "https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=vhmhrycy7rk",
+  "type-integrated_servo": "https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=w6vmu4mj1j2",
+  "type-rigid_body_chain": "https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=uddw02334fp",
+  "type-tool": "https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=xiz8q20d78w"
+ }
+}

@@ -10,7 +10,7 @@ import sys
 
 from sim2real.result import QUESTIONS, CalibrationResult, Node
 from sim2real.tracking import curriculum
-from sim2real.tracking.wandb_log import _table_rows, digest, percentages, records, worst_ratio
+from sim2real.tracking.wandb_log import _table_rows, digest, percentages, records, settled, worst_ratio
 
 
 def answers(**own: str) -> dict:
@@ -104,6 +104,10 @@ def test_coverage_numbers_are_read_from_the_answer_s_own_text():
     assert percentages("joint cube 100.0 % of allowed (≥ 90 %); workspace (2 cm tool pixels) 85.4 % of allowed (≥ 50 %); "
                        "heading (15°, for facing) 100.0 % of allowed (≥ 90 %)") == {"cube_pct": 100.0, "workspace_pct": 85.4, "heading_pct": 100.0}
     assert percentages("physical runs: 407") == {}
+    assert settled("settled 0.339° median, 0.551° p95 over 9812 settled rows (the target at rest ≥ 0.3 s) on the operating gains "
+                   "(pick_sliding) vs its share 0.329° (1.0×); other gains: ram: 0.509° median") == \
+        {"settled_median_deg": 0.339, "settled_p95_deg": 0.551, "settled_n": 9812, "share_deg": 0.329, "settled_over_share": 1.0}
+    assert settled("no settled data; share 0.136°") == {}
     assert worst_ratio("full_ff: after twin 4.3 mm vs tool floor 1.7 mm = 2.6×; gravity_ff: after twin 4.1 mm vs tool floor 1.3 mm = 3.1×") == 3.1
     after = {r["config"]["node"]: r for r in records(tree()) if r["config"]["stage_role"] == "after"}
     assert after["rig/arm/j1"]["history"][-1]["Data/coverage_pct"] == 45.7
