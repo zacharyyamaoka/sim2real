@@ -484,9 +484,11 @@ def _verdict(record: dict) -> str:
             + (f" failing {', '.join(cal['failing'])}" if cal["failing"] else "") + f"; gates {gates}; {record['seconds']['total']:.0f} s")
 
 
-def plan(ladders: Iterable[str] | None = None, seeds: Sequence[int] = SEEDS) -> list[Cell]:
+def plan(ladders: Iterable[str] | None = None, seeds: Sequence[int] = SEEDS, *, front: bool = False) -> list[Cell]:
     """Every cell of the ladders, in the order that answers the most first: the 1x on every seed, then each ladder's nearest stress level,
-    then the farther ones. The noise-free level of the overall ladder is one run (no term draws at 0x, so every seed is the same run)."""
+    then the farther ones. Whole cells play the noise-free level of the overall ladder once (every draw is gated on its term's sigma > 0,
+    so the seed has no path into a 0x run); ``front`` plays it on every seed, so that equality is measured (``zero_seed_equal``), not
+    assumed, and the brief's three seeds a level hold."""
     wanted = list(ladders or LADDERS)
     first = {"overall": (2, 3), "torque": (3,), "encoder": (3,), "timing": (0, 3), "truth": (2,), "mismatch": (10,)}
     order: list[Cell] = [Cell("overall", 1, s) for s in seeds]
@@ -499,7 +501,7 @@ def plan(ladders: Iterable[str] | None = None, seeds: Sequence[int] = SEEDS) -> 
                 for level in spec.levels:
                     if level == spec.baseline or (wave == "near") != (level in first[ladder]):
                         continue
-                    if ladder == "overall" and level == 0 and seed != seeds[0]:
+                    if ladder == "overall" and level == 0 and seed != seeds[0] and not front:
                         continue
                     order.append(Cell(ladder, level, seed))
     return order
@@ -953,6 +955,16 @@ def probe_tables_html(out: Path) -> str:
     return "".join(html_parts)
 
 
+def zero_seed_equal(front: Mapping[str, dict], label: str, first: str) -> bool:
+    """Whether a 0x front pass found, row for row and to the bit, what the first seed's did (both run, neither raised). WHY measured: the
+    claim that a 0x run is seed-free rests on every draw being gated on its sigma; one ungated draw anywhere would make the seeds differ,
+    and this is where it would show."""
+    a, b = front.get(label), front.get(first)
+    if a is None or b is None or "error" in a or "error" in b:
+        return False
+    return a["calibration"]["rows"] == b["calibration"]["rows"]
+
+
 def coverage(out: Path, base) -> dict:
     """Which cells ran whole (every routine + eval_twin) and which only as the front pass, per ladder and level, and every whole cell of the
     plan that was not run, with why: the level already breaks in its front pass (a whole run cannot un-break it), or the wall-time budget."""
@@ -963,8 +975,6 @@ def coverage(out: Path, base) -> dict:
     for name, spec in LADDERS.items():
         for level in spec.levels:
             labels = [Cell(name, level, s).label(base) for s in SEEDS]
-            if name == "overall" and level == 0:
-                labels = labels[:1]   # no term draws at 0x: one run stands for every seed
             whole = [lb for lb in labels if lb in full and "error" not in full[lb]]
             fronts = [lb for lb in labels if lb in front and "error" not in front[lb]]
             front_breaks = any(misses(front[lb]) for lb in fronts)
@@ -973,10 +983,13 @@ def coverage(out: Path, base) -> dict:
             for lb in labels:
                 if lb in full or lb.startswith("baseline-"):
                     continue
-                why = ("its front pass already misses at this level: the level breaks whatever the dynamics do" if front_breaks else
+                stand_in = zero_seed_equal(front, lb, labels[0]) if name == "overall" and level == 0 and lb != labels[0] else False
+                why = (f"the 0x draws nothing from its seed (every draw is gated on its term's sigma > 0) and its front pass is bit-equal to "
+                       f"{labels[0]}'s, so a whole run would repeat {labels[0]}'s" if stand_in else
+                       "its front pass already misses at this level: the level breaks whatever the dynamics do" if front_breaks else
                        "a whole seed already misses at this level (the level breaks); another seed would only add a count" if whole_breaks else
                        "wall-time and memory budget (a whole cell is ~1 h on the shared host; on 2026-11-12 at 00:40 its swap was full "
-                       "with 1.5 GB free, so overall-0 and truth-2's other seeds were shed mid-run; seed 20261111 ran whole below each "
+                       "with 1.5 GB free, so overall-0's whole run and truth-2's other seeds were shed mid-run; seed 20261111 ran whole below each "
                        "break, the front pass ran every seed)")
                 dropped.append({"label": lb, "why": why})
     return {"rows": rows, "dropped": dropped, "whole_cells": len(full), "front_cells": len(front)}
@@ -1790,7 +1803,7 @@ def _cli(argv: Sequence[str] | None = None) -> int:
         print(record.get("summary") or record.get("traceback"), flush=True)
         return 0 if "error" not in record else 3
     if args.command == "run":
-        cells = plan(args.ladders)
+        cells = plan(args.ladders, front=args.front)
         base = _base()
         if args.only:
             # in the order given: a budget-cut run spends its full cells where the front pass cannot answer
