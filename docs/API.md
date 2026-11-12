@@ -89,10 +89,13 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 - **Never:** writes anything or touches hardware.
 - **Not built yet:** a rig's twin (`RigRunner` has no `simulate`).
 
-### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None) -> RobotTwin`
+### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None, config=None, data=None) -> RobotTwin`
 
-- **What it does:** returns a NEW, fitted twin. It plays the type's routine schedule on the simulator against a hidden truth that the fit never sees.
+- **What it does:** returns a NEW, fitted twin. It plays the routines on the simulator against a hidden truth that the fit never sees, in the order their declarations give (`sim2real.calibration.plan`; docs/CALIBRATE.md).
 - **The learned values end in `_`** (scikit-learn's convention): `values_`, `intervals_`, `rungs_` and `calibration_`. `fitted.parameters` carries them as Values.
+- **`plan_` and `record_`** (rigs on the one-click seam): `plan_` is the `CalibrationPlan` that ran, and `record_` is the run as one `sim2real.calibration/1` record (`record_.to_dict()`; add eval's gates with `record_.with_evaluation(fitted.eval().to_dict())`). On the pendulum tracer both are `None`, because it runs sysid's pipeline rather than planned routines.
+- **`config=CalibrationConfig(...)`:** steers the run: models per part, known values, excluded or included routines, an explicit order, the noise level the metric reads, the budget, per-routine options and injected routines. See docs/CALIBRATE.md.
+- **`data=collect(twin)`:** fits recorded runs and never calls the backend's measure. This is the deployment path: collect in the field, fit anywhere.
 - **`move_truth={key: value}`:** moves hidden values for one run while the ruler stays put. It's the mutation test: a moved truth must turn red.
 - **`noise`:** rigs only. `None` is the rig's measured 1×, a number scales every term, or pass a `sim2real.rig.NoiseModel`.
 - **Never:** writes anything. It doesn't touch hardware unless `on="real"`, and that isn't built yet.
@@ -100,7 +103,12 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   - `ValueError` for an unknown `on` or for `truth` other than `"sealed"`;
   - `NotImplementedError` for `on="real"` (it names the rack path);
   - `NotImplementedError` for `noise=` on the tracer;
-  - `KeyError` for a `move_truth` key the world doesn't have.
+  - `KeyError` for a `move_truth` key the world doesn't have;
+  - `ValueError` for noise given both as `noise=` and in `config.noise`;
+  - `KeyError` for a per-routine option the routine doesn't have;
+  - `CalibrationPlanError` for an unregistered custom routine, an explicit order that breaks a requirement, a strict budget exceeded, or `data` missing a planned run;
+  - `CalibrationCycleError` when the routines' declared needs form a cycle;
+  - `NotImplementedError` for `config=` or `data=` on the tracer.
 
 ### `fitted.eval() -> TwinReport | RigReport`
 

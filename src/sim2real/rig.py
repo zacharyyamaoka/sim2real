@@ -416,7 +416,11 @@ class RigRunner:
 
     # ---- calibrate
 
-    def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None, noise=None) -> tuple[RigCalibration, dict]:
+    def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None, noise=None, routines: Sequence[Routine] | None = None,
+                  measured: Mapping[str, Any] | None = None, known: Mapping[str, float] | None = None) -> tuple[RigCalibration, dict]:
+        """`routines`: the planned sequence (sim2real.calibration.plan: ordered, substituted, option copies), else the rig's own.
+        `measured`: pre-collected runs {run id: measurement} (sim2real.calibration.collect); a planned run missing from it is refused and
+        the rig's measure is never called. `known`: {key: value} fixed for every routine (CalibrationConfig.known)."""
         from robot_msgs.space import Basis, Value  # noqa: PLC0415
 
         started = time.monotonic()
@@ -440,16 +444,27 @@ class RigRunner:
         # the world plays the ruled truth, moved where asked; a parameter world.json does not hide plays at its nominal
         world_values = {**{k: v for k, v in nominal.items() if v is not None}, **ruled, **moved}
         values = {k: v for k, v in nominal.items() if v is not None}
+        known = {k: float(v) for k, v in (known or {}).items()}
+        values.update(known)
+        recorded = None if measured is None else dict(measured)  # WHY a name of its own: the loop below rebinds `measured` per routine
         estimates: dict[str, Estimate] = {}
         adjusted: dict[str, Estimate] = {}
         steps, trained = [], set()
         played: dict[str, Any] = {}
-        for routine in self.rig.routines():
+        sequence = list(self.rig.routines() if routines is None else routines)
+        for routine in sequence:
             began = time.monotonic()
             runs = list(routine.runs(dict(values)))
             # WHY played once: a run two routines both read (the dynamics fit's chirps are the delay scan's) is one physical run, its data shared
             fresh = [run for run in runs if run.id not in played]
-            if fresh:
+            if fresh and recorded is not None:
+                missing = [run.id for run in fresh if run.id not in recorded]
+                if missing:
+                    from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
+
+                    raise CalibrationPlanError(f"{routine.id} plays runs {missing}, which the recorded data does not hold")
+                played.update({run.id: recorded[run.id] for run in fresh})
+            elif fresh:
                 played.update(self.rig.measure(fresh, world_values, noise, f"routine:{routine.id}", workers=self.workers))
             measured = {run.id: played[run.id] for run in runs}
             _say(f"{routine.id}: {len(runs)} runs ({len(fresh)} played) in {time.monotonic() - began:.0f} s; fitting")
@@ -461,6 +476,8 @@ class RigRunner:
             if extra:
                 raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies}, adjusts: {adjusts})")
             for key, estimate in found.items():
+                if key in known:
+                    continue  # fixed by the caller: never overwritten, never graded
                 if key in routine.identifies:
                     estimates[key] = estimate
                 else:
@@ -471,6 +488,12 @@ class RigRunner:
             steps.append({"routine": routine.id, "identifies": list(routine.identifies), "runs": len(runs), "seconds": round(time.monotonic() - began, 1),
                           "found": {k: (None if e.value is None else float(e.value)) for k, e in found.items()}})
         rows = self._rows(params, nominal, ruled, estimates)
+        ran = {r.id for r in sequence}
+        for row in rows:
+            if routines is not None and row["routine"] is not None and (row["key"] in known or row["routine"] not in ran):
+                row["pass"] = None  # not graded: fixed by the caller, or its routine was left out of the plan
+                row["why_not"] = (f"known: fixed at {known[row['key']]:.6g} by the caller" if row["key"] in known
+                                  else f"its routine {row['routine']} was not in the plan")
         for row in rows:
             if row["key"] in adjusted and row["routine"] is None:
                 row["set_for_twin"] = adjusted[row["key"]].value   # used by the twin, never claimed: no verdict

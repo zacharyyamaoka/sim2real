@@ -471,11 +471,15 @@ class RobotTwin:
     def simulate(self, **options) -> Simulation:
         return self.runner.simulate(**options)
 
-    def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None, noise=None) -> RobotTwin:
+    def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None, noise=None, config=None,
+                  data=None) -> RobotTwin:
         """A NEW twin, fitted: the type's routine schedule played `on` the simulator at the hidden truth (`truth="sealed"`: the fit never
         sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test).
         `noise` (a rig on the one-click seam only): None = the rig's measured 1x, a number = every term at that level, or a
-        sim2real.rig.NoiseModel."""
+        sim2real.rig.NoiseModel. `config` (a sim2real.calibration.CalibrationConfig) steers the run: models, known values, exclusions, an
+        order, the budget, per-routine options, injected routines (PEP 0001 §6). `data` (sim2real.calibration.collect(twin)) fits recorded
+        runs without measuring. The routines run in the planned order (sim2real.calibration.plan); the fitted twin carries it as plan_ and
+        the run as record_ (sim2real.calibration/1, docs/CALIBRATE.md)."""
         if on not in BACKENDS:
             raise ValueError(f"on must be one of {BACKENDS}, not {on!r}")
         if on == "real":
@@ -489,7 +493,10 @@ class RobotTwin:
         if _is_rig(self.runner):
             from .rig import RigRunner  # noqa: PLC0415
 
-            calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, noise=noise)
+            from .calibration.collect import fit_rig  # noqa: PLC0415
+            from .calibration.record import CalibrationRecord  # noqa: PLC0415
+
+            calibration, state, plan = fit_rig(self, move_truth=move_truth, noise=noise, config=config, data=data)
             fitted = RobotTwin.__new__(RobotTwin)
             fitted.description = self.description.with_values(_identified(calibration, calibration.model))
             fitted.model, fitted.models = self.model, self.models
@@ -498,7 +505,12 @@ class RobotTwin:
             fitted.intervals_ = {r["key"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
             fitted.rungs_ = {step["routine"]: step["found"] for step in calibration.routines}
             fitted.calibration_ = calibration
+            fitted.plan_ = plan
+            fitted.record_ = CalibrationRecord.from_rig(calibration.to_dict(), description=self.description, plan=plan)
             return fitted
+        if config is not None or data is not None:
+            raise NotImplementedError("config= and data= plan routines on a rig on the one-click seam (sim2real.rig); the pendulum tracer "
+                                      "runs sysid's five-function pipeline")
         if noise is not None:
             raise NotImplementedError("the pendulum tracer sets its noise through sysid's ladder (sysid.world.noise_scale), not calibrate(noise=)")
         calibration, state = self.runner.calibrate(model=self.model, truth=move_truth)
@@ -512,6 +524,7 @@ class RobotTwin:
         fitted.intervals_ = {k: tuple(r["ci95"]) for k, r in ((r["name"], r) for r in calibration.rows) if r["ci95"]}
         fitted.rungs_ = calibration.rungs
         fitted.calibration_ = calibration
+        fitted.plan_ = fitted.record_ = None  # WHY: the tracer runs sysid's pipeline, not planned routines on the seam
         return fitted
 
     def noise(self):
