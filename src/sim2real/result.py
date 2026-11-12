@@ -36,10 +36,33 @@ REPO = Path(__file__).resolve().parents[2]
 KIT = REPO / "vendor" / "data-ui" / "dist"
 RULER_TWINNED = 1.5          # sim->real / floor at most this: twinned (sim2real README, the ruler)
 RULER_CLOSE = 3.0            # past twinned, up to this: close
-TOOL_GATE_MM = 1.0           # the deployment's tool gate at a stop. WHY 1, not the old 5 (Zach, 2026-11-11): "we certainly need final tool error sub 1 mm"
+# WHY 1 mm (Zach, 2026-11-11): "we certainly need final tool error sub 1mm final accuracy" - replaces the 5 mm of Oct 24.
+TOOL_GATE_MM = 1.0           # the deployment's tool gate at a stop (Zach's standing metric)
 
 
-VERDICT_RANK = {"twinned": 0, "gate pass": 0, "close": 1, "not twinned": 2, "gate fail": 2}
+# Proposal C (Zach's default, 2026-11-11 "Sim2Real KPIs and Gates"): every node answers these in order; its verdict is the first "no".
+QUESTIONS = ("Floor", "Data", "Routines", "Twin", "Job")
+ANSWERS = ("yes", "no", "partial", "unknown")   # a question passes only on "yes"
+FLOOR_CHECK = 1 / math.sqrt(2)                 # twin / floor below 1/sqrt(2) means the "repeats" were not repeats: it fails Floor
+
+
+# The answers' badge colours, data-ui palette slots (CONTRACT §4: 3 green, 2 red, 4 amber, 0 muted). WHY fixed: a hashed hue painted
+# "yes" orange and "unknown" green (2026-11-11 render); amber and red only where something is wrong (calm UI)
+ANSWER_COLORS = {"yes": 3, "no": 2, "partial": 4, "unknown": 0, "child": 0}
+VERDICT_COLORS = {"passes all five": 3, **{f"stops at {q}": 2 for q in QUESTIONS}}
+# WHY every shown column declared: a table that declares `properties` draws only those (data-ui, measured 2026-11-11)
+TABLE_PROPERTIES = {
+    "nodes": {"label": {"displayName": "Level"}, "verdict": {"displayName": "Verdict", "colors": VERDICT_COLORS},
+              **{q.lower(): {"displayName": q, "colors": ANSWER_COLORS} for q in QUESTIONS},
+              "why": {"displayName": "Why it stops"}, "ratio": {"displayName": "Twin ÷ floor (driven)"},
+              "sim_real_deg": {"displayName": "sim→real after"}, "sim_real_before_deg": {"displayName": "sim→real before"},
+              "target_real_deg": {"displayName": "target→real"}, "floor_deg": {"displayName": "Floor (driven)"},
+              "kind": {"displayName": "Kind"}, "node": {"displayName": "Node"}, "parent": {"displayName": "Parent"}},
+    "questions": {"order": {"displayName": "#"}, "question": {"displayName": "Question"},
+                  "passes": {"displayName": "Passes", "colors": ANSWER_COLORS}, "own": {"displayName": "At its own output", "colors": ANSWER_COLORS},
+                  "numbers": {"displayName": "The numbers"}, "gate": {"displayName": "The gate"},
+                  "children_not_passing": {"displayName": "Children not passing"}, "node": {"displayName": "Node"}},
+}
 
 
 def verdict_of(ratio: float | None) -> str:
@@ -57,7 +80,8 @@ class Node:
     type: str = ""                            # the sim2real type ("integrated_servo") or a structural word
     word: str = ""                            # the description's own word
     parent: str | None = None
-    floor_deg: float | None = None            # the real device's own run-to-run floor (joints)
+    floor_deg: float | None = None            # the real device's own run-to-run floor (joints), only when known
+    twin_ratio: float | None = None           # the producer's driven twin / floor on the floor's own run group (beats the generic median)
     note: str = ""
     coverage: list[dict] = field(default_factory=list)      # {channel, lo, hi, seconds} | {channel: workspace, x_lo, x_hi, y_lo, y_hi, seconds}
     coverage_summary: list[dict] = field(default_factory=list)   # {measure, value, unit, of}
@@ -66,6 +90,8 @@ class Node:
     models: list[dict] = field(default_factory=list)        # {model, held_out_deg, picked, note}
     runs: list[dict] = field(default_factory=list)          # {run, label, held_out, gains, tape, target_real_deg, sim_real_deg, sim_real_before_deg, run_view}
     gate: dict | None = None                  # the tool gate's numbers, on the node that carries it
+    # the five questions at this node's OWN output: {question: {own: yes|no|partial|unknown, numbers: the soft numbers, gate: its rule}}
+    questions: dict = field(default_factory=dict)
     result: Any = field(default=None, repr=False, compare=False)   # set by CalibrationResult: node.show() asks it
 
     def show(self, *, held_out_only: bool = True, limit: int = 12):
@@ -141,39 +167,40 @@ class CalibrationResult:
         return next(n for n in self.nodes if n.id == node_id)
 
     def verdicts(self) -> dict[str, dict]:
-        """Per node: the held-out sim->real median after calibration, before, the floor and the ratio. A leaf with errors judges itself;
-        a parent is its worst child (its ratio the children's max), so the root is the deployment's answer."""
+        """Per node: the five questions rolled up and the soft numbers beside them (proposal C, "Sim2Real KPIs and Gates", 2026-11-11).
+        A node passes a question only when it answers "yes" at its own output AND every child passes it; its verdict is the first
+        question it does not pass ("stops at Floor"). The numbers roll up softly: medians, and the worst child's twin ratio."""
         out: dict[str, dict] = {}
 
-        def leaf(n: Node) -> dict:
+        def numbers(n: Node) -> dict:
             after = [e["sim_real_deg"] for e in n.errors if e["stage"] == self.stages[-1] and e["held_out"] and e["sim_real_deg"] is not None]
             before = [e["sim_real_deg"] for e in n.errors if e["stage"] == self.stages[0] and e["held_out"] and e["sim_real_deg"] is not None]
             target = [e["target_real_deg"] for e in n.errors if e["stage"] == self.stages[-1] and e["target_real_deg"] is not None]
             med = _median(after)
-            ratio = med / n.floor_deg if med is not None and n.floor_deg else None
-            return {"sim_real_deg": med, "sim_real_before_deg": _median(before), "target_real_deg": _median(target),
-                    "floor_deg": n.floor_deg, "ratio": ratio, "verdict": verdict_of(ratio), "held_out_runs": len(after)}
+            return {"sim_real_deg": med, "sim_real_before_deg": _median(before), "target_real_deg": _median(target), "floor_deg": n.floor_deg,
+                    "ratio": n.twin_ratio if n.twin_ratio is not None else (med / n.floor_deg if med is not None and n.floor_deg else None),
+                    "held_out_runs": len(after)}
 
         def visit(n: Node) -> dict:
             kids = [visit(c) for c in self.children(n.id)]
-            if n.errors:
-                v = leaf(n)
-            elif kids:
-                judged = [k for k in kids if k["ratio"] is not None]
-                worst = max(judged, key=lambda k: k["ratio"]) if judged else None
-                # WHY by rank, not by ratio alone (Zach: "everything rolls up to the tool gate"): a failed tool gate makes its parent fail
-                # even when every joint is twinned
-                ranked = [k["verdict"] for k in kids if k["verdict"] in VERDICT_RANK]
+            if n.errors or not kids:
+                v = numbers(n)
+            else:
+                ratios = [k["ratio"] for k in kids if k["ratio"] is not None]
                 v = {"sim_real_deg": _median([k["sim_real_deg"] for k in kids]), "sim_real_before_deg": _median([k["sim_real_before_deg"] for k in kids]),
                      "target_real_deg": _median([k["target_real_deg"] for k in kids]), "floor_deg": None,
-                     "ratio": worst["ratio"] if worst else None,
-                     "verdict": max(ranked, key=VERDICT_RANK.get) if ranked else "no data",
-                     "held_out_runs": sum(k["held_out_runs"] for k in kids)}
-            else:
-                # a leaf without joint errors (the tool) is judged by its gate when it carries one
-                gate_verdict = ("gate pass" if n.gate["verdict"].startswith("pass") else "gate fail") if n.gate else "no data"
-                v = {"sim_real_deg": None, "sim_real_before_deg": None, "target_real_deg": None, "floor_deg": None, "ratio": None,
-                     "verdict": gate_verdict, "held_out_runs": 0}
+                     "ratio": max(ratios) if ratios else None, "held_out_runs": sum(k["held_out_runs"] for k in kids)}
+            answers = {}
+            for q in QUESTIONS:
+                own = n.questions.get(q, {"own": "unknown", "numbers": "not measured at this level"})
+                failing_children = [c.label for c, k in zip(self.children(n.id), kids) if not k["answers"][q]["passes"]]
+                answers[q] = {**own, "passes": own["own"] == "yes" and not failing_children, "failing_children": failing_children}
+            stop = next((q for q in QUESTIONS if not answers[q]["passes"]), None)
+            v["answers"] = answers
+            v["stops_at"] = stop
+            v["verdict"] = "passes all five" if stop is None else f"stops at {stop}"
+            v["why"] = "" if stop is None else (answers[stop]["numbers"] if answers[stop]["own"] != "yes"
+                                                 else "a child stops here: " + ", ".join(answers[stop]["failing_children"]))
             if n.gate:
                 v["gate"] = n.gate
             out[n.id] = v
@@ -189,8 +216,8 @@ class CalibrationResult:
         for n in self.nodes:
             depth = len(n.id.split("/")) - 1
             v = verdicts[n.id]
-            lines.append(f"  {'  ' * depth}{n.label:34s} {v['verdict']:12s} sim->real {_f(v['sim_real_deg'])} (before {_f(v['sim_real_before_deg'])})"
-                         + (f", {v['ratio']:.2f}x floor" if v["ratio"] is not None else ""))
+            chips = " ".join(f"{q}:{_chip(v['answers'][q])}" for q in QUESTIONS)
+            lines.append(f"  {'  ' * depth}{n.label[:34]:34s} {v['verdict']:18s} {chips}  | {v['why'][:90]}")
         return "\n".join(lines)
 
     # ---------------------------------------------------------------------------------------------------------- the tables
@@ -200,6 +227,7 @@ class CalibrationResult:
         level of the tree shows that level's runs; parameters and models stay on the node that owns them, plus the subtree's below."""
         verdicts = self.verdicts()
         nodes, coverage, workspace, cover_sum, errors, error_stats, params, models, runs = [], [], [], [], [], [], [], [], []
+        questions: list[dict] = []
         for n in self.nodes:
             v = verdicts[n.id]
             gate = v.get("gate") or {}
@@ -210,7 +238,13 @@ class CalibrationResult:
                           "parameters": ", ".join(p["parameter"] for p in n.parameters), "note": n.note,
                           "tool_gate_mm": gate.get("gate_mm"), "tool_sim_real_mm": _r(gate.get("sim_real_mm"), 2),
                           "tool_target_real_mm": _r(gate.get("target_real_mm"), 2),
-                          "tool_gate": gate.get("verdict", "")})
+                          "tool_gate": gate.get("verdict", ""), "stops_at": v["stops_at"] or "", "why": v["why"],
+                          **{q.lower(): _chip(v["answers"][q]) for q in QUESTIONS}})
+            for order, q in enumerate(QUESTIONS, 1):
+                a = v["answers"][q]
+                questions.append({"node": n.id, "order": order, "question": q, "passes": "yes" if a["passes"] else "no",
+                                  "own": a["own"], "numbers": a["numbers"], "gate": a.get("gate", ""),
+                                  "children_not_passing": ", ".join(a["failing_children"])})
             subtree = self.subtree(n.id)
             for member in subtree:
                 # WHY two tables (2026-11-11 render): one table mixing histogram rows (lo/hi) and workspace cells (x_lo/...) drew
@@ -240,7 +274,7 @@ class CalibrationResult:
                         error_stats.append({"node": n.id, "stage": stage, "order": order, "label": f"{order + 1} · {stage}", "scope": scope,
                                             "median_deg": _r(_median(values), 3), "p95_deg": _r(_pct(values, 95), 3),
                                             "mean_deg": _r(sum(values) / len(values), 3), "runs": len(values)})
-        return {"nodes": nodes, "coverage": coverage, "workspace": workspace, "coverage_summary": cover_sum, "errors": errors, "error_stats": error_stats,
+        return {"nodes": nodes, "questions": questions, "coverage": coverage, "workspace": workspace, "coverage_summary": cover_sum, "errors": errors, "error_stats": error_stats,
                 "parameters": params, "models": models, "runs": runs}
 
     # ---------------------------------------------------------------------------------------------------------- the page
@@ -251,7 +285,10 @@ class CalibrationResult:
         out = Path(out)
         (out / "data").mkdir(parents=True, exist_ok=True)
         for name, rows in self.tables().items():
-            (out / "data" / f"{name}.json").write_text(json.dumps({"name": name, "rows": rows}, default=_json))
+            document = {"name": name, "rows": rows}
+            if name in TABLE_PROPERTIES:
+                document["properties"] = TABLE_PROPERTIES[name]
+            (out / "data" / f"{name}.json").write_text(json.dumps(document, default=_json))
         _copy_kit(out / "vendor" / "data-ui")
         if runs_folder is not None and Path(runs_folder).is_dir():
             link = out / "runs"
@@ -330,6 +367,13 @@ def _r(value, digits: int):
     return None if value is None or not isinstance(value, (int, float)) or not math.isfinite(value) else round(float(value), digits)
 
 
+def _chip(answer: dict) -> str:
+    """A question's cell in the tree: yes when it passes; else why not, its own answer, or "child" when only a child stops it."""
+    if answer["passes"]:
+        return "yes"
+    return answer["own"] if answer["own"] != "yes" else "child"
+
+
 def _sig(value, digits: int = 4):
     """Display rounding to significant figures (a parameter's before / after); None and text pass through."""
     if not isinstance(value, (int, float)) or not math.isfinite(value) or value == 0:
@@ -370,6 +414,7 @@ datasets:
     data: data/nodes.json
     label: Tree
   node: data/nodes.json
+  questions: data/questions.json
   coverage: data/coverage.json
   workspace: data/workspace.json
   coverage_summary: data/coverage_summary.json
@@ -385,6 +430,7 @@ datasets:
       - {{ property: tape, label: Tape }}
 links:
   - {{ from: nodes.node, to: node.node, direction: one-way }}
+  - {{ from: nodes.node, to: questions.node, direction: one-way }}
   - {{ from: nodes.node, to: coverage.node, direction: one-way }}
   - {{ from: nodes.node, to: workspace.node, direction: one-way }}
   - {{ from: nodes.node, to: coverage_summary.node, direction: one-way }}
@@ -396,12 +442,15 @@ links:
 layout:
   panels:
     - text: |
-        **The ruler.** A joint is **twinned** when its twin's held-out error (sim→real RMS, median over held-out runs) is at most
-        **{RULER_TWINNED}×** the real joint's own run-to-run floor (repeats of one stimulus); close up to {RULER_CLOSE}×. A level's verdict is
-        its worst child's. The deployment also answers the **tool gate**: {TOOL_GATE_MM:g} mm at a stop. **Before** = {before}, **after** = {after}.
-        Pick any level in the tree; coverage, error, parameters, models and runs follow it.
+        **Five questions, in order** (proposal C, "Sim2Real KPIs and Gates", 2026-11-11). Every level answers
+        **Floor** (≥ 5 same-input repeats, passive and driven) → **Data** (coverage, sealed split, physical runs) → **Routines**
+        (hidden truth recovered in sim) → **Twin** (held-out sim→real ≤ {RULER_TWINNED}× floor, passive and driven) → **Job**
+        (real vs target; tool ≤ {TOOL_GATE_MM:g} mm at a stop). Its verdict is the **first one it does not pass**; a level passes a
+        question only if it does at its own output **and** every child does. The numbers beside each answer are soft.
+        **Before** = {before}, **after** = {after}. Pick any level in the tree.
       w: 12
     - {{ view: Tree, w: 12, h: 4 }}
+    - {{ view: Five questions, w: 12, h: 3 }}
     - {{ view: Verdict, w: 3, h: 2 }}
     - {{ view: Twin ÷ floor, w: 3, h: 2 }}
     - {{ view: sim→real before → after, w: 3, h: 2 }}
@@ -429,7 +478,19 @@ layout:
 properties:
   label: {{ displayName: Level }}
   verdict: {{ displayName: Verdict }}
-  ratio: {{ displayName: Twin ÷ floor }}
+  ratio: {{ displayName: Twin ÷ floor (driven) }}
+  floor: {{ displayName: Floor }}
+  data: {{ displayName: Data }}
+  routines: {{ displayName: Routines }}
+  twin: {{ displayName: Twin }}
+  job: {{ displayName: Job }}
+  why: {{ displayName: Why it stops }}
+  question: {{ displayName: Question }}
+  passes: {{ displayName: Passes }}
+  own: {{ displayName: At its own output }}
+  numbers: {{ displayName: The numbers }}
+  gate: {{ displayName: The gate }}
+  children_not_passing: {{ displayName: Children not passing }}
   sim_real_deg: {{ displayName: sim→real after }}
   sim_real_before_deg: {{ displayName: sim→real before }}
   target_real_deg: {{ displayName: target→real }}
@@ -453,12 +514,19 @@ views:
     selected: first
     tree: {{ parent: parent }}
     fold: open
-    order: [label, verdict, ratio, sim_real_deg, sim_real_before_deg, target_real_deg, floor_deg, held_out_runs, kind, type, tool_gate, parameters]
-    display: {{ verdict: badge }}
+    order: [label, verdict, floor, data, routines, twin, job, why, ratio, sim_real_deg, sim_real_before_deg, target_real_deg, floor_deg, kind]
+    display: {{ verdict: badge, floor: badge, data: badge, routines: badge, twin: badge, job: badge }}
+  - type: table
+    name: Five questions
+    from: questions
+    order: [order, question, passes, own, numbers, gate, children_not_passing]
+    display: {{ passes: badge, own: badge }}
+    sort:
+      - {{ property: order, direction: ASC }}
   - type: kpi
     name: Verdict
     from: node
-    kpi: {{ label: Verdict (worst level below), value: {{ property: verdict }} }}
+    kpi: {{ label: Verdict (the first question not passed), value: {{ property: verdict }} }}
   - type: gauge
     name: Twin ÷ floor
     from: node
