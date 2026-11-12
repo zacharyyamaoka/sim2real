@@ -179,6 +179,27 @@ def build(verify_log: str | None) -> str:
     servo = sorted(r["config"]["node_label"].split(" (")[0] for b in afters.values() for r in b if r["config"]["type"] == "integrated_servo")
     stamp = f"sim2real `main` @ `{sha[:9]}`" + (" (with uncommitted changes in src/)" if dirty else "")
     fivebar_tool = f["tool"]["history"][-1]
+    # the brief's tool number (sim2real 662e64d): 9.6 mm at the 16 settled holds on the nominal gravity compensation
+    tool_now = fivebar_tool.get("Job/tool_settled_mm", float("nan"))
+    tool_moved = abs(tool_now - 9.5588) > 0.05
+    tool_bullet = (f"> - **Five-bar tool:** 9.6 mm at the 16 settled holds on the nominal gravity compensation → {tool_now:.1f} mm on the "
+                   "identified one (`data/fivebar_dwell_identified_2026-11-11.json`); the tool's Job now reads the operating config, the "
+                   "nominal run stays beside it.\n" if tool_moved else "")
+    tool_unchanged = "" if tool_moved else f", the tool's {tool_now:.1f} mm"
+    ratios = {joint: f[joint]["history"][-1].get("Job/settled_over_share") for joint in ("j2", "c1")}
+    if all(ratios.values()):
+        big, small = sorted(ratios, key=lambda joint: -ratios[joint])
+        name = {"j2": "J2", "c1": "C1"}
+        big_term = (f"{name[big]} is the bigger term: it settles {num(f[big], 'Job/settled_median_deg')}° from its target, "
+                    f"{ratios[big]:.1f}× its {num(f[big], 'Job/share_deg')}° share ({name[small]}: {ratios[small]:.1f}×).")
+    else:
+        big_term = ""
+    d435 = re.search(r"(\d+(?:\.\d+)?) mm median by the D435", f["arm"]["summary"].get("Job/numbers", ""))
+    campaign = re.search(r"repeat campaign: (\d+(?:\.\d+)?)° median", w["can15"]["summary"].get("Job/numbers", ""))
+    d435_text = f" ({d435.group(1)} mm by the D435)" if d435 else ""
+    campaign_text = (f"; on the repeat campaign's gains it settles at {campaign.group(1)}°, "
+                     + ("inside it" if float(campaign.group(1)) <= w["can15"]["history"][-1]["Job/share_deg"] else "also outside it")
+                     if campaign and w["can15"]["history"][-1].get("Job/share_deg") else "")
     return f"""# Sim2Real: KPIs, gates and the curriculum
 
 *{DATE} · status as of {stamp} · written by `docs/build_kpis_gates_curriculum.py` from `sim2real.rack_results.load(...)` through
@@ -217,11 +238,10 @@ def build(verify_log: str | None) -> str:
 > - **C1 coverage:** 34.1 % → {num(f['c1'], 'Data/coverage_pct', '{:.1f}')} % after seven C1 swings (`coverage_real_031652`, `7f8d13b`), so
 >   C1 now stops at Routines like J2.
 > - **Wrist workspace:** the source says 60.55 % (`multi3/multi_scores.json` real_all); the page prints it to one place as 60.5 %.
-> - **Unchanged:** the floors ({num(w['can14'], 'Floor/floor_deg')} / {num(w['can15'], 'Floor/floor_deg')} /
+{tool_bullet}> - **Unchanged:** the floors ({num(w['can14'], 'Floor/floor_deg')} / {num(w['can15'], 'Floor/floor_deg')} /
 >   {num(w['can16'], 'Floor/floor_deg')}° wrist, {num(f['j2'], 'Floor/floor_deg')} / {num(f['c1'], 'Floor/floor_deg')}° five-bar), the twin
 >   ratios ({num(w['can14'], 'Twin/ratio', '{:.2f}')}× / {num(w['can15'], 'Twin/ratio', '{:.2f}')}× / {num(w['can16'], 'Twin/ratio', '{:.2f}')}×;
->   {num(f['j2'], 'Twin/ratio', '{:.2f}')}× / {num(f['c1'], 'Twin/ratio', '{:.2f}')}×), the tool's
->   {fivebar_tool.get('Job/tool_settled_mm', float('nan')):.1f} mm.
+>   {num(f['j2'], 'Twin/ratio', '{:.2f}')}× / {num(f['c1'], 'Twin/ratio', '{:.2f}')}×){tool_unchanged}.
 
 ## 1 · The KPIs and gates (as decided 2026-11-11)
 
@@ -340,7 +360,7 @@ counts differ):
    {num(w['can14'], 'Twin/passive_ratio', '{:.1f}')}× its {num(w['can14'], 'Floor/passive_floor_deg')}° passive floor: the released
    joint's gravity or breakaway model is wrong.
 3. **CAN 15, S5 (settled stop).** {num(w['can15'], 'Job/settled_median_deg')}° median on its operating gains (pick_sliding) against its
-   {num(w['can15'], 'Job/share_deg')}° share; the repeat campaign's gains settle at 0.311°, inside it.
+   {num(w['can15'], 'Job/share_deg')}° share{campaign_text}.
 
 **Five-bar**
 
@@ -350,9 +370,7 @@ counts differ):
 2. **Then S4.** The after twin is {num(f['j2'], 'Twin/ratio', '{:.2f}')}× (J2) and {num(f['c1'], 'Twin/ratio', '{:.2f}')}× (C1) its floor
    on the floor's own tape; the gate is 1.5×.
 3. **Then the tool gate (A5, T5).** The tool settles {fivebar_tool.get('Job/tool_settled_mm', float('nan')):.1f} mm from its target by
-   encoders + FK (20.7 mm by the D435) against 1 mm; J2 is the big term: it settles {num(f['j2'], 'Job/settled_median_deg')}° from its
-   target, {num(f['j2'], 'Job/settled_over_share', '{:.1f}')}× its {num(f['j2'], 'Job/share_deg')}° share (C1:
-   {num(f['c1'], 'Job/settled_over_share', '{:.1f}')}×).
+   encoders + FK{d435_text} against 1 mm. {big_term}
 
 ## 3 · Tracking it in W&B: three proposals
 
@@ -419,7 +437,8 @@ of models or something…"
 | Sharing outside (5) | 2 | 3 | **5** |
 | **Total (of 100)** | **46** | **89** | **61** |
 
-**Recommendation: B, as built.** It takes A's per-type view and C's per-deployment view and tree without splitting the data.
+**Recommendation: B, as built.** It takes A's per-type view and C's per-deployment view and tree without splitting the data. Decision
+record: `docs/decision-wandb-one-project-2026-11-11.md`.
 
 - **The reversible default:** everything goes through `wandb_log.PROJECT`. A customer cell that must be shared on its own gets
   `log(result, project="<customer> cell")`: C for that one deployment, B for the rest.
@@ -475,15 +494,17 @@ blockquote p{margin:4px 0}em{color:var(--mut)}
 
 def render_html(markdown: str) -> None:
     """Pandoc (GFM in, one standalone HTML file out, the stylesheet inline): opens from disk, no server, works offline."""
-    style = HTML.with_suffix(".css.tmp")
-    style.write_text(CSS)
+    import tempfile
+
     # WHY the callout rewritten: pandoc has no "[!note]" admonitions; a plain blockquote with a bold first line reads the same
     body = re.sub(r"^> \[!note\] (.*)$", r"> **\1**", markdown, flags=re.M)
-    try:
+    with tempfile.TemporaryDirectory() as folder:
+        # WHY a .css name: --embed-resources types the inlined file by its extension; a ".tmp" sheet went in as octet-stream and
+        # the browser ignored it (2026-11-11 render)
+        style = Path(folder) / "page.css"
+        style.write_text(CSS)
         subprocess.run(["pandoc", "-f", "gfm", "-t", "html5", "--standalone", "--embed-resources", f"--css={style}",
                         "--metadata", "pagetitle=Sim2Real KPIs and curriculum", "-o", str(HTML)], input=body, text=True, check=True)
-    finally:
-        style.unlink(missing_ok=True)
 
 
 def main() -> None:

@@ -4,8 +4,9 @@
 
 Zach (2026-11-11): "Should we have one weights and biases project per generic type? This could be a lot of projects ... having it in one
 location could work, if we can filter that data to show it for particular types of models". Decision (proposal B, scored in
-docs/KPIS_GATES_CURRICULUM.md section 3): one project, "Sim2Real"; every run carries its node's type, level, deployment and twin
-iteration as config, and one saved view plus one report per type and per deployment filter on them.
+docs/KPIS_GATES_CURRICULUM.md section 3; decision record docs/decision-wandb-one-project-2026-11-11.md): one project, "Sim2Real"; every
+run carries its node's type, level, deployment and twin iteration as config, and one saved view plus one report per type and per
+deployment filter on them. Do not re-split by type: the per-type views already show one type alone, and a split scatters each rig's tree.
 
 What a run is: one node of the result's typed tree (deployment -> arm -> joint -> tool) at one twin iteration (result.stages) of one
 evaluation. The last iteration's run carries the five answers (proposal C: Floor -> Data -> Routines -> Twin -> Job, the verdict is the
@@ -616,7 +617,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verify", action="store_true", help="read the project back through the W&B API and check it")
     parser.add_argument("--registry", type=Path, default=REGISTRY, help="where the view / report URLs are kept (default: beside this file)")
     parser.add_argument("--project", default=PROJECT)
+    parser.add_argument("--allow-dirty", action="store_true", help="log even when src/ has uncommitted changes")
     args = parser.parse_args(argv)
+
+    # WHY refuse a dirty tree (2026-11-11): every evaluation in W&B should be reproducible from a commit; that night a peer's
+    # in-flight edit to rack_results.py would otherwise have been logged as an evaluation of its own
+    sha, dirty = code_version()
+    if args.backfill and dirty and not args.allow_dirty:
+        parser.error(f"src/ has uncommitted changes (HEAD {sha[:9]}): commit them, or pass --allow-dirty")
 
     from ..rack_results import load
 
