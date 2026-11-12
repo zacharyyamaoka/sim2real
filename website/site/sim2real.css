@@ -68,3 +68,7 @@ table.kv td .chip { white-space: normal; overflow-wrap: anywhere; }
   body.docs.wide-page .shell { grid-template-columns: minmax(0, 1fr); }
   table.routines th[scope="row"] { min-width: 180px; }
 }
+
+/* an example's recorded output: one line per parameter; units never break mid-word */
+table.example-out td, table.example-out th { overflow-wrap: normal; white-space: nowrap; }
+table.example-out td:last-child { white-space: normal; min-width: 200px; }

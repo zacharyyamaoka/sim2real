@@ -617,11 +617,19 @@ def _num(value, unit: str = "") -> str:
     return esc(value)
 
 
+_HUMAN_UNITS = {"rad": (180.0 / 3.141592653589793, "deg"), "rad/s": (180.0 / 3.141592653589793, "deg/s"), "m": (1000.0, "mm")}
+
+
 def example_page(ex: ExampleInfo, types: list[TypeInfo], catalog: set[str], **ctx) -> str:
     rec = ex.recorded or {}
     rows = []
     for p in rec.get("parameters", []):
+        # WHY degrees and mm here only (Zach: angles in degrees, lengths in mm for humans): the record stays SI; convert at the display edge.
+        scale, unit = _HUMAN_UNITS.get(p.get("unit") or "", (1.0, p.get("unit") or ""))
+        p = {**p, "unit": unit, **{k: (p[k] * scale if isinstance(p.get(k), (int, float)) else p.get(k)) for k in ("true", "value")}}
         ci = p.get("ci95")
+        if isinstance(ci, (list, tuple)) and len(ci) == 2 and None not in ci:
+            ci = [ci[0] * scale, ci[1] * scale]
         ci_text = f"[{ci[0]:.4g}, {ci[1]:.4g}]" if isinstance(ci, (list, tuple)) and len(ci) == 2 and None not in ci else "—"
         verdict = p.get("pass")
         word = '<span class="rec-word pass">pass</span>' if verdict is True else ('<span class="rec-word fail">fail</span>' if verdict is False
@@ -649,7 +657,7 @@ def example_page(ex: ExampleInfo, types: list[TypeInfo], catalog: set[str], **ct
                f"PYTHONPATH=/home/bam/sim2real/src:/home/bam/dataclass_values/src:/home/bam/sim2real "
                f"/home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python /home/bam/sim2real/website/build/record_examples.py {ex.name}")
     toc = [("code", "Code", 2), ("output", "What calibrate() found", 2), ("printed", "What it printed", 2), ("rerun", "Record it again", 2)]
-    body = f"""<article class="prose">
+    body = f"""<article class="prose wide-table">
 {crumbs(("Examples", "/examples/"), (ex.title, None))}
 <h1 id="top">{esc(ex.title)}</h1>
 <p class="lead">{esc(ex.summary)}</p>
@@ -659,7 +667,7 @@ def example_page(ex: ExampleInfo, types: list[TypeInfo], catalog: set[str], **ct
 {code_block(ex.source, label=f"{ex.name} example", pre_attrs=f' data-source="{esc(ex.name)}"')}</section>
 <section aria-labelledby="output">{heading(2, "What calibrate() found", "output")}
 <p class="muted">{meta}</p>
-<div data-output="{esc(ex.name)}">{table(["Parameter", "Hidden truth", "Recovered", "95 % interval", "Unit", "Verdict", "Routine"], rows, cls="kv")}</div></section>
+<div data-output="{esc(ex.name)}">{table(["Parameter", "Hidden truth", "Recovered", "95 % interval", "Unit", "Verdict", "Routine"], rows, cls="kv example-out")}</div></section>
 <section aria-labelledby="printed">{heading(2, "What it printed", "printed")}
 {code_block(printed, "text", wrap=True, label="printed output") if printed else '<p class="faint">Nothing recorded.</p>'}
 {code_block(evaluation, "text", wrap=True, label="evaluation") if evaluation and evaluation not in printed else ""}</section>
@@ -668,7 +676,7 @@ def example_page(ex: ExampleInfo, types: list[TypeInfo], catalog: set[str], **ct
 {code_block(run_cmd, "shell", wrap=True, label="record command")}</section>
 </article>"""
     return shell(title=f"{ex.title} · sim2real examples", description=ex.summary or ex.title, path=ex.path, body=body, section="examples",
-                 toc=toc, types=types, **ctx)
+                 toc=toc, types=types, wide=True, **ctx)
 
 
 def api_page(entries: list[ApiEntry], types: list[TypeInfo], **ctx) -> str:
