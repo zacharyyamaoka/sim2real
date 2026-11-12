@@ -65,7 +65,9 @@ def world() -> dict:
 
 def within(value, truth, rule) -> bool:
     kind, tol = rule
-    return value is not None and math.isfinite(value) and abs(value - truth) <= (tol if kind == "abs" else tol * abs(truth))
+    # the seam's rule (sim2real.rig: a part in 1e9 of slack, so binary floating point cannot fail a value exactly one tolerance away:
+    # |0.8 ms - 0.6 ms| reads 2.0000000000000001e-4 against 2e-4)
+    return value is not None and math.isfinite(value) and abs(value - truth) <= (tol if kind == "abs" else tol * abs(truth)) * (1.0 + 1e-9)
 
 
 @pytest.fixture(scope="module")
@@ -101,9 +103,11 @@ def test_the_runner_is_the_seam_and_every_routine_is_a_registered_one(twin):
     known = {r.id for r in reg.ROUTINES}
     assert set(ids) <= known, set(ids) - known
     # backlash, the joint zero (homing), the mount tilt, the dynamics and the command delay, each a routine in the sequence
-    assert {"servo.backlash_reversal_held", "homing.single_touch", "arm.gravity_direction", "servo.dynamics_regression",
-            "servo.command_delay_scan"} <= set(ids)
+    assert {"servo.backlash_reversal_held", "servo.breakaway_two_sided", "homing.single_touch", "arm.gravity_direction",
+            "servo.dynamics_regression", "servo.command_delay_scan"} <= set(ids)
     assert ids.index("servo.backlash_reversal_held") < ids.index("homing.single_touch"), "homing corrects its stall by half the gap"
+    assert ids.index("servo.backlash_reversal_held") < ids.index("servo.breakaway_two_sided"), "the breakaway's walk crosses the measured gap"
+    assert ids.index("servo.breakaway_two_sided") < ids.index("servo.dynamics_regression"), "the dynamics hold the breakaway it measured"
     assert ids.index("servo.dynamics_regression") < ids.index("arm.gravity_direction"), "the direction is read off the load the dynamics found"
 
 
@@ -122,6 +126,11 @@ def test_every_hidden_value_is_a_row_identified_or_said_why_not(twin):
         # only the axis inertia is seen: the armature apart from the links it turns is not (the CAD links are a prior the masses move)
         assert params[f"{can}.armature_kg_m2"].routine is None and "axis inertia" in params[f"{can}.armature_kg_m2"].why_not
     assert params["wrist.command_delay_s"].routine == "servo.command_delay_scan"
+    # the breakaway is measured where it happens (both ways from a held flank), not read off refit's onset percentile, which a gear's gap
+    # flattens: the gap's crossings start at ~0 N.m
+    for can in MOVING:
+        assert params[f"{can}.static_friction_nm"].routine == "servo.breakaway_two_sided"
+        assert params[f"{can}.backlash_rad"].routine == "servo.backlash_reversal_held"
     # on its side, CAN 14 carries the wrist's gravity and 15 / 16 next to none: only CAN 14's is identified, the others say why
     assert params["can14.gravity_nm"].routine == "servo.dynamics_regression"
     for can in ("can15", "can16"):
@@ -199,6 +208,41 @@ def test_the_held_reversal_reads_a_gap_from_the_motor_encoder_alone(twin):
     gap = 15.0 * ARCMIN
     found = rig.reversal_check(gap_rad=gap)
     assert abs(found - gap) <= 0.05 * gap, (found / ARCMIN, gap / ARCMIN)
+
+
+def test_the_gap_is_read_by_the_five_bar_lanes_estimator(twin):
+    """The coordinator, 2026-11-11: reuse the mount lane's backlash routine, don't re-implement it. Both rigs read a dead band with one
+    function, bam_fb_test_rig.backlash.dead_band; the wrist drives its reversal under the position loop (the rig's WHY)."""
+    from sysid.examples.ur_wrist_test_rig import plant as wp
+    from sysid.examples.ur_wrist_test_rig import rig as wr
+
+    assert wp.FIVEBAR_TEST_RIG is not None, "bam_fb_test_rig.backlash is on bam_ws main or the mount lane's worktree"
+    import bam_fb_test_rig.backlash as fb
+
+    values = {**twin.runner.rig.nominal_values(), "can15.backlash_rad": 15.0 * ARCMIN}
+    run = next(r for r in wr.BacklashReversal().runs(values) if r.spec["can"] == 15)
+    rec = wr.play({"kind": "reversal", "spec": run.spec, "values": values, "noise": {}, "seed": None})
+    estimate = wr.BacklashReversal().fit({run.id: rec}, values, None)["can15.backlash_rad"]
+    band = fb.dead_band(rec["q"], rec["tau"], threshold_nm=wr.DEAD_BAND_THRESHOLD_FRACTION * run.spec["cap_nm"],
+                        mesh_stiffness_nm_per_rad=wr.MESH_STIFFNESS_NM_PER_RAD)
+    assert estimate.value == band.backlash_rad and "bam_fb_test_rig.backlash.dead_band" in estimate.method
+
+
+def test_the_breakaway_reads_the_static_friction_from_both_sides(twin):
+    """servo.breakaway_two_sided on a noise-free world whose CAN 15 breaks away at a set level: the two caps' mean, within 2 %."""
+    rig = twin.runner.rig
+    for static in (0.12, 0.24):
+        found = rig.breakaway_check(static_nm=static)
+        assert abs(found - static) <= 0.02 * static, (found, static)
+
+
+def test_the_gap_prior_is_the_gearboxs_datasheet(twin):
+    """The GIM4305-10's rated 15 arcmin (SteadyWin, robotparts' record) is every joint's prior, and every hidden gap is set apart from it."""
+    params = manifest()["parameters"]
+    for can in MOVING:
+        prior = params[f"{can}.backlash_rad"]
+        assert abs(prior["value"] - 15.0 * ARCMIN) < 1e-12 and "GIM4305-10" in prior["source"]
+        assert abs(world()["truth"][f"{can}.backlash_rad"] - prior["value"]) >= 1.5 * ARCMIN
 
 
 # --- the one click, end to end (slow) --------------------------------------------------------------------------------------------------
