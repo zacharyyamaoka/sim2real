@@ -2,9 +2,11 @@
 
 Runs on the latest MuJoCo from PyPI (no sim2real import), against a Menagerie checkout:
 
-    MUJOCO_GL=egl uv run --isolated --with mujoco --with pillow python docs/build_report_gripper_gallery.py <menagerie_dir>
+    uv run --isolated --no-project --with mujoco --with scipy --with fast-simplification \
+        python docs/build_report_gripper_gallery.py <menagerie_dir>
 
-Writes /home/bam/sim2real/reports/media/gripper-gallery-2026-11-11.html (self-contained) and, beside it,
+Writes /home/bam/sim2real/reports/media/gripper-gallery-2026-11-11.html (self-contained: an animated three.js view per
+gripper, docs/gripper_gallery_3d.py; three.js inlined from vendor/three/) and, beside it,
 gripper-gallery-2026-11-11.json (the extracted settings, one row per model file). Read by
 docs/practice-gripper-contact-sim-2026-11-11.md.
 
@@ -16,9 +18,7 @@ is one (Menagerie keeps impratio/cone there).
 
 from __future__ import annotations
 
-import base64
 import html
-import io
 import json
 import re
 import subprocess
@@ -28,7 +28,9 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
-from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).parent))
+from gripper_gallery_3d import VIEWER_JS, payload  # noqa: E402
 
 OUT_DIR = Path("/home/bam/sim2real/reports/media")
 STEM = "gripper-gallery-2026-11-11"
@@ -49,7 +51,7 @@ TYPE_COLOURS = {
     mujoco.mjtGeom.mjGEOM_MESH: (0.62, 0.62, 0.66),
 }
 TYPE_NAMES = {value: name.removeprefix("mjGEOM_").lower() for name, value in mujoco.mjtGeom.__members__.items()}
-WIDTH, HEIGHT = 480, 380
+THREE_BUNDLE = Path(__file__).resolve().parent.parent / "vendor" / "three" / "three-orbit-0.186.1.min.js"
 # Grippers whose finger bodies carry no finger-like name (read from each model's own kinematic tree).
 NAMED_FINGERS = {"agilex_piper": ("link7", "link8"), "arx_l5": ("link7", "link8")}
 # Matched by name but not grippers: a fruit fly's tarsal claws and a soft robotic foot.
@@ -146,56 +148,6 @@ def options_row(opt) -> dict:
     }
 
 
-def render(model, data, root_bodies: set[int], mode: str, camera) -> Image.Image:
-    model = model  # rgba edits are restored by the caller (copy)
-    rgba = model.geom_rgba.copy()
-    matid = model.geom_matid.copy()
-    for geom in range(model.ngeom):
-        inside = int(model.geom_bodyid[geom]) in root_bodies
-        collision = is_collision(model, geom)
-        if not inside:
-            model.geom_rgba[geom, 3] = 0.0
-        elif mode == "visual":
-            if collision and model.geom_group[geom] >= 3:
-                model.geom_rgba[geom, 3] = 0.0
-            elif collision:
-                # A geom that is both drawn and collides (no separate visual layer): drawn as-is.
-                pass
-        else:
-            if collision:
-                model.geom_matid[geom] = -1
-                model.geom_rgba[geom] = (*TYPE_COLOURS.get(mujoco.mjtGeom(model.geom_type[geom]), (0.5, 0.5, 0.5)), 1.0)
-            else:
-                model.geom_rgba[geom, 3] = 0.0
-    option = mujoco.MjvOption()
-    option.geomgroup[:] = 1
-    option.sitegroup[:] = 0
-    model.vis.headlight.ambient[:] = 0.42
-    model.vis.headlight.diffuse[:] = 0.62
-    model.vis.headlight.specular[:] = 0.08
-    with mujoco.Renderer(model, height=HEIGHT, width=WIDTH) as renderer:
-        renderer.update_scene(data, camera=camera, scene_option=option)
-        pixels = renderer.render().copy()
-        # WHY a depth pass: Menagerie robot files carry no skybox, so the background renders black; pixels at the far
-        # plane are background and turn light without touching the robot's. (Segmentation rendering raises an
-        # IndexError on some models in MuJoCo 4.0.1.)
-        renderer.enable_depth_rendering()
-        renderer.update_scene(data, camera=camera, scene_option=option)
-        depth = renderer.render()
-        renderer.disable_depth_rendering()
-    pixels[depth >= 0.999 * float(depth.max())] = (236, 237, 240)
-    image = Image.fromarray(pixels)
-    model.geom_rgba[:] = rgba
-    model.geom_matid[:] = matid
-    return image
-
-
-def jpeg_uri(image: Image.Image) -> str:
-    buffer = io.BytesIO()
-    image.save(buffer, format="JPEG", quality=78, optimize=True)
-    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
-
-
 def summarise_contacts(model, fingers: set[int]) -> dict:
     geoms = [geom for geom in range(model.ngeom) if int(model.geom_bodyid[geom]) in fingers and is_collision(model, geom)]
     if not geoms:
@@ -214,23 +166,6 @@ def summarise_contacts(model, fingers: set[int]) -> dict:
         "priority": sorted({int(model.geom_priority[geom]) for geom in geoms}),
         "margin_mm": sorted({round(1000 * float(model.geom_margin[geom]), 3) for geom in geoms}),
     }
-
-
-def camera_for(model, data, bodies: set[int]):
-    points = []
-    for geom in range(model.ngeom):
-        if int(model.geom_bodyid[geom]) in bodies:
-            centre, radius = data.geom_xpos[geom], float(model.geom_rbound[geom])
-            if radius > 0.6:  # planes / huge meshes would blow the framing up
-                continue
-            points.append((centre, radius))
-    centre = np.mean([point for point, _ in points], axis=0)
-    extent = max(np.linalg.norm(point - centre) + radius for point, radius in points)
-    camera = mujoco.MjvCamera()
-    camera.lookat[:] = centre
-    camera.distance = 0.95 * extent / np.tan(np.radians(model.vis.global_.fovy / 2.0))
-    camera.azimuth, camera.elevation = 135.0, -20.0
-    return camera
 
 
 def entries(menagerie: Path):
@@ -257,7 +192,6 @@ def entries(menagerie: Path):
         if not summarise_contacts(model, {b for body in bodies for b in subtree(model, body)}).get("finger_collision_geoms"):
             continue  # finger bodies with no collision geoms (e.g. MS-Human-700's locomotion variant): nothing to show
         opt, scene_name = scene_options(path)
-        camera = camera_for(model, data, framed)
         row = {
             "model": path.parent.name,
             "file": path.name,
@@ -266,10 +200,9 @@ def entries(menagerie: Path):
             "contacts": summarise_contacts(model, fingers),
             "options": options_row(opt if opt is not None else model.opt),
             "options_from": scene_name or path.name,
-            "visual": jpeg_uri(render(model, data, framed, "visual", camera)),
-            "collision": jpeg_uri(render(model, data, framed, "collision", camera)),
         }
-        print(path.parent.name, path.name, row["contacts"].get("types"), flush=True)
+        row["payload"], row["animation"] = payload(model, root, framed, fingers, TYPE_COLOURS)
+        print(path.parent.name, path.name, row["contacts"].get("types"), row["animation"], flush=True)
         yield row
 
 
@@ -280,14 +213,14 @@ def fmt(values) -> str:
                        for value in values)
 
 
-def card(row: dict) -> str:
+def card(row: dict, index: int) -> str:
     contacts, options = row["contacts"], row["options"]
     types = ", ".join(f"{count} {name}" for name, count in sorted(contacts.get("types", {}).items())) or "none"
     flags = ", ".join(options["flags"]) or "defaults"
-    return f"""<article class="card" data-types="{html.escape(' '.join(contacts.get('types', {})))}">
+    return f"""<article class="card" data-payload="p{index}" data-types="{html.escape(' '.join(contacts.get('types', {})))}">
 <h3>{html.escape(row['model'])} <small>{html.escape(row['file'])}{(' (+ ' + html.escape(', '.join(row['variants'])) + ', same settings)') if row.get('variants') else ''}</small></h3>
-<div class="pair"><figure><img loading="lazy" src="{row['visual']}" alt="visual"><figcaption>visual</figcaption></figure>
-<figure><img loading="lazy" src="{row['collision']}" alt="collision"><figcaption>collision</figcaption></figure></div>
+<div class="view"></div><div class="frame">drag to orbit · scroll to zoom</div>
+<script type="application/octet-stream" id="p{index}">{row['payload']}</script>
 <table>
 <tr><th>finger collision geoms</th><td>{types}</td></tr>
 <tr><th>condim</th><td>{fmt(contacts.get('condim'))}</td></tr>
@@ -320,7 +253,7 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / f"{STEM}.json").write_text(json.dumps(
         {"menagerie": commit, "mujoco": mujoco.__version__,
-         "rows": [{k: v for k, v in row.items() if k not in ("visual", "collision")} for row in good],
+         "rows": [{k: v for k, v in row.items() if k != "payload"} for row in good],
          "not_compiled": [row for row in rows if "error" in row]}, indent=1))
     legend = "".join(
         f'<span><i style="background:rgb({",".join(str(int(255 * c)) for c in colour)})"></i>{geom_type_name(kind)}</span>'
@@ -328,7 +261,8 @@ def main() -> None:
     )
     page = TEMPLATE.format(
         count=len(good), commit=html.escape(commit), mujoco=mujoco.__version__, legend=legend,
-        cards="".join(card(row) for row in good),
+        cards="".join(card(row, index) for index, row in enumerate(good)),
+        three=THREE_BUNDLE.read_text(), viewer=VIEWER_JS,
         errors="".join(f"<li>{html.escape(row['model'])}/{html.escape(row['file'])}: {html.escape(row['error'])}</li>"
                        for row in errors) or "<li>none</li>",
         summary=summary(good),
@@ -381,20 +315,25 @@ main{{max-width:1240px;margin:0 auto;padding:26px 16px 70px}}h1{{font-size:25px;
 .filters button.on{{border-color:var(--accent);color:var(--accent)}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(370px,1fr));gap:14px}}
 .card{{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}}.card h3{{margin:0 0 6px;font-size:15px}}.card h3 small{{color:var(--muted);font-weight:400}}
-.pair{{display:grid;grid-template-columns:1fr 1fr;gap:6px}}figure{{margin:0}}img{{width:100%;border-radius:4px;display:block;cursor:zoom-in}}img.big{{position:fixed;inset:0;margin:auto;width:min(92vw,900px);height:auto;z-index:9;box-shadow:0 0 0 100vmax rgba(0,0,0,.6);cursor:zoom-out}}figcaption{{font-size:11.5px;color:var(--muted);text-align:center}}
+.view{{height:300px;border-radius:6px;background:linear-gradient(#f3f4f6,#e3e5e9);overflow:hidden;touch-action:none}}.view canvas{{display:block}}
+.frame{{font-size:11px;color:var(--muted);margin:3px 0 0;min-height:15px}}
+.bar{{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px;font-size:13px;color:var(--muted)}}
+.bar button{{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:14px;padding:3px 12px;cursor:pointer;font-size:13px}}.bar button.on{{border-color:var(--accent);color:var(--accent)}}
 .card table{{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px}}.card th{{text-align:left;color:var(--muted);font-weight:500;padding:3px 6px 3px 0;vertical-align:top;width:34%}}.card td{{padding:3px 0;font-family:ui-monospace,Menlo,monospace;font-size:12px}}
 .card th small{{display:block;font-size:10.5px}}
 details{{margin-top:24px;color:var(--muted)}}
 </style></head><body><main>
-<h1>Menagerie gripper gallery: visual vs collision</h1>
+<h1>Menagerie gripper gallery: visual vs collision, in 3D</h1>
 <p class="sub">Every MuJoCo Menagerie model with a gripper or hand ({count} distinct set-ups; variants with identical settings merged) · Menagerie {commit} · MuJoCo {mujoco} · settings read from the compiled model, collision geoms on finger bodies only</p>
 <div class="lead">{summary}</div>
 <div class="legend">collision geoms coloured by type: {legend}<span>· one gripper framed per robot (bimanual robots: the first)</span></div>
+<div class="bar" id="modes">show <button data-mode="visual">visual</button><button data-mode="collision">collision</button><button data-mode="both" class="on">both</button><span>·</span><button data-play>pause</button><span>· each gripper opens and closes through its own actuators (gravity off); drag to orbit</span></div>
 <div class="filters" id="filters"><button class="on" data-f="">all</button><button data-f="box">has box</button><button data-f="capsule">has capsule</button><button data-f="sphere">has sphere</button><button data-f="mesh">has mesh</button><button data-f="cylinder">has cylinder</button></div>
 <div class="grid" id="grid">{cards}</div>
 <details><summary>Files that do not compile alone (include fragments: actuator / keyframe snippets)</summary><ul>{errors}</ul></details>
+<script>{three}</script>
+<script>{viewer}</script>
 <script>
-document.getElementById('grid').addEventListener('click',e=>{{if(e.target.tagName==='IMG')e.target.classList.toggle('big')}});
 document.getElementById('filters').addEventListener('click',e=>{{const b=e.target.closest('button');if(!b)return;
 document.querySelectorAll('#filters button').forEach(x=>x.classList.toggle('on',x===b));const f=b.dataset.f;
 document.querySelectorAll('#grid .card').forEach(c=>{{c.style.display=!f||c.dataset.types.split(' ').includes(f)?'':'none'}});}});

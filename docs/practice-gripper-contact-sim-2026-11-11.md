@@ -10,7 +10,7 @@
 
 Evidence behind it:
 - bam_ws `src/dev/bam_pick_worlds/research/grasp_contact_2026_11_11/` (R3 crab claw, an 80-run one-knob sweep, then the 96-episode gate);
-- the Menagerie gallery `reports/media/gripper-gallery-2026-11-11.html`, built by `docs/build_report_gripper_gallery.py`: 40 distinct set-ups, visual vs collision, settings read from the compiled models;
+- the Menagerie gallery `reports/media/gripper-gallery-2026-11-11.html`, built by `docs/build_report_gripper_gallery.py` + `docs/gripper_gallery_3d.py`: 40 distinct set-ups, each an animated 3D view (open/close through its own actuators) toggling visual vs collision, with settings read from the compiled models;
 - the MuJoCo docs and issues cited below.
 
 ## 1. Stiffness is per unit mass: size `solref` for the lightest object
