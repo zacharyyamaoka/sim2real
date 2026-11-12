@@ -18,6 +18,9 @@ sim = ["mujoco==3.11.0"]
 # WHY opencv in its own extra (2026-11-11, the conveyor belt type): the ChArUco verbs in metrics/charuco.py import cv2 lazily, so the
 # stable folders still load without it; 4.11.0.86 is the build bam_aruco and bam_rack_twin run (cv2.aruco.CharucoDetector).
 vision = ["opencv-python-headless==4.11.0.86"]
+# WHY its own extra (2026-11-11, the W&B tracker): sim2real.tracking.wandb_log imports wandb and wandb-workspaces only inside the
+# functions that talk to W&B, so the package never needs them; the pins are bam_ws bam_trackio's, the versions the house logs with.
+tracking = ["wandb==0.31.0", "wandb-workspaces==0.4.13"]
 test = ["pytest>=8"]
 
 [tool.uv.sources]
