@@ -810,6 +810,8 @@ def build_report(out: Path) -> dict:
            "seeds": list(SEEDS), "ladders": summary, "plots": plots,
            "wall_s": {"calibrate_median": _median(walls), "calibrate_range": [min(walls, default=None), max(walls, default=None)],
                       "cell_total_median": _median(totals)}}
+    doc["coverage"] = coverage(out, base)
+    doc["findings"] = findings(out)
     (out / "ladders.json").write_text(json.dumps(doc, indent=1, default=_plain))
     (out / "ladders.md").write_text(table_markdown(summary) + "\n")
     (out / "index.html").write_text(index_html(doc, out))
@@ -882,7 +884,196 @@ def probe_tables_html(out: Path) -> str:
                           f"baseline cell's dynamics routine read; replays' velocity noise {v['quiet'] * 1e3:.3f}e-3 rad/s (rests only) instead of "
                           f"{v['reading_noise'] * 1e3:.2f}e-3 (reading_noise()), drawn {v['true'] * 1e3:.2f}e-3; |error| / tolerance.</p>"
                           + _table(["parameter", "as committed", "rests' velocity noise"], body))
+    for name, world in (("breakaway_fix", "a DRY motor friction (motor_friction(dry=True))"), ("breakaway_fix_soft", "the mismatch cells' own soft motor friction")):
+        path = out / "probes" / f"{name}.json"
+        if not path.exists():
+            continue
+        rows = json.loads(path.read_text())
+        body = [(r["motor_friction_mnm"], f"CAN {r['can']}", f"{r['static_truth_mnm']:.0f}", f"{r['crossing_mnm']:.1f}",
+                 f"{r['committed']['low_cap_mnm']:.1f}", f"{r['committed']['static_mnm']:.1f}", f"{r['committed']['err_over_tol']:.2f}",
+                 f"{r['fixed']['low_cap_mnm']:.1f}", f"{r['fixed']['static_mnm']:.1f}", f"{r['fixed']['err_over_tol']:.2f}") for r in rows]
+        html_parts.append(f"<h2>Probe: breakaway's walk cap raised by the gap-crossing torque ({_esc(world)})</h2><p class=m>servo.breakaway_two_sided "
+                          "noise-free; committed = the walk's low cap at 0.6 x the Coulomb prior; fixed = that cap + the board torque the held "
+                          "reversal measured inside the gap on the same world (crossing_torque); |error| / tolerance (10 %).</p>"
+                          + _table(["motor friction mN.m", "joint", "breakaway truth mN.m", "crossing mN.m", "cap mN.m", "read mN.m", "err / tol",
+                                    "fixed cap mN.m", "fixed read mN.m", "fixed err / tol"], body))
+    path = out / "probes" / "encoder_fix.json"
+    if path.exists():
+        rows = json.loads(path.read_text())
+        def cell(d, unit):
+            return "-" if d.get(unit) is None else f"{d[unit]:.1f} ({d['err_over_tol']:.2f})"
+        body = [(f"{r['multiplier']:g}x", r["seed"], f"CAN {r['can']}", f"{r['step_arcmin']:.2f}", f"{r['gap_truth_arcmin']:.1f}",
+                 " ".join(f"{w:.2f}" for w in sorted(set(round(w, 2) for w in r["widths_arcmin"]))), cell(r["gap_median"], "arcmin"),
+                 cell(r["gap_mean"], "arcmin"), f"{r['static_truth_mnm']:.0f}", cell(r["static_committed"], "mnm"), cell(r["static_leave_3_steps"], "mnm"))
+                for r in rows]
+        html_parts.append("<h2>Probe: the encoder ladder's break (encoder step and velocity noise x10)</h2><p class=m>the routines' own recordings "
+                          "at the encoder cells' streams; gap by the crossings' median (committed) and mean; breakaway with the leave at 0.05 deg "
+                          "(committed) and at three encoder steps. Each cell: the value (|error| / tolerance). The distinct crossing widths show "
+                          "why the mean cannot help: every crossing lands at the same phase of the step.</p>"
+                          + _table(["encoder", "seed", "joint", "step arcmin", "gap truth arcmin", "crossing widths arcmin", "gap median",
+                                    "gap mean", "breakaway truth mN.m", "breakaway committed", "breakaway leave 3 steps"], body))
+    path = out / "probes" / "reversal_crossing.json"
+    if path.exists():
+        rows = json.loads(path.read_text())
+        def val(d):
+            return "-" if d.get("arcmin") is None else f"{d['arcmin']:.2f} ({d['err_over_tol']:.2f})"
+        body = [(r["motor_friction_mnm"], r["seed"], r["key"].split(".")[0], f"{r['truth_arcmin']:.1f}", f"{r['sigma_mnm']:.1f}", r["window"],
+                 f"{r['crossing_mnm']:.1f}", f"{r['threshold_mnm']:.0f} / {r['raised_mnm']:.1f}", val(r["committed"]), val(r["smoothed"]),
+                 val(r["smoothed_raised"])) for r in rows]
+        html_parts.append("<h2>Probe: the held reversal under motor-side friction (the mismatch world, 1x noise)</h2><p class=m>"
+                          "servo.backlash_reversal_held's recordings at the mismatch cells' world and streams; gap read as committed, on the torque "
+                          "smoothed by the adaptive window, and smoothed with the threshold raised above the trace's own gap-crossing torque "
+                          "(crossing + 4.5 x the smoothed sigma, at most 0.95 of the cap). Each cell: arcmin (|error| / tolerance).</p>"
+                          + _table(["motor friction mN.m", "seed", "joint", "gap truth arcmin", "torque sigma mN.m", "window", "crossing mN.m",
+                                    "threshold / raised mN.m", "committed", "smoothed", "smoothed + raised"], body))
+    for path in sorted((out / "probes").glob("dynamics_downstream-*.json")):
+        doc = json.loads(path.read_text())
+        body = [(r["key"], f"{r['truth']:.4g}", "-" if r["cell"] is None else f"{r['cell']:.4g}", f"{r['probe']:.4g}",
+                 "-" if r["cell_err_over_tol"] is None else f"{r['cell_err_over_tol']:.2f}", f"{r['probe_err_over_tol']:.2f}") for r in doc["rows"]]
+        fv = "; ".join(f"{k} cell {v['cell']:.4g} / used {v['used']:.4g} / truth {v['truth']:.4g}" for k, v in doc["front_values"].items())
+        html_parts.append(f"<h2>Probe: is {_esc(doc['label'])}'s dynamics miss its own? (front values = {_esc(doc['front'])}, velocity noise = "
+                          f"{_esc(doc['velocity'])})</h2><p class=m>servo.dynamics_regression measured and fitted again at the cell's noise and "
+                          f"streams, the routines before it handed {'the hidden truth' if doc['front'] == 'truth' else 'the cell’s own values'}; "
+                          f"{doc['seconds']:.0f} s. SI values; |error| / tolerance.</p>"
+                          + _table(["parameter", "truth", "the cell", "the probe", "cell err / tol", "probe err / tol"], body)
+                          + f"<details><summary class=m>front values</summary><p class=m>{_esc(fv)}</p></details>")
     return "".join(html_parts)
+
+
+def coverage(out: Path, base) -> dict:
+    """Which cells ran whole (every routine + eval_twin) and which only as the front pass, per ladder and level, and every whole cell of the
+    plan that was not run, with why: the level already breaks in its front pass (a whole run cannot un-break it), or the wall-time budget."""
+    out = Path(out)
+    full = {r["label"]: r for r in read_records(out)}
+    front = {r["label"]: r for r in read_records(out, "front")}
+    rows, dropped = [], []
+    for name, spec in LADDERS.items():
+        for level in spec.levels:
+            labels = [Cell(name, level, s).label(base) for s in SEEDS]
+            if name == "overall" and level == 0:
+                labels = labels[:1]   # no term draws at 0x: one run stands for every seed
+            whole = [lb for lb in labels if lb in full and "error" not in full[lb]]
+            fronts = [lb for lb in labels if lb in front and "error" not in front[lb]]
+            front_breaks = any(misses(front[lb]) for lb in fronts)
+            rows.append({"ladder": name, "level": level, "whole": whole, "front": fronts, "front_breaks": front_breaks})
+            for lb in labels:
+                if lb in full or lb.startswith("baseline-"):
+                    continue
+                why = ("its front pass already misses at this level: the level breaks whatever the dynamics do" if front_breaks else
+                       "wall-time budget (a whole cell is ~1 h on the shared host; seed 20261111 ran whole below each break, the front "
+                       "pass ran every seed)")
+                dropped.append({"label": lb, "why": why})
+    return {"rows": rows, "dropped": dropped, "whole_cells": len(full), "front_cells": len(front)}
+
+
+def coverage_html(cov: dict) -> str:
+    body = [(r["ladder"], f"{r['level']:g}", " ".join(lb[-1] for lb in r["whole"]) or "-",
+             len(r["front"]), "yes" if r["front_breaks"] else "no") for r in cov["rows"]]
+    dropped = "".join(f"<li><code>{_esc(d['label'])}</code>: {_esc(d['why'])}</li>" for d in cov["dropped"])
+    return ("<h2>Coverage: whole cells and front passes</h2><p class=m>A whole cell runs all six routines and eval_twin (22 identified values, "
+            "the three gates); a front pass runs the three routines before the dynamics (9 values: backlash, breakaway, zero), bit-equal to a "
+            "whole run's (tests/test_stress_wrist.py pins it). Whole seeds are named by their last digit (1 = 20261111).</p>"
+            + _table(["ladder", "level", "whole seeds", "front seeds", "front breaks"], body)
+            + f"<details><summary class=m>{len(cov['dropped'])} whole cells not run, and why</summary><ul class=s>{dropped}</ul></details>")
+
+
+def findings(out: Path) -> list[dict]:
+    """Each break the ladders found: where, the cause the probes pinned, the fix proposed (the routines are not changed here) and what the
+    probe measured with it. Numbers come from the probe files; a probe not written leaves its finding's measurement out."""
+    out = Path(out)
+    probe = lambda name: json.loads((out / "probes" / f"{name}.json").read_text()) if (out / "probes" / f"{name}.json").exists() else None  # noqa: E731
+    found = []
+    fine, coarse = probe("dead_band_fine"), probe("dead_band")
+    if coarse:
+        worst = lambda rs, k: max(math.inf if x[k]["err_over_tol"] is None else x[k]["err_over_tol"] for x in rs)  # noqa: E731
+        by = {}
+        for r in (fine or []) + coarse:
+            by.setdefault(float(r["multiplier"]), []).append(r)
+        ok = [m for m, rs in sorted(by.items()) if worst(rs, "committed") <= 1]
+        bad = [m for m, rs in sorted(by.items()) if worst(rs, "committed") > 1]
+        first_bad = min(bad) if bad else None
+        last_ok = max((m for m in ok if first_bad is None or m < first_bad), default=None)
+        adaptive = max(worst(rs, "adaptive") for rs in by.values())
+        found.append({
+            "id": "dead_band", "routine": "servo.backlash_reversal_held",
+            "breaks": f"torque noise between {last_ok:g}x and {first_bad:g}x (overall ladder at 2, torque ladder at 3)",
+            "params": "every joint's backlash_rad, then homing.single_touch's zero_offset_rad (it reads the gap) from 3x",
+            "cause": ("dead_band() thresholds the raw torque at 0.7 of the 70 mN.m cap (49 mN.m); at ~18 mN.m sigma (1.8x) a single noisy sample "
+                      "inside the gap crosses it, the band collapses and the gap reads near 0 (|error| / tolerance -> 10)"),
+            "fix": ("smooth the torque before thresholding with a window the trace's own measured noise asks (z 4.5 on the threshold, at most 31 "
+                    "samples; torque_sigma + adaptive_window in this tool)"),
+            "measured": f"the adaptive window holds every seed and joint at <= {adaptive:.2f} of the tolerance up to 10x torque noise "
+                        f"(committed: up to {max(worst(rs, 'committed') for rs in by.values()):.1f})"})
+    brk = probe("breakaway_fix_soft") or probe("breakaway_fix")
+    if brk:
+        broke = [r for r in brk if r["committed"]["err_over_tol"] > 1]
+        found.append({
+            "id": "breakaway_cap", "routine": "servo.breakaway_two_sided",
+            "breaks": "motor-side friction between 10 and 20 mN.m (mismatch ladder at 20)",
+            "params": "can15.static_friction_nm (all seeds); from 40 mN.m also every backlash (the held reversal, below) and can16 zero",
+            "cause": ("the walk's low cap is 0.6 x the Coulomb prior (24.8 mN.m); the motor's friction adds to the torque it takes to cross the "
+                      "gap (" + ", ".join(f"{r['crossing_mnm']:.0f} mN.m at {r['motor_friction_mnm']}" for r in brk if r["can"] == broke[0]["can"])
+                      + f" on CAN {broke[0]['can']}), which eats that cap: the low push no longer carries the output to its flank and the departure "
+                      f"is read at the cap ({min(r['committed']['static_mnm'] for r in broke):.0f} mN.m against {broke[0]['static_truth_mnm']:.0f})") if broke else "",
+            "fix": "raise the walk's cap by the gap-crossing torque the held reversal already measured on the same joint (crossing_torque)",
+            "measured": (f"worst |error| / tolerance {max(r['committed']['err_over_tol'] for r in brk):.2f} -> {max(r['fixed']['err_over_tol'] for r in brk):.2f} "
+                         "over 0/20/40 mN.m and all three joints, unchanged where it already passed")})
+        found.append({
+            "id": "reversal_crossing", "routine": "servo.backlash_reversal_held",
+            "breaks": "motor-side friction at 40 mN.m (mismatch ladder)", "params": "every joint's backlash_rad",
+            "cause": ("the gap-crossing torque (~30-34 mN.m at 40 mN.m friction) plus the 1x torque noise reaches the 49 mN.m dead-band threshold, "
+                      "so the motor's travel inside the gap reads as contact"),
+            "fix": ("smooth the torque (the dead_band fix) and set the threshold above the trace's own gap-crossing torque (crossing + 4.5 x "
+                    "the smoothed sigma, at least 0.7 and at most 0.95 of the cap)"),
+            "measured": "not measured (probe reversal_crossing not written)"})
+        rev = probe("reversal_crossing")
+        if rev:
+            worst_of = lambda k, lv: max(math.inf if r[k]["err_over_tol"] is None else r[k]["err_over_tol"] for r in rev if r["motor_friction_mnm"] == lv)  # noqa: E731
+            levels = sorted({r["motor_friction_mnm"] for r in rev})
+            found[-1]["measured"] = "; ".join(f"{lv} mN.m: committed {worst_of('committed', lv):.2f}, smoothed {worst_of('smoothed', lv):.2f}, "
+                                              f"smoothed + raised {worst_of('smoothed_raised', lv):.2f}" for lv in levels) + " (worst |error| / tolerance, 3 seeds x 3 joints); at 40 mN.m the raised threshold sits on its 0.95-cap ceiling, so past ~45 mN.m the reversal's cap must rise too"
+    enc = probe("encoder_fix")
+    if enc:
+        gap = [r for r in enc if r["gap_median"]["err_over_tol"] is not None and r["gap_median"]["err_over_tol"] > 1]
+        found.append({
+            "id": "encoder_step", "routine": "servo.backlash_reversal_held + servo.breakaway_two_sided",
+            "breaks": "encoder step + velocity noise between 3x and 10x (step 3.3 arcmin = 0.055 deg at 10x; the real encoder is 1x, 0.33 arcmin)",
+            "params": "can14.backlash_rad (all seeds), can14/can16.static_friction_nm (some seeds)",
+            "cause": ("gap: every crossing lands at the same phase of the step, so the five widths are identical and neither median nor mean "
+                      f"resolves below a step (CAN 14 reads {gap[0]['gap_median']['arcmin']:.2f} against {gap[0]['gap_truth_arcmin']:.0f} arcmin)" if gap else "gap: -")
+                     + "; breakaway: the 0.05 deg leave is under one 10x step, so a single step's flip during windup reads as a departure",
+            "fix": ("breakaway: leave at max(0.05 deg, 3 encoder steps). gap: dither each crossing's start by a fraction of a step (k/N of the "
+                    "step over the N crossings) so the widths sample the phase and their mean resolves below a step - the dither is not probed yet"),
+            "measured": (f"breakaway worst |error| / tolerance {max(r['static_committed']['err_over_tol'] for r in enc):.2f} -> "
+                         f"{max(r['static_leave_3_steps']['err_over_tol'] for r in enc):.2f} with the 3-step leave; gap unchanged by the mean "
+                         f"({max(r['gap_mean']['err_over_tol'] for r in enc):.2f})")})
+    for path in sorted((out / "probes").glob("dynamics_downstream-*-truth-reading.json")):
+        doc = json.loads(path.read_text())
+        bad_cell = [r for r in doc["rows"] if r["cell_err_over_tol"] is not None and r["cell_err_over_tol"] > 1]
+        bad_probe = [r for r in doc["rows"] if r["probe_err_over_tol"] > 1]
+        if not bad_cell:
+            continue
+        carried = [r["key"] for r in bad_cell if r["probe_err_over_tol"] <= 1]
+        own = [r["key"] for r in bad_probe]
+        found.append({
+            "id": f"dynamics-{doc['label']}", "routine": "servo.dynamics_regression",
+            "breaks": doc["label"], "params": ", ".join(r["key"] for r in bad_cell),
+            "cause": ((f"carried in from the front routines' misses: with their true values the refit recovers {', '.join(carried)}" if carried else "")
+                      + ("; " if carried and own else "") + (f"its own: with the true front values it still misses {', '.join(own)}" if own else "")),
+            "fix": ("fix the front routines first (dead_band above); the dynamics then need nothing" if not own else
+                    "the fit's velocity-noise weight: reading_noise() reads the velocity sigma 3.5x high at 1x (second differences carry the "
+                    "commanded motion); take it from the rests (quiet_velocity_sigma) - see the dynamics_downstream quiet probe"),
+            "measured": "; ".join(f"{r['key']} {r['cell_err_over_tol']:.2f} -> {r['probe_err_over_tol']:.2f}" for r in bad_cell)})
+    return found
+
+
+def findings_html(items: Sequence[dict]) -> str:
+    if not items:
+        return ""
+    body = [(f["routine"], f["breaks"], f["params"], f["cause"], f["fix"], f["measured"]) for f in items]
+    return ("<h2>Where recovery breaks, why, and the proposed fixes</h2><p class=m>The routines are not changed here: each fix is proposed with "
+            "what its probe measured on the routines' own recordings.</p>"
+            + _table(["routine", "breaks at", "first parameters", "cause", "proposed fix", "probe measured"], body))
 
 
 def index_html(doc: dict, out: Path) -> str:
@@ -901,6 +1092,8 @@ def index_html(doc: dict, out: Path) -> str:
     plots = "".join(f"<figure><img src='plots/{_esc(Path(path).name)}' alt='{_esc(name)} ladder: error over tolerance against level'>"
                     f"<figcaption>{_esc(doc['ladders'][name]['note'])}</figcaption></figure>" for name, path in doc["plots"].items())
     probes = probe_tables_html(out)
+    fixes = findings_html(doc.get("findings", []))
+    cov = coverage_html(doc["coverage"]) if doc.get("coverage") else ""
     wall = doc["wall_s"]
     return f"""<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Wrist one-click stress</title><style>
@@ -920,7 +1113,9 @@ Median calibrate {wall['calibrate_median']} s (range {wall['calibrate_range'][0]
 A level breaks when any seed misses any identified value's tolerance (the rig's, world.json's truth).</p>
 <div class=wrap><table><thead><tr><th>ladder</th><th>levels</th><th>first fail</th><th>first fail parameter(s)</th><th>recovered per seed</th><th>worst held-out / floor</th><th>worst tool p95</th></tr></thead>
 <tbody>{''.join(rows)}</tbody></table></div>
+{fixes}
 {plots}
+{cov}
 {probes}
 </main></body></html>"""
 
@@ -1380,6 +1575,51 @@ def probe_breakaway_fix(levels_mnm=(0, 20, 40), workers: int = 1, dry: bool = Tr
     return out
 
 
+def probe_reversal_crossing(levels_mnm=(0, 20, 40), seeds=SEEDS, workers: int = 1, z: float = 4.5) -> list[dict]:
+    """The mismatch ladder's backlash break at 40 mN.m: servo.backlash_reversal_held's recordings on the mismatch cells' own world (the soft
+    motor friction, the 1x noise, the cells' stream and seeds), read three ways: as committed (dead_band on the raw torque at 0.7 of the cap),
+    smoothed by the adaptive window only, and smoothed with the threshold raised above the trace's own gap-crossing torque (crossing + z x the
+    smoothed sigma, at least the committed threshold, at most 0.95 of the cap)."""
+    import importlib  # noqa: PLC0415
+
+    import sim2real  # noqa: PLC0415
+
+    twin = sim2real.Twin.load(NAME, workers=workers)
+    wr = importlib.import_module(RIG_MODULE)
+    from bam_fb_test_rig.backlash import dead_band  # noqa: PLC0415
+
+    rig, base = twin.runner.rig, twin.noise()
+    world, nominal = _world(twin)
+    runs = list(wr.BacklashReversal().runs(dict(nominal)))
+    out = []
+    for level in levels_mnm:
+        for seed in seeds:
+            with motor_friction(level * 1e-3) if level else contextlib.nullcontext():
+                measured = rig.measure(runs, world, base.with_terms(seed=int(seed)), "routine:servo.backlash_reversal_held", workers=workers)
+            for rec in measured.values():
+                key = f"{wr.INSTANCE[rec['can']]}.backlash_rad"
+                truth, tol = world[key], 0.10 * world[key]
+                committed_threshold = wr.DEAD_BAND_THRESHOLD_FRACTION * rec["cap_nm"]
+                sigma = torque_sigma(rec["tau"])
+                window = adaptive_window(sigma, committed_threshold, z=z)
+                tau_s = smoothed(rec["tau"], window)
+                crossing = crossing_torque({"tau": tau_s, "q": rec["q"]}, committed_threshold)
+                raised = min(0.95 * rec["cap_nm"], max(committed_threshold, crossing + z * sigma / math.sqrt(window)))
+                row = {"motor_friction_mnm": level, "seed": int(seed), "key": key, "truth_arcmin": truth / ARCMIN, "sigma_mnm": sigma * 1e3,
+                       "window": window, "crossing_mnm": crossing * 1e3, "threshold_mnm": committed_threshold * 1e3, "raised_mnm": raised * 1e3}
+                try:
+                    found = wr.BacklashReversal().fit({"r": rec}, dict(nominal), None)[key].value
+                    row["committed"] = {"arcmin": found / ARCMIN, "err_over_tol": abs(found - truth) / tol}
+                except ValueError as exc:
+                    row["committed"] = {"arcmin": None, "err_over_tol": None, "why": str(exc)[:120]}
+                for name, tau, threshold in (("smoothed", tau_s, committed_threshold), ("smoothed_raised", tau_s, raised)):
+                    value = dead_band(rec["q"], tau, threshold_nm=threshold, mesh_stiffness_nm_per_rad=wr.MESH_STIFFNESS_NM_PER_RAD).backlash_rad
+                    row[name] = {"arcmin": None if value is None else value / ARCMIN, "err_over_tol": None if value is None else abs(value - truth) / tol}
+                out.append(row)
+                print(json.dumps(row, default=_plain), flush=True)
+    return out
+
+
 # --- the CLI -----------------------------------------------------------------------------------------------------------------------------
 
 
@@ -1405,7 +1645,7 @@ def _cli(argv: Sequence[str] | None = None) -> int:
     rep = sub.add_parser("report", help="the ladder table and one plot per ladder, from the cells written")
     rep.add_argument("--out", type=Path, default=None)
     pro = sub.add_parser("probe", help="the known risks' estimators on a routine's own recordings (dead_band, reading_noise)")
-    pro.add_argument("which", choices=["dead_band", "reading_noise", "motor_friction", "dynamics_fix", "breakaway_fix", "dynamics_downstream", "encoder_fix"])
+    pro.add_argument("which", choices=["dead_band", "reading_noise", "motor_friction", "dynamics_fix", "breakaway_fix", "dynamics_downstream", "encoder_fix", "reversal_crossing"])
     pro.add_argument("--label", default=None, help="dynamics_downstream: the whole cell (e.g. overall-2-s20261111)")
     pro.add_argument("--front-values", choices=["truth", "found"], default="truth", help="dynamics_downstream: the values before the dynamics")
     pro.add_argument("--velocity", choices=["reading", "quiet"], default="reading", help="dynamics_downstream: the replays' velocity noise")
@@ -1455,7 +1695,8 @@ def _cli(argv: Sequence[str] | None = None) -> int:
             name = args.name or "dead_band_fine"
         else:
             rows = {"dead_band": probe_dead_band, "reading_noise": probe_reading_noise, "motor_friction": probe_motor_friction,
-                    "breakaway_fix": probe_breakaway_fix, "encoder_fix": probe_encoder_fix}[args.which](workers=args.workers)
+                    "breakaway_fix": probe_breakaway_fix, "encoder_fix": probe_encoder_fix,
+                    "reversal_crossing": probe_reversal_crossing}[args.which](workers=args.workers)
             name = args.name or args.which
         (out / "probes").mkdir(parents=True, exist_ok=True)
         (out / "probes" / f"{name}.json").write_text(json.dumps(rows, indent=1, default=_plain))
