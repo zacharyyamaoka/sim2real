@@ -127,3 +127,74 @@ def test_recover_first_homes_from_the_bowl_on_mujoco(rests):
     episode = run_episode("recover_first+press_reverse", mujoco_plant.MujocoRigPlant("B2"), rests["bowl"], prior_for(FivebarGeometry()),
                           "mujoco · B2")
     assert episode.record.finished, episode.record.outcome
+
+
+def _mesh_peaks(plant):
+    """Hook the twin's dead zone: the largest mesh torque (N.m) each wrapped drive has carried since, per physics step."""
+    wrapped = plant.rig.backlash
+    peaks = {name: 0.0 for name in wrapped.joints}
+    before = wrapped.before_step
+
+    def hooked(data):
+        before(data)
+        for name, joint in wrapped.joints.items():
+            peaks[name] = max(peaks[name], abs(float(data.qfrc_applied[joint.gap_dof])))
+
+    wrapped.before_step = hooked
+    return peaks, (lambda: setattr(wrapped, "before_step", before))
+
+
+def test_the_dead_zone_stays_bounded_while_both_drives_press_their_stops_under_gravity(rests):
+    """B1 (gear_backlash's dead zone) pressing J2 and C1 on their stops from the bowl, tview's step 2 (seek together at 10 / 7 N.m).
+
+    Red before 2026-11-12 pass 4: at the twin's 0.25 ms step the explicit dead-zone spring on C1 (13 N.m/arcmin on a 0.0020 kg.m^2 mesh
+    mode, omega dt = 1.19) gained energy at every flank impact - 5800 N.m of mesh torque and 70 rad/s on the drives within 8 s, where
+    the boards give 12 N.m at most and the arm's weight ~6 N.m. That is what tripped the sequences' 3 rad/s speed guard on B1."""
+    import numpy as np  # noqa: PLC0415
+    from robot_msgs.control import ServoCommand  # noqa: PLC0415
+
+    mujoco_plant = _plant_or_skip()
+    plant = mujoco_plant.MujocoRigPlant("B1")
+    state = plant.reset(rests["bowl"])
+    peaks, unhook = _mesh_peaks(plant)
+    start = dict(zip(state.name, state.position, strict=True))
+    fastest = 0.0
+    try:
+        for k in range(800):
+            d = 0.1 * 2.0 * math.pi * 0.01 * (k + 1)  # 0.1 rev/s, tview's seek speed
+            state = plant.tick(ServoCommand(name=DRIVES, position=np.array([start[DRIVES[0]], start[DRIVES[1]] + d, start[DRIVES[2]] + d]),
+                                            max_effort=np.array([7.0, 10.0, 7.0])), 0.01)
+            fastest = max(fastest, float(np.abs(state.velocity[1:]).max()))
+    finally:
+        unhook()
+    assert plant.log["touching"][-1][1:] == ["upper", "upper"]  # both drives on their stops: the press the dead zone must carry
+    # 150 N.m: a crank impact on its stop through the gap measured 139 N.m at dt/4 and dt/8 alike (converged), 2.5x the board limit
+    assert max(peaks.values()) < 150.0, peaks
+    assert fastest < 3.0  # the sequences' speed guard (JointCommandSequence.max_speed)
+
+
+def test_tview_keeps_j2_pressed_on_its_stop_until_c1_has_stalled_too(rests):
+    """tview's set-output is defined when C1 stalls (step 2b), so J2 must still be on its stop then. The real lane keeps a stalled drive
+    pushing (bam_rack_twin.hardware.tview_run: ``held`` pins its control position cap/kp into the stop, ``literal`` lets it run on).
+
+    Red before 2026-11-12 pass 4: step 2b re-sent J2's seek, and a robot_msgs move_by starts from where the joint is - J2's push dropped
+    from its 10 N.m cap to nothing, L1's weight took it 0.57 deg off its stop before C1's stall fired, and tview defined J2's frame there
+    (0.85 deg zero error vs CAD where single_touch has the contact pair's 0.285)."""
+    from sim2real.sim.homing.bench import prior_for, run_phase  # noqa: PLC0415
+    from sim2real.sim.homing.geometry import FivebarGeometry  # noqa: PLC0415
+    from sim2real.sim.homing.procedures import TviewV2  # noqa: PLC0415
+    from sim2real.sim.homing.sag_proof import sag_proof  # noqa: PLC0415
+
+    mujoco_plant = _plant_or_skip()
+    prior = prior_for(FivebarGeometry())
+    sequence = TviewV2().plan(prior, [])
+    sequence = sag_proof(type(sequence)(joint_names=sequence.joint_names, steps=sequence.steps[:4], name=sequence.name))
+    plant = mujoco_plant.MujocoRigPlant("B0")
+    plant.reset(rests["home"])
+    phase = run_phase(plant, sequence)
+    assert phase.status == "done", phase.message
+    event = next(e for e in phase.events if e.name.startswith("2b."))
+    k = phase.log["plant_offset"] + int(round(event.finished / 0.01)) - 1  # the tick the controller saw when C1's stall held
+    assert plant.log["touching"][k][1] == "upper"
+    contact = math.radians(124.7144)  # mujoco_plant.twin_contacts: the twin's J2 upper contact
+    assert abs(math.degrees(plant.log["link"][k][1] - contact)) < 0.02, math.degrees(plant.log["link"][k][1])

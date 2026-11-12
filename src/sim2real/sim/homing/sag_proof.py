@@ -102,17 +102,22 @@ def rehold_step(previous: JointCommandStep, step: JointCommandStep, joints: list
     """The seeking joints re-hold (a hold after a hold keeps its setpoint; otherwise it anchors where the joint is), ``step``'s limp joints
     stay limp, every other joint holds; done when the re-held and the limp joints are all still (the home button's settle). Each hold's
     cap is the joint's cap in ``previous`` when it was powered there, else its cap in ``step``."""
-    previous_cap = {command.joint: command.max_effort for command in previous.commands if command.mode != "limp"}
+    powered = {command.joint: command for command in previous.commands if command.mode != "limp"}
     commands, watched = [], list(joints)
     for command in step.commands:
-        cap = previous_cap.get(command.joint) or command.max_effort
+        before = powered.get(command.joint)
+        cap = (before.max_effort if before is not None else None) or command.max_effort
+        # WHY the feed-forward travels with the cap (2026-11-12, the +gff rows): a hold that dropped a gravity feed-forward the joint
+        # was carrying would let it sag gravity / kp (J2: 6.6 N.m on 22.9 N.m/rad = 17 deg) before its seek. After a limp the joint
+        # rests wherever it fell, a pose no plan names, so it gets none. 0 on every original row (and in the blind recovery).
+        feedforward = float(before.feedforward_effort or 0.0) if before is not None else 0.0
         if command.joint in joints:
-            commands.append(JointCommand.hold(command.joint, max_effort=float(cap)))
+            commands.append(JointCommand.hold(command.joint, max_effort=float(cap), feedforward_effort=feedforward))
         elif command.mode == "limp":
             commands.append(command)
             watched.append(command.joint)
         else:
-            commands.append(JointCommand.hold(command.joint, max_effort=float(cap)))
+            commands.append(JointCommand.hold(command.joint, max_effort=float(cap), feedforward_effort=feedforward))
     names = ", ".join(joints)
     return JointCommandStep(name=f"{REHOLD_PREFIX}{names} before: {step.name}", commands=tuple(commands),
                             done_when=(Settled(joints=tuple(watched), speed=HOME_STILL_SPEED_RAD_S, dwell=HOME_STILL_DWELL_S),),

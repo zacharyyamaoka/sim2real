@@ -108,6 +108,9 @@ class RecoverFirst(Procedure):
         self.notes.update(self.inner.notes)
         return result
 
+    def observe_vs_twin(self, prior: Prior, twin: Prior, phases: Sequence[Phase]) -> HomingResult:
+        return self.inner.observe_vs_twin(prior, twin, phases)
+
 
 def recover_first(name: str, *, sag_proof: bool = False) -> RecoverFirst:
     """A leaderboard procedure by name with the recovery in front (``sag_proof``: sag_proof.py's completion, the MuJoCo rung's)."""

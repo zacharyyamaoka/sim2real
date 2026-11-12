@@ -50,9 +50,11 @@ from .bench import (
     split_scorecards,
 )
 from .geometry import BUNDLE_SHA, C1, DRIVES, J2, ROLE, FivebarGeometry
-from .mujoco_plant import BACKLASH_METHOD, BAM_WS_SRC, MujocoRigPlant
+from .gravity_ff import GFF_SUFFIX, GFF_VARIANTS, GravityFF
+from .gravity_ff import procedure as procedure_by_name
+from .mujoco_plant import BACKLASH_METHOD, BAM_WS_SRC, MujocoRigPlant, twin_contacts
 from .plant import HIDDEN_GAP_ARCMIN
-from .procedures import PROCEDURES, PressReverse, identify_backlash
+from .procedures import PROCEDURES, HomingRefused, PressReverse, identify_backlash
 from .recover import PREFIX, RECOVER_PREFIX_NAME, RecoverFirst
 
 RUNG = "mujoco"
@@ -85,14 +87,26 @@ class TimedRecoverFirst(RecoverFirst):
 
 
 def make(name: str):
-    """A row by name. WHY sag_proof on every recover_first row here (2026-11-12): gravity on PD boards, sag_proof.py's docstring."""
+    """A row by name (``<name>+gff``: gravity_ff's variant). WHY sag_proof on every recover_first row here (2026-11-12): gravity on PD
+    boards, sag_proof.py's docstring."""
     if name.startswith(TIMED):
-        return TimedRecoverFirst(inner=PROCEDURES[name.removeprefix(TIMED)](), sag_proof=True)
+        return TimedRecoverFirst(inner=procedure_by_name(name.removeprefix(TIMED)), sag_proof=True)
     if name.startswith(RECOVER_PREFIX_NAME):
-        return RecoverFirst(inner=PROCEDURES[name.removeprefix(RECOVER_PREFIX_NAME)](), sag_proof=True)
-    from .bench import make_procedure  # noqa: PLC0415
+        return RecoverFirst(inner=procedure_by_name(name.removeprefix(RECOVER_PREFIX_NAME)), sag_proof=True)
+    return procedure_by_name(name)
 
-    return make_procedure(name)
+
+def base_name(name: str) -> str:
+    """The original procedure a row is built on (no recover_first / timed prefix, no +gff)."""
+    return inner_name(name.replace(TIMED, RECOVER_PREFIX_NAME)).removesuffix(GFF_SUFFIX)
+
+
+def event_tick(plant: MujocoRigPlant, offset: int, event) -> int:
+    """The plant log row the controller saw on the tick a step's done-when held, and the command still in force there.
+    WHY ``- 1`` (2026-11-12 pass 4): the controller's clock is advanced before it checks, so a step that ends at ``n`` ticks was judged
+    on the state after ``n - 1`` plant ticks; row ``offset + n`` already carries the NEXT step's first command (pass 3's step_ends read
+    that one: a move-by's setpoint anchored where the joint was, so every ending seek showed a lead of ~0)."""
+    return max(0, min(offset + int(round(event.finished / 0.01)) - 1, len(plant.log["t"]) - 1))
 
 
 def recovery_landing(plant: MujocoRigPlant, phase, geometry: FivebarGeometry) -> list[dict]:
@@ -104,8 +118,7 @@ def recovery_landing(plant: MujocoRigPlant, phase, geometry: FivebarGeometry) ->
         name = phase.sequence.steps[event.index].name
         if not name.startswith(PREFIX):
             continue
-        k = offset + int(round(event.finished / 0.01))
-        k = min(k, len(plant.log["link"]) - 1)
+        k = event_tick(plant, offset, event)
         link = dict(zip(DRIVES, plant.log["link"][k], strict=True))
         c1_stop = geometry.stop(C1, +1, link[J2])
         out.append({"step": event.index + 1, "name": name.removeprefix(PREFIX), "outcome": event.outcome,
@@ -123,7 +136,7 @@ def step_ends(plant: MujocoRigPlant, phase) -> list[dict]:
     out = []
     offset = phase.log["plant_offset"]
     for event in phase.events:
-        k = min(offset + int(round(event.finished / 0.01)), len(plant.log["motor"]) - 1)
+        k = event_tick(plant, offset, event)
         motor, setpoint = plant.log["motor"][k], plant.log["setpoint"][k]
         out.append({"step": event.index + 1, "name": event.name, "outcome": event.outcome, "t_s": round(event.finished, 3),
                     "motor_minus_setpoint_deg": {ROLE[j]: (None if math.isnan(sp) else round(math.degrees(m - sp), 3))
@@ -131,13 +144,38 @@ def step_ends(plant: MujocoRigPlant, phase) -> list[dict]:
     return out
 
 
-def run_one(name: str, plant: MujocoRigPlant, start, prior, geometry, environment: str):
-    episode = run_episode(name, plant, start, prior, environment, procedure=make(name))
+def run_one(name: str, plant: MujocoRigPlant, start, prior, geometry, environment: str, twin=None):
+    """One episode; with ``twin`` (the prior on the twin's own contacts, ``twin_prior``) also each joint's zero error against those
+    (``notes["zero_error_vs_twin_deg"]``): the same evidence, the exporter's geometry error taken out."""
+    procedure = make(name)
+    episode = run_episode(name, plant, start, prior, environment, procedure=procedure)
     if episode.phases:
         episode.notes["recovery_landing"] = recovery_landing(plant, episode.phases[0], geometry)
         episode.notes["step_ends"] = step_ends(plant, episode.phases[0])
     episode.notes["start"] = plant.start_settled
+    if twin is not None and episode.result is not None:
+        try:
+            result = procedure.observe_vs_twin(prior, twin, episode.phases)
+        except HomingRefused as error:  # the same evidence: refused vs CAD and vs twin alike, recorded if it ever differs
+            episode.notes["zero_error_vs_twin_deg"] = {"refused": str(error)}
+        else:
+            true = plant.truth()["true_offset_rad"]
+            episode.notes["zero_error_vs_twin_deg"] = {
+                ROLE[j]: (None if result.zero(j) is None else math.degrees(result.zero(j).offset_rad - true[j])) for j in DRIVES}
     return episode
+
+
+def twin_prior(prior, contacts: dict, table=None):
+    """``prior`` with its stop map replaced by the twin's own contacts (``mujoco_plant.twin_contacts``) and ``table`` as its stored table
+    (the calibration observed against those same contacts)."""
+    from dataclasses import replace as _replace  # noqa: PLC0415
+
+    from robot_models.homing.types import StopMap  # noqa: PLC0415
+
+    sides = tuple(_replace(side, q_rad=contacts[(side.joint, side.side)], basis="measured",
+                           source="the twin's own contact (mujoco_plant.twin_contacts)") if (side.joint, side.side) in contacts else side
+                  for side in prior.stops.sides)
+    return _replace(prior, stops=StopMap(sides, source="twin contacts"), table=table)
 
 
 def trace_of(geometry: FivebarGeometry, model: str, name: str, start, every: int = 5) -> dict:
@@ -159,34 +197,49 @@ def trace_of(geometry: FivebarGeometry, model: str, name: str, start, every: int
             "recovery_landing": episode.notes.get("recovery_landing"), "start_settled": plant.start_settled}
 
 
-def calibrate(geometry: FivebarGeometry, model: str, start):
-    """identify_backlash on this plant (the kinematic bench's ``calibrate``): plain press_reverse from ``start``."""
-    plant = MujocoRigPlant(model)
+def calibrate(geometry: FivebarGeometry, model: str, start, contacts: dict | None = None):
+    """identify_backlash on this plant (the kinematic bench's ``calibrate``): plain press_reverse from ``start``; when that cannot finish
+    under gravity (pass 3: the far-corner walk, every model), the same calibration verb on press_reverse's gravity-aware variant behind
+    recover_first (``recover_first+press_reverse+gff``, sag_proof on) - the press_reverse that can run here. Returns (table, twin table,
+    info); the twin table is the same run observed against the twin's own contacts (``contacts``), for the vs-twin scoring."""
     prior = prior_for(geometry)
-    procedure = PressReverse()
-    plant.reset(start)
-    phase = run_phase(plant, procedure.plan(prior, []))
-    if phase.status != "done":
-        return None, {"seconds": plant.time, "failed": f"{phase.status}: {phase.message}", "start": plant.start_settled}
-    table = identify_backlash(procedure, prior, [phase])
-    return table, {"seconds": plant.time, "table": table.to_dict(),
-                   "gap_deg": {j: math.degrees(table.get(j).model.gap_rad) for j in DRIVES}, "start": plant.start_settled}
+    tried = []
+    for name, procedure in (("press_reverse", PressReverse()),
+                            (RECOVER_PREFIX_NAME + "press_reverse" + GFF_SUFFIX,
+                             RecoverFirst(inner=GravityFF(inner=PressReverse()), sag_proof=True))):
+        plant = MujocoRigPlant(model)
+        plant.reset(start)
+        phase = run_phase(plant, procedure.plan(prior, []))
+        if phase.status != "done":
+            tried.append({"procedure": name, "seconds": plant.time, "failed": f"{phase.status}: {phase.message}"})
+            continue
+        table = identify_backlash(procedure, prior, [phase])
+        twin_table = None if contacts is None else procedure.observe(twin_prior(prior, contacts), [phase]).backlash
+        return table, twin_table, {"procedure": name, "seconds": plant.time, "table": table.to_dict(),
+                                   "gap_deg": {j: math.degrees(table.get(j).model.gap_rad) for j in DRIVES},
+                                   "twin_gap_deg": None if twin_table is None else {j: math.degrees(twin_table.get(j).model.gap_rad)
+                                                                                    for j in DRIVES},
+                                   "tried_first": tried, "start": plant.start_settled}
+    return None, None, {"failed": "; ".join(f"{t['procedure']}: {t['failed']}" for t in tried), "tried": tried}
 
 
 _GEOMETRY: dict = {}
 
 
 def _job(args):
-    name, model, start, table_dict, root, cogging = args
+    name, model, start, table_dict, twin_table_dict, contacts, root, cogging = args
     from robot_models.homing.types import BacklashTable  # noqa: PLC0415
 
     geometry = _GEOMETRY.get(root) or _GEOMETRY.setdefault(root, FivebarGeometry(root))
     table = BacklashTable.from_dict(table_dict) if table_dict is not None else None
+    twin_table = BacklashTable.from_dict(twin_table_dict) if twin_table_dict is not None else None
     plant = MujocoRigPlant(model, cogging=cogging)
-    uses_table = inner_name(name.replace(TIMED, RECOVER_PREFIX_NAME)) in ("single_touch", "two_level_touch")
+    uses_table = base_name(name) in ("single_touch", "two_level_touch")
+    prior = prior_for(geometry, table if uses_table else None)
+    twin = None if contacts is None else twin_prior(prior, contacts, twin_table if uses_table else None)
     t0 = time.time()
     try:
-        episode = run_one(name, plant, start, prior_for(geometry, table if uses_table else None), geometry, f"{RUNG} · {model}")
+        episode = run_one(name, plant, start, prior, geometry, f"{RUNG} · {model}", twin=twin)
     except Exception as error:  # a crash is an outcome, recorded (never a silent drop from the denominator)
         from robot_models.homing.metrics import EpisodeRecord, JointOutcome  # noqa: PLC0415
 
@@ -206,20 +259,42 @@ def kinematic_reference(path: Path = KINEMATIC_JSON) -> dict:
     return {"path": str(path), "sim2real_sha": results.get("sim2real_sha"), "cards": by_scope[WORKING]}
 
 
-def verdicts(cards: dict, reference: dict) -> dict:
-    """Per (model, procedure): the brief's two MuJoCo gates, each with its numbers."""
+def kinematic_name(name: str) -> str:
+    """The kinematic rung's row a MuJoCo row is compared with: the timed diagnostic as its recover_first row, a +gff variant as its
+    original (the kinematic plant is weightless: its feed-forward is nil, so its original's result is the variant's)."""
+    return name.replace(TIMED, RECOVER_PREFIX_NAME).removesuffix(GFF_SUFFIX)
+
+
+def verdicts(cards: dict, reference: dict, cards_vs_twin: dict | None = None) -> dict:
+    """Per (model, procedure): the brief's two MuJoCo gates, each with its numbers. The zero gate is judged twice, unchanged (0.1 deg over
+    the kinematic rung's p95): vs CAD (``zero_vs_kinematic_pass``, the record) and vs the twin's own contact (``zero_vs_kinematic_vs_twin
+    _pass``). ``pass`` takes the second - the coordinator's 2026-11-12 ruling: the exporter's J2 pair sits 0.285 deg short of CAD (asked
+    of the Windows Cad2Robot agent), a geometry error homing must not be failed for; ``pass_vs_cad`` keeps the first."""
     out = {}
     for model, by_name in cards.items():
         for name, card in by_name.items():
-            ref = (reference.get("cards", {}).get(model, {}).get(name.replace(TIMED, RECOVER_PREFIX_NAME)) or {})
+            ref = (reference.get("cards", {}).get(model, {}).get(kinematic_name(name)) or {})
             kin = ref.get("joint_angle_error_deg")
             mine = card.get("joint_angle_error_deg")
             zero_ok = None if (kin is None or mine is None) else bool(mine <= kin + ZERO_VS_KINEMATIC_DEG)
+            twin_card = ((cards_vs_twin or {}).get(model) or {}).get(name) or {}
+            twin = twin_card.get("joint_angle_error_deg")
+            twin_ok = None if (kin is None or twin is None) else bool(twin <= kin + ZERO_VS_KINEMATIC_DEG)
+            reliable_ok = bool(card["reliability_pct"] == 100.0)
             out.setdefault(model, {})[name] = {
-                "reliability_pct": card["reliability_pct"], "reliability_gate_pass": bool(card["reliability_pct"] == 100.0),
-                "zero_p95_deg": mine, "kinematic_zero_p95_deg": kin, "zero_vs_kinematic_pass": zero_ok,
-                "pass": bool(card["reliability_pct"] == 100.0 and zero_ok is True)}
+                "reliability_pct": card["reliability_pct"], "reliability_gate_pass": reliable_ok,
+                "zero_p95_deg": mine, "zero_p95_vs_twin_deg": twin, "kinematic_zero_p95_deg": kin,
+                "zero_vs_kinematic_pass": zero_ok, "zero_vs_kinematic_vs_twin_pass": twin_ok,
+                "pass_vs_cad": bool(reliable_ok and zero_ok is True),
+                "pass": bool(reliable_ok and twin_ok is True)}
     return out
+
+
+def vs_twin_row(record: dict, note: dict) -> dict:
+    """``record`` (an EpisodeRecord dict) with each joint's zero error the one against the twin's own contacts (``run_one``)."""
+    twin = (note or {}).get("zero_error_vs_twin_deg") or {}
+    joints = [dict(j, zero_error_deg=(twin.get(ROLE[j["joint"]]) if j["zero_error_deg"] is not None else None)) for j in record["joints"]]
+    return dict(record, joints=joints)
 
 
 def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers: int = 3, cogging: bool = True,
@@ -228,13 +303,18 @@ def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers
     geometry = FivebarGeometry(root) if root else FivebarGeometry()
     prior = prior_for(geometry)
     starts = named_rests(geometry, prior) + sobol_starts(geometry)[:n_sobol]
-    home_start = next(s for s in starts if s.name == "home")
-    calibration, tables = {}, {}
+    rest = {s.name: s for s in starts}
+    home_start = rest["home"]
+    # the twin's own contacts, measured once on B0 (every drive pressed on each stop, gravity off): the vs-twin scoring's stop map
+    contacts = twin_contacts({+1: rest["on_seek_stops"], -1: rest["lower_corner"]})
+    calibration, tables, twin_tables = {}, {}, {}
     for model in models:
-        table, info = calibrate(geometry, model, home_start)
+        table, twin_table, info = calibrate(geometry, model, home_start, contacts)
         calibration[model] = info
         tables[model] = None if table is None else table.to_dict()
-    jobs = [(name, model, start, tables[model], str(geometry.root), cogging) for model in models for name in procedures for start in starts]
+        twin_tables[model] = None if twin_table is None else twin_table.to_dict()
+    jobs = [(name, model, start, tables[model], twin_tables[model], contacts, str(geometry.root), cogging)
+            for model in models for name in procedures for start in starts]
     if workers > 1:
         import multiprocessing  # noqa: PLC0415
 
@@ -243,16 +323,20 @@ def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers
     else:
         outputs = [_job(job) for job in jobs]
     episodes: dict = {}
+    episodes_vs_twin: dict = {}
     notes: dict = {}
     wall: dict = {}
     for model, name, start, record, note, seconds in outputs:
         episodes.setdefault(model, {}).setdefault(name, []).append(compact(record))
+        episodes_vs_twin.setdefault(model, {}).setdefault(name, []).append(compact(vs_twin_row(record, note)))
         notes.setdefault(model, {}).setdefault(name, {})[start] = note
         wall.setdefault(model, {}).setdefault(name, []).append(round(seconds, 1))
-    cards = {}
+    cards, cards_vs_twin = {}, {}
     for model, by_name in episodes.items():
         for name, rows in by_name.items():
             cards.setdefault(model, {})[name] = scorecard([expand(r, name, f"{RUNG} · {model}") for r in rows], gate_deg=GATE_DEG)
+            cards_vs_twin.setdefault(model, {})[name] = scorecard([expand(r, name, f"{RUNG} · {model}")
+                                                                   for r in episodes_vs_twin[model][name]], gate_deg=GATE_DEG)
     start_rows = [{"name": s.name, "branch": s.branch, "link_deg": {j: math.degrees(v) for j, v in s.link_rad.items()},
                    "why": NAMED_WHY.get(s.name, "Sobol")} for s in starts]
     reference = kinematic_reference()
@@ -269,6 +353,12 @@ def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers
         "bam_ws_sha": git_sha(BAM_WS_SRC.parent),
         "dt_s": 0.01,
         "physics_dt_s": float(any_plant.rig.model.opt.timestep),
+        "physics_dt_s_by_model": {m: float(MujocoRigPlant(m, cogging=cogging, settle_s=0.0).rig.model.opt.timestep) for m in models},
+        "twin_contacts_deg": {ROLE[j]: {("upper" if side > 0 else "lower"): {
+            "twin": math.degrees(contacts[(j, side)]), "cad": math.degrees(prior.stops.q_rad(j, side)),
+            "cad_minus_twin": math.degrees(prior.stops.q_rad(j, side) - contacts[(j, side)])} for side in (+1, -1)} for j in DRIVES},
+        "twin_contacts_method": "mujoco_plant.twin_contacts: each drive pressed on each stop at 2 and 4 N.m, gravity off, no cogging, "
+                                "the others holding; link angle extrapolated to zero push (B0)",
         "gate_deg": GATE_DEG,
         "zero_vs_kinematic_deg": ZERO_VS_KINEMATIC_DEG,
         "hidden_gap_arcmin": HIDDEN_GAP_ARCMIN,
@@ -285,11 +375,13 @@ def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers
         "starts": start_rows,
         "calibration": calibration,
         "scorecards": cards,
+        "scorecards_vs_twin": cards_vs_twin,
         "scorecards_by_scope": split_scorecards(episodes, start_rows, RUNG, GATE_DEG),
         "kinematic_reference": {k: v for k, v in reference.items() if k != "cards"},
-        "verdicts": verdicts(cards, reference),
+        "verdicts": verdicts(cards, reference, cards_vs_twin),
         "episode_columns": list(EPISODE_COLUMNS),
         "episodes": episodes,
+        "episodes_vs_twin": episodes_vs_twin,
         "notes": notes,
         "wall_s": wall,
         "seconds": time.time() - t0,
@@ -300,9 +392,9 @@ def merge(main: dict, extra: dict) -> dict:
     """``extra``'s rows (e.g. the DIAGNOSTIC timed run) added to ``main``'s: per-(model, procedure) tables merged, nothing overwritten."""
     out = dict(main)
     out["procedures"] = list(main["procedures"]) + [p for p in extra["procedures"] if p not in main["procedures"]]
-    for key in ("episodes", "notes", "scorecards", "verdicts", "wall_s"):
-        merged = {m: dict(v) for m, v in main[key].items()}
-        for model, by_name in extra[key].items():
+    for key in ("episodes", "episodes_vs_twin", "notes", "scorecards", "scorecards_vs_twin", "verdicts", "wall_s"):
+        merged = {m: dict(v) for m, v in main.get(key, {}).items()}
+        for model, by_name in extra.get(key, {}).items():
             for name, value in by_name.items():
                 if name in merged.get(model, {}):
                     raise ValueError(f"{key}: {model} {name} is in both results")
@@ -325,7 +417,7 @@ def main(argv=None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--sobol", type=int, default=SOBOL_STARTS)
-    parser.add_argument("--procedures", nargs="*", default=list(PROCEDURES))
+    parser.add_argument("--procedures", nargs="*", default=list(PROCEDURES) + list(GFF_VARIANTS))
     parser.add_argument("--models", nargs="*", default=list(MODELS))
     parser.add_argument("--timed-recovery", action="store_true", help="also run the DIAGNOSTIC recover_first(timed)+ rows")
     parser.add_argument("--only-timed", action="store_true", help="run only the DIAGNOSTIC rows (merged into a main results JSON later)")
@@ -356,8 +448,9 @@ def main(argv=None) -> int:
     args.out.write_text(json.dumps(results))
     for model, by_name in results["verdicts"].items():
         for name, v in by_name.items():
-            print(f"{model} {name:38s} rel {v['reliability_pct']:6.1f}%  zero p95 {v['zero_p95_deg']}  kin {v['kinematic_zero_p95_deg']}  "
-                  f"{'PASS' if v['pass'] else 'FAIL'}")
+            print(f"{model} {name:42s} rel {v['reliability_pct']:6.1f}%  zero p95 vs CAD {v['zero_p95_deg']}  vs twin "
+                  f"{v['zero_p95_vs_twin_deg']}  kin {v['kinematic_zero_p95_deg']}  {'PASS' if v['pass'] else 'FAIL'}"
+                  f"{'' if v['pass_vs_cad'] == v['pass'] else ' (vs CAD: ' + ('PASS' if v['pass_vs_cad'] else 'FAIL') + ')'}")
     print(f"{results['seconds']:.0f} s")
     return 0
 
@@ -366,4 +459,5 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["RUNG", "TimedRecoverFirst", "calibrate", "recovery_landing", "run_bench", "verdicts"]
+__all__ = ["RUNG", "TimedRecoverFirst", "base_name", "calibrate", "event_tick", "kinematic_name", "recovery_landing", "run_bench",
+           "twin_prior", "verdicts", "vs_twin_row"]

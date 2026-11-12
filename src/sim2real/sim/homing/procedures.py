@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from robot_models.homing.fit import fit
 from robot_models.homing.protocols import Phase, Prior
@@ -76,6 +76,9 @@ REPEAT_TOLERANCE_RAD = 1e-3
 MIN_STIFFNESS_NM_PER_REV = 400.0
 MIN_PROBE_DISPLACEMENT_REV = 1e-9
 RECALIBRATE_FRACTION = 0.5
+# the boards' kp (N.m/rad) for tview's held pin: the real arm's record (mujoco_plant.REAL_BOARD_RECORD, N.m per output rev / 2 pi)
+BOARD_KP_NM_PER_RAD = {J1: 200.0 / TAU, J2: 144.0 / TAU, C1: 200.0 / TAU}
+PIN_SPEED = 100.0  # rad/s: the pin is "set at once" (tview_run: no limits); 1 rad per 10 ms tick
 
 
 class HomingRefused(RuntimeError):
@@ -109,6 +112,12 @@ def _hold(joint):
 
 def _seek(joint, side, cap, speed=SEEK_SPEED):
     return JointCommand.move_by(joint, side * SEEK_DISTANCE, speed=speed, max_effort=cap)
+
+
+def _pin(joint, side, cap):
+    """tview_run's ``held`` handoff for a drive that has stalled: its setpoint set at once ``cap / kp`` past where it is, into the stop,
+    so its board presses at the cap and no further (``PIN_SPEED`` gets there within one 10 ms tick)."""
+    return JointCommand.move_by(joint, side * cap / BOARD_KP_NM_PER_RAD[joint], speed=PIN_SPEED, max_effort=cap)
 
 
 def _to(joint, position, speed=MOVE_SPEED, cap=None):
@@ -189,6 +198,17 @@ class Procedure:
         self.references.append((phase_index, reading.tick, joint, side))
         return StallEvidence(joint, side, abs(reading.effort[joint]), reading.raw[joint])
 
+    def observe_vs_twin(self, prior: Prior, twin: Prior, phases: Sequence[Phase]) -> HomingResult:
+        """What this run's evidence says when the stops it references are the twin's own contacts (``twin``: ``prior`` with its stop
+        map - and stored table - measured on the twin) instead of CAD: the procedure's error with the exporter's geometry error taken
+        out (the 2026-11-12 coordinator's split). The same arithmetic as ``observe``; its references and notes are left as ``observe``
+        set them."""
+        references, notes = list(self.references), dict(self.notes)
+        try:
+            return self.observe(twin, phases)
+        finally:
+            self.references, self.notes = references, notes
+
 
 # ---------------------------------------------------------------------------------------------------------------- tview v2
 
@@ -207,7 +227,11 @@ class TviewV2(Procedure):
             # C1's; whichever stalled first keeps pushing its stop meanwhile (tview leaves the seek running), as on the boards.
             _step("2. J2 + C1 seek together", [_hold(J1), _seek(J2, +1, SEEK_CAP_NM[J2]), _seek(C1, +1, SEEK_CAP_NM[C1])],
                   [Stall(joint=J2)]),
-            _step("2b. ... until C1 has stalled too", [_hold(J1), _seek(J2, +1, SEEK_CAP_NM[J2]), _seek(C1, +1, SEEK_CAP_NM[C1])],
+            # WHY J2 is pinned in 2b, not re-seeking (2026-11-12 pass 4): a robot_msgs move_by starts from where the joint is, so a
+            # re-sent seek drops the stalled drive's push to nothing - under L1's weight J2 left its stop by 0.57 deg before C1's
+            # stall fired and the set-output was taken there. The real lane never lets go: tview_run's default ``held`` handoff pins
+            # a stalled drive's control position cap/kp into its stop at once (``literal`` lets it run on); this is ``held``.
+            _step("2b. ... until C1 has stalled too", [_hold(J1), _pin(J2, +1, SEEK_CAP_NM[J2]), _seek(C1, +1, SEEK_CAP_NM[C1])],
                   [Stall(joint=C1)], define={J2: rev(SET_OUTPUT_REV[J2]), C1: rev(SET_OUTPUT_REV[C1])}),
             _step("3. cfg-set-output 0.34722 / 0.66347", [_hold(J1), _hold(J2), _hold(C1)], [Elapsed(duration=0.2)]),
         ]
@@ -236,6 +260,14 @@ class TviewV2(Procedure):
         zeros = tuple(JointZero(j, frame[j] - d[j], 0.0, 1, (+1,)) for j in DRIVES)
         table = BacklashTable(tuple(JointBacklash(j, BacklashModel("B0"), source="tview: no backlash model") for j in DRIVES))
         return HomingResult(zeros, table, prior.stops, tuple(evidence), "kinematic")
+
+    def observe_vs_twin(self, prior: Prior, twin: Prior, phases: Sequence[Phase]) -> HomingResult:
+        """tview's zero is his typed set-output, which labels each upper stop (CAD's, to his typing precision; C1's in his own crank
+        frame): against the twin's contacts each joint's zero moves by exactly how far the twin's upper contact sits from CAD's."""
+        result = self.observe(prior, phases)
+        shift = {j: prior.stops.q_rad(j, +1) - twin.stops.q_rad(j, +1) for j in DRIVES}
+        zeros = tuple(replace(z, offset_rad=z.offset_rad - shift[z.joint]) for z in result.zeros)
+        return HomingResult(zeros, result.backlash, twin.stops, result.evidence, result.rung)
 
 
 # ---------------------------------------------------------------------------------------------------------------- single touch

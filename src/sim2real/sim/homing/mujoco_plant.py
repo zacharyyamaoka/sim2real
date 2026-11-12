@@ -8,7 +8,8 @@ What MuJoCo adds over ``KinematicStopPlant`` (the decision report: "kinematic pr
 * the stops as the exporter's contact pairs and the loop closed by its ``connect``, so a start on the mirrored assembly can be carried
   across the toggle by gravity (or not) - the thing the kinematic rung cannot judge (the coordinator's 2026-11-12 ruling);
 * the hidden backlash as gear_backlash's double joint, J1 3.5' / J2 2.5' / C1 4.0' (``bam_fb_test_rig.backlash.HIDDEN_ARCMIN``): B0 none,
-  B1 ``method="deadzone"`` (the ElastoBacklash torque), B2 ``method="passive_joint"`` (a limited hinge tuned to the mesh's 13 N.m/arcmin);
+  B1 ``method="deadzone"`` (the ElastoBacklash torque, an explicit spring: its timestep is divided until the mesh mode is resolved,
+  ``resolve_mesh_mode``, 62.5 us), B2 ``method="passive_joint"`` (a limited hinge tuned to the mesh's 13 N.m/arcmin);
 * the boards: one ``moteus_servo`` position loop per drive at the real arm's record (``REAL_BOARD_RECORD``: J1 / C1 kp 200, kd 4; J2 kp 144,
   kd 8 per output rev - what CAN 11/12/13 ran when the home button recovered the arm), fed every 10 ms;
 * JMC cogging on J2 and C1 (``bam_fivebar.plant.JMC_COGGING``, sim2real bldc_motor M4.dynamics.cogging, fitted 2026-11-12 on the real
@@ -163,8 +164,30 @@ class RigCache:
                 rig = bench_rig(bundle, backlash=None)
             else:
                 rig = bench_rig(bundle, backlash=hidden_specs(), backlash_method=method)
+            resolve_mesh_mode(rig)
             cls._rigs[kind] = rig
         return cls._rigs[kind]
+
+
+# WHY 0.3 (2026-11-12, homing MuJoCo rung pass 4): gear_backlash's dead zone is an explicit spring ("dt must resolve the mesh mode",
+# gear_backlash.wrap), and its own bound (omega dt < 2, ArmRig.explicit_spring_dt_limit_s) is the linear spring's, not the impacting
+# one's. At the twin's 0.25 ms C1's mesh mode (13 N.m/arcmin on 0.0020 kg.m^2) has omega dt = 1.19: under the bound, yet every flank
+# impact gained energy - 814 N.m of mesh torque and the 3 rad/s speed guard tripped in recover_first+tview_v2 from the bowl, 5800 N.m and
+# 70 rad/s pressing both stops for 8 s. Measured on that episode: dt/2 completes but lands 0.03 deg off; dt/4 (omega dt 0.30) and dt/8
+# agree (peak 138.5 vs 138.8 N.m, zero errors within 0.003 deg). The passive joint (B2) is MuJoCo's own implicit limit and needs none.
+MESH_MODE_OMEGA_DT = 0.3
+
+
+def resolve_mesh_mode(rig) -> int:
+    """Divide ``rig``'s timestep so the stiffest dead-zone mesh mode has ``omega dt <= MESH_MODE_OMEGA_DT`` (module WHY); returns the
+    divisor (1: no dead zone, nothing changed). ``omega = sqrt(mesh stiffness / the wrapped joint's effective inertia)``."""
+    wrapped = getattr(rig, "backlash", None)
+    if wrapped is None or getattr(wrapped, "method", None) != "deadzone" or not wrapped.joints:
+        return 1
+    omega = max(math.sqrt(joint.spec.mesh_stiffness_nm_per_rad / joint.effective_inertia_kg_m2) for joint in wrapped.joints.values())
+    divisor = max(1, math.ceil(omega * float(rig.model.opt.timestep) / MESH_MODE_OMEGA_DT - 1e-9))
+    rig.model.opt.timestep = float(rig.model.opt.timestep) / divisor
+    return divisor
 
 
 def cogging_terms(rig) -> dict:
@@ -418,4 +441,48 @@ class MujocoRigPlant:
         self.log["setpoint"].append([math.nan if not targets or targets.get(j) is None else targets[j] for j in DRIVES])
 
 
-__all__ = ["BACKLASH_METHOD", "MujocoRigPlant", "RigCache", "available", "bam_ws_path", "cogging_terms"]
+# The twin's own stops, measured (2026-11-12 pass 4, the coordinator: report homing error vs CAD AND vs the twin's own contact, so a
+# procedure's error is separable from the exporter's geometry - its J2 pair is 0.285 deg short of CAD). WHY measured by pressing and not
+# by bam_fb_test_rig.model.stop_sweep: the exporter's pairs between two links include hulls that touch far from the stop (the sweep reports
+# J2's upper at 10.4 deg), so only the contact a drive actually presses on is the stop. Two light pushes, gravity off, extrapolated to zero.
+TWIN_CONTACT_PUSH_NM = (2.0, 4.0)
+TWIN_CONTACT_PRESS_S = 1.5
+
+
+def twin_contacts(starts: Mapping, *, kind: str = "B0", push_nm: tuple[float, float] = TWIN_CONTACT_PUSH_NM,
+                  press_s: float = TWIN_CONTACT_PRESS_S) -> dict:
+    """``{(joint, side): rad}``: where each drive's link meets its stop in the twin, independent of any homing procedure. From
+    ``starts[+1]`` (every drive just inside its upper stop) and ``starts[-1]`` (just inside its lower), with gravity switched off and no
+    cogging, each drive in turn is pushed onto that side's stop at each of ``push_nm`` (position far past the stop, the push as its cap),
+    the others holding where they rest; its link angle after ``press_s`` is extrapolated linearly to zero push. Raises if a press is
+    not on the stop it names (the plant's contact log)."""
+    from robot_msgs.control import ServoCommand  # noqa: PLC0415
+
+    plant = MujocoRigPlant(kind, cogging=False, settle_s=0.0)
+    gravity = plant.rig.model.opt.gravity.copy()
+    out = {}
+    try:
+        plant.rig.model.opt.gravity[:] = 0.0
+        for side in (+1, -1):
+            for pushed in DRIVES:
+                links = []
+                for push in push_nm:
+                    state = plant.reset(starts[side])
+                    rest = dict(zip(state.name, state.position, strict=True))
+                    position = np.array([rest[j] + (side * 0.5 if j == pushed else 0.0) for j in DRIVES])
+                    cap = np.array([push if j == pushed else 10.0 for j in DRIVES])
+                    for _ in range(int(round(press_s / CONTROL_DT))):
+                        plant.tick(ServoCommand(name=DRIVES, position=position, max_effort=cap), CONTROL_DT)
+                    touching = plant.log["touching"][-1][DRIVES.index(pushed)]
+                    if touching != ("upper" if side > 0 else "lower"):
+                        raise RuntimeError(f"{pushed} pushed {side:+d} at {push} N.m is touching {touching!r}, not its stop")
+                    links.append(plant.sim.link_rad(ROLE_OF[pushed]))
+                (p1, p2), (l1, l2) = push_nm, links
+                out[(pushed, side)] = float(l1 - (l2 - l1) * p1 / (p2 - p1))
+    finally:
+        plant.rig.model.opt.gravity[:] = gravity
+    return out
+
+
+__all__ = ["BACKLASH_METHOD", "MESH_MODE_OMEGA_DT", "MujocoRigPlant", "RigCache", "available", "bam_ws_path", "cogging_terms",
+           "resolve_mesh_mode", "twin_contacts"]
