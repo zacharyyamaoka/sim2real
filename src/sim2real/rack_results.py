@@ -363,10 +363,13 @@ PASSIVE_NA = {15: "it cannot move unpowered: ≤ 0.012 N·m of gravity against 0
 
 
 def repeat_campaign() -> dict[int, dict]:
-    """The real lane's dedicated repeat-floor campaign (ur_wrist/repeat_floor: 5 identical repeats per joint, floor_scores.json and the
-    twin of record's replays, twin_scores.json). Driven floors are recomputed with metrics.series.repeat_floor on the lane's own
-    same-input window (every run shifted by one constant, never by its own first sample); the passive release's floor is the lane's
-    (its input is a release from a start that varies ~1°, which no command check can compare)."""
+    """The real lane's dedicated repeat-floor campaign (ur_wrist/repeat_floor: every same-input repeat by schedule digest + board config,
+    floor_scores.json, and the twin of record's replays, twin_scores.json). The floors are the lane's: driven on the plan tick by
+    metrics.series.repeat_floor itself (bam_rack_twin scripts/ur_wrist/repeat_floor_score.py, schema /3), unknown when no repeat carries a
+    tick; the passive release's from its release-aligned coasts (its input is a release from a start that varies ~1°, which no command
+    check can compare).
+    WHY not recomputed here (2026-11-12, Codex judge round 1 on the wrist): these repeats carry no plan tick, so repeat_floor here would fall
+    back to the common wall clock, the clock the judge ruled out; the lane scores the tick or reports the floor unknown, with the reason."""
     root = REPEAT_FLOOR.resolve()
     if not (root / "floor_scores.json").exists():
         return {}
@@ -379,36 +382,35 @@ def repeat_campaign() -> dict[int, dict]:
         twin_deg = (twin_group.get("summary") or {}).get("twin_vs_real_deg_median")
         entry = out[can]
         if mode == "driven":
-            start = group.get("same_input_from_s", 0.0)
-            runs, q_all, qd_all, qdd_all, dts = [], [], [], [], []
+            q_all, qd_all, qdd_all, dts = [], [], [], []
             for run in group["runs"]:
                 data = np.load(Path(run["file"]).with_suffix(".npz"))
                 t = data["t"] - data["t"][0]
-                keep = t >= start
-                runs.append((t[keep] - start, _wrist_target(t, data["q"], data["q_target"], data["qd_target"])[keep], data["q"][keep]))
                 q_all.append(np.degrees(data["q"])); qd_all.append(np.degrees(data["qd"])); qdd_all.append(np.degrees(np.gradient(data["qd"], t)))
                 entry.setdefault("samples", []).append((data["q"], data["qd"], np.gradient(data["qd"], t)))
                 entry.setdefault("settled", []).append(("repeat campaign", settled_errors_deg(t, data["q"], data["q_target"])))
                 dts.append(float(np.median(np.diff(t))))
-            floor = repeat_floor(runs)
-            floor_deg = math.degrees(floor.value) if floor.value is not None else None
-            entry["driven"] = {"floor_deg": floor_deg, "pairs": floor.pairs, "runs": floor.runs, "known": floor.known, "kind": f"{kind} (driven)",
-                               "twin_deg": twin_deg, "note": f"the lane's own: {group['floor_rms_deg_median']:.3f}°"}
+            known = bool(group["floor_known"])
+            floor_deg = group["floor_deg"] if known else None
+            note = (f"the lane's floor on the plan tick, {group['runs_in_pairs']} of {group['repeats']} repeats in same-input pairs" if known else
+                    f"unknown on the plan tick: {group.get('why_unknown')}")
+            entry["driven"] = {"floor_deg": floor_deg, "pairs": group["pairs"], "runs": group["runs_in_pairs"], "known": known, "kind": f"{kind} (driven)",
+                               "twin_deg": twin_deg, "note": note}
             entry["coverage"] = joint_coverage(np.concatenate(q_all), np.concatenate(qd_all), np.concatenate(qdd_all), float(np.median(dts)))
             entry["target_deg"] = _median([r.get("target_vs_real_deg") for r in twin_group.get("runs", [])])
             entry["target_twin_deg"] = _median([r.get("target_vs_twin_deg") for r in twin_group.get("runs", [])])
-            entry["rows"].append({"kind": f"{kind} (repeat campaign)", "mode": "driven", "floor_deg": _r(floor_deg, 4), "pairs": floor.pairs,
-                                  "runs": floor.runs, "known": floor.known, "twin_deg": _r(twin_deg),
+            entry["rows"].append({"kind": f"{kind} (repeat campaign)", "mode": "driven", "floor_deg": _r(floor_deg, 4), "pairs": group["pairs"],
+                                  "runs": group["runs_in_pairs"], "known": known, "twin_deg": _r(twin_deg),
                                   "twin_over_floor": _r(twin_deg / floor_deg, 2) if twin_deg and floor_deg else None,
-                                  "verdict": verdict_of(twin_deg / floor_deg) if twin_deg and floor.known else "floor unknown",
-                                  "source": "ur_wrist/repeat_floor (floor: repeat_floor; twin: twin_scores.json, it5)"})
+                                  "verdict": verdict_of(twin_deg / floor_deg) if twin_deg and known else "floor unknown",
+                                  "source": "ur_wrist/repeat_floor floor_scores.json (the lane's plan-tick floor); twin: twin_scores.json, it5"})
         else:
-            floor_deg = group["floor_rms_deg_median"]
+            floor_deg = group["floor_deg"]
             entry["passive"] = {"state": "known", "floor_deg": floor_deg, "twin_deg": twin_deg,
                                 "note": f"{group['repeats']} releases of {kind}, the lane's floor; the twin's rest is "
                                         f"{(twin_group.get('summary') or {}).get('rest_deg', {}).get('twin_minus_real_median', float('nan')):.1f}° off"}
-            entry["rows"].append({"kind": f"{kind} (repeat campaign)", "mode": "passive", "floor_deg": _r(floor_deg, 4), "pairs": len(group.get("pairs", [])),
-                                  "runs": group["repeats"], "known": group["repeats"] >= 5, "twin_deg": _r(twin_deg),
+            entry["rows"].append({"kind": f"{kind} (repeat campaign)", "mode": "passive", "floor_deg": _r(floor_deg, 4), "pairs": group["pairs"],
+                                  "runs": group["repeats"], "known": bool(group["floor_known"]), "twin_deg": _r(twin_deg),
                                   "twin_over_floor": _r(twin_deg / floor_deg, 2) if twin_deg else None,
                                   "verdict": verdict_of(twin_deg / floor_deg) if twin_deg else "no twin",
                                   "source": "ur_wrist/repeat_floor floor_scores.json / twin_scores.json (the lane's)"})
@@ -503,11 +505,11 @@ def ur_wrist() -> CalibrationResult:
 
     campaign = repeat_campaign()
     for can, node in joints.items():
-        floors = {key: repeat_floor(runs) for key, runs in groups[can].items()}
-        twins = {key: _median([r[2] for r in per_run[can] if r[0] == key]) for key in floors}
-        node.floors = floors_rows(floors, twins, "driven", "coverage runs (summary_real it5 twin)")
+        # WHY no floor from the coverage runs (2026-11-12, Codex judge round 1 on the wrist): they carry no plan tick (the rack runner sampled its
+        # plan at host time, ~91 Hz, before its 11-12 deadline loop), so repeat_floor would align them on the wall clock, the clock the judge
+        # ruled out; the wrist's floor is the repeat campaign's, on the plan tick or unknown (repeat_campaign)
         own = campaign.get(can, {})
-        node.floors = own.get("rows", []) + node.floors
+        node.floors = own.get("rows", [])
         driven = own.get("driven") or {"floor_deg": None, "known": False, "note": "no dedicated repeat campaign"}
         node.floor_deg = driven["floor_deg"] if driven.get("known") else None
         if cover[can][0]:
