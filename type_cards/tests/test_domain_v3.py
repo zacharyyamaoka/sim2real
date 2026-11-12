@@ -41,7 +41,7 @@ from type_cards import domain as dm  # noqa: E402
 from type_cards import registry as reg  # noqa: E402
 
 GENERIC = {"rigid_body_chain", "integrated_servo", "bldc_motor", "gearbox", "foc_controller", "encoder", "camera", "depth_camera",
-           "hyperspectral_camera", "conveyor", "gripper"}
+           "hyperspectral_camera", "conveyor", "gripper", "aruco_marker"}  # aruco_marker: PEP 0001 §8 (Zach, 2026-11-11)
 INSTANCE_WORDS = ("6dof", "6_dof", "ur5", "arm_6", "d405", "d435", "moteus", "jmc", "gim43", "subassembly")
 MODEL_ID = re.compile(r"^M(\d+)\.(kinematics|dynamics|measurement)\.([a-z0-9_]+)$")
 
