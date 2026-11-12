@@ -224,8 +224,11 @@ def floors_rows(floors: dict, twins: dict, mode: str, source: str) -> list[dict]
 
 REPEAT_FLOOR = WRIST / ".." / "repeat_floor"
 # the coverage lane's reachable mask (bam_ws claude/ur-wrist-coverage @ eef94b778, schema bam_ur_wrist_coverage.reachable/1): its joint
-# descriptions and the PROPOSED good-data thresholds; read from that lane's worktree until it lands
-REACHABLE_EXPORT = Path("/home/bam/bam_ws-worktrees/ur-wrist-coverage/src/dev/bam_ur_wrist_coverage/bam_ur_wrist_coverage/data/reachable_2026-11-11.json")
+# descriptions and the PROPOSED good-data thresholds. WHY two places, main first (coordinator, 2026-11-11): bam_ws main's copy once the
+# lane lands, so a worktree sweep cannot break the page; the lane's worktree only until then
+_REACHABLE = "src/dev/bam_ur_wrist_coverage/bam_ur_wrist_coverage/data/reachable_2026-11-11.json"
+REACHABLE_EXPORT_CANDIDATES = (Path("/home/bam/bam_ws") / _REACHABLE, Path("/home/bam/bam_ws-worktrees/ur-wrist-coverage") / _REACHABLE)
+REACHABLE_EXPORT = next((path for path in REACHABLE_EXPORT_CANDIDATES if path.exists()), REACHABLE_EXPORT_CANDIDATES[0])
 MULTI3 = WRIST / "multi3"
 
 
@@ -474,7 +477,8 @@ def ur_wrist() -> CalibrationResult:
                  ("facing", real["facing_pct"], thresholds["facing_pct_of_allowed"]))
         arm_data = {"own": "yes" if all(value >= limit for _name, value, limit in gates) else "no",
                     "numbers": "; ".join(f"{name} {value:.1f} % of allowed (≥ {limit:g} %)" for name, value, limit in gates)
-                    + f" — every real run (multi3 real_all, {export['counts']['allowed']['joint_grid_poses']} allowed grid poses)",
+                    + f" — every real run (multi3 real_all, {export['counts']['allowed']['joint_grid_poses']} allowed grid poses; "
+                      f"mask from {REACHABLE_EXPORT.parent.parent.parent.parent.parent.parent})",
                     "gate": f"cube ≥ {thresholds['joint_cube_pct_of_allowed']:g} %, workspace ≥ {thresholds['workspace_pct_of_allowed']:g} %, "
                             f"facing ≥ {thresholds['facing_pct_of_allowed']:g} % of the allowed mask ({status})"}
     else:
