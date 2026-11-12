@@ -60,11 +60,13 @@ def difference(a: tuple[np.ndarray, np.ndarray], b: tuple[np.ndarray, np.ndarray
 
 
 def on_common_clock(a: tuple[np.ndarray, np.ndarray], b: tuple[np.ndarray, np.ndarray], dt: float) -> tuple[np.ndarray, np.ndarray]:
-    """Two (t from 0, signal) series linearly interpolated onto one grid over their overlap: ``arange(0, min end, dt)``. WHY beside
-    ``difference``: bam_rack_twin's floor (gate T1) is defined on this shared clock."""
+    """Two (t, signal) series linearly interpolated onto one grid over their overlap: ``arange(max start, min end, dt)``. WHY beside
+    ``difference``: bam_rack_twin's floor (gate T1) is defined on this shared clock. WHY max start, not 0 (2026-11-12): a held-out window
+    that starts 30 s into a run was gridded from 0, and np.interp held the 30 s sample across 0-30 s, so the "held-out" RMS carried 30 s of
+    a constant offset. For series that start at 0 (every floor and twin replay) the grid is unchanged."""
 
     (t_a, y_a), (t_b, y_b) = a, b
-    grid = np.arange(0.0, min(t_a[-1], t_b[-1]), dt)
+    grid = np.arange(max(t_a[0], t_b[0]), min(t_a[-1], t_b[-1]), dt)
     return np.interp(grid, t_a, y_a), np.interp(grid, t_b, y_b)
 
 
