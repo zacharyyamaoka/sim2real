@@ -1,0 +1,276 @@
+{
+ "schema": "sim2real.rack.fivebar_dwell/1",
+ "date": "2026-11-11",
+ "what": "settled tool error at the mass-ID stage's 16 three-second holds (the last second scored), massid_real_dwell_021115",
+ "source": "bam_ws claude/fivebar-guard @ 3d820b08f, docs/build_fivebar_repeat_floor_report.py -> reports/fivebar-repeat-floor-2026-11-11.html section 3 (its dwell.json was not kept; this table is extracted from that report, every row)",
+ "run": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/massid_real_dwell_021115",
+ "summary": {
+  "encoders_fk_mm": {
+   "median": 9.559999999999999,
+   "p95": 40.14,
+   "n": 16
+  },
+  "camera_vs_commanded_mm": {
+   "median": 20.725,
+   "n": 14
+  }
+ },
+ "rows": [
+  {
+   "hold": 0,
+   "commanded_deg": [
+    10.0,
+    -24.0,
+    88.7
+   ],
+   "settled_error_deg": {
+    "j2": 2.96,
+    "c1": 0.53
+   },
+   "encoders_fk_mm": 12.6,
+   "camera_vs_commanded_mm": null,
+   "camera_vs_as_built_lever_mm": null,
+   "note": "the model puts the hub 16.0 px from the bolt circle at best (median over 14 frames, over 5.0): the circle found is not the hub's, or the strips are misplaced: no camera pose"
+  },
+  {
+   "hold": 1,
+   "commanded_deg": [
+    82.0,
+    -24.0,
+    -170.9
+   ],
+   "settled_error_deg": {
+    "j2": -1.67,
+    "c1": 0.89
+   },
+   "encoders_fk_mm": 7.23,
+   "camera_vs_commanded_mm": 21.71,
+   "camera_vs_as_built_lever_mm": 9.34,
+   "note": ""
+  },
+  {
+   "hold": 2,
+   "commanded_deg": [
+    100.0,
+    -126.0,
+    123.5
+   ],
+   "settled_error_deg": {
+    "j2": -2.7,
+    "c1": 1.96
+   },
+   "encoders_fk_mm": 39.18,
+   "camera_vs_commanded_mm": 22.8,
+   "camera_vs_as_built_lever_mm": 34.62,
+   "note": ""
+  },
+  {
+   "hold": 3,
+   "commanded_deg": [
+    106.0,
+    -24.0,
+    -122.4
+   ],
+   "settled_error_deg": {
+    "j2": -2.54,
+    "c1": -0.28
+   },
+   "encoders_fk_mm": 4.98,
+   "camera_vs_commanded_mm": 22.25,
+   "camera_vs_as_built_lever_mm": 10.16,
+   "note": ""
+  },
+  {
+   "hold": 4,
+   "commanded_deg": [
+    10.0,
+    -48.0,
+    63.1
+   ],
+   "settled_error_deg": {
+    "j2": 2.54,
+    "c1": 0.13
+   },
+   "encoders_fk_mm": 11.61,
+   "camera_vs_commanded_mm": null,
+   "camera_vs_as_built_lever_mm": null,
+   "note": "the model puts the hub 16.8 px from the bolt circle at best (median over 13 frames, over 5.0): the circle found is not the hub's, or the strips are misplaced: no camera pose"
+  },
+  {
+   "hold": 5,
+   "commanded_deg": [
+    106.0,
+    -126.0,
+    134.7
+   ],
+   "settled_error_deg": {
+    "j2": -2.91,
+    "c1": 2.1
+   },
+   "encoders_fk_mm": 43.02,
+   "camera_vs_commanded_mm": 25.01,
+   "camera_vs_as_built_lever_mm": 36.65,
+   "note": ""
+  },
+  {
+   "hold": 6,
+   "commanded_deg": [
+    64.0,
+    -24.0,
+    158.9
+   ],
+   "settled_error_deg": {
+    "j2": 2.44,
+    "c1": -1.31
+   },
+   "encoders_fk_mm": 10.35,
+   "camera_vs_commanded_mm": 37.96,
+   "camera_vs_as_built_lever_mm": 25.23,
+   "note": ""
+  },
+  {
+   "hold": 7,
+   "commanded_deg": [
+    106.0,
+    -30.0,
+    -130.6
+   ],
+   "settled_error_deg": {
+    "j2": -2.16,
+    "c1": -0.27
+   },
+   "encoders_fk_mm": 4.76,
+   "camera_vs_commanded_mm": 24.02,
+   "camera_vs_as_built_lever_mm": 11.94,
+   "note": ""
+  },
+  {
+   "hold": 8,
+   "commanded_deg": [
+    16.0,
+    -24.0,
+    95.3
+   ],
+   "settled_error_deg": {
+    "j2": 2.69,
+    "c1": -0.13
+   },
+   "encoders_fk_mm": 7.57,
+   "camera_vs_commanded_mm": 8.54,
+   "camera_vs_as_built_lever_mm": 10.39,
+   "note": ""
+  },
+  {
+   "hold": 9,
+   "commanded_deg": [
+    106.0,
+    -120.0,
+    139.2
+   ],
+   "settled_error_deg": {
+    "j2": -2.86,
+    "c1": -0.75
+   },
+   "encoders_fk_mm": 22.36,
+   "camera_vs_commanded_mm": 15.66,
+   "camera_vs_as_built_lever_mm": 18.25,
+   "note": ""
+  },
+  {
+   "hold": 10,
+   "commanded_deg": [
+    22.0,
+    -54.0,
+    70.5
+   ],
+   "settled_error_deg": {
+    "j2": 2.75,
+    "c1": 1.29
+   },
+   "encoders_fk_mm": 14.63,
+   "camera_vs_commanded_mm": 10.68,
+   "camera_vs_as_built_lever_mm": 16.16,
+   "note": ""
+  },
+  {
+   "hold": 11,
+   "commanded_deg": [
+    100.0,
+    -24.0,
+    -135.6
+   ],
+   "settled_error_deg": {
+    "j2": -2.29,
+    "c1": 0.62
+   },
+   "encoders_fk_mm": 4.28,
+   "camera_vs_commanded_mm": 19.69,
+   "camera_vs_as_built_lever_mm": 7.98,
+   "note": ""
+  },
+  {
+   "hold": 12,
+   "commanded_deg": [
+    100.0,
+    -120.0,
+    128.2
+   ],
+   "settled_error_deg": {
+    "j2": -1.38,
+    "c1": 1.69
+   },
+   "encoders_fk_mm": 22.94,
+   "camera_vs_commanded_mm": 8.68,
+   "camera_vs_as_built_lever_mm": 18.05,
+   "note": ""
+  },
+  {
+   "hold": 13,
+   "commanded_deg": [
+    70.0,
+    -24.0,
+    168.5
+   ],
+   "settled_error_deg": {
+    "j2": 2.83,
+    "c1": -0.83
+   },
+   "encoders_fk_mm": 8.77,
+   "camera_vs_commanded_mm": 32.36,
+   "camera_vs_as_built_lever_mm": 19.88,
+   "note": ""
+  },
+  {
+   "hold": 14,
+   "commanded_deg": [
+    22.0,
+    -24.0,
+    102.1
+   ],
+   "settled_error_deg": {
+    "j2": 2.48,
+    "c1": -0.19
+   },
+   "encoders_fk_mm": 5.94,
+   "camera_vs_commanded_mm": 15.76,
+   "camera_vs_as_built_lever_mm": 6.16,
+   "note": ""
+  },
+  {
+   "hold": 15,
+   "commanded_deg": [
+    106.0,
+    -36.0,
+    -138.2
+   ],
+   "settled_error_deg": {
+    "j2": -2.35,
+    "c1": 0.41
+   },
+   "encoders_fk_mm": 5.66,
+   "camera_vs_commanded_mm": 19.74,
+   "camera_vs_as_built_lever_mm": 9.0,
+   "note": ""
+  }
+ ]
+}

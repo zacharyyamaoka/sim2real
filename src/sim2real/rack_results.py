@@ -200,7 +200,8 @@ def joint_questions(*, driven: dict, passive: dict, before_deg, target_deg, cove
         "Routines": {"own": routines_own, "numbers": routines, "gate": "hidden values within tolerance at 1× noise, truth off the grid"},
         "Twin": {"own": twin_own, "numbers": "; ".join(twin_parts), "gate": f"held-out sim→real ≤ {RULER_TWINNED:g}× floor of the same run kind, passive and driven"},
         "Job": {"own": "unknown", "numbers": (f"real vs target {target_deg:.3f}°" if target_deg else "real vs target —")
-                + (f"; the twin predicts the real joint {skill:.1f}× better than its target does" if skill else ""),
+                + ((f"; the twin predicts the real joint {skill:.1f}× better than its target does" if skill >= 1 else
+                    f"; the twin is {1 / skill:.1f}× further from the real joint than its target is (no skill yet)") if skill else ""),
                 "gate": "stop error inside this joint's share of the 1 mm tool gate (share not set); feedback share (not logged)"},
     }
 
@@ -534,6 +535,19 @@ FIVEBAR_MODELS = (("refit_baseline_104512", "held_out_after", "baseline: armatur
                   ("refit_breakdown_123729", "held_out_before", "the dynamics refit compared on the tick clock"))
 
 
+# WHY N/A (bam_ws claude/fivebar-guard @ 3d820b08f, docs/fivebar_passive_twin.py; proposed, Zach to confirm): the hanging rest sits at
+# the closure fold (margin 0.041); gravity's stiffness there (~9 N.m/rad J2, ~3.5 N.m/rad C1) against 0.74 N.m of friction per drive is a
+# +-4.5 deg / +-12 deg band where gravity cannot move the arm; on the CAD twin the safe limp releases move 0.03-0.5 deg, the larger ones
+# start at the fold or fall 40-80 deg at up to 1,300 deg/s. No passive response is both safe and alive.
+FIVEBAR_PASSIVE_NA = {
+    "j2": "no safe passive release moves it: its rest is at the closure fold (margin 0.041); gravity ~9 N·m/rad against 0.74 N·m friction "
+          "holds a ±4.5° band, and larger releases fall 40-80° at up to 1,300°/s (CAD twin, fivebar_passive_twin.py)",
+    "c1": "no safe passive release moves it: its rest is at the closure fold (margin 0.041); gravity ~3.5 N·m/rad against 0.74 N·m friction "
+          "holds a ±12° band, and larger releases fall 40-80° at up to 1,300°/s (CAD twin, fivebar_passive_twin.py)",
+}
+DWELL = Path(__file__).resolve().parent / "data" / "fivebar_dwell_2026-11-11.json"
+
+
 def fivebar() -> CalibrationResult:
     stages = [title for _key, title, _src in FIVEBAR_STAGES]
     refits = {key: json.loads((FIVEBAR / src[0] / "refit.json").read_text())[src[1]]["per_rung"] for key, _t, src in FIVEBAR_STAGES if src}
@@ -627,7 +641,7 @@ def fivebar() -> CalibrationResult:
                   "runs": floor.runs if floor else 0, "known": bool(floor and floor.known), "kind": " / ".join(map(str, key)) if key else "—",
                   "twin_deg": twin_same, "note": f"twin = the {which}; after twin on held-out rungs {_median([r[2] for r in held_after]):.3f}°"}
         node.questions = joint_questions(
-            driven=driven, passive={"state": "none"}, before_deg=_median([r[3] for r in held_after]),
+            driven=driven, passive={"state": "na", "reason": FIVEBAR_PASSIVE_NA[joint]}, before_deg=_median([r[3] for r in held_after]),
             target_deg=_median([r[4] for r in held_after]),
             coverage_text=f"angle {summary_rows[0]['value']}°, speed p99 {summary_rows[1]['value']}°/s, {summary_rows[3]['value']} min logged",
             routines="the five-bar mass ID's hidden-gravity test (bam_fivebar tests/test_massid.py) grades the gravity only")
@@ -656,9 +670,21 @@ def fivebar() -> CalibrationResult:
     # WHY split (2026-11-11 review): the old "tool gate" took a MODELLING number (twin vs real, on the before twin) for a PERFORMANCE gate.
     # Twin = the twin's tool vs the real tool at stops; Job = the real tool vs the commanded one at stops, against the tool gate.
     sim_p95, job_p95 = _pct(stop_sim, 95), _pct(stop_target, 95)
-    job = "no" if job_p95 is not None and job_p95 > TOOL_GATE_MM else ("yes" if job_p95 is not None else "unknown")
-    tool.gate = {"gate_mm": TOOL_GATE_MM, "sim_real_mm": sim_p95, "target_real_mm": job_p95,
-                 "verdict": f"Job {job}: real vs commanded {job_p95:.1f} mm p95 at stops (gate {TOOL_GATE_MM:g} mm)"}
+    # WHY the dwell holds (coordinator, 2026-11-11): the raster's "stops" are turnarounds (median 0.06 s), tracking at the turn; the
+    # mass-ID's 16 three-second holds are the settled accuracy the 1 mm gate asks about
+    dwell = json.loads(DWELL.read_text()) if DWELL.exists() else None
+    if dwell:
+        enc, cam = dwell["summary"]["encoders_fk_mm"], dwell["summary"]["camera_vs_commanded_mm"]
+        job = "no" if enc["median"] > TOOL_GATE_MM else "yes"
+        job_text = (f"settled at {enc['n']} three-second holds: {enc['median']:.1f} mm median, {enc['p95']:.1f} mm p95 by encoders + FK; "
+                    f"{cam['median']:.1f} mm median by the D435 ({cam['n']} holds); raster turnarounds (tracking, not settled) "
+                    f"{job_p95:.1f} mm p95 by encoders")
+    else:
+        job = "no" if job_p95 is not None and job_p95 > TOOL_GATE_MM else ("yes" if job_p95 is not None else "unknown")
+        job_text = f"real vs commanded {job_p95:.1f} mm p95 at raster stops, by encoder kinematics"
+    tool.gate = {"gate_mm": TOOL_GATE_MM, "sim_real_mm": sim_p95,
+                 "target_real_mm": dwell["summary"]["encoders_fk_mm"]["median"] if dwell else job_p95,
+                 "verdict": f"Job {job}: " + job_text.split(';')[0] + f" (gate {TOOL_GATE_MM:g} mm)"}
     tool.note = "stops = where the commanded tool point rests (< 2 mm/s); the tool by encoder kinematics (bam_fivebar FK, as logged), not by camera"
     tool.questions = {
         "Floor": {"own": "no", "numbers": "no tool revisits of one commanded stop", "gate": "the tool at the same stop, revisited, by camera"},
@@ -666,8 +692,8 @@ def fivebar() -> CalibrationResult:
         "Routines": {"own": "unknown", "numbers": "no TCP / payload routine graded", "gate": "mass 5 %, CoM 3 mm, TCP 0.5 / 1 mm"},
         "Twin": {"own": "unknown", "numbers": f"study (before) twin vs real {sim_p95:.1f} mm p95 at stops; the after twin's tool is not computed "
                  "(the refits kept joint scores only); no tool floor to divide by", "gate": "tool twin vs real at stops ÷ the tool floor, on the after twin"},
-        "Job": {"own": job, "numbers": f"real vs commanded {job_p95:.1f} mm p95 at stops, by encoder kinematics (the camera-seen as-built L2 "
-                "error, 12-17 mm, is in neither)", "gate": f"≤ {TOOL_GATE_MM:g} mm at a stop, measured at the tool"},
+        "Job": {"own": job, "numbers": job_text + (f" (source: {dwell['source'].split(',')[0]})" if dwell else ""),
+                "gate": f"≤ {TOOL_GATE_MM:g} mm at a stop, measured at the tool"},
     }
     arm.questions = {
         "Floor": {"own": "no", "numbers": "no tool-pose repeats (ISO 9283 RP)", "gate": "repeatability at the tool"},
@@ -690,7 +716,9 @@ def fivebar() -> CalibrationResult:
              "Floors: same-input repeats only (sim2real.metrics.series.repeat_floor), compared per plan tick: the five repeat ladders of the "
              "0.05 m/s rungs (identical tapes); the earlier ladders' runs of those rungs start from other homings and are rejected. The twin "
              "ratio divides the after twin's held-out rungs by that floor (the repeats were scored on the study twin only).",
-             "Tool: Twin = the study twin's tool vs the real tool at stops; Job = the real tool vs commanded at stops, both by encoder kinematics."]
+             "Tool: Twin = the study twin's tool vs the real tool at raster stops; Job = the settled tool at the mass-ID's 16 dwell holds "
+             "(data/fivebar_dwell_2026-11-11.json, from the five-bar lane's repeat-floor report), by encoders + FK and by the D435.",
+             "Passive: N/A for J2 and C1 (proposed, Zach to confirm): the rest sits at the closure fold, and no limp release is both safe and alive."]
     return CalibrationResult("fivebar-2026-11-11", "Five-bar calibration · One Dof Test Rack · 2026-11-11", stages,
                              [root, arm, joints["j2"], joints["c1"], tool], source=str(FIVEBAR), notes=notes, messages=_messages(files))
 
