@@ -1,0 +1,25 @@
+{
+ "generated_by": "tests/test_aruco_marker.py",
+ "levels": {
+  "0x": {
+   "pass": true,
+   "worst_error_over_tolerance": 0.953614224496306
+  },
+  "1x": {
+   "pass": true,
+   "worst_error_over_tolerance": 0.9547733377712143
+  },
+  "3x": {
+   "pass": true,
+   "worst_error_over_tolerance": 0.9996132471860358
+  }
+ },
+ "routine": "camera.exposure_for_aruco",
+ "schema": "sim2real.routine_ladder/1",
+ "tolerance": {
+  "true_corner_error": {
+   "kind": "rel_to_oracle",
+   "value": "1.15x+0.02 px static, 1.30x+0.05 px moving"
+  }
+ }
+}

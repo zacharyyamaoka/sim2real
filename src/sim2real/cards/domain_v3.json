@@ -1781,6 +1781,119 @@
    "current": [
     "M2.measurement.smile_keystone"
    ]
+  },
+  {
+   "id": "aruco_marker",
+   "title": "ArUco Marker",
+   "zach": "ArUco Marker",
+   "group": "target",
+   "covers": "one printed sticker carrying one or more ArUco markers rigidly, its layout from CAD (a five-bar strip, a plate, a single tag)",
+   "families": [
+    "kinematics"
+   ],
+   "models": [
+    "M0.kinematics.nominal",
+    "M1.kinematics.as_built",
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "parameters": [
+    "dictionary",
+    "marker_ids",
+    "marker_length_m",
+    "layout_m",
+    "pose_on_link",
+    "as_built_offset",
+    "print_scale",
+    "flatness_m"
+   ],
+   "metrics": [
+    "aruco.corner_position",
+    "aruco.reprojection",
+    "aruco.ids_read"
+   ],
+   "diagnostics": [
+    "aruco.reprojection.dx",
+    "aruco.corner_position.dx",
+    "aruco.ids_read.dx",
+    "aruco_marker.drift"
+   ],
+   "gates": [
+    {
+     "id": "aruco.reprojection.gate",
+     "diagnostic": "aruco.reprojection.dx",
+     "target": {
+      "op": "<=",
+      "value": 1.5,
+      "unit": "× floor",
+      "note": ""
+     },
+     "acceptance": "",
+     "note": ""
+    },
+    {
+     "id": "aruco.corner_position.gate",
+     "diagnostic": "aruco.corner_position.dx",
+     "target": {
+      "op": "<=",
+      "value": 2.0,
+      "unit": "mm",
+      "note": ""
+     },
+     "acceptance": "",
+     "note": ""
+    }
+   ],
+   "coverage": {
+    "type": "aruco_marker",
+    "dimensions": [
+     {
+      "name": "viewing angle",
+      "unit": "°",
+      "headline": true,
+      "bin_size": 15.0,
+      "binning": "0 / 15 / 30 / 45 / 60 / 75° between the ray and the sticker's normal"
+     },
+     {
+      "name": "distance",
+      "unit": "m",
+      "headline": true,
+      "bin_size": null,
+      "binning": "0.2 / 0.4 / 0.8 / 1.6 m edges (log: the corner's pixel size halves per band)"
+     },
+     {
+      "name": "joint angle span",
+      "unit": "°",
+      "headline": true,
+      "bin_size": null,
+      "binning": "0 / 10 / 25 / 50 / 100 / 180° of joint travel the views span (static stickers span 0)"
+     }
+    ],
+    "rule": "share of the viewing angle x distance x joint-angle-span cells the views visit; every cell is reachable",
+    "gate_pct": 40.0,
+    "reachable": "every cell (a rig can set any condition)",
+    "from_runs": false,
+    "why_not": "no run writes this type's coverage points yet; plans are scored by the card's function"
+   },
+   "dashboard": {
+    "template": null,
+    "panels": [],
+    "components": [],
+    "proposed": "no data-ui marker template: needs each sticker's corners (detected vs twin) per view, its as-built offset and print scale with their intervals, and the ids read"
+   },
+   "members": [],
+   "legacy_cards": [
+    "aruco_marker"
+   ],
+   "robotdx_part": null,
+   "note": "",
+   "pinned": [
+    "aruco.corner_position",
+    "aruco.reprojection"
+   ],
+   "current": [
+    "M2.kinematics.print_scale"
+   ]
   }
  ],
  "models": [
@@ -6113,6 +6226,241 @@
     ]
    ],
    "note": ""
+  },
+  {
+   "key": "aruco_marker/M0.kinematics.nominal",
+   "id": "M0.kinematics.nominal",
+   "type": "aruco_marker",
+   "k": 0,
+   "family": "kinematics",
+   "name": "nominal",
+   "title": "Nominal from CAD: the sheet as designed, where CAD put it",
+   "kind": "physics",
+   "parameters": [
+    "dictionary",
+    "marker_ids",
+    "marker_length_m",
+    "layout_m",
+    "pose_on_link"
+   ],
+   "adds": [
+    "dictionary",
+    "marker_ids",
+    "marker_length_m",
+    "layout_m",
+    "pose_on_link"
+   ],
+   "base": "",
+   "wear": false,
+   "current": false,
+   "n_parameters": 5,
+   "equation": "X_corner = FK(q) · pose_on_link · layout_corner",
+   "references": [
+    {
+     "title": "Garrido-Jurado, Muñoz-Salinas, Madrid-Cuevas, Marín-Jiménez (2014). Automatic generation and detection of highly reliable fiducial markers under occlusion. Pattern Recognition 47(6):2280-2292.",
+     "url": "",
+     "kind": "paper",
+     "doi": "",
+     "note": "the ArUco dictionaries, their ids and the detector OpenCV ships"
+    },
+    {
+     "title": "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
+     "url": "https://doi.org/10.1109/34.888718",
+     "kind": "paper",
+     "doi": "10.1109/34.888718",
+     "note": "pinhole intrinsics from a planar target in several poses"
+    }
+   ],
+   "architecture": null,
+   "needs": {
+    "min_pct": 40.0,
+    "min_samples": 1,
+    "extrapolates": true,
+    "deployment_weighted_pct": null,
+    "note": "visited once: the type's coverage gate; physics extrapolates between cells"
+   },
+   "robotparts": null,
+   "implemented": "cad2robot bundle + aruco-studio sheet record",
+   "legacy": [
+    [
+     "aruco_marker",
+     "M0"
+    ]
+   ],
+   "note": ""
+  },
+  {
+   "key": "aruco_marker/M1.kinematics.as_built",
+   "id": "M1.kinematics.as_built",
+   "type": "aruco_marker",
+   "k": 1,
+   "family": "kinematics",
+   "name": "as_built",
+   "title": "+ as-built offset: how the sticker was actually stuck down",
+   "kind": "physics",
+   "parameters": [
+    "dictionary",
+    "marker_ids",
+    "marker_length_m",
+    "layout_m",
+    "pose_on_link",
+    "as_built_offset"
+   ],
+   "adds": [
+    "as_built_offset"
+   ],
+   "base": "",
+   "wear": false,
+   "current": false,
+   "n_parameters": 6,
+   "equation": "X_corner = FK(q) · pose_on_link · as_built_offset · layout_corner",
+   "references": [
+    {
+     "title": "Triggs, McLauchlan, Hartley, Fitzgibbon (2000). Bundle adjustment: a modern synthesis. Vision Algorithms: Theory and Practice, LNCS 1883, Springer.",
+     "url": "",
+     "kind": "chapter",
+     "doi": "",
+     "note": "robust bundle adjustment, priors and the gauge (one sticker held at CAD)"
+    },
+    {
+     "title": "BAM (2026). bam_rack_twin fivebar_asbuilt.py: the five-bar strips' as-built 6-DOF and print scale by bundle adjustment (bam_ws src/dev/bam_rack_twin).",
+     "url": "",
+     "kind": "code",
+     "doi": "",
+     "note": "L2 printed 1.5 % small and tilted 2.4 deg: the 12-17 mm strip error"
+    }
+   ],
+   "architecture": null,
+   "needs": {
+    "min_pct": 40.0,
+    "min_samples": 1,
+    "extrapolates": true,
+    "deployment_weighted_pct": null,
+    "note": "visited once: the type's coverage gate; physics extrapolates between cells"
+   },
+   "robotparts": null,
+   "implemented": "sim2real fit/aruco.py bundle_adjust",
+   "legacy": [
+    [
+     "aruco_marker",
+     "M1"
+    ]
+   ],
+   "note": ""
+  },
+  {
+   "key": "aruco_marker/M2.kinematics.print_scale",
+   "id": "M2.kinematics.print_scale",
+   "type": "aruco_marker",
+   "k": 2,
+   "family": "kinematics",
+   "name": "print_scale",
+   "title": "+ print scale (today's model)",
+   "kind": "physics",
+   "parameters": [
+    "dictionary",
+    "marker_ids",
+    "marker_length_m",
+    "layout_m",
+    "pose_on_link",
+    "as_built_offset",
+    "print_scale"
+   ],
+   "adds": [
+    "print_scale"
+   ],
+   "base": "",
+   "wear": false,
+   "current": true,
+   "n_parameters": 7,
+   "equation": "X_corner = FK(q) · pose_on_link · as_built_offset · (print_scale · layout_corner)",
+   "references": [
+    {
+     "title": "Strobl, Hirzinger (2011). More accurate pinhole camera calibration with imperfect planar target. IEEE International Conference on Computer Vision Workshops.",
+     "url": "",
+     "kind": "paper",
+     "doi": "",
+     "note": "a target's own geometry (scale, flatness) fitted with the camera"
+    },
+    {
+     "title": "BAM (2026). bam_rack_twin fivebar_asbuilt.py: the five-bar strips' as-built 6-DOF and print scale by bundle adjustment (bam_ws src/dev/bam_rack_twin).",
+     "url": "",
+     "kind": "code",
+     "doi": "",
+     "note": "L2 printed 1.5 % small and tilted 2.4 deg: the 12-17 mm strip error"
+    }
+   ],
+   "architecture": null,
+   "needs": {
+    "min_pct": 40.0,
+    "min_samples": 1,
+    "extrapolates": true,
+    "deployment_weighted_pct": null,
+    "note": "visited once: the type's coverage gate; physics extrapolates between cells"
+   },
+   "robotparts": null,
+   "implemented": "sim2real fit/aruco.py bundle_adjust + caliper_scale; bam_rack_twin fivebar_asbuilt.py",
+   "legacy": [
+    [
+     "aruco_marker",
+     "M2"
+    ]
+   ],
+   "note": ""
+  },
+  {
+   "key": "aruco_marker/M3.kinematics.curl",
+   "id": "M3.kinematics.curl",
+   "type": "aruco_marker",
+   "k": 3,
+   "family": "kinematics",
+   "name": "curl",
+   "title": "+ curl: a sticker that is not flat",
+   "kind": "physics",
+   "parameters": [
+    "dictionary",
+    "marker_ids",
+    "marker_length_m",
+    "layout_m",
+    "pose_on_link",
+    "as_built_offset",
+    "print_scale",
+    "flatness_m"
+   ],
+   "adds": [
+    "flatness_m"
+   ],
+   "base": "",
+   "wear": false,
+   "current": false,
+   "n_parameters": 8,
+   "equation": "layout_corner z = flatness · (2 x / L)^2 (a bow across the sheet's length L)",
+   "references": [
+    {
+     "title": "Strobl, Hirzinger (2011). More accurate pinhole camera calibration with imperfect planar target. IEEE International Conference on Computer Vision Workshops.",
+     "url": "",
+     "kind": "paper",
+     "doi": "",
+     "note": "a target's own geometry (scale, flatness) fitted with the camera"
+    }
+   ],
+   "architecture": null,
+   "needs": {
+    "min_pct": 40.0,
+    "min_samples": 1,
+    "extrapolates": true,
+    "deployment_weighted_pct": null,
+    "note": "visited once: the type's coverage gate; physics extrapolates between cells"
+   },
+   "robotparts": null,
+   "implemented": "",
+   "legacy": [
+    [
+     "aruco_marker",
+     "M3"
+    ]
+   ],
+   "note": ""
   }
  ],
  "parameters": [
@@ -8451,7 +8799,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ]
   },
   {
@@ -8963,6 +9312,233 @@
     ]
    ],
    "note": "",
+   "routines": []
+  },
+  {
+   "key": "aruco_marker/dictionary",
+   "type": "aruco_marker",
+   "name": "dictionary",
+   "unit": "name",
+   "family": "kinematics",
+   "introduced_in": "M0.kinematics.nominal",
+   "models": [
+    "M0.kinematics.nominal",
+    "M1.kinematics.as_built",
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "nominal": null,
+   "source": "the sheet's generator record (aruco-studio profile)",
+   "identified_by": "ID confirmation on a captured view",
+   "observable": "yes",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "dictionary"
+    ]
+   ],
+   "note": "e.g. DICT_4X4_50; a sheet printed in another dictionary reads as missing ids",
+   "routines": [
+    "aruco.id_confirm"
+   ]
+  },
+  {
+   "key": "aruco_marker/marker_ids",
+   "type": "aruco_marker",
+   "name": "marker_ids",
+   "unit": "id",
+   "family": "kinematics",
+   "introduced_in": "M0.kinematics.nominal",
+   "models": [
+    "M0.kinematics.nominal",
+    "M1.kinematics.as_built",
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "nominal": null,
+   "source": "the sheet's generator record and the CAD bundle (cad2robot)",
+   "identified_by": "ID confirmation on a captured view",
+   "observable": "yes",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "marker_ids"
+    ]
+   ],
+   "note": "",
+   "routines": [
+    "aruco.id_confirm"
+   ]
+  },
+  {
+   "key": "aruco_marker/marker_length_m",
+   "type": "aruco_marker",
+   "name": "marker_length_m",
+   "unit": "m",
+   "family": "kinematics",
+   "introduced_in": "M0.kinematics.nominal",
+   "models": [
+    "M0.kinematics.nominal",
+    "M1.kinematics.as_built",
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "nominal": null,
+   "source": "the sheet's generator record (the marker's black square side)",
+   "identified_by": "caliper on a marker side or the ruler bar",
+   "observable": "partial",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "marker_length_m"
+    ]
+   ],
+   "note": "",
+   "routines": []
+  },
+  {
+   "key": "aruco_marker/layout_m",
+   "type": "aruco_marker",
+   "name": "layout_m",
+   "unit": "m",
+   "family": "kinematics",
+   "introduced_in": "M0.kinematics.nominal",
+   "models": [
+    "M0.kinematics.nominal",
+    "M1.kinematics.as_built",
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "nominal": null,
+   "source": "the sheet's layout in its own frame (aruco-studio / CAD)",
+   "identified_by": "the layout is the design; its errors are print_scale and flatness",
+   "observable": "partial",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "layout_m"
+    ]
+   ],
+   "note": "",
+   "routines": []
+  },
+  {
+   "key": "aruco_marker/pose_on_link",
+   "type": "aruco_marker",
+   "name": "pose_on_link",
+   "unit": "m, rad",
+   "family": "kinematics",
+   "introduced_in": "M0.kinematics.nominal",
+   "models": [
+    "M0.kinematics.nominal",
+    "M1.kinematics.as_built",
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "nominal": null,
+   "source": "the CAD bundle (cad2robot): the sticker's frame on its link",
+   "identified_by": "bundle adjustment through as_built_offset",
+   "observable": "yes",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "pose_on_link"
+    ]
+   ],
+   "note": "",
+   "routines": []
+  },
+  {
+   "key": "aruco_marker/as_built_offset",
+   "type": "aruco_marker",
+   "name": "as_built_offset",
+   "unit": "m, rad",
+   "family": "kinematics",
+   "introduced_in": "M1.kinematics.as_built",
+   "models": [
+    "M1.kinematics.as_built",
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "nominal": null,
+   "source": "unknown until fitted: how the sticker was actually stuck down",
+   "identified_by": "bundle adjustment against the encoders, CAD as prior",
+   "observable": "yes",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "as_built_offset"
+    ]
+   ],
+   "note": "6-DOF in the sticker frame",
+   "routines": [
+    "aruco.bundle_adjustment"
+   ]
+  },
+  {
+   "key": "aruco_marker/print_scale",
+   "type": "aruco_marker",
+   "name": "print_scale",
+   "unit": "1",
+   "family": "kinematics",
+   "introduced_in": "M2.kinematics.print_scale",
+   "models": [
+    "M2.kinematics.print_scale",
+    "M3.kinematics.curl"
+   ],
+   "nominal": 1.0,
+   "source": "1.0 nominal; the five-bar's L2 strip printed 0.98493 (243.3 of 247.0 mm, bam_fivebar strips_asbuilt.json)",
+   "identified_by": "caliper on the ruler bar, or bundle adjustment of a sticker the joints carry",
+   "observable": "partial",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "print_scale"
+    ]
+   ],
+   "note": "a static sticker's scale trades with its depth from one fixed camera: only the caliper or a moving view sees it",
+   "routines": [
+    "aruco.caliper_size",
+    "aruco.bundle_adjustment"
+   ]
+  },
+  {
+   "key": "aruco_marker/flatness_m",
+   "type": "aruco_marker",
+   "name": "flatness_m",
+   "unit": "m",
+   "family": "kinematics",
+   "introduced_in": "M3.kinematics.curl",
+   "models": [
+    "M3.kinematics.curl"
+   ],
+   "nominal": null,
+   "source": "unknown (a printed sticker lifting at its ends or a plate's bow)",
+   "identified_by": "a straight edge and feeler gauge, or a depth camera's plane fit across the sticker",
+   "observable": "partial",
+   "role": "model",
+   "wear": null,
+   "legacy": [
+    [
+     "aruco_marker",
+     "flatness_m"
+    ]
+   ],
+   "note": "the sheet's out-of-plane bow at its far end",
    "routines": []
   }
  ],
@@ -10163,6 +10739,75 @@
      "hsi.smile_keystone"
     ]
    ]
+  },
+  {
+   "id": "aruco.corner_position",
+   "type": "aruco_marker",
+   "family": "performance",
+   "title": "Corner position (as built)",
+   "unit": "mm",
+   "defined_on": "a corner's position from the fitted twin vs an independent measure of it (a probe touch, a caliper, a second camera)",
+   "pinned": true,
+   "model_dependent": false,
+   "aggregate": "median",
+   "per_run": null,
+   "why_not": "no producer writes it per run yet; the type card says how it is measured",
+   "robotdx": null,
+   "normalised": "against Zach's 2 mm manual-diagnosis line (feedback-aruco-bundle-adjustment-every-rig); ÷ the corner jitter beside",
+   "acceptance": "",
+   "today": true,
+   "legacy": [
+    [
+     "aruco_marker",
+     "aruco.corner_position"
+    ]
+   ]
+  },
+  {
+   "id": "aruco.reprojection",
+   "type": "aruco_marker",
+   "family": "fidelity",
+   "title": "Twin / floor (corners)",
+   "unit": "× floor",
+   "defined_on": "the twin's corners (camera model x sticker model x forward kinematics) projected vs the detected corners on held-out views",
+   "pinned": true,
+   "model_dependent": true,
+   "aggregate": "median",
+   "per_run": null,
+   "why_not": "no producer writes it per run yet; the type card says how it is measured",
+   "robotdx": null,
+   "normalised": "÷ corner jitter on a static view (the floor); <= 1.5× is twinned",
+   "acceptance": "",
+   "today": true,
+   "legacy": [
+    [
+     "aruco_marker",
+     "aruco.reprojection"
+    ]
+   ]
+  },
+  {
+   "id": "aruco.ids_read",
+   "type": "aruco_marker",
+   "family": "performance",
+   "title": "Expected ids read",
+   "unit": "%",
+   "defined_on": "ids decoded vs the ids the sheet should carry, per view in which it is seen",
+   "pinned": false,
+   "model_dependent": false,
+   "aggregate": "median",
+   "per_run": null,
+   "why_not": "no producer writes it per run yet; the type card says how it is measured",
+   "robotdx": null,
+   "normalised": "a share with its Wilson interval",
+   "acceptance": "",
+   "today": true,
+   "legacy": [
+    [
+     "aruco_marker",
+     "aruco.ids_read"
+    ]
+   ]
   }
  ],
  "diagnostics": [
@@ -11290,6 +11935,110 @@
      "camera_hsi.drift"
     ]
    ]
+  },
+  {
+   "id": "aruco.reprojection.dx",
+   "type": "aruco_marker",
+   "metric": "aruco.reprojection",
+   "title": "Twin / floor (corners)",
+   "warn": {
+    "op": "<=",
+    "value": 2.0,
+    "unit": "× floor",
+    "note": ""
+   },
+   "error": null,
+   "kind": "threshold",
+   "units": "metric",
+   "parameter": "",
+   "message": "aruco.reprojection past its threshold (<= 2.0 × floor)",
+   "baseline": "",
+   "robotdx": null,
+   "note": "",
+   "legacy": [
+    [
+     "aruco_marker",
+     "aruco.reprojection.dx"
+    ]
+   ]
+  },
+  {
+   "id": "aruco.corner_position.dx",
+   "type": "aruco_marker",
+   "metric": "aruco.corner_position",
+   "title": "Corner position (as built)",
+   "warn": {
+    "op": "<=",
+    "value": 2.0,
+    "unit": "mm",
+    "note": "Zach's manual-diagnosis line: past 2 mm / 2° a sticker is checked by hand"
+   },
+   "error": null,
+   "kind": "threshold",
+   "units": "metric",
+   "parameter": "",
+   "message": "aruco.corner_position past its threshold (<= 2.0 mm)",
+   "baseline": "",
+   "robotdx": null,
+   "note": "Zach's manual-diagnosis line: past 2 mm / 2° a sticker is checked by hand",
+   "legacy": [
+    [
+     "aruco_marker",
+     "aruco.corner_position.dx"
+    ]
+   ]
+  },
+  {
+   "id": "aruco.ids_read.dx",
+   "type": "aruco_marker",
+   "metric": "aruco.ids_read",
+   "title": "Expected ids read",
+   "warn": {
+    "op": ">=",
+    "value": 100.0,
+    "unit": "%",
+    "note": "every expected id, every view it is in"
+   },
+   "error": null,
+   "kind": "threshold",
+   "units": "metric",
+   "parameter": "",
+   "message": "aruco.ids_read past its threshold (>= 100.0 %)",
+   "baseline": "",
+   "robotdx": null,
+   "note": "every expected id, every view it is in",
+   "legacy": [
+    [
+     "aruco_marker",
+     "aruco.ids_read.dx"
+    ]
+   ]
+  },
+  {
+   "id": "aruco_marker.drift",
+   "type": "aruco_marker",
+   "metric": "aruco.reprojection",
+   "title": "drift: Twin / floor (corners)",
+   "warn": {
+    "op": "<=",
+    "value": 1.25,
+    "unit": "× calibrated",
+    "note": ""
+   },
+   "error": null,
+   "kind": "drift",
+   "units": "ratio",
+   "parameter": "",
+   "message": "model drift detected — recalibration required",
+   "baseline": "its held-out fidelity at calibration (the held-out step's scores.json)",
+   "robotdx": null,
+   "note": "a sticker knocked or peeling moves its corners off where the bundle put them",
+   "legacy": [
+    [
+     "aruco_marker",
+     "aruco_marker.drift"
+    ]
+   ]
   }
  ],
  "coverage": [
@@ -11734,6 +12483,37 @@
     }
    ],
    "rule": "share of the cells of distance × incidence × illumination × material × exposure a planned capture visits; every cell is reachable × wavelength band × material class",
+   "gate_pct": 40.0,
+   "reachable": "every cell (a rig can set any condition)",
+   "from_runs": false,
+   "why_not": "no run writes this type's coverage points yet; plans are scored by the card's function"
+  },
+  {
+   "type": "aruco_marker",
+   "dimensions": [
+    {
+     "name": "viewing angle",
+     "unit": "°",
+     "headline": true,
+     "bin_size": 15.0,
+     "binning": "0 / 15 / 30 / 45 / 60 / 75° between the ray and the sticker's normal"
+    },
+    {
+     "name": "distance",
+     "unit": "m",
+     "headline": true,
+     "bin_size": null,
+     "binning": "0.2 / 0.4 / 0.8 / 1.6 m edges (log: the corner's pixel size halves per band)"
+    },
+    {
+     "name": "joint angle span",
+     "unit": "°",
+     "headline": true,
+     "bin_size": null,
+     "binning": "0 / 10 / 25 / 50 / 100 / 180° of joint travel the views span (static stickers span 0)"
+    }
+   ],
+   "rule": "share of the viewing angle x distance x joint-angle-span cells the views visit; every cell is reachable",
    "gate_pct": 40.0,
    "reachable": "every cell (a rig can set any condition)",
    "from_runs": false,
@@ -13520,6 +14300,141 @@
      ]
     }
    ]
+  },
+  {
+   "id": "aruco.id_confirm",
+   "title": "ArUco ID confirmation: every expected id read, no duplicate, no stranger, the dictionary actually printed",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "aruco_marker",
+     "model": "M0.kinematics.nominal",
+     "parameter": "dictionary"
+    },
+    {
+     "type": "aruco_marker",
+     "model": "M0.kinematics.nominal",
+     "parameter": "marker_ids"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "aruco_marker",
+     "rung": "M0",
+     "parameters": [
+      "dictionary",
+      "marker_ids"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "aruco.caliper_size",
+   "title": "ArUco print size by caliper: the 100 mm ruler bar (or a marker side) against its spec",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "aruco_marker",
+     "model": "M2.kinematics.print_scale",
+     "parameter": "print_scale"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "aruco_marker",
+     "rung": "M2",
+     "parameters": [
+      "print_scale"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "aruco.bundle_adjustment",
+   "title": "ArUco bundle adjustment: camera, as-built sticker poses, print scales and joint zeros against the encoders",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "deployed",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "aruco_marker",
+     "model": "M1.kinematics.as_built",
+     "parameter": "as_built_offset"
+    },
+    {
+     "type": "aruco_marker",
+     "model": "M2.kinematics.print_scale",
+     "parameter": "print_scale"
+    },
+    {
+     "type": "camera",
+     "model": "M0.measurement.pinhole",
+     "parameter": "extrinsics"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "aruco_marker",
+     "rung": "M1",
+     "parameters": [
+      "as_built_offset"
+     ]
+    },
+    {
+     "card": "aruco_marker",
+     "rung": "M2",
+     "parameters": [
+      "print_scale"
+     ]
+    },
+    {
+     "card": "camera_rgb",
+     "rung": "M0",
+     "parameters": [
+      "extrinsics"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
+   "id": "camera.exposure_for_aruco",
+   "title": "Exposure, gain and frame rate tuned for ArUco corner accuracy (not mean grey, not markers read)",
+   "package": "camera.rgb",
+   "kind": "tune",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [],
+   "legacy_identifies": [],
+   "configures": [
+    {
+     "type": "camera",
+     "card": "camera_rgb",
+     "settings": [
+      "exposure",
+      "gain",
+      "fps"
+     ]
+    },
+    {
+     "type": "depth_camera",
+     "card": "camera_rgbd",
+     "settings": [
+      "exposure",
+      "gain",
+      "fps"
+     ]
+    }
+   ]
   }
  ],
  "parameter_routines": {
@@ -13718,7 +14633,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "distortion": [
     "camera.intrinsics_charuco"
@@ -13770,6 +14686,25 @@
     "conveyor_belt.line_scan"
    ],
    "reference_drift_per_h": []
+  },
+  "aruco_marker": {
+   "dictionary": [
+    "aruco.id_confirm"
+   ],
+   "marker_ids": [
+    "aruco.id_confirm"
+   ],
+   "marker_length_m": [],
+   "layout_m": [],
+   "pose_on_link": [],
+   "as_built_offset": [
+    "aruco.bundle_adjustment"
+   ],
+   "print_scale": [
+    "aruco.caliper_size",
+    "aruco.bundle_adjustment"
+   ],
+   "flatness_m": []
   }
  },
  "migration": {
@@ -13785,7 +14720,8 @@
    "conveyor": "conveyor",
    "camera_rgb": "camera",
    "camera_rgbd": "depth_camera",
-   "camera_hsi": "hyperspectral_camera"
+   "camera_hsi": "hyperspectral_camera",
+   "aruco_marker": "aruco_marker"
   },
   "rungs": [
    {
@@ -14379,6 +15315,38 @@
     "models": [
      "M3.measurement.wear"
     ]
+   },
+   {
+    "card": "aruco_marker",
+    "key": "M0",
+    "type": "aruco_marker",
+    "models": [
+     "M0.kinematics.nominal"
+    ]
+   },
+   {
+    "card": "aruco_marker",
+    "key": "M1",
+    "type": "aruco_marker",
+    "models": [
+     "M1.kinematics.as_built"
+    ]
+   },
+   {
+    "card": "aruco_marker",
+    "key": "M2",
+    "type": "aruco_marker",
+    "models": [
+     "M2.kinematics.print_scale"
+    ]
+   },
+   {
+    "card": "aruco_marker",
+    "key": "M3",
+    "type": "aruco_marker",
+    "models": [
+     "M3.kinematics.curl"
+    ]
    }
   ],
   "parameters": [
@@ -14963,6 +15931,54 @@
     "name": "eccentricity_growth_mrad_per_sqrt_h",
     "type": "encoder",
     "parameter": "eccentricity_growth_mrad_per_sqrt_h"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "dictionary",
+    "type": "aruco_marker",
+    "parameter": "dictionary"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "marker_ids",
+    "type": "aruco_marker",
+    "parameter": "marker_ids"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "marker_length_m",
+    "type": "aruco_marker",
+    "parameter": "marker_length_m"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "layout_m",
+    "type": "aruco_marker",
+    "parameter": "layout_m"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "pose_on_link",
+    "type": "aruco_marker",
+    "parameter": "pose_on_link"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "as_built_offset",
+    "type": "aruco_marker",
+    "parameter": "as_built_offset"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "print_scale",
+    "type": "aruco_marker",
+    "parameter": "print_scale"
+   },
+   {
+    "card": "aruco_marker",
+    "name": "flatness_m",
+    "type": "aruco_marker",
+    "parameter": "flatness_m"
    }
   ],
   "metrics": [

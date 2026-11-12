@@ -180,7 +180,7 @@ class Tool:
 class Card:
     id: str
     title: str
-    group: str  # actuator | sensor
+    group: str  # actuator | sensor | target (a thing a sensor reads, neither driven nor sensing: the ArUco marker, PEP 0001)
     zach: str   # his word for it in the Nov 4 list
     robotdx_part: str | None
     robotdx_gap: str
@@ -674,8 +674,77 @@ CONVEYOR = Card(
     error_budget="the pick's tolerance along the belt at the arm's reach: the arm's 5 mm tool gate",
 )
 
-ORDER = ("gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "conveyor", "camera_rgb", "camera_rgbd", "camera_hsi", "encoder")
-CARDS: dict[str, Card] = {c.id: c for c in sorted((GEARBOX, DRIVER, MOTOR, SERVO, ARM_SUB, ARM, ARM_GRIPPER, CONVEYOR, CAMERA_RGB, CAMERA_RGBD, CAMERA_HSI, ENCODER),
+# WHY a third group, "target" (Zach, 2026-11-11, PEP 0001): an ArUco marker is neither driven nor sensing; a sensor reads it. The instance
+# is ONE printed sticker carrying one or more markers rigidly, its layout from CAD (a five-bar strip, a plate, a single tag); its model is
+# where its corners are, so the five-bar's 12-17 mm strip error (L2 printed 1.5 % small and tilted 2.4 deg, bam_rack_twin.fivebar_asbuilt)
+# is a parameter of this type, not of the camera or the joint.
+ARUCO_AXES = {
+    "viewing angle": [0.0, 15.0, 30.0, 45.0, 60.0, 75.0],     # deg between the camera ray and the sticker's normal
+    "distance": [0.2, 0.4, 0.8, 1.6],                         # m, camera to sticker
+    "joint angle span": [0.0, 10.0, 25.0, 50.0, 100.0, 180.0],  # deg the views' joint readings span (a sticker on a static link spans 0)
+}
+
+ARUCO_MARKER = Card(
+    id="aruco_marker", title="ArUco marker", group="target", zach="ArUco Marker",
+    robotdx_part=None, robotdx_gap="RobotDx has no marker part type: its camera entries (camera.tag_detect, marker_drift) read tags as a camera's "
+                                   "instrument, never as a part with an as-built pose and a print scale of its own",
+    inputs="a camera's view of the sticker (pose, light, exposure)", outputs="each marker's id and its four corners in the image",
+    metrics=(
+        Metric("aruco.ids_read", "performance", "Expected ids read", "ids decoded vs the ids the sheet should carry, per view in which it is seen", "%", None,
+               proposed="no RobotDx marker entry; camera.tag_detect counts tags but not which ids, duplicates or the dictionary",
+               normalised="a share with its Wilson interval"),
+        Metric("aruco.corner_position", "performance", "Corner position (as built)", "a corner's position from the fitted twin vs an independent "
+               "measure of it (a probe touch, a caliper, a second camera)", "mm", None,
+               proposed="no RobotDx entry; stock.agreement between the twin's corner and an independent measure",
+               normalised="against Zach's 2 mm manual-diagnosis line (feedback-aruco-bundle-adjustment-every-rig); ÷ the corner jitter beside"),
+        Metric("aruco.reprojection", "fidelity", "Twin / floor (corners)", "the twin's corners (camera model x sticker model x forward kinematics) "
+               "projected vs the detected corners on held-out views", "× floor", None,
+               proposed="RobotDx camera.intrinsics is the camera's reprojection; per-sticker reprojection on held-out views has no entry",
+               normalised="÷ corner jitter on a static view (the floor); <= 1.5× is twinned"),
+    ),
+    floor=Floor(None, "proposed: corner jitter over 100 frames of the sticker held still at the working distance"),
+    model=Model("Printed sticker on a link", None,
+                "robotparts has no marker model; aruco-studio generates the sheets (profile, preset, the 100 mm ruler bar) and cad2robot places "
+                "them on links; this card adds the as-built correction and the print scale",
+                "X_corner = FK(q) · pose_on_link · as_built_offset · (print_scale · layout_corner)",
+                (
+                    P("dictionary", "name", None, "the sheet's generator record (aruco-studio profile)", "ID confirmation on a captured view", "yes",
+                      "e.g. DICT_4X4_50; a sheet printed in another dictionary reads as missing ids"),
+                    P("marker_ids", "id", None, "the sheet's generator record and the CAD bundle (cad2robot)", "ID confirmation on a captured view", "yes"),
+                    P("marker_length_m", "m", None, "the sheet's generator record (the marker's black square side)", "caliper on a marker side or the "
+                      "ruler bar", "partial"),
+                    P("layout_m", "m", None, "the sheet's layout in its own frame (aruco-studio / CAD)", "the layout is the design; its errors are "
+                      "print_scale and flatness", "partial"),
+                    P("pose_on_link", "m, rad", None, "the CAD bundle (cad2robot): the sticker's frame on its link", "bundle adjustment through "
+                      "as_built_offset", "yes"),
+                    P("as_built_offset", "m, rad", None, "unknown until fitted: how the sticker was actually stuck down", "bundle adjustment "
+                      "against the encoders, CAD as prior", "yes", "6-DOF in the sticker frame"),
+                    P("print_scale", "1", 1.0, "1.0 nominal; the five-bar's L2 strip printed 0.98493 (243.3 of 247.0 mm, bam_fivebar strips_asbuilt.json)",
+                      "caliper on the ruler bar, or bundle adjustment of a sticker the joints carry", "partial",
+                      "a static sticker's scale trades with its depth from one fixed camera: only the caliper or a moving view sees it"),
+                )),
+    coverage=Coverage(tuple(Axis(name, unit, binning, bin_size=size) for name, unit, binning, size in (
+                          ("viewing angle", "°", "0 / 15 / 30 / 45 / 60 / 75° between the ray and the sticker's normal", 15.0),
+                          ("distance", "m", "0.2 / 0.4 / 0.8 / 1.6 m edges (log: the corner's pixel size halves per band)", None),
+                          ("joint angle span", "°", "0 / 10 / 25 / 50 / 100 / 180° of joint travel the views span (static stickers span 0)", None))),
+                      "share of the viewing angle x distance x joint-angle-span cells the views visit; every cell is reachable",
+                      cov.condition_coverage(ARUCO_AXES), plan_source="proposed: the bundle adjustment's pose list (arm poses that show each sticker)"),
+    view=View(None, proposed="no data-ui marker template: needs each sticker's corners (detected vs twin) per view, its as-built offset and "
+                             "print scale with their intervals, and the ids read"),
+    observability=Observability("yes", ("D405 / D435 colour streams", "the rack's and the five-bar's printed stickers", "a digital caliper"),
+                                ("a probe or a second camera for corner truth",),
+                                "the rack's D435 reads the five-bar strips today (bam_rack_twin.fivebar_asbuilt)"),
+    procedure=proc(describe="cad2robot bundle: each sticker's link and pose; aruco-studio sheet record", nominal="the CAD bundle's sticker poses",
+                   capture="bam_rack_twin camera / tag_track (views with joint readings)",
+                   identify="sim2real fit/aruco.py: confirm_ids, caliper_scale, bundle_adjust (bam_rack_twin calib.py / fivebar_asbuilt.py maths)",
+                   gates="proposed: aruco.corner_position against the 2 mm line"),
+    error_budget="2 mm / 2° per corner (Zach's manual-diagnosis line): past it a sticker is diagnosed by hand",
+)
+
+ORDER = ("gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "conveyor", "camera_rgb", "camera_rgbd", "camera_hsi", "encoder",
+         "aruco_marker")
+CARDS: dict[str, Card] = {c.id: c for c in sorted((GEARBOX, DRIVER, MOTOR, SERVO, ARM_SUB, ARM, ARM_GRIPPER, CONVEYOR, CAMERA_RGB, CAMERA_RGBD, CAMERA_HSI, ENCODER,
+                                                    ARUCO_MARKER),
                                                    key=lambda c: ORDER.index(c.id))}
 
 
@@ -714,8 +783,9 @@ WEAR_LAW_REFERENCES: dict[str, tuple[Reference, ...]] = _references.WEAR_LAW_REF
 # follow, so reg.SERVO is reg.CARDS["servo"].
 V1_CARDS: dict[str, Card] = CARDS
 CARDS = _ladders.build(sys.modules[__name__])
-GEARBOX, DRIVER, MOTOR, SERVO, ARM_SUB, ARM, ARM_GRIPPER, CONVEYOR, CAMERA_RGB, CAMERA_RGBD, CAMERA_HSI, ENCODER = (CARDS[k] for k in (
-    "gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "conveyor", "camera_rgb", "camera_rgbd", "camera_hsi", "encoder"))
+GEARBOX, DRIVER, MOTOR, SERVO, ARM_SUB, ARM, ARM_GRIPPER, CONVEYOR, CAMERA_RGB, CAMERA_RGBD, CAMERA_HSI, ENCODER, ARUCO_MARKER = (CARDS[k] for k in (
+    "gearbox", "driver", "motor", "servo", "arm_subassembly", "arm_6dof", "arm_6dof_gripper", "conveyor", "camera_rgb", "camera_rgbd", "camera_hsi", "encoder",
+    "aruco_marker"))
 
 SELECTION_RULE = ("pick the lowest rung, in ladder order, whose held-out fidelity reaches the floor (held-out error ÷ the floor <= "
                   f"{TWINNED_LIMIT:g}×); a residual or learned rung is judged only on held-out data inside its covered cells, and "
@@ -816,9 +886,17 @@ def routines_for(card_or_package: Card | str) -> tuple[CalibrationRoutine, ...]:
 
 
 def routines_configuring(card: Card | str) -> tuple[CalibrationRoutine, ...]:
-    """Card -> its configure routines (kind "configure"): the set-up steps a robot of this type runs, like homing, before it is used."""
+    """Card -> its configure routines (kind "configure"): the set-up steps a robot of this type runs, like homing, before it is used.
+    A tune routine also writes settings (its `configures`) but optimises a metric; routines_tuning lists those (PEP 0001)."""
     cid = _card(card).id
-    return tuple(r for r in ROUTINES if any(c.card == cid for c in r.configures))
+    return tuple(r for r in ROUTINES if r.kind == "configure" and any(c.card == cid for c in r.configures))
+
+
+def routines_tuning(card: Card | str) -> tuple[CalibrationRoutine, ...]:
+    """Card -> its tune routines (kind "tune", PEP 0001): settings chosen by optimising a metric with no real reference to match, such as
+    a camera's exposure, gain and frame rate for ArUco corner accuracy."""
+    cid = _card(card).id
+    return tuple(r for r in ROUTINES if r.kind == "tune" and any(c.card == cid for c in r.configures))
 
 
 def routines_identifying(card: Card | str, parameter: str) -> tuple[CalibrationRoutine, ...]:
@@ -850,6 +928,8 @@ ALIASES = {
     "hyperspectral": "camera_hsi", "hyperspectral camera": "camera_hsi", "arm": "arm_6dof", "6 dof robot arm": "arm_6dof", "ur5e": "arm_6dof",
     "arm_gripper": "arm_6dof_gripper", "arm + gripper": "arm_6dof_gripper", "wrist": "arm_subassembly", "sub-assembly": "arm_subassembly",
     "conveyor belt": "conveyor", "belt": "conveyor",
+    "aruco": "aruco_marker", "aruco marker": "aruco_marker", "aruco tag": "aruco_marker", "marker": "aruco_marker", "fiducial": "aruco_marker",
+    "sticker": "aruco_marker", "tag sticker": "aruco_marker",
 }
 
 

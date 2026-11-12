@@ -34,7 +34,7 @@ KINCAL = "src/core/mdp/setup/bam_calibration/src/bam_calibration"
 
 PACKAGES = (
     CalibrationPackage(
-        "hand_eye", "Hand Eye", "Hand-eye calibration", ("camera_rgb", "camera_rgbd", "arm_6dof", "arm_6dof_gripper"),
+        "hand_eye", "Hand Eye", "Hand-eye calibration", ("camera_rgb", "camera_rgbd", "arm_6dof", "arm_6dof_gripper", "aruco_marker"),
         (CodeHome(BAM_WS, "src/core/mdp/setup/bam_calibration/docs/ref/bam_calibration/dev/camera_calibration/hand_eye_calibration.py",
                   note="a 2024-era ROS 2 node chaining ChArUco transforms, kept as reference (docs/ref); no AX = XB solver"),
          CodeHome(BAM_WS, f"{TWIN}/calib.py", note="the rack: camera and joints against the CAD by bundle adjustment over ArUco corners"),
@@ -147,6 +147,9 @@ EQUIPMENT = {e.id: e for e in (
     Equipment("divot_board", "The belt ChArUco with four conical divots at its corners, for an arm's touch", Q(60, "USD", ESTIMATE)),
     Equipment("probe_ball_tip", "A 6 mm ball tip on arm 1's flange and its joint-current read-back as a load cell", Q(30, "USD", ESTIMATE)),
     Equipment("belt_load", "15 kg of sandbags spread on the belt", Q(20, "USD", ESTIMATE)),
+    # the ArUco marker's print-size check (PEP 0001, 2026-11-12, additive)
+    Equipment("caliper", "A 150 mm digital caliper reading 0.01 mm", Q(30, "USD", ESTIMATE),
+              "to read an aruco-studio sheet's 100 mm ruler bar or a marker's side"),
 )}
 
 
@@ -162,6 +165,19 @@ def routine(id, title, package, identifies, setting, wall_time, operator_time, e
     return CalibrationRoutine(id, title, package, tuple(identifies), setting, wall_time, operator_time, tuple(equipment), excitation, coverage,
                               int(repeats), how, **kw)
 
+
+# --- the ArUco marker's references (PEP 0001): cited without a URL or DOI (references.py and its checked list are the reference lane's)
+GARRIDO_2014 = refs.R("Garrido-Jurado, Muñoz-Salinas, Madrid-Cuevas, Marín-Jiménez (2014). Automatic generation and detection of highly "
+                      "reliable fiducial markers under occlusion. Pattern Recognition 47(6):2280-2292.", kind="paper",
+                      note="the ArUco dictionaries, their ids and the detector OpenCV ships")
+TRIGGS_2000 = refs.R("Triggs, McLauchlan, Hartley, Fitzgibbon (2000). Bundle adjustment: a modern synthesis. Vision Algorithms: Theory and "
+                     "Practice, LNCS 1883, Springer.", kind="chapter", note="robust bundle adjustment, priors and the gauge (one sticker held at CAD)")
+STROBL_2011 = refs.R("Strobl, Hirzinger (2011). More accurate pinhole camera calibration with imperfect planar target. IEEE International "
+                     "Conference on Computer Vision Workshops.", kind="paper", note="a target's own geometry (scale, flatness) fitted with the camera")
+FIVEBAR_ASBUILT = refs.R("BAM (2026). bam_rack_twin fivebar_asbuilt.py: the five-bar strips' as-built 6-DOF and print scale by bundle "
+                         "adjustment (bam_ws src/dev/bam_rack_twin).", kind="code",
+                         note="L2 printed 1.5 % small and tilted 2.4 deg: the 12-17 mm strip error")
+ARUCO_TEST = "tests/test_aruco_marker.py"
 
 NO_HARD_STOP = "the sysid oracle has no hard-stop scene yet"
 CAN11 = "sysid/results/pendulum_can11.json"
@@ -605,7 +621,7 @@ ROUTINES = (
          code=(CodeHome(SIM2REAL, "sysid/examples/dual_arm_cell/pipeline.py"),
                CodeHome(BAM_WS, f"{TWIN}/calib.py", note="the rack's: camera and joints against the CAD by bundle adjustment over ArUco corners")),
          status="implemented", oracle=("dual_arm_cell:cell.tags_bundle_adjustment",),
-         alternatives=("hand_eye.ax_xb", "camera.intrinsics_charuco"),
+         alternatives=("hand_eye.ax_xb", "camera.intrinsics_charuco", "aruco.bundle_adjustment"),
          references=(refs.ZHANG_2000, refs.HOLLERBACH_2016)),
     routine("hand_eye.ax_xb", "Hand-eye by AX = XB (Tsai-Lenz, Park-Martin, Daniilidis)", "hand_eye",
          (I("camera_rgb", "M0", "extrinsics"), I("arm_6dof", "M0", "base_frame")), "both",
@@ -765,7 +781,7 @@ ROUTINES = (
                         note="aruco_score; the grid is calibrate(task_score=...)"),),
          status="implemented",
          oracle_note="no sysid check: the score is the task itself, run live; bam_camera_calibration's tests hold the grid's pick on a known camera",
-         alternatives=("camera.exposure_lock",)),
+         alternatives=("camera.exposure_lock", "camera.exposure_for_aruco")),
     routine("rgbd.depth_emitter_settings", "Depth module set-up: IR exposure, laser power and emitter for the fill rate", "camera.rgbd", (), "both",
          Q(60, "s", ESTIMATE), Q(0, "s", ESTIMATE, "unattended, the work area in view"), (),
          "IR exposure and laser power stepped with the emitter on", "the work area's depth ROI over the settings", 1,
@@ -881,4 +897,88 @@ ROUTINES = (
          "calibration runs under (0.2 m/s, 0.4 m/s for the line scan), then read them back",
          kind="configure", configures=(C("conveyor", "counts_per_m", "direction_sign", "speed_limit_m_s", "accel_limit_m_s2"),),
          oracle_note="not implemented: it needs the real belt's drive (its motor and driver are not known yet)"),
+
+    # --- the ArUco marker (PEP 0001, Zach 2026-11-11: "bundle adjustment ... manually measuring the markers with a caliper to confirm their
+    # size ... confirm the IDs ... tune the exposure and FPS to maximize ArUco accuracy"; additive). Graded by tests/test_aruco_marker.py
+    # against its own hidden truth; each ladder file (sysid/results/routine_ladders/<id>.json) is read by sim2real.calibration.recovery.
+    routine("aruco.id_confirm", "ArUco ID confirmation: every expected id read, no duplicate, no stranger, the dictionary actually printed",
+         "hand_eye", (I("aruco_marker", "M0", "dictionary", "marker_ids"),), "both",
+         Q(10, "s", ESTIMATE, "one view of each sticker; detection takes milliseconds"), Q(0, "s", ESTIMATE, "unattended, the stickers in view"), (),
+         "one still view of every sticker in the cell camera", "every sticker the robot carries, each in view once", 3,
+         "detect every marker of the expected dictionary (OpenCV ArucoDetector) in each view; flag expected ids never read, ids read twice in "
+         "one view (two stickers printed with one id) and ids nobody expects; when ids are missing, try every predefined dictionary and name "
+         "the one that decodes more markers (a sheet printed in DICT_5X5_50 reads as nothing in DICT_4X4_50)",
+         tests=("aruco_marker.id_check", "aruco_marker.id_in_service"),
+         code=(CodeHome(SIM2REAL, "src/sim2real/fit/aruco.py", note="confirm_ids"),
+               CodeHome("/home/bam/aruco-studio", "aruco_studio/verify/sheet_check.py",
+                        note="aruco-studio's printed-sheet check: ids and the 100 mm ruler bar on a scan of the sheet")),
+         status="implemented",
+         oracle_note=f"no sysid example films stickers; the hidden-truth test is {ARUCO_TEST} (OpenCV-rendered tags with noise: a duplicate, "
+                     "a stranger and two missing ids flagged exactly, a DICT_5X5_50 sheet named as such); ladder routine_ladders/aruco.id_confirm.json",
+         references=(GARRIDO_2014,),
+         # WHY uses exposure (PEP 0001): a locked exposure reads every marker; the camera's own auto mode serves when nothing set it
+         uses=("exposure",)),
+    routine("aruco.caliper_size", "ArUco print size by caliper: the 100 mm ruler bar (or a marker side) against its spec", "hand_eye",
+         (I("aruco_marker", "M2", "print_scale"),), "both",
+         Q(120, "s", ESTIMATE, "five readings per sticker"), Q(120, "s", ESTIMATE, "an operator with the caliper"), ("caliper",),
+         "an operator closes the caliper on the sheet's 100 mm ruler bar (or a marker's black square) five times",
+         "one length per sticker, read n times", 5,
+         "print scale = mean reading / nominal length with a Student-t 95 % interval whose spread never falls below one caliper count; in or "
+         "out of a 0.5 % print tolerance (out: reprint the sticker or carry its scale into the twin)",
+         tests=("aruco_marker.caliper",),
+         code=(CodeHome(SIM2REAL, "src/sim2real/fit/aruco.py", note="caliper_scale"),
+               CodeHome("/home/bam/aruco-studio", "aruco_studio/verify/sheet_check.py", note="the sheet's 100 mm ruler bar it is read on")),
+         status="implemented",
+         oracle_note=f"no sysid example; the hidden-truth test is {ARUCO_TEST} (true scale 0.98493, the five-bar's L2 strip; five readings at "
+                     "0.03 mm operator sigma; recovered within 0.05 %); ladder routine_ladders/aruco.caliper_size.json",
+         alternatives=("aruco.bundle_adjustment",),
+         references=(STROBL_2011, FIVEBAR_ASBUILT)),
+    routine("aruco.bundle_adjustment", "ArUco bundle adjustment: camera, as-built sticker poses, print scales and joint zeros against the encoders",
+         "hand_eye", (I("aruco_marker", "M1", "as_built_offset"), I("aruco_marker", "M2", "print_scale"), I("camera_rgb", "M0", "extrinsics")),
+         "deployed",
+         Q(600, "s", ESTIMATE, "30 joint poses that show every sticker, like the five-bar's strips run"),
+         Q(0, "s", ESTIMATE, "unattended once the stickers are on"), ("camera_tags",),
+         "joint poses that carry each moving sticker through a wide arc (the test's strip turns 100 deg over 30 views) while the fixed "
+         "stickers stay in view", "every sticker in view in many poses; a moving sticker over a wide joint arc", 1,
+         "Levenberg-Marquardt (fit/least_squares.py) on every corner's reprojection through the forward kinematics, robust soft-L1 at 1 px: the "
+         "camera's pose, each free sticker's 6-DOF as-built correction and print scale, the joints' zeros; one gauge sticker held exactly at "
+         "CAD with scale 1.0; CAD pose and joint-zero priors, the caliper's scale where it ran (else a weak 2 % prior); says which scales the "
+         "views alone could not see (a static sticker's scale trades with its depth from one fixed camera)",
+         tests=("aruco_marker.bundle", "camera_rgb.tag_poses"),
+         code=(CodeHome(SIM2REAL, "src/sim2real/fit/aruco.py", note="bundle_adjust"),
+               CodeHome(BAM_WS, f"{TWIN}/calib.py", note="the rack's: camera and joints against the CAD by bundle adjustment over ArUco corners"),
+               CodeHome(BAM_WS, f"{TWIN}/asbuilt.py", note="the rack's as-built sticker poses"),
+               CodeHome(BAM_WS, f"{TWIN}/fivebar_asbuilt.py", note="the five-bar strips: 6-DOF in the sticker frame plus a print scale")),
+         status="implemented",
+         oracle_note=f"no sysid example; the hidden-truth test is {ARUCO_TEST} (one fixed camera, a gauge plate, a free plate and a strip turning "
+                     "+-50 deg; corners within 2 mm, camera within 1.5 mm and 0.2 deg, print scale within 0.2 %); ladder "
+                     "routine_ladders/aruco.bundle_adjustment.json",
+         alternatives=("cell.tags_bundle_adjustment", "aruco.caliper_size"),
+         note="it also fits the joints' zeros, but claims none: grading is on the corners, because a sticker turned about its joint's axis and "
+              "that joint's zero project the same from one fixed camera",
+         references=(TRIGGS_2000, FIVEBAR_ASBUILT, refs.ZHANG_2000),
+         requires=("marker_ids", "exposure"), uses=("print_scale",)),
+    routine("camera.exposure_for_aruco", "Exposure, gain and frame rate tuned for ArUco corner accuracy (not mean grey, not markers read)",
+         "camera.rgb", (), "both",
+         Q(90, "s", ESTIMATE, "54 exposure x gain x frame-rate settings of 5 frames each, settling between"),
+         Q(0, "s", ESTIMATE, "unattended, a known board in view"), ("camera_tags",),
+         "an exposure x gain x frame-rate grid (exposure up to one frame period), a known board of markers in view",
+         "exposures from 2 ms to 133 ms, gains 1 to 16, 6 to 30 fps", 5,
+         "per setting: the board's PnP reprojection RMS (the corners' noise), 5 px for each marker not read, and the blur length (the board's "
+         "image speed measured at the fastest rate x the exposure); the first two pooled over the frame rates of one exposure and gain; the "
+         "lowest score wins, near-ties to the higher frame rate (in the dark the rate drops to 6 fps for a 133 ms exposure)",
+         kind="tune", configures=(C("camera_rgb", "exposure", "gain", "fps"), C("camera_rgbd", "exposure", "gain", "fps")),
+         code=(CodeHome(SIM2REAL, "src/sim2real/schedule/aruco_exposure.py", note="tune"),
+               CodeHome(BAM_WS, "src/core/mdp/setup/bam_camera_calibration/src/bam_camera_calibration/task.py",
+                        note="the house rule it replaces for accuracy: aruco_score, markers read"),
+               CodeHome(BAM_WS, "src/dev/bam_rack_twin/bam_rack_twin/hardware/d435_exposure.py",
+                        note="the rack's mean-grey exposure band and the 6 fps still look (D435_STILL_LOOK)")),
+         status="implemented",
+         oracle_note=f"no sysid check: tuning recovers no hidden value; {ARUCO_TEST} renders the board with shot and read noise and motion blur "
+                     "and scores every candidate by its true corner error (picks within 1.15x + 0.02 px static, 1.30x + 0.05 px moving); ladder "
+                     "routine_ladders/camera.exposure_for_aruco.json",
+         alternatives=("camera.exposure_for_task",),
+         references=(GARRIDO_2014,),
+         # WHY after the lock (PEP 0001): camera.exposure_lock writes exposure and gain provisionally; this tune finds them for accuracy
+         requires=("marker_ids",), refines=("exposure", "gain")),
 )

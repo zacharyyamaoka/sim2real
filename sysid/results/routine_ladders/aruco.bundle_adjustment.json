@@ -1,0 +1,65 @@
+{
+ "generated_by": "tests/test_aruco_marker.py",
+ "levels": {
+  "0x": {
+   "errors": {
+    "camera_m": 6.556960856372474e-10,
+    "camera_rad": 0.0,
+    "corner_m": 1.6406604228982077e-05,
+    "print_scale": 2.2631770803416273e-05
+   },
+   "pass": true,
+   "worst_error_over_tolerance": 0.011315885401708137
+  },
+  "10x": {
+   "errors": {
+    "camera_m": 0.004448831103999808,
+    "camera_rad": 0.007243065235137784,
+    "corner_m": 0.004116864271684492,
+    "print_scale": 0.0009987257971867392
+   },
+   "pass": false,
+   "worst_error_over_tolerance": 2.9658874026665387
+  },
+  "1x": {
+   "errors": {
+    "camera_m": 0.000767987816214894,
+    "camera_rad": 0.001114276327884593,
+    "corner_m": 0.001165845176025094,
+    "print_scale": 0.0001745723630811602
+   },
+   "pass": true,
+   "worst_error_over_tolerance": 0.582922588012547
+  },
+  "3x": {
+   "errors": {
+    "camera_m": 0.0021093953317811577,
+    "camera_rad": 0.003347051939018997,
+    "corner_m": 0.0030674247630788007,
+    "print_scale": 0.0003141503011642177
+   },
+   "pass": false,
+   "worst_error_over_tolerance": 1.5337123815394003
+  }
+ },
+ "routine": "aruco.bundle_adjustment",
+ "schema": "sim2real.routine_ladder/1",
+ "tolerance": {
+  "camera_m": {
+   "kind": "abs",
+   "value": 0.0015
+  },
+  "camera_rad": {
+   "kind": "abs",
+   "value": 0.003490658503988659
+  },
+  "corner_m": {
+   "kind": "abs",
+   "value": 0.002
+  },
+  "print_scale": {
+   "kind": "abs",
+   "value": 0.002
+  }
+ }
+}

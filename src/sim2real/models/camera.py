@@ -1,4 +1,4 @@
-"""The camera types as kits: name a type, get its model rungs, its identify and configure routines and its black-box fidelity metrics.
+"""The camera types as kits: name a type, get its model rungs, its identify, configure and tune routines and its black-box fidelity metrics.
 
 Zach, 2026-11-11: "robot types I can assign those generic types and then they get all of the stuff for those types kinda like
 automatically". A robot's camera names a type id (camera_rgb, camera_rgbd, camera_hsi: the cards' ids); ``kit(type_id)`` hands back
@@ -6,7 +6,7 @@ everything that type has here, and ``kits_for`` adds what its members bring (an 
 
     from sim2real.models.camera import kits_for
     for k in kits_for(["camera_rgbd"]):           # -> camera_rgbd, then camera_rgb (its member)
-        k.rungs, k.identify, k.configure, k.fidelity
+        k.rungs, k.identify, k.configure, k.tune, k.fidelity
 
 The cards (sim2real.cards, the stdlib contract) hold each routine's record: what it identifies or configures, its time, equipment and
 status. This module is the code behind those ids; tests/test_camera_types.py holds the two to each other (every rung key and parameter
@@ -23,7 +23,7 @@ import numpy as np
 
 from ..fit import camera_hsi, camera_rgb, camera_rgbd
 from ..metrics import camera as metric
-from ..schedule import camera_configure
+from ..schedule import aruco_exposure, camera_configure
 
 __all__ = ["TWINNED_LIMIT", "Rung", "FidelityMetric", "CameraKit", "CAMERA_KITS", "kit", "kits_for",
            "rgb_geometry_fidelity", "rgb_photometric_fidelity", "rgb_latency_fidelity", "rgbd_depth_fidelity", "rgbd_noise_calibration",
@@ -67,6 +67,8 @@ class CameraKit:
     configure: dict[str, object] = field(default_factory=dict)   # a callable here, or "<repo>:<path>" where the driver lives
     fidelity: tuple[FidelityMetric, ...] = ()
     members: tuple[str, ...] = ()
+    # kind "tune" (PEP 0001): settings chosen by optimising a metric with no real reference, e.g. exposure / gain / fps for ArUco accuracy
+    tune: dict[str, Callable] = field(default_factory=dict)
 
     def rung(self, key: str) -> Rung:
         for r in self.rungs:
@@ -200,6 +202,7 @@ CAMERA_KITS: dict[str, CameraKit] = {
             FidelityMetric("camera.latency_model", "event-to-stamp delay on held-out LED edges", "stamp jitter, session floor", "s", rgb_latency_fidelity,
                            on_card=False),
         ),
+        tune={"camera.exposure_for_aruco": aruco_exposure.tune},
     ),
     "camera_rgbd": CameraKit(
         "camera_rgbd", "RGBD camera",
@@ -217,6 +220,7 @@ CAMERA_KITS: dict[str, CameraKit] = {
                            rgbd_depth_fidelity),
         ),
         members=("camera_rgb",),
+        tune={"camera.exposure_for_aruco": aruco_exposure.tune},
     ),
     "camera_hsi": CameraKit(
         "camera_hsi", "Hyperspectral camera",
