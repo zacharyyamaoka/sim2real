@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from urllib.parse import quote
 
 from sim2real.rack_results import load
 from sim2real.result import QUESTIONS
@@ -93,6 +94,11 @@ def cell(record: dict, q: str) -> str:
 
 STAGE_TITLE = {"target_vs_sim": "1 · target vs sim (controller)", "sim_vs_real": "2 · sim vs real (twin)",
                "target_vs_real": "3 · target vs real", None: "flag"}
+
+
+def href(url: str) -> str:
+    """A URL safe inside a markdown link: the rig projects' names carry spaces and '·', and a bare space ends a GFM link target."""
+    return quote(url, safe=":/?=&%#")
 
 
 def joint_label(joint: str) -> str:
@@ -193,17 +199,19 @@ def rig_wandb_section(rd: dict, verify_log: str | None) -> str:
     lines = ["| Project | Runs (latest evaluation) | Saved view | Report |", "|---|---|---|---|"]
     for name, data in rd.items():
         rig = data["rig"]
-        link = f"https://wandb.ai/{ENTITY}/{rig.project.replace(' ', '%20')}"
+        link = href(f"https://wandb.ai/{ENTITY}/{rig.project}")
         lines.append(f"| [{rig.project}]({link}) | {len(data['twin'])} twin ({len({r['config']['node'] for r in data['twin']})} nodes × "
                      f"{data['twin'][0]['config']['iterations']} twin iterations) + {len(data['controller'])} controller versions | "
-                     + (f"[view]({urls['views'][name]})" if name in urls.get("views", {}) else "—") + " | "
-                     + (f"[report]({urls['reports'][name]})" if name in urls.get("reports", {}) else "—") + " |")
+                     + (f"[view]({href(urls['views'][name])})" if name in urls.get("views", {}) else "—") + " | "
+                     + (f"[report]({href(urls['reports'][name])})" if name in urls.get("reports", {}) else "—") + " |")
     if "servo-across-rigs" in urls.get("reports", {}):
         lines.append(f"| [{rigs.HUB}](https://wandb.ai/{ENTITY}/{rigs.HUB}) (cross-rig) | the one-project runs below | — | "
-                     f"[servo joints and the same-named gates across rigs]({urls['reports']['servo-across-rigs']}) |")
+                     f"[servo joints and the same-named gates across rigs]({href(urls['reports']['servo-across-rigs'])}) |")
+    boards = [(data["rig"], f"https://wandb.ai/{ENTITY}/{data['rig'].project}/weave/leaderboards") for data in rd.values()]
     lines += ["", "Each project also holds the rig's Weave evaluations and leaderboards (bam_ws `bam_trackio.bbo`: a version is a Weave "
               "model version scored on a fixed environment; one leaderboard per environment: twin versions on the held-out runs, "
-              "controller versions on the coverage set, and on the five-bar the tool at the 16 settled holds).", "",
+              "controller versions on the coverage set, and on the five-bar the tool at the 16 settled holds): " + ", ".join(
+                  f"[{rig.label} leaderboards]({href(board)})" for rig, board in boards) + ".", "",
               "Log both rigs (idempotent; new numbers supersede, nothing is deleted), rebuild the reports and views, read it all back:", "",
               "```bash",
               "env -u VIRTUAL_ENV uv run --isolated --project /home/bam/sim2real --extra tracking python -m sim2real.tracking.rigs --log --views --verify",
@@ -292,7 +300,7 @@ def build(verify_log: str | None, rig_verify_log: str | None = None) -> str:
     results = {name: load(name) for name in ("ur_wrist", "fivebar")}
     rd = rig_data(results, sha, dirty)
     rig_urls = json.loads(rigs.REGISTRY.read_text()) if rigs.REGISTRY.exists() else {"reports": {}, "views": {}}
-    rig_links = ", ".join(f"[{rig.project}](https://wandb.ai/{ENTITY}/{rig.project.replace(' ', '%20')})" for rig in rigs.RIGS.values())
+    rig_links = ", ".join(f"[{rig.project}]({href(f'https://wandb.ai/{ENTITY}/{rig.project}')})" for rig in rigs.RIGS.values())
     batches, afters, rungs = {}, {}, {}
     for name, result in results.items():
         batch = records(result, sha=sha, dirty=dirty, extra_config=RIG)
