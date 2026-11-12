@@ -686,7 +686,8 @@ def plot_ladder(name: str, records: Sequence[dict], base, path: Path, tolerance_
                 first_out[key] = x_of[lv]
                 break
     leaving = sorted(first_out, key=lambda k: (first_out[k], -max(max(v) for v in series[k].values())))
-    loud = leaving[:3]
+    # nothing leaves: the two closest to their tolerance at any level are the ones to read
+    loud = leaving[:3] or sorted(series, key=lambda k: -max(float(np.median(v)) for v in series[k].values()))[:2]
     fig, ax = plt.subplots(figsize=(9.6, 5.0), dpi=130)
     fig.patch.set_facecolor(SURFACE)
     ax.set_facecolor(SURFACE)
@@ -754,7 +755,7 @@ def plot_ladder(name: str, records: Sequence[dict], base, path: Path, tolerance_
 
     ax.set_title(f"{spec.title}: {head}", loc="left", fontsize=11, color=INK, pad=30)
     note = (f"{len(series)} identified parameters, the median of {len(seeds)} seeds (each a dot; hollow = the front pass only, the routines "
-            f"before the dynamics). Colour = the first to leave the band, gray = the rest"
+            f"before the dynamics). Colour = {'the first to leave the band' if leaving else 'the two closest to their tolerance'}, gray = the rest"
             f"{(' (' + str(len(leaving) - 3) + (' more leaves)' if len(leaving) == 4 else ' more leave)')) if len(leaving) > 3 else ''}. {tolerance_note}")
     ax.text(0.0, 1.015, textwrap.fill(note, 150), transform=ax.transAxes, fontsize=7.8, color=MUTED, va="bottom", linespacing=1.3)
     fig.tight_layout()
@@ -868,7 +869,8 @@ def probe_tables_html(out: Path) -> str:
                                     "the six pushes mN.m"], body))
     for path in sorted((out / "probes").glob("dynamics_fix-s*.json")):
         doc = json.loads(path.read_text())
-        body = [(r["key"], f"{r['committed_err_over_tol']:.2f}", f"{r['fixed_err_over_tol']:.2f}") for r in doc["rows"]]
+        body = [(r["key"], "-" if r["committed_err_over_tol"] is None else f"{r['committed_err_over_tol']:.2f}", f"{r['fixed_err_over_tol']:.2f}")
+                for r in doc["rows"]]
         v = doc["velocity_sigma"]
         html_parts.append(f"<h2>Probe: the dynamics fit with the rests' velocity noise (seed {doc['seed']})</h2><p class=m>the very recordings the "
                           f"baseline cell's dynamics routine read; replays' velocity noise {v['quiet'] * 1e3:.3f}e-3 rad/s (rests only) instead of "
@@ -1156,7 +1158,9 @@ def probe_dynamics_fix(seed: int = SEEDS[0], workers: int = 4, out: Path | None 
     from sim2real import rig as seam  # noqa: PLC0415
 
     out = Path(out or default_out())
-    cell = json.loads((out / "cells" / f"baseline-s{seed}.json").read_text())
+    # the values the first three routines found: the whole run's record, or the front pass's (the same to the bit: front_check)
+    whole, front = out / "cells" / f"baseline-s{seed}.json", out / "front" / f"baseline-s{seed}.json"
+    cell = json.loads((whole if whole.exists() else front).read_text())
     twin = sim2real.Twin.load(NAME, workers=workers)
     wr = importlib.import_module(RIG_MODULE)
     rig, base = twin.runner.rig, twin.noise()
@@ -1185,15 +1189,19 @@ def probe_dynamics_fix(seed: int = SEEDS[0], workers: int = 4, out: Path | None 
     finally:
         wr.reading_noise = original
     params = {p.key: p for p in rig.parameters()}
-    theirs = {r["key"]: r for r in cell["calibration"]["rows"]}
+    theirs = {}
+    if whole.exists():
+        theirs = {r["key"]: r["recovered"] for r in json.loads(whole.read_text())["calibration"]["rows"]}
     rows = []
     for key in wr.Dynamics.identifies:
         p, truth = params[key], world[key]
         kind, tol = p.tolerance
         limit = tol if kind == "abs" else tol * abs(truth)
         mine = float(found[key].value)
-        rows.append({"key": key, "truth": truth, "committed": theirs[key]["recovered"], "fixed": mine,
-                     "committed_err_over_tol": abs(theirs[key]["recovered"] - truth) / limit, "fixed_err_over_tol": abs(mine - truth) / limit})
+        committed = theirs.get(key)
+        rows.append({"key": key, "truth": truth, "committed": committed, "fixed": mine,
+                     "committed_err_over_tol": None if committed is None else abs(committed - truth) / limit,
+                     "fixed_err_over_tol": abs(mine - truth) / limit})
     doc = {"seed": int(seed), "velocity_sigma": {"true": noise.effective()["velocity_noise_rad_s"], "reading_noise": read["qd"], "quiet": quiet},
            "seconds": round(time.monotonic() - began, 1), "rows": rows}
     print(json.dumps(doc, indent=1, default=_plain), flush=True)
@@ -1219,7 +1227,7 @@ def _cli(argv: Sequence[str] | None = None) -> int:
     many.add_argument("--workers", type=int, default=6)
     many.add_argument("--out", type=Path, default=None)
     many.add_argument("--no-reuse", action="store_true")
-    many.add_argument("--only", nargs="*", default=None, help="labels to run (e.g. torque-10-s20261112)")
+    many.add_argument("--only", nargs="*", default=None, help="labels to run, in this order (e.g. torque-10-s20261112)")
     many.add_argument("--exclude-baseline", action="store_true", help="leave the 1x runs to another process (the slow test writes them)")
     many.add_argument("--front", action="store_true", help="only the routines before the dynamics, every cell (FrontRig)")
     rep = sub.add_parser("report", help="the ladder table and one plot per ladder, from the cells written")
@@ -1227,6 +1235,8 @@ def _cli(argv: Sequence[str] | None = None) -> int:
     pro = sub.add_parser("probe", help="the known risks' estimators on a routine's own recordings (dead_band, reading_noise)")
     pro.add_argument("which", choices=["dead_band", "reading_noise", "motor_friction", "dynamics_fix"])
     pro.add_argument("--seed", type=int, default=SEEDS[0])
+    pro.add_argument("--multipliers", type=float, nargs="*", default=None, help="dead_band: the torque-noise multipliers (default 0 1 2 3 5 10)")
+    pro.add_argument("--name", default=None, help="the probe's file name under probes/ (default: the probe's)")
     pro.add_argument("--workers", type=int, default=4)
     pro.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
@@ -1244,7 +1254,9 @@ def _cli(argv: Sequence[str] | None = None) -> int:
         cells = plan(args.ladders)
         base = _base()
         if args.only:
-            cells = [c for c in cells if c.label(base) in set(args.only)]
+            # in the order given: a budget-cut run spends its full cells where the front pass cannot answer
+            by_label = {c.label(base): c for c in cells}
+            cells = [by_label[label] for label in args.only if label in by_label]
         if args.exclude_baseline:
             cells = [c for c in cells if not c.label(base).startswith("baseline-")]
         run_cells(cells, out=out, parallel=args.parallel, workers=args.workers, reuse=not args.no_reuse, front=args.front)
@@ -1256,9 +1268,12 @@ def _cli(argv: Sequence[str] | None = None) -> int:
         if args.which == "dynamics_fix":
             rows = probe_dynamics_fix(seed=args.seed, workers=args.workers, out=out)
             name = f"dynamics_fix-s{args.seed}"
+        elif args.which == "dead_band" and args.multipliers:
+            rows = probe_dead_band(multipliers=tuple(args.multipliers), workers=args.workers)
+            name = args.name or "dead_band_fine"
         else:
             rows = {"dead_band": probe_dead_band, "reading_noise": probe_reading_noise, "motor_friction": probe_motor_friction}[args.which](workers=args.workers)
-            name = args.which
+            name = args.name or args.which
         (out / "probes").mkdir(parents=True, exist_ok=True)
         (out / "probes" / f"{name}.json").write_text(json.dumps(rows, indent=1, default=_plain))
         return 0

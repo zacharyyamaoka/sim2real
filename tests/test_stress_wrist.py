@@ -243,3 +243,16 @@ def test_1x_meets_every_gate_on_every_seed(one_x):
         assert gates == {"twinned": True, "recovery": True, "tool_at_stops": True}, (record["cell"]["seed"], gates)
         assert max(report["ratios"]["fitted"].values()) <= 1.5
         assert report["tool_stop_m"]["fitted"] <= 1e-3, "Zach: final tool error sub 1 mm"
+
+
+@pytest.mark.skipif(not SLOW, reason="three routines of the wrist's sequence, ~2 min: SIM2REAL_SLOW=1")
+def test_the_front_pass_is_a_whole_runs_first_three_routines(tmp_path):
+    """FrontRig (the routines before the dynamics, on the seam's own runner) finds, to the bit, what the one-click lane's whole 1x run
+    found in those routines (the committed green run, seed 20261111): the stress lane's front cells stand for those rows of a whole run."""
+    green = json.loads(GREEN.read_text())
+    record = sw.run_front_cell(sw.Cell("overall", 1, 20261111), workers=WORKERS, out=tmp_path)
+    assert "error" not in record, record.get("error")
+    front = {r["key"]: r["recovered"] for r in record["calibration"]["rows"] if r["pass"] is not None}
+    whole = {r["key"]: r["recovered"] for r in green["calibration"]["rows"]}
+    assert set(front) == {f"can{c}.{n}" for c in (14, 15, 16) for n in ("backlash_rad", "static_friction_nm", "zero_offset_rad")}
+    assert front == {k: whole[k] for k in front}
