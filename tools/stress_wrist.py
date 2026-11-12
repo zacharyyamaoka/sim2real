@@ -1104,9 +1104,9 @@ def findings(out: Path) -> list[dict]:
                        "any stress that adds bias to the fit's residual (velocity noise, timing spread, a far truth) pushes it out")
                       if base_ratios and max(base_ratios) > 0.3 else
                       f"the 1x seeds sit at {min(base_ratios, default=0):.2f}-{max(base_ratios, default=0):.2f} of the tolerance; the stress itself moves it"),
-            "fix": ("see the dynamics_downstream rows below for whether the miss is the cell's own; for an own miss: weight the fit by the rests' "
-                    "velocity noise (reading_noise() reads it ~3x high) and add slow constant-speed sweeps both ways on this joint to the "
-                    "dynamics plan, where Coulomb separates from damping"),
+            "fix": ("see the dynamics_downstream rows below for whether the miss is the cell's own; for an own miss: slow constant-speed "
+                    "sweeps both ways on this joint in the dynamics plan, where Coulomb separates from damping, and the inference iterated to "
+                    "convergence (the velocity-noise weight from the rests was tried on overall-2 and changed nothing)"),
             "measured": "whole cells only (seed 20261111 below the front's break); |error| / tolerance in brackets"})
     # the truth ladder's own dynamics miss: the front routines recover every value at the far truth, so the miss is the fit's, and how it
     # grows with the distance says which part of the fit (added 2026-11-12 when truth-2-s20261111 ran whole and moved the break from 3 to 2)
@@ -1171,6 +1171,15 @@ def findings(out: Path) -> list[dict]:
         if own and quiet.exists():
             q = {r["key"]: r["probe_err_over_tol"] for r in json.loads(quiet.read_text())["rows"]}
             found[-1]["measured"] += "; and with the rests' velocity noise too: " + "; ".join(f"{k} {q[k]:.2f}" for k in own if k in q)
+            still = [k for k in own if q.get(k, 0) > 1]
+            if still:
+                # WHY the fix is rewritten here (measured 2026-11-12, overall-2-s20261111: can16.coulomb_nm 1.65 with the true front values
+                # and 1.65 again with the rests' velocity sigma): the velocity-noise weight was the proposal, and its probe ruled it out
+                found[-1]["fix"] = (f"not the velocity-noise weight (the rests' sigma leaves {', '.join(f'{k} at {q[k]:.2f}' for k in still)}): "
+                                    "the same candidates as the truth ladder's miss - the inference's fixed 8 iterations, and the joint's damping "
+                                    "fitted on its 0 bound so a slope lands in Coulomb; add slow constant-speed sweeps both ways on that joint to the "
+                                    "dynamics plan (at a steady speed Coulomb and damping separate without the inertia), and iterate to a step under "
+                                    "a tenth of each tolerance")
         elif own:
             found[-1]["measured"] += "; the rests' velocity-noise refit is not written"
     return found
