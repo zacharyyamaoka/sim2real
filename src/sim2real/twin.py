@@ -538,6 +538,11 @@ class RobotTwin:
         # routines that did not run
         from .calibration.record import CalibrationRecord, sysid_plan  # noqa: PLC0415
 
+        # WHY only when the runner reports its fits (2026-11-12): a record lists what actually ran; a runner that hands back no sysid state
+        # (tests/test_one_click.py stubs it) has nothing honest to record, so plan_ / record_ stay None rather than an invented plan
+        if not {"fits", "noise_level", "noise", "measured"} <= set(state):
+            fitted.plan_ = fitted.record_ = None
+            return fitted
         fitted.plan_ = sysid_plan(self.description.id, state["fits"], level=state["noise_level"], wall_time_s=calibration.seconds,
                                   description=self.description)
         fitted.record_ = CalibrationRecord.from_sysid(calibration.to_dict(), fits=state["fits"], plan=fitted.plan_,
