@@ -635,8 +635,15 @@ def example_page(ex: ExampleInfo, types: list[TypeInfo], catalog: set[str], **ct
     stale = '<p class="warn">This output is stale: the snippet changed after it was recorded. Re-run the recorder.</p>' if ex.stale else ""
     printed = rec.get("stdout", "").strip()
     evaluation = (rec.get("evaluation") or {}).get("summary", "")
+    # WHY count graded and ungraded apart: the wrist reports 20 of its 42 keys as not identified (pass=None); "42, all within tolerance"
+    # claimed a verdict nobody gave them. Unknown stays unknown.
+    params = rec.get("parameters", [])
+    graded = [p for p in params if p.get("pass") is not None]
+    ungraded = len(params) - len(graded)
+    verdict_text = (f'{len(graded)} graded, {"all within tolerance" if rec.get("passed") else "failing: " + esc(", ".join(rec.get("failing", [])))}'
+                    + (f', {ungraded} not identified' if ungraded else ""))
     meta = (f'Recorded {esc(rec.get("recorded", "?"))} in {esc(round(rec.get("seconds", 0) / 60, 1))} min; schema <code>{esc(rec.get("schema"))}</code>; '
-            f'{plural(len(rec.get("parameters", [])), "parameter")}, {"all within tolerance" if rec.get("passed") else "failing: " + esc(", ".join(rec.get("failing", [])))}.'
+            f'{plural(len(params), "parameter")}: {verdict_text}.'
             if rec else "Not recorded yet.")
     run_cmd = (f"systemd-run --user --scope -p MemoryMax=16G -p OOMPolicy=continue -- env -u VIRTUAL_ENV "
                f"PYTHONPATH=/home/bam/sim2real/src:/home/bam/dataclass_values/src:/home/bam/sim2real "
