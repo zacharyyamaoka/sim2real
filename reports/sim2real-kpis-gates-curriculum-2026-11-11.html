@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Sim2Real KPIs and curriculum</title>
+  <style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+  <style type="text/css">
+:root{--bg:#fbfbf9;--fg:#1d1d1b;--mut:#6b6b66;--line:#e2e1dc;--card:#ffffff;--accent:#2f8a4f;--code:#f2f1ec}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--fg:#ecebe6;--mut:#a3a29b;--line:#34332f;--card:#1e1e1c;--accent:#5cc27e;--code:#262623}}
+:root[data-theme="dark"]{--bg:#161615;--fg:#ecebe6;--mut:#a3a29b;--line:#34332f;--card:#1e1e1c;--accent:#5cc27e;--code:#262623}
+html{background:var(--bg)}body{margin:0 auto;max-width:1180px;padding:20px 16px 48px;background:var(--bg);color:var(--fg);
+font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+h1{font-size:26px;margin:4px 0 6px}h2{font-size:20px;margin:30px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
+h3{font-size:16.5px;margin:22px 0 6px}a{color:var(--accent)}p,li{max-width:96ch}
+table{border-collapse:collapse;margin:10px 0 16px;font-size:13px;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--line);padding:5px 8px;vertical-align:top;text-align:left}th{background:var(--code)}
+tbody tr:nth-child(even){background:color-mix(in srgb,var(--code) 45%,transparent)}
+code{background:var(--code);padding:1px 4px;border-radius:4px;font-size:12.5px}pre{background:var(--code);padding:10px 12px;border-radius:6px;overflow-x:auto}
+pre code{padding:0}blockquote{margin:12px 0;padding:8px 14px;border-left:3px solid var(--accent);background:var(--card)}
+blockquote p{margin:4px 0}em{color:var(--mut)}
+</style>
+</head>
+<body>
+<h1 id="sim2real-kpis-gates-and-the-curriculum">Sim2Real: KPIs, gates
+and the curriculum</h1>
+<p><em>2026-11-11 · status as of sim2real <code>main</code> @
+<code>48d8396af</code> · written by
+<code>docs/build_kpis_gates_curriculum.py</code> from
+<code>sim2real.rack_results.load(...)</code> through
+<code>sim2real.tracking.wandb_log.records()</code>, the same records the
+W&amp;B runs are made from · angles in degrees, lengths in mm</em></p>
+<h2 id="the-answer">The answer</h2>
+<ul>
+<li><strong>The KPIs are five questions every node of the tree answers
+in order: Floor → Data → Routines → Twin → Job.</strong> A node&#39;s
+verdict is its first &quot;no&quot;; a parent passes a question only if it does at
+its own output and every child does. Each question has one hard gate;
+the numbers beside it are soft KPIs you push inside the gate.</li>
+<li><strong>UR wrist today:</strong> CAN 16 <em>passes all five</em>.
+CAN 15 <em>stops at Job</em>: it settles 0.339° from its target against
+its 0.329° share of the 1 mm tool gate. CAN 14 <em>stops at Twin</em>:
+driven it is 1.13× its floor, but its passive release is 102.6×. The
+arm, the holder board and the deployment read <em>stops at Floor</em>:
+nothing revisits a tool stop yet.</li>
+<li><strong>Five-bar today:</strong> J2 and C1 both read <em>stops at
+Routines</em> (only their gravity is graded on a hidden truth). Behind
+that, their twins are 3.69× and 2.36× their floors, and the tool settles
+4.3 mm from its target against the 1 mm gate.</li>
+<li><strong>The curriculum is the same five answers climbed in work
+order:</strong> S0 described → S1 routines recover a hidden truth in sim
+→ S2 real floor → S3 coverage → S4 twin ≤ 1.5× floor → S5 job, at every
+joint; A0–A5 for an arm (tool repeats, the 1 mm tool gate), T0–T5 for a
+tool, D0–D5 for a deployment. A rung passes exactly when its question
+does.</li>
+<li><strong>Next rungs:</strong> the wrist&#39;s holder board (T1: its TCP
+and payload graded in sim; T2: one stop revisited, the tool by encoders
++ FK), then CAN 14&#39;s passive twin (S4) and CAN 15&#39;s settled stop (S5).
+The five-bar&#39;s S1: grade friction, armature and delay in sim at 1× noise
+(the one-click seam the wrist got today), then its twin (S4) and the
+tool gate.</li>
+<li><strong>The gates, in Zach&#39;s order (2026-11-11 21:50), all from the
+joint encoders through FK:</strong> target vs sim (the controller) → sim
+vs real (the twin, ≤ 1.5× the same-input floor on the tick clock) →
+target vs real (the tool ≤ 1 mm at a settled stop). ArUco is a flag,
+never a gate. UR wrist: gate 1 (target vs sim at a stop) is <strong>not
+measured</strong>: no sim replay of settled holds; gate 2 (twin)
+<strong>fails</strong>; gate 3 (tool at a stop) is <strong>not
+measured</strong> (the tool is not tracked). Five-bar: gate 1 (target vs
+sim at a stop) is <strong>not measured</strong>: no sim replay of
+settled holds; gate 2 (twin) <strong>fails</strong>; gate 3 (tool at a
+stop) <strong>fails</strong>: 4.34 mm on gravity comp: identified.</li>
+<li><strong>W&amp;B, live: one project per rig</strong>, <a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig">Sim2Real
+· wrist rig</a>, <a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig">Sim2Real
+· five-bar rig</a>, on bam_ws&#39;s <code>bam_trackio.bbo</code> template
+(Zach&#39;s direction, relayed by the W1 sprint), with the same gate names
+on both and <code>type</code>, <code>joint</code> and
+<code>deployment</code> config on every run; one W&amp;B run per version
+of what is fitted (each twin iteration, each controller configuration).
+The one-project layout I first recommended (proposal B) stays in
+<code>Sim2Real</code> (44 runs; the filter
+<code>type = integrated_servo</code> returns the 5 servo joints of both
+rigs), and its filter-by-type view now lives on as the cross-rig report
+there.</li>
+</ul>
+<blockquote>
+<p><strong>What moved since the brief (its numbers were sim2real
+<code>662e64d</code>)</strong></p>
+<ul>
+<li><strong>Wrist Routines:</strong> the one-click seam (sim2real
+<code>82f14db</code>, wired in <code>7f8d13b</code>) recovers CAN 14
+8/8, CAN 15 6/6, CAN 16 6/6 and the arm&#39;s 2/2 identifiable parameters at
+1× noise on a sealed truth, so no wrist joint stops at Routines any
+more.</li>
+<li><strong>Joint Job</strong> (<code>d626be9</code>): each joint&#39;s
+settled error is now held against its share of the 1 mm tool gate, 1 mm
+÷ (lever × √joints) (an RSS split, proposed): CAN 15 0.329°, CAN 16
+0.957°, CAN 14 0.411°; J2 0.136°, C1 0.144°.</li>
+<li><strong>C1 coverage:</strong> 34.1 % → 44.3 % after seven C1 swings
+(<code>coverage_real_031652</code>, <code>7f8d13b</code>), so C1 now
+stops at Routines like J2.</li>
+<li><strong>Wrist workspace:</strong> the source says 60.55 %
+(<code>multi3/multi_scores.json</code> real_all); the page prints it to
+one place as 60.5 %.</li>
+<li><strong>Five-bar tool:</strong> 9.6 mm at the 16 settled holds on
+the nominal gravity compensation → 4.3 mm on the identified one
+(<code>data/fivebar_dwell_identified_2026-11-11.json</code>); the tool&#39;s
+Job now reads the operating config, the nominal run stays beside
+it.</li>
+<li><strong>Unchanged:</strong> the floors (0.099 / 0.087 / 0.241°
+wrist, 0.160 / 0.187° five-bar), the twin ratios (1.13× / 1.38× / 0.78×;
+3.69× / 2.36×).</li>
+</ul>
+</blockquote>
+<h2 id="1--the-kpis-and-gates-as-decided-2026-11-11">1 · The KPIs and
+gates (as decided 2026-11-11)</h2>
+<p>Proposal C of the vault note <em>Sim2Real KPIs and Gates — 3
+Proposals and What Good Looks Like per Type (2026-11-11)</em>, as
+<code>result.py</code> and <code>rack_results.py</code> implement it
+tonight.</p>
+<table>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Question</th>
+<th>It asks</th>
+<th>Hard gate</th>
+<th>Soft numbers beside it</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><strong>Floor</strong></td>
+<td>How much does the real thing disagree with itself?</td>
+<td>≥ 5 repeats of one input per run kind; a pair counts only if its
+commands agree within 0.01° RMS, compared tick for tick when the run
+carries its plan tick; driven, and passive or N/A with a measured
+reason; twin ÷ floor never below 0.71</td>
+<td>floor (°), same-input pairs, runs, per run kind</td>
+<td>decided; passive N/A proposed</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><strong>Data</strong></td>
+<td>Is the data enough?</td>
+<td>joint: ≥ 40 % of its reachable (angle, speed, acceleration) cells
+visited by real runs; arm: joint cube ≥ 90 %, workspace ≥ 50 %, facing
+or heading ≥ 90 % of the allowed mask; held-out split sealed before
+fitting; physical runs for a physical deployment</td>
+<td>coverage %, samples, minutes logged</td>
+<td>thresholds proposed</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><strong>Routines</strong></td>
+<td>Does each calibration routine get a hidden truth back, in sim?</td>
+<td>every identifiable value within its tolerance of a sealed truth at
+1× the real sensor noise, the truth off the search grid; the nominal
+value fails its own tolerance; then the stress ladder (3×, 10×, delay
+and quantisation variants)</td>
+<td>k of n identifiable recovered; error ÷ tolerance; wall and operator
+time</td>
+<td>decided</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><strong>Twin</strong></td>
+<td>Is the twin as good as reality allows?</td>
+<td>held-out sim vs real ≤ 1.5× the floor <strong>of the same run
+kind</strong>, passive and driven (≤ 3× reads &quot;close&quot;)</td>
+<td>the ratio per run kind; before → after; how many times better than
+&quot;it follows its target&quot;</td>
+<td>decided</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><strong>Job</strong></td>
+<td>Does the real thing do its job?</td>
+<td>joint: settled stop error within its share of the tool gate; tool:
+<strong>≤ 1 mm at a stop</strong>, on settled holds, at the tool by the
+joint encoders through FK (Zach, 21:50)</td>
+<td>real vs target; feedback-torque share, RMS(τ − τ_ff) ÷ RMS(τ),
+falling (≤ 0.3 proposed); the sim predicting its own tracking</td>
+<td>1 mm decided (Zach); joint share proposed</td>
+</tr>
+</tbody>
+</table>
+<p><strong>How it rolls up</strong></p>
+<ul>
+<li><strong>The verdict is the first &quot;no&quot;:</strong> &quot;stops at Data&quot;
+means Floor passed and Data did not; the later answers are still
+computed and shown beside it.</li>
+<li><strong>A parent passes a question only if it answers yes at its own
+output (an arm at its tool pose, a deployment at its picks) and every
+child passes it</strong> (<code>CalibrationResult.verdicts()</code>). So
+the deployment&#39;s line is the answer for the whole rig, and a joint that
+is twinned on its own cannot make an arm twinned whose coupled moves are
+not.</li>
+<li><strong>The numbers roll up softly:</strong> medians of the
+children, the worst child&#39;s twin ratio, the tool in mm.</li>
+</ul>
+<p><strong>The rules behind each gate</strong></p>
+<ul>
+<li><strong>Floor, from same-input repeats only</strong>
+(<code>metrics.series.repeat_floor</code>). Repeats are grouped per run
+kind and controller gains (T1: like for like) and compared tick for tick
+when the run carries its plan tick: on the host&#39;s wall clock, ~1 ms of
+jitter put identical five-bar tapes 1.6–3.1° apart. <strong>The floor
+check:</strong> with each real run = truth + independent noise, floor² =
+2σ² and gap² = bias² + σ², so a twin cannot sit below 1/√2 ≈ 0.71× its
+floor; one that does fails <em>Floor</em> (its &quot;repeats&quot; were not
+repeats), it does not pass Twin.</li>
+<li><strong>Twin on the floor&#39;s own run kind:</strong> the wrist&#39;s twin
+is judged on its repeat campaign&#39;s tape (<code>cycle-s4</code>,
+<code>cycle14-a</code>), the five-bar&#39;s on the five repeats of the 0.05
+m/s gravity-feed-forward rung, replayed on the after twin.</li>
+<li><strong>Passive &quot;N/A with a measured reason&quot; (proposed, Zach to
+confirm):</strong> a joint that cannot move unpowered answers N/A
+instead of failing Floor forever. CAN 15 and 16 carry at most 0.012 N·m
+of gravity against 0.140 and 0.186 N·m of breakaway; the five-bar&#39;s J2
+and C1 rest at the closure fold, where gravity cannot move them, and
+larger releases fall 40–80° at up to 1,300°/s.</li>
+<li><strong>Data thresholds (proposed, coordinator 2026-11-11, Zach to
+confirm):</strong> per joint ≥ 40 % of reachable (angle, speed,
+acceleration) cells; arm: cube ≥ 90 %, workspace ≥ 50 %, facing (wrist)
+or heading (five-bar) ≥ 90 %. The joint&#39;s reachable cells come from its
+committed description; for these joints every cell of the box counts as
+reachable, so it is the visited share of the full box.</li>
+<li><strong>Routines means recovering the hidden truth, in sim, within
+tolerance, under noise:</strong> the oracle&#39;s rule
+(<code>sysid/acceptance.json</code>): every hidden value within its
+tolerance at 1× sensor noise, and the nominal fails its own tolerance so
+&quot;return the description unchanged&quot; fails; the noise ladder
+(<code>sysid/noise_ladder.json</code>): 0×, 1×, 3×, 10×, bound min(k ×
+tol, max(tol, |nominal − true|)).</li>
+<li><strong>Job: the tool gate is 1 mm at a stop</strong> (Zach,
+2026-11-11: &quot;we certainly need final tool error sub 1mm&quot;, was 5 mm),
+<strong>measured on settled holds</strong>: the five-bar&#39;s 16
+three-second mass-ID holds, not the raster&#39;s turnarounds (median 0.06 s:
+tracking, not settled). A joint&#39;s share of it is 1 mm ÷ (lever ×
+√joints), an RSS split (proposed); <code>tools/tool_levers.py</code>
+measures each rig&#39;s lever.</li>
+</ul>
+<p><strong>Still sized for 5 mm in code</strong> (to re-derive at 1 mm;
+not changed here):</p>
+<ul>
+<li><code>cards/domain_v3.json</code>:
+<code>arm.tool_error_at_stop.gate</code>,
+<code>pick.grasp_pose_error.gate</code> and
+<code>conveyor.object_position.gate</code> are ≤ 5 mm.</li>
+<li><code>cards/servo_gates.py</code>: <code>STOP_ALLOCATION_MRAD</code>
+and T4&#39;s rule text allocate &quot;the 5 mm tool gate&quot; (about 3 mm RSS inside
+5 mm).</li>
+<li><code>sysid/acceptance.json</code>: tolerances are set for &quot;a 5 mm
+tool budget&quot;; the ur5e examples&#39; held-out tool is 5 mm.</li>
+</ul>
+<h3 id="11-zachs-gate-rulings-2026-11-11-2150-and-the-same-named-gates">1.1
+Zach&#39;s gate rulings (2026-11-11 21:50) and the same-named gates</h3>
+<ul>
+<li><strong>Every gate and tracking error comes from the joint encoders
+through FK, never the camera.</strong> The five-bar&#39;s tool at a stop is
+the 16 settled holds through the encoders and the CAD lever
+(<code>encoders_fk_mm</code>); the D435&#39;s number (camera vs the
+commanded target) is kept beside it as a flag only, under a name no gate
+reads.</li>
+<li><strong>ArUco is a 6-DOF tracked point logged as a flag, never a
+gate</strong> (<code>aruco_vs_fk_mm</code>: the tag vs the encoders&#39; FK
+at the same instant; a large value says look at the stickers or the
+as-built geometry, it passes or fails nothing). Not measured yet on
+either rig.</li>
+<li><strong>The gate order: target vs sim first, then sim vs real, then
+target vs real.</strong> Target vs sim is the controller alone (does the
+controller do the job in a sim that is right by construction?); sim vs
+real is the twin (held-out, ≤ 1.5× the same-input repeat floor on the
+tick clock, the tree&#39;s Twin answer); target vs real is the job. A later
+gate is read only after the earlier ones: a real tool error cannot be
+blamed on the twin until the controller passes in sim.</li>
+<li><strong>Tool gate 1 mm at a settled stop.</strong>
+<code>target_vs_real_at_stop_mm</code> is the same number as
+<code>tool_error_at_stop_mm</code> under its gate-order name;
+<code>target_vs_sim_at_stop_mm</code> holds the controller to the same 1
+mm in sim (proposed: the sim must pass before the real rig can).</li>
+</ul>
+<p><strong>The gates, one metric name each on both rig projects</strong>
+(<code>sim2real.tracking.rigs.GATES</code>; &quot;today&quot; is the latest
+version that measures it: the latest twin for the twin gate, the last
+controller configuration that ran for the rest):</p>
+<table>
+<thead>
+<tr class="header">
+<th>Order</th>
+<th>Metric (same name on both rigs)</th>
+<th>Role</th>
+<th>Limit</th>
+<th>UR wrist today</th>
+<th>Five-bar today</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1 · target vs sim (controller)</td>
+<td><code>target_vs_sim_tracking_deg</code></td>
+<td>kpi</td>
+<td>—</td>
+<td>0.148° · gains: pick_sliding</td>
+<td>0.919° · winners + lumped comp</td>
+</tr>
+<tr class="even">
+<td>1 · target vs sim (controller)</td>
+<td><code>target_vs_sim_at_stop_mm</code></td>
+<td>gate</td>
+<td>≤ 1 mm (proposed)</td>
+<td>not measured</td>
+<td>not measured</td>
+</tr>
+<tr class="odd">
+<td>2 · sim vs real (twin)</td>
+<td><code>heldout_sim_vs_real_deg</code></td>
+<td>gate</td>
+<td>≤ 1.5× floor, per joint</td>
+<td>0.118° · <strong>fails</strong> (CAN 14 over 1.5× floor) · latest
+twin (it5 + gravity refit)</td>
+<td>0.559° · <strong>fails</strong> (J2, C1 over 1.5× floor) · latest
+twin (refit on the tick clock)</td>
+</tr>
+<tr class="even">
+<td>3 · target vs real</td>
+<td><code>tracking_rms_deg</code></td>
+<td>kpi</td>
+<td>—</td>
+<td>0.340° · gains: pick_sliding</td>
+<td>0.785° · winners + lumped comp</td>
+</tr>
+<tr class="odd">
+<td>3 · target vs real</td>
+<td><code>tracking_rms_tool_mm</code></td>
+<td>kpi</td>
+<td>—</td>
+<td>not measured</td>
+<td>5.65 mm · winners + lumped comp</td>
+</tr>
+<tr class="even">
+<td>3 · target vs real</td>
+<td><code>target_vs_real_at_stop_mm</code></td>
+<td>gate</td>
+<td>≤ 1 mm</td>
+<td>not measured</td>
+<td>4.34 mm · <strong>fails</strong> (4.3× the gate) · gravity comp:
+identified</td>
+</tr>
+<tr class="odd">
+<td>3 · target vs real</td>
+<td><code>tool_error_at_stop_mm</code></td>
+<td>gate</td>
+<td>≤ 1 mm</td>
+<td>not measured</td>
+<td>4.34 mm · <strong>fails</strong> (4.3× the gate) · gravity comp:
+identified</td>
+</tr>
+<tr class="even">
+<td>3 · target vs real</td>
+<td><code>home_repeatability_deg</code></td>
+<td>kpi</td>
+<td>—</td>
+<td>not measured</td>
+<td>not measured</td>
+</tr>
+<tr class="odd">
+<td>flag</td>
+<td><code>aruco_vs_fk_mm</code></td>
+<td>flag</td>
+<td>—</td>
+<td>not measured</td>
+<td>not measured</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Read in that order, today:</strong></p>
+<ul>
+<li><strong>UR wrist:</strong> gate 1 (target vs sim at a stop) is
+<strong>not measured</strong>: no sim replay of settled holds; gate 2
+(twin) <strong>fails</strong>; gate 3 (tool at a stop) is <strong>not
+measured</strong> (the tool is not tracked). The controller in sim on
+the operating gains (pick_sliding) tracks to 0.148° (worst joint,
+held-out runs on the twin of record), the real joints to 0.340°.</li>
+<li><strong>Five-bar:</strong> gate 1 (target vs sim at a stop) is
+<strong>not measured</strong>: no sim replay of settled holds; gate 2
+(twin) <strong>fails</strong>; gate 3 (tool at a stop)
+<strong>fails</strong>: 4.34 mm on gravity comp: identified. Coulomb
+feed-forward is a controller change, and it shows first in gate 1:
+target vs sim went 1.39° → 0.37° (worst joint) and the sim&#39;s tool 7.4 →
+3.0 mm, before the real tool&#39;s 9.4 → 6.1 mm.</li>
+</ul>
+<p><strong>Controller versions, UR wrist</strong> (target vs sim:
+bam_ur_wrist_coverage&#39;s own score on the twin of record, held-out runs,
+CAN 15 and 16 only; target vs real: each coverage run&#39;s RMS per joint,
+averaged):</p>
+<table>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Controller version</th>
+<th>target vs sim, worst joint</th>
+<th>target vs real, worst joint</th>
+<th>per joint, sim / real</th>
+<th>tool tracking, sim / real</th>
+<th>tool at a settled stop (encoders + FK)</th>
+<th>camera vs commanded (flag)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>gains: stock</td>
+<td>10.664°</td>
+<td>10.184°</td>
+<td>CAN 15 9.906° / 10.072°, CAN 16 10.664° / 10.184°</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>gains: ram</td>
+<td>0.359°</td>
+<td>0.446°</td>
+<td>CAN 15 0.359° / 0.446°, CAN 16 0.332° / 0.349°</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>gains: pick_sliding</td>
+<td>0.148°</td>
+<td>0.340°</td>
+<td>CAN 15 0.148° / 0.340°, CAN 16 0.119° / 0.279°</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Controller versions, five-bar</strong> (tracking: each
+coverage rung&#39;s own metrics, the real run and the sim the ladder ran
+beside it on the same plan, averaged over the rungs; the tool at a stop:
+the 16 three-second holds, last second scored):</p>
+<table>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Controller version</th>
+<th>target vs sim, worst joint</th>
+<th>target vs real, worst joint</th>
+<th>per joint, sim / real</th>
+<th>tool tracking, sim / real</th>
+<th>tool at a settled stop (encoders + FK)</th>
+<th>camera vs commanded (flag)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>gravity comp: nominal</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>9.56 mm (fails 1 mm; p95 40.1)</td>
+<td>20.73 mm</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>Coulomb feed-forward: none (stock)</td>
+<td>1.387°</td>
+<td>1.701°</td>
+<td>J2 1.387° / 1.701°, C1 1.294° / 1.564°</td>
+<td>7.37 mm / 9.38 mm</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>Coulomb feed-forward: 0.70 / 0.78 N·m (winners)</td>
+<td>0.370°</td>
+<td>1.096°</td>
+<td>J2 0.370° / 1.096°, C1 0.263° / 0.681°</td>
+<td>2.97 mm / 6.06 mm</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>winners + lumped comp</td>
+<td>0.919°</td>
+<td>0.785°</td>
+<td>J2 0.919° / 0.785°, C1 0.490° / 0.596°</td>
+<td>4.71 mm / 5.65 mm</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>gravity comp: identified</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>4.34 mm (fails 1 mm; p95 8.9)</td>
+<td>19.87 mm</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2--the-curriculum">2 · The curriculum</h2>
+<p><strong>How to read it.</strong> The verdict reads the five questions
+in <em>check</em> order (Floor first: a wrong floor makes every later
+number meaningless). The ladder is climbed in <em>work</em> order:
+Routines first, because it needs no rig time (prove a routine on a
+hidden truth in sim before trusting it on hardware), then the rig rungs
+from cheapest to dearest. A rung passes exactly when its question
+passes, so the two orders read the same answers; &quot;next rung&quot; and &quot;stops
+at&quot; can name different questions only when more than one is open. Today
+they agree on every node. <code>sim2real.tracking.curriculum</code>
+holds the ladders; each W&amp;B run carries its node&#39;s rungs.</p>
+<h3 id="21-the-ladders">2.1 The ladders</h3>
+<p><strong>Joint (every actuator or sensor type; the integrated servo
+here)</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Rung</th>
+<th>What</th>
+<th>Reads</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>S0</strong></td>
+<td>Described</td>
+<td>—</td>
+<td>a sim2real type with a nominal model, its parameters and their
+tolerances</td>
+</tr>
+<tr class="even">
+<td><strong>S1</strong></td>
+<td>Routines recover the hidden truth in sim</td>
+<td>Routines</td>
+<td>noise-free, then 1× the real noise with the truth off the search
+grid, then the stress ladder (3×, 10×, delay and quantisation variants):
+every identifiable value within its tolerance, and the nominal value
+fails its own</td>
+</tr>
+<tr class="odd">
+<td><strong>S2</strong></td>
+<td>Real floor known</td>
+<td>Floor</td>
+<td>≥ 5 repeats of one input per run kind (commands within 0.01°,
+compared tick for tick); driven, and passive or N/A with a measured
+reason (proposed); twin ÷ floor never below 0.71</td>
+</tr>
+<tr class="even">
+<td><strong>S3</strong></td>
+<td>Coverage</td>
+<td>Data</td>
+<td>≥ 40 % of the reachable (angle, speed, acceleration) cells visited
+by real runs (proposed); the held-out split sealed before fitting</td>
+</tr>
+<tr class="odd">
+<td><strong>S4</strong></td>
+<td>Twin within 1.5× the floor</td>
+<td>Twin</td>
+<td>held-out sim vs real on the floor&#39;s own run kind ≤ 1.5× the floor,
+passive and driven</td>
+</tr>
+<tr class="even">
+<td><strong>S5</strong></td>
+<td>Does its job</td>
+<td>Job</td>
+<td>settled stop error within the joint&#39;s share of the tool gate (1 mm
+at a stop); feedback-torque share falling</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Arm (rigid body chain)</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Rung</th>
+<th>What</th>
+<th>Reads</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>A0</strong></td>
+<td>Described</td>
+<td>—</td>
+<td>the chain, its mounts and a committed reachable mask</td>
+</tr>
+<tr class="even">
+<td><strong>A1</strong></td>
+<td>Arm routines recover the truth in sim</td>
+<td>Routines</td>
+<td>kinematics, mounts, joint zeros, delay and the gravity direction at
+1× noise, truth sealed</td>
+</tr>
+<tr class="odd">
+<td><strong>A2</strong></td>
+<td>Tool repeats</td>
+<td>Floor</td>
+<td>the same commanded tool pose revisited (ISO 9283 RP: 5 poses × 30
+cycles), the tool by the joint encoders through FK</td>
+</tr>
+<tr class="even">
+<td><strong>A3</strong></td>
+<td>Arm coverage</td>
+<td>Data</td>
+<td>joint cube ≥ 90 %, workspace ≥ 50 %, facing or heading ≥ 90 % of the
+allowed mask (proposed)</td>
+</tr>
+<tr class="odd">
+<td><strong>A4</strong></td>
+<td>Coupled twin</td>
+<td>Twin</td>
+<td>twin vs real tool pose ≤ 1.5× the tool floor on coupled multi-joint
+moves</td>
+</tr>
+<tr class="even">
+<td><strong>A5</strong></td>
+<td>Tool gate</td>
+<td>Job</td>
+<td>tool ≤ 1 mm at a stop, on settled holds (not raster turnarounds), at
+the tool by the joint encoders through FK</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tool (payload + TCP)</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Rung</th>
+<th>What</th>
+<th>Reads</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>T0</strong></td>
+<td>Described</td>
+<td>—</td>
+<td>the TCP and payload, with their tolerances</td>
+</tr>
+<tr class="even">
+<td><strong>T1</strong></td>
+<td>Tool routines recover the truth in sim</td>
+<td>Routines</td>
+<td>payload mass 5 %, centre of mass 3 mm, TCP 0.5 mm across and 1 mm
+along</td>
+</tr>
+<tr class="odd">
+<td><strong>T2</strong></td>
+<td>Tool repeats</td>
+<td>Floor</td>
+<td>the tool at the same commanded stop, revisited, by the joint
+encoders through FK</td>
+</tr>
+<tr class="even">
+<td><strong>T3</strong></td>
+<td>Tool seen widely</td>
+<td>Data</td>
+<td>the TCP seen from spread poses; payload classes</td>
+</tr>
+<tr class="odd">
+<td><strong>T4</strong></td>
+<td>Tool twin</td>
+<td>Twin</td>
+<td>the after twin&#39;s tool vs the real tool at stops ≤ 1.5× the tool
+floor</td>
+</tr>
+<tr class="even">
+<td><strong>T5</strong></td>
+<td>Tool gate</td>
+<td>Job</td>
+<td>real tool vs commanded ≤ 1 mm at a stop, settled, at the tool by the
+joint encoders through FK</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Deployment</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Rung</th>
+<th>What</th>
+<th>Reads</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>D0</strong></td>
+<td>Described</td>
+<td>—</td>
+<td>physical or virtual, with its schedule of routines</td>
+</tr>
+<tr class="even">
+<td><strong>D1</strong></td>
+<td>Every child&#39;s routines pass</td>
+<td>Routines</td>
+<td>the roll-up of its children&#39;s Routines</td>
+</tr>
+<tr class="odd">
+<td><strong>D2</strong></td>
+<td>Its output repeats</td>
+<td>Floor</td>
+<td>the deployment&#39;s own output repeated: the same scene run twice</td>
+</tr>
+<tr class="even">
+<td><strong>D3</strong></td>
+<td>Physical runs, split sealed</td>
+<td>Data</td>
+<td>runs from every routine in its schedule; for a physical deployment,
+physical runs</td>
+</tr>
+<tr class="odd">
+<td><strong>D4</strong></td>
+<td>The sim ranks like reality</td>
+<td>Twin</td>
+<td>sim ranks policies in the order reality does (rank correlation &gt;
+0.9, proposed)</td>
+</tr>
+<tr class="even">
+<td><strong>D5</strong></td>
+<td>Picks</td>
+<td>Job</td>
+<td>real picks, then successful picks per minute; tool ≤ 1 mm at a
+stop</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-what-each-rung-means-per-generic-type">2.2 What each rung
+means, per generic type</h3>
+<p>The rungs are the same for every type; what changes is each gate&#39;s
+number. Tolerances are the oracle&#39;s
+(<code>sysid/acceptance.json</code>), hard gates are
+<code>cards/domain_v3.json</code>&#39;s; <em>proposed</em> marks a number no
+code holds yet.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>S1 · Routines (tolerance at 1× noise)</th>
+<th>S2 · Floor (what repeats)</th>
+<th>S3 · Data (cells, ≥ 40 %)</th>
+<th>S4 · Twin (≤ 1.5× floor)</th>
+<th>S5 · Job (hard gate)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>integrated_servo</strong></td>
+<td>gravity 2 %, gravity zero 0.29°, armature 5 %, Coulomb 10 %,
+Stribeck drop 25 % and speed 30 %, viscous 20 %, backlash 10 %
+(pendulum_can11)</td>
+<td>one tape ×5, per run kind and gains</td>
+<td>(angle, speed, acceleration) at the output</td>
+<td>held-out angle, passive and driven; current ≤ 2× its scatter in
+closed loop (T3)</td>
+<td>settled stop within its share of the 1 mm tool gate (T4); feedback
+share</td>
+</tr>
+<tr class="even">
+<td><strong>bldc_motor</strong></td>
+<td>torque per amp, phase resistance (Kt ≤ 2 %, proposed)</td>
+<td>dyno shaft torque, or current scatter</td>
+<td>(angle, speed, acceleration) at the shaft</td>
+<td>shaft torque; winding ≤ 5 °C</td>
+<td>Kt within 5 % (T6); share of the datasheet speed-torque curve</td>
+</tr>
+<tr class="odd">
+<td><strong>gearbox</strong></td>
+<td>backlash 0.033° (2 arcmin) or 10 %</td>
+<td>the hysteresis loop&#39;s 95 % half-width (T5)</td>
+<td>(angle, speed, acceleration) at the output</td>
+<td>output angle for the same input (needs an output encoder; a camera
+tag only as a flag)</td>
+<td>lost motion ≤ 0.033° (2 arcmin)</td>
+</tr>
+<tr class="even">
+<td><strong>foc_controller</strong></td>
+<td>command delay (≤ 1 ms, proposed); current-loop bandwidth</td>
+<td>q-current scatter on one command</td>
+<td>(q-current, speed) map</td>
+<td>q-current ≤ 2× scatter; board temperature ≤ 5 °C</td>
+<td>torque-cap share (≤ 1 %, proposed); loop rate ±10 %</td>
+</tr>
+<tr class="odd">
+<td><strong>encoder</strong></td>
+<td>quantisation known; eccentricity 10 % (proposed)</td>
+<td>standstill spread; homing repeats</td>
+<td>(angle, speed)</td>
+<td>noise and quantisation spectrum</td>
+<td>homing repeatability</td>
+</tr>
+<tr class="even">
+<td><strong>rigid_body_chain</strong></td>
+<td>joint zeros 0.029°, armature 10 %, damping 20 %, friction 10 %,
+mounts 1 mm / 0.057°</td>
+<td>the same tool pose revisited (ISO 9283 RP)</td>
+<td>joint cube ≥ 90 %, workspace ≥ 50 %, facing ≥ 90 % (proposed)</td>
+<td>tool pose ≤ 1.5× the tool floor</td>
+<td>tool ≤ 1 mm at a stop, settled, at the tool</td>
+</tr>
+<tr class="odd">
+<td><strong>gripper</strong></td>
+<td>actuator gain 5 %, finger damping 15 %</td>
+<td>the same grasp revisited</td>
+<td>the arm&#39;s coverage at grasp poses</td>
+<td>grasp pose ≤ 1.5×</td>
+<td>grasp pose ≤ 5 mm in the card (to re-derive at 1 mm); picks per
+minute</td>
+</tr>
+<tr class="even">
+<td><strong>conveyor</strong></td>
+<td>drum radius 0.1 %, moving mass 10 %, viscous 15 %, Coulomb 10 %</td>
+<td>belt position run to run on one profile</td>
+<td>(belt speed, load mass)</td>
+<td>belt position ≤ 1.5×</td>
+<td>object position ≤ 5 mm in the card</td>
+</tr>
+<tr class="odd">
+<td><strong>camera</strong></td>
+<td>pose 2 mm / 0.11°, focal 0.5 %, principal point 2 px</td>
+<td>a static scene frame to frame; corner jitter</td>
+<td>distance × incidence × light × material × exposure</td>
+<td>sim overlay ≤ 1.5×</td>
+<td>reprojection ≤ 0.5 px</td>
+</tr>
+<tr class="even">
+<td><strong>depth_camera</strong></td>
+<td>depth scale 0.2 %, depth offset 1 mm, plus the camera&#39;s</td>
+<td>temporal noise on a flat target</td>
+<td>as the camera</td>
+<td>cloud vs sim ≤ 1.5×</td>
+<td>Z within 1 % of Z, plane RMS ≤ 0.4 % of Z, fill ≥ 99 %</td>
+</tr>
+<tr class="odd">
+<td><strong>hyperspectral_camera</strong></td>
+<td>focal 1 %, principal point 1 px, height 3 mm, across 1 mm, scan line
+1 mm, scan yaw 0.11°, gain 2 %, dark 2 counts</td>
+<td>the spectral angle between repeat cubes</td>
+<td>× wavelength band × material class</td>
+<td>rendered cube ≤ 1.5×</td>
+<td>smile and keystone ≤ 1 px</td>
+</tr>
+<tr class="even">
+<td><strong>tool</strong> (structural)</td>
+<td>mass 5 %, centre of mass 3 mm, TCP 0.5 mm across, 1 mm along</td>
+<td>the same stop revisited, encoders + FK</td>
+<td>the TCP seen from spread poses</td>
+<td>the after twin&#39;s tool ≤ 1.5× the tool floor</td>
+<td>≤ 1 mm at a stop, settled</td>
+</tr>
+<tr class="odd">
+<td><strong>deployment</strong> (structural)</td>
+<td>every child&#39;s routines</td>
+<td>its output repeated: the same scene twice</td>
+<td>physical runs from every routine in its schedule</td>
+<td>sim ranks policies like reality (r &gt; 0.9, proposed)</td>
+<td>picks per minute; tool ≤ 1 mm</td>
+</tr>
+</tbody>
+</table>
+<h3 id="23-today-per-rig">2.3 Today, per rig</h3>
+<p>✓ passes · ✗ no · ~ partial · ? unknown · ↓ its own answer is yes, a
+child holds it back. Each cell is the question&#39;s mark and its headline
+number; the full text of every answer is on the result page
+(<code>load(...).display()</code>) and in each W&amp;B run&#39;s
+<code>&lt;Q&gt;/numbers</code>.</p>
+<p><strong>UR wrist on the One Dof Test Rack</strong> (twins: twin of
+record 11-10 → it2 Karnopp refit → it3 refit → it5 + gravity refit)</p>
+<table>
+<thead>
+<tr class="header">
+<th>Node</th>
+<th>Verdict</th>
+<th>Floor</th>
+<th>Data</th>
+<th>Routines</th>
+<th>Twin</th>
+<th>Job</th>
+<th>Next rung</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>UR wrist on the One Dof Test Rack</td>
+<td><strong>stops at Floor</strong></td>
+<td>✗ no output repeat</td>
+<td>↓ physical runs, split sealed</td>
+<td>↓ roll-up</td>
+<td>↓ roll-up</td>
+<td>? no picks</td>
+<td>D1 · Every child&#39;s routines pass</td>
+</tr>
+<tr class="even">
+<td>  UR wrist (CAN 14 + 15 + 16)</td>
+<td><strong>stops at Floor</strong></td>
+<td>✗ no tool-pose repeats</td>
+<td>↓ cube 100.0 %, workspace 60.5 %, facing 100.0 %</td>
+<td>↓ 2/2 at 1× noise</td>
+<td>? coupled moves: twin 0.13–0.35° vs target 0.14–0.31°, no tool
+floor</td>
+<td>✗ 0.71 mm vs 1 mm (settled holds)</td>
+<td>A1 · Arm routines recover the truth in sim</td>
+</tr>
+<tr class="odd">
+<td>    CAN 14 wrist joint (revolute 11, moteus servo)</td>
+<td><strong>stops at Twin</strong></td>
+<td>✓ 0.099° (10 pairs); passive 0.326°</td>
+<td>✓ 45.7 % of 1716 cells</td>
+<td>✓ 8/8 at 1× noise</td>
+<td>✗ 1.13×; passive 102.6×</td>
+<td>✗ 0.132° vs 0.411° share</td>
+<td>S4 · Twin within 1.5× the floor</td>
+</tr>
+<tr class="even">
+<td>    CAN 15 wrist joint (moteus servo)</td>
+<td><strong>stops at Job</strong></td>
+<td>✓ 0.087° (10 pairs); passive N/A</td>
+<td>✓ 73.0 % of 1716 cells</td>
+<td>✓ 6/6 at 1× noise</td>
+<td>✓ 1.38×</td>
+<td>✗ 0.339° vs 0.329° share</td>
+<td>S5 · Does its job</td>
+</tr>
+<tr class="odd">
+<td>    CAN 16 wrist joint (moteus servo)</td>
+<td><strong>passes all five</strong></td>
+<td>✓ 0.241° (10 pairs); passive N/A</td>
+<td>✓ 71.2 % of 1716 cells</td>
+<td>✓ 6/6 at 1× noise</td>
+<td>✓ 0.78×</td>
+<td>✓ 0.289° vs 0.957° share</td>
+<td>climbed</td>
+</tr>
+<tr class="even">
+<td>    holder board #4-7 (tool)</td>
+<td><strong>stops at Floor</strong></td>
+<td>✗ no revisit of one tool stop: the tool fl</td>
+<td>? not measured</td>
+<td>? not graded</td>
+<td>? no ratio</td>
+<td>✗ 0.71 mm vs 1 mm (settled holds)</td>
+<td>T1 · Tool routines recover the truth in sim</td>
+</tr>
+</tbody>
+</table>
+<p>Held-out sim → real median per twin iteration (held-out runs in
+brackets): the it3 refit got <em>worse</em> on held-out tapes while its
+all-run median improved (an overfit), before it5 + gravity brought it to
+about 0.12°.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Node</th>
+<th>1 · twin of record 11-10</th>
+<th>2 · it2 Karnopp refit</th>
+<th>3 · it3 refit</th>
+<th>4 · it5 + gravity refit</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>UR wrist on the One Dof Test Rack</td>
+<td>0.456° (72)</td>
+<td>0.421° (72)</td>
+<td>0.859° (72)</td>
+<td>0.118° (87)</td>
+</tr>
+<tr class="even">
+<td>CAN 14 wrist joint (revolute 11, moteus servo)</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>0.112° (5)</td>
+</tr>
+<tr class="odd">
+<td>CAN 15 wrist joint (moteus servo)</td>
+<td>0.473° (38)</td>
+<td>0.479° (38)</td>
+<td>0.937° (38)</td>
+<td>0.110° (43)</td>
+</tr>
+<tr class="even">
+<td>CAN 16 wrist joint (moteus servo)</td>
+<td>0.448° (34)</td>
+<td>0.413° (34)</td>
+<td>0.850° (34)</td>
+<td>0.129° (39)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Five-bar on the One Dof Test Rack</strong> (twins: study twin
+(nominal) → + mass-ID gravity → + dynamics refit → refit on the tick
+clock)</p>
+<table>
+<thead>
+<tr class="header">
+<th>Node</th>
+<th>Verdict</th>
+<th>Floor</th>
+<th>Data</th>
+<th>Routines</th>
+<th>Twin</th>
+<th>Job</th>
+<th>Next rung</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Five-bar on the One Dof Test Rack</td>
+<td><strong>stops at Floor</strong></td>
+<td>✗ no output repeat</td>
+<td>↓ physical runs, split sealed</td>
+<td>↓ roll-up</td>
+<td>↓ roll-up</td>
+<td>? no picks</td>
+<td>D1 · Every child&#39;s routines pass</td>
+</tr>
+<tr class="even">
+<td>  five-bar arm (J2 + C1 driven, J3 / C2 passive)</td>
+<td><strong>stops at Floor</strong></td>
+<td>✗ no tool-pose repeats</td>
+<td>↓ cube 100.0 %, workspace 85.4 %, heading 100.0 %</td>
+<td>? not graded</td>
+<td>✗ per joint only</td>
+<td>✗ 4.19 mm vs 1 mm (settled holds)</td>
+<td>A1 · Arm routines recover the truth in sim</td>
+</tr>
+<tr class="odd">
+<td>    J2 shoulder (CAN 12, moteus)</td>
+<td><strong>stops at Routines</strong></td>
+<td>✓ 0.160° (10 pairs); passive N/A</td>
+<td>✓ 50.4 % of 1694 cells</td>
+<td>~ gravity only</td>
+<td>✗ 3.69×</td>
+<td>✗ 0.364° vs 0.136° share</td>
+<td>S1 · Routines recover the hidden truth in sim</td>
+</tr>
+<tr class="even">
+<td>    C1 crank (CAN 13, moteus)</td>
+<td><strong>stops at Routines</strong></td>
+<td>✓ 0.187° (10 pairs); passive N/A</td>
+<td>✓ 44.3 % of 1694 cells</td>
+<td>~ gravity only</td>
+<td>✗ 2.36×</td>
+<td>✗ 0.637° vs 0.144° share</td>
+<td>S1 · Routines recover the hidden truth in sim</td>
+</tr>
+<tr class="odd">
+<td>    tool point (L2 tip)</td>
+<td><strong>stops at Floor</strong></td>
+<td>✗ driven 1.7 / 1.3 mm; no settled tool revisit</td>
+<td>? not measured</td>
+<td>? not graded</td>
+<td>✗ 3.10×</td>
+<td>✗ 4.19 mm vs 1 mm (settled holds)</td>
+<td>T1 · Tool routines recover the truth in sim</td>
+</tr>
+</tbody>
+</table>
+<p>Held-out sim → real median per twin iteration (the study twin scored
+every rung; the refits scored their own held-out rungs, so the counts
+differ):</p>
+<table>
+<thead>
+<tr class="header">
+<th>Node</th>
+<th>1 · study twin (nominal)</th>
+<th>2 · + mass-ID gravity</th>
+<th>3 · + dynamics refit</th>
+<th>4 · refit on the tick clock</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Five-bar on the One Dof Test Rack</td>
+<td>0.892° (68)</td>
+<td>0.632° (20)</td>
+<td>0.626° (20)</td>
+<td>0.559° (24)</td>
+</tr>
+<tr class="even">
+<td>J2 shoulder (CAN 12, moteus)</td>
+<td>1.099° (34)</td>
+<td>0.613° (10)</td>
+<td>0.609° (10)</td>
+<td>0.566° (12)</td>
+</tr>
+<tr class="odd">
+<td>C1 crank (CAN 13, moteus)</td>
+<td>0.657° (34)</td>
+<td>0.635° (10)</td>
+<td>0.626° (10)</td>
+<td>0.537° (12)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="24-the-next-rung-per-rig">2.4 The next rung per rig</h3>
+<p><strong>UR wrist</strong></p>
+<ol type="1">
+<li><strong>The holder board, T1 and T2.</strong> It is the one node
+with no evidence at all (&quot;no tool runs: the holder board is not
+tracked&quot;), and it holds back the arm (A1, A2) and the deployment (D1,
+D2). T1: grade its TCP and payload on a sealed truth in sim, the way the
+one-click seam already grades the joints. T2: revisit one commanded stop
+≥ 5 times, the holder&#39;s point by the joint encoders through FK (ISO 9283
+RP); a tag on it is logged beside it as a flag.</li>
+<li><strong>CAN 14, S4 (passive twin).</strong> Driven it is 1.13× its
+floor. On its passive release (<code>release60</code>: let go near 142°,
+the real joint swings and rests near 80°) the twin rests 34.5° away from
+the real joint, which is 102.6× its 0.326° passive floor: the released
+joint&#39;s gravity or breakaway model is wrong.</li>
+<li><strong>CAN 15, S5 (settled stop).</strong> 0.339° median on its
+operating gains (pick_sliding) against its 0.329° share; on the repeat
+campaign&#39;s gains it settles at 0.311°, inside it.</li>
+</ol>
+<p><strong>Five-bar</strong></p>
+<ol type="1">
+<li><strong>J2 and C1, S1.</strong> Only the gravity is graded on a
+hidden truth (<code>bam_fivebar tests/test_massid.py</code>). Port the
+wrist&#39;s one-click seam
+(<code>Twin.load(...).calibrate(on=&#39;sim&#39;, truth=&#39;sealed&#39;)</code> at 1×
+noise) so friction, armature and delay are graded too; the arm&#39;s A1 and
+the tool&#39;s T1 come with it.</li>
+<li><strong>Then S4.</strong> The after twin is 3.69× (J2) and 2.36×
+(C1) its floor on the floor&#39;s own tape; the gate is 1.5×.</li>
+<li><strong>Then the tool gate (A5, T5).</strong> The tool settles 4.3
+mm from its target by encoders + FK against 1 mm. C1 is the bigger term:
+it settles 0.637° from its target, 4.4× its 0.144° share (J2:
+2.7×).</li>
+</ol>
+<h2 id="3--tracking-it-in-wb-three-proposals">3 · Tracking it in
+W&amp;B: three proposals</h2>
+<p><strong>Your question:</strong> &quot;Should we have one weights and
+biases project per generic type? This could be a lot of projects. But I
+guess for each one it&#39;s a bit unique, no? OK, having it in one location
+could work, if we can filter that data to show it for particular types
+of models or something…&quot;</p>
+<p><strong>What the question assumes:</strong></p>
+<ul>
+<li><strong>&quot;A lot of projects&quot; is the cheap part of the cost.</strong>
+The dear part is that per-type projects split one rig&#39;s tree: the
+wrist&#39;s deployment, arm, three joints and holder would land in four
+projects. &quot;A parent passes only if every child does&quot; would then be
+visible nowhere, and a W&amp;B workspace cannot hold runs from two
+projects (only a report can).</li>
+<li><strong>&quot;Each one is a bit unique&quot;: less than it looks.</strong>
+Every node answers the same five questions with the same words; that is
+the point of proposal C. What is unique per type is its Job metric and
+unit (px, mm, °, %) and its coverage axes: config and summary keys, data
+rather than structure.</li>
+<li><strong>What a W&amp;B run is.</strong> Not a rig run (the wrist
+calibration has 400+); those stay in the archive, on the result page and
+in Rerun (the house rule: &quot;we own our data … W&amp;B only ever gets a
+copy&quot;). A W&amp;B run is one node&#39;s evaluation at one twin iteration, so
+W&amp;B tracks the verdicts and their numbers over time.</li>
+</ul>
+<p><strong>Criteria, weighted for now:</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Criterion</th>
+<th style="text-align: right;">Weight</th>
+<th>Why it matters now</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><strong>One place, filterable at a glance</strong></td>
+<td style="text-align: right;">25</td>
+<td>your worry, and &quot;at a glance I can look at any level, and navigate
+that with the tree&quot;</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><strong>Like with like, across rigs and within one</strong></td>
+<td style="text-align: right;">20</td>
+<td>a servo type is judged across its units (<code>TYPE_GATES</code>
+T1–T8 vs <code>UNIT_GATES</code>); a rig across its types (the
+roll-up)</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><strong>Keeps the tree and its roll-up together</strong></td>
+<td style="text-align: right;">15</td>
+<td>the verdict rolls up deployment → arm → joint → tool</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><strong>Cost of growth</strong></td>
+<td style="text-align: right;">15</td>
+<td>11 generic and 6 structural types today; deployments multiply
+fastest (every rig, every customer cell)</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><strong>Type-specific numbers stay honest</strong></td>
+<td style="text-align: right;">10</td>
+<td>px, mm, ° and % must never share an axis</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><strong>House conventions</strong></td>
+<td style="text-align: right;">10</td>
+<td>entity <code>zach-yamaoka-independent</code>; Title Case project
+names (&quot;Traj Gen&quot;, &quot;Grasp Detection&quot;); views and reports built from
+code</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><strong>Sharing one deployment outside</strong></td>
+<td style="text-align: right;">5</td>
+<td>W&amp;B permissions are per project; a customer&#39;s cell may be shared
+one day</td>
+</tr>
+</tbody>
+</table>
+<p><strong>A · One project per generic type</strong> (&quot;Integrated
+Servo&quot;, &quot;Gearbox&quot;, &quot;Camera&quot;, &quot;Conveyor&quot;, &quot;Rigid Body Chain&quot;, … up to
+17)</p>
+<ul>
+<li><em>For:</em> one schema per project and a clean auto-made
+workspace; one type compares across rigs natively. It mirrors today&#39;s
+split of the pick-place ladder into &quot;Grasp Detection&quot; and &quot;Traj
+Gen&quot;.</li>
+<li><em>Against:</em> a rig&#39;s tree is spread over 4–6 projects and its
+roll-up is visible nowhere; a deployment view needs a cross-project
+report; every new type is a new project with its own views.</li>
+<li><em>Scores:</em> one place 1 · like with like 3 (across rigs 5,
+within a rig 1) · tree 1 · growth 2 · honest numbers 5 · house 4 ·
+sharing 2.</li>
+</ul>
+<p><strong>B · One project, <code>Sim2Real</code>, every run configured
+and filtered</strong> (recommended on these criteria and built first;
+superseded as the home by C per rig, below)</p>
+<ul>
+<li><em>For:</em> filter <code>type = integrated_servo</code> and get
+every servo on every rig; <code>deployment = fivebar</code> and get its
+whole tree; group by either; one overview over everything. A new type or
+deployment is a new config value; its view and report are generated from
+the runs present (<code>build_views</code>).</li>
+<li><em>Against:</em> one key namespace, so type-specific keys sit
+sparse beside each other. Kept honest by units in every key name
+(<code>_deg</code>, <code>_mm</code>, <code>_pct</code>) and by per-type
+views that chart only that type&#39;s keys.</li>
+<li><em>Scores:</em> one place 5 · like with like 5 · tree 5 · growth 4
+· honest numbers 3 · house 4 · sharing 3.</li>
+</ul>
+<p><strong>C · One project per deployment</strong> (&quot;UR Wrist Test Rig&quot;,
+&quot;Five-bar Test Rig&quot;, &quot;Conveyor&quot;, …), types as config</p>
+<ul>
+<li><em>For:</em> it mirrors <code>result.display()</code>: one tree per
+project; sharing one customer&#39;s cell is clean.</li>
+<li><em>Against:</em> a type across rigs needs a cross-project report;
+deployments are the fastest-growing count; the house&#39;s own deployment
+mirror (bam_ws <code>bam_deployments</code>, project
+<code>bam-deployments</code>) is one project grouped by deployment, not
+one per deployment.</li>
+<li><em>Scores:</em> one place 3 · like with like 2 · tree 5 · growth 2
+· honest numbers 3 · house 3 · sharing 5.</li>
+</ul>
+<table>
+<thead>
+<tr class="header">
+<th>Criterion (weight)</th>
+<th style="text-align: right;">A · per type</th>
+<th style="text-align: right;">B · one project</th>
+<th style="text-align: right;">C · per deployment</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>One place, filterable (25)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;"><strong>5</strong></td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td>Like with like (20)</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;"><strong>5</strong></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>Tree and roll-up together (15)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;"><strong>5</strong></td>
+<td style="text-align: right;"><strong>5</strong></td>
+</tr>
+<tr class="even">
+<td>Cost of growth (15)</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;"><strong>4</strong></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>Type numbers honest (10)</td>
+<td style="text-align: right;"><strong>5</strong></td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td>House conventions (10)</td>
+<td style="text-align: right;"><strong>4</strong></td>
+<td style="text-align: right;"><strong>4</strong></td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td>Sharing outside (5)</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;"><strong>5</strong></td>
+</tr>
+<tr class="even">
+<td><strong>Total (of 100)</strong></td>
+<td style="text-align: right;"><strong>46</strong></td>
+<td style="text-align: right;"><strong>89</strong></td>
+<td style="text-align: right;"><strong>61</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>My recommendation on these criteria was B</strong> (89), and
+it was built first. <strong>What is live is C, per rig, with B&#39;s config
+on every run</strong>, because you set the direction tonight (relayed by
+the W1 sprint): bottom-up per sub-assembly, each rig introspected
+through W&amp;B and Rerun, in projects named &quot;Sim2Real · five-bar rig&quot;
+and &quot;Sim2Real · wrist rig&quot; on the house black-box template (bam_ws
+<code>bam_trackio.bbo</code>: one W&amp;B project per black-box family,
+its versions on leaderboards). Your call outranks my scoring, and the
+criteria above did not weigh what it adds:</p>
+<ul>
+<li><p><strong>One leaderboard per sub-assembly.</strong> A rig is the
+black box being optimised; its twin iterations and controller
+configurations are its versions, ranked on the same environment. In one
+shared project those leaderboards would sit side by side with no
+owner.</p></li>
+<li><p><strong>What C costs against B, and how it is paid:</strong> a
+workspace cannot filter across rigs, so &quot;every servo on every rig&quot; is a
+report, not a filter: the cross-rig report in <code>Sim2Real</code>
+takes one runset per rig, each filtered
+<code>type = integrated_servo</code>, and charts the same-named gates
+side by side. Every run carries <code>type</code>, <code>level</code>,
+<code>deployment</code> and <code>joint</code>, so any new cross-rig
+report is one filter.</p></li>
+<li><p><strong>Decision record:</strong>
+<code>docs/decision-wandb-one-project-2026-11-11.md</code>, amended: B
+is superseded as the home by C per rig; B&#39;s runs stay in
+<code>Sim2Real</code> (nothing is deleted) and <code>wandb_log</code>
+still logs that layout.</p></li>
+<li><p><strong>Reversible either way:</strong> the per-rig projects are
+<code>rigs.RIGS[...].project</code>, the one-project layout is
+<code>wandb_log.PROJECT</code>; both are written from the same records,
+so going back to B is one command and no data moves.</p></li>
+<li><p><strong>Steelman for A:</strong> you split the pick-place ladder
+into two projects today because &quot;we are optimizing them separately&quot;.
+That split is between two products with a contract between them and two
+scoreboards; sim2real has one scoreboard at every level, and splitting
+it by type would break the roll-up the scoreboard is made of.</p></li>
+<li><p><strong>What would change my mind:</strong> a customer who may
+see only their own cell (C for customer cells); one type&#39;s media (camera
+frames, hyperspectral cubes) swamping the shared workspace even with
+views (that type&#39;s media in its own project, its verdict still here);
+W&amp;B filters slowing down at scale (untested past a few hundred
+runs).</p></li>
+</ul>
+<h3 id="what-is-in-wb-now">What is in W&amp;B now</h3>
+<p><strong>The per-rig projects (live, proposal C):</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Project</th>
+<th>Runs (latest evaluation)</th>
+<th>Saved view</th>
+<th>Report</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig">Sim2Real
+· wrist rig</a></td>
+<td>24 twin (6 nodes × 4 twin iterations) + 3 controller versions</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig?nw=wb14q47ug7h">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig/reports/Sim2Real-%C2%B7-wrist-rig-%C2%B7-versions-and-gates--VmlldzoxODI5MzczNg==">report</a></td>
+</tr>
+<tr class="even">
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig">Sim2Real
+· five-bar rig</a></td>
+<td>20 twin (5 nodes × 4 twin iterations) + 5 controller versions</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig?nw=62bp8rsp6h2">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig/reports/Sim2Real-%C2%B7-five-bar-rig-%C2%B7-versions-and-gates--VmlldzoxODI5MzczOA==">report</a></td>
+</tr>
+<tr class="odd">
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real">Sim2Real</a>
+(cross-rig)</td>
+<td>the one-project runs below</td>
+<td>—</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-%C2%B7-servo-joints-across-rigs--VmlldzoxODI5Mzc0MA==">servo
+joints and the same-named gates across rigs</a></td>
+</tr>
+</tbody>
+</table>
+<p>Each project also holds the rig&#39;s Weave evaluations and leaderboards
+(bam_ws <code>bam_trackio.bbo</code>: a version is a Weave model version
+scored on a fixed environment; one leaderboard per environment: twin
+versions on the held-out runs, controller versions on the coverage set,
+and on the five-bar the tool at the 16 settled holds): <a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20wrist%20rig/weave/leaderboards">UR
+wrist leaderboards</a>, <a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real%20%C2%B7%20five-bar%20rig/weave/leaderboards">five-bar
+leaderboards</a>.</p>
+<p>Log both rigs (idempotent; new numbers supersede, nothing is
+deleted), rebuild the reports and views, read it all back:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="at">-u</span> VIRTUAL_ENV uv run <span class="at">--isolated</span> <span class="at">--project</span> /home/bam/sim2real <span class="at">--extra</span> tracking python <span class="at">-m</span> sim2real.tracking.rigs <span class="at">--log</span> <span class="at">--views</span> <span class="at">--verify</span></span></code></pre></div>
+<p>The read-back through W&amp;B&#39;s API (<code>rigs --verify</code>), as
+run for this page:</p>
+<pre class="text"><code>Sim2Real · wrist rig: 4 twin-version runs -&gt; 0 twin of record 11-10: heldout_sim_vs_real_deg 0.456; 1 it2 Karnopp refit: heldout_sim_vs_real_deg 0.421; 2 it3 refit: heldout_sim_vs_real_deg 0.859; 3 it5 + gravity refit: heldout_sim_vs_real_deg 0.118
+  3 controller-version runs -&gt; 1 · gains: stock: tracking_rms_deg 10.184; 2 · gains: ram: tracking_rms_deg 0.446; 3 · gains: pick_sliding: tracking_rms_deg 0.340
+  filter type=integrated_servo: [&#39;CAN 14 wrist joint (revolute 11, moteus servo)&#39;, &#39;CAN 15 wrist joint (moteus servo)&#39;, &#39;CAN 16 wrist joint (moteus servo)&#39;]
+  gate lines on every deployment run: [9] of 9
+Sim2Real · five-bar rig: 4 twin-version runs -&gt; 0 study twin (nominal): heldout_sim_vs_real_deg 0.892; 1 + mass-ID gravity: heldout_sim_vs_real_deg 0.632; 2 + dynamics refit: heldout_sim_vs_real_deg 0.626; 3 refit on the tick clock: heldout_sim_vs_real_deg 0.559
+  5 controller-version runs -&gt; 1 · gravity comp: nominal: tool_error_at_stop_mm 9.559; 2 · Coulomb feed-forward: none (stock): tracking_rms_tool_mm 9.380, tracking_rms_deg 1.701; 3 · Coulomb feed-forward: 0.70 / 0.78 N·m (winners): tracking_rms_tool_mm 6.058, tracking_rms_deg 1.096; 4 · winners + lumped comp: tracking_rms_tool_mm 5.648, tracking_rms_deg 0.785; 5 · gravity comp: identified: tool_error_at_stop_mm 4.343
+  filter type=integrated_servo: [&#39;C1 crank (CAN 13, moteus)&#39;, &#39;J2 shoulder (CAN 12, moteus)&#39;]
+  gate lines on every deployment run: [9] of 9
+  gate keys on both rigs: [&#39;heldout_sim_vs_real_deg&#39;, &#39;heldout_sim_vs_real_pass&#39;, &#39;objective&#39;, &#39;objective_is&#39;, &#39;target_vs_sim_tracking_deg&#39;, &#39;tracking_rms_deg&#39;]
+  reports: [&#39;fivebar&#39;, &#39;servo-across-rigs&#39;, &#39;ur_wrist&#39;]; saved views: [&#39;fivebar&#39;, &#39;ur_wrist&#39;]
+VERIFY: PASS</code></pre>
+<p><strong>The one-project layout (proposal B), kept in
+<code>Sim2Real</code>:</strong></p>
+<ul>
+<li><strong>Project:</strong> <a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real">zach-yamaoka-independent/Sim2Real</a>
+(wandb.ai redirects to forge.coreweave.com/wandb/).</li>
+<li><strong>Runs:</strong> 44 = 24 (ur-wrist-2026-11-10: 6 nodes × 4
+twin iterations) + 20 (fivebar-2026-11-11: 5 nodes × 4 twin iterations);
+one group per evaluation: <code>ur-wrist-2026-11-10 · 85772c7053</code>,
+<code>fivebar-2026-11-11 · d9c0f15eb5</code>. Runs of earlier
+evaluations stay in the project as <code>superseded</code> (never
+deleted) and every view filters them out; logging refuses a src/ with
+uncommitted changes, so each evaluation is a commit.</li>
+<li><strong>Config on every run</strong> (filter and group on any):
+<code>type</code>, <code>type_group</code>, <code>level</code>,
+<code>deployment</code>, <code>deployment_kind</code>, <code>rig</code>,
+<code>node</code>, <code>instance</code>, <code>can_id</code>,
+<code>twin_iteration</code>, <code>iteration</code>,
+<code>stage_role</code> (before / between / after),
+<code>model_rung</code>, <code>floor_kind</code>, <code>gains</code>,
+<code>split</code>, <code>evaluation</code>,
+<code>evaluation_state</code> (latest / superseded),
+<code>sim2real_sha</code>, <code>result_id</code>.</li>
+<li><strong>Summary on each node&#39;s last iteration:</strong>
+<code>verdict</code>, <code>stops_at</code>,
+<code>questions_passed</code> (0–5), <code>next_rung</code>,
+<code>rungs</code>; per question <code>&lt;Q&gt;/own</code>,
+<code>&lt;Q&gt;/pass</code>, <code>&lt;Q&gt;/numbers</code>,
+<code>&lt;Q&gt;/gate</code>; the numbers <code>Floor/floor_deg</code>,
+<code>Floor/pairs</code>, <code>Data/coverage_pct</code> (or
+<code>Data/cube_pct</code>, <code>Data/workspace_pct</code>,
+<code>Data/facing_pct</code>), <code>Twin/ratio</code>,
+<code>Twin/sim_real_after_deg</code>,
+<code>Twin/sim_real_before_deg</code>,
+<code>Job/settled_median_deg</code>, <code>Job/share_deg</code>,
+<code>Job/tool_settled_mm</code>; the held-out trend as history
+(<code>trend/heldout_median_deg</code> per <code>iteration</code>);
+W&amp;B Tables <code>questions</code>, <code>curriculum</code>,
+<code>floors</code>, <code>models</code>, <code>parameters</code>, and
+on the deployment&#39;s run <code>tree</code>, <code>questions_all</code>,
+<code>curriculum_all</code>, <code>trend_all</code>.</li>
+<li><strong>Saved views</strong> (the workspace&#39;s view menu) and
+<strong>reports</strong>, one per type and per deployment, plus an
+overview:</li>
+</ul>
+<table>
+<thead>
+<tr class="header">
+<th>Slice</th>
+<th>Saved view</th>
+<th>Report</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>deployment = fivebar</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=syjerxnd294">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-·-Deployment-·-Five-bar-on-the-One-Dof-Test-Rack--VmlldzoxODI5MzMyMA==">report</a></td>
+</tr>
+<tr class="even">
+<td>deployment = ur-wrist</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=ony77qilvxw">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-·-Deployment-·-UR-wrist-on-the-One-Dof-Test-Rack--VmlldzoxODI5MzMxOA==">report</a></td>
+</tr>
+<tr class="odd">
+<td>type = deployment</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=vhmhrycy7rk">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-·-Type-·-deployment--VmlldzoxODI5MzMwOA==">report</a></td>
+</tr>
+<tr class="even">
+<td>type = integrated_servo</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=w6vmu4mj1j2">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-·-Type-·-integrated_servo--VmlldzoxODI5MzMxMQ==">report</a></td>
+</tr>
+<tr class="odd">
+<td>type = rigid_body_chain</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=uddw02334fp">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-·-Type-·-rigid_body_chain--VmlldzoxODI5MzMxMw==">report</a></td>
+</tr>
+<tr class="even">
+<td>type = tool</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real?nw=xiz8q20d78w">view</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-·-Type-·-tool--VmlldzoxODI5MzMxNQ==">report</a></td>
+</tr>
+<tr class="odd">
+<td>everything</td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real">project
+workspace</a></td>
+<td><a href="https://wandb.ai/zach-yamaoka-independent/Sim2Real/reports/Sim2Real-·-Overview--VmlldzoxODI5MzMyMQ==">overview</a></td>
+</tr>
+</tbody>
+</table>
+<p>Log a new evaluation (idempotent: the same numbers update the same
+runs; new numbers supersede them, nothing is deleted), rebuild the views
+and read it all back:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="at">-u</span> VIRTUAL_ENV uv run <span class="at">--isolated</span> <span class="at">--project</span> /home/bam/sim2real <span class="at">--extra</span> tracking python <span class="at">-m</span> sim2real.tracking.wandb_log <span class="at">--backfill</span> <span class="at">--views</span> <span class="at">--verify</span></span></code></pre></div>
+<p>The read-back through W&amp;B&#39;s API (<code>--verify</code>), as run
+for this page:</p>
+<pre class="text"><code>ur-wrist-2026-11-10: 24 latest runs (want 24 = 6 nodes x 4 twin iterations)
+  filter deployment=ur-wrist: 6 runs -&gt; [&#39;CAN 14 wrist joint (revolute 11, moteus servo)&#39;, &#39;CAN 15 wrist joint (moteus servo)&#39;, &#39;CAN 16 wrist joint (moteus servo)&#39;, &#39;UR wrist (CAN 14 + 15 + 16)&#39;, &#39;UR wrist on the One Dof Test Rack&#39;, &#39;holder board #4-7 (tool)&#39;]
+fivebar-2026-11-11: 20 latest runs (want 20 = 5 nodes x 4 twin iterations)
+  filter deployment=fivebar: 5 runs -&gt; [&#39;C1 crank (CAN 13, moteus)&#39;, &#39;Five-bar on the One Dof Test Rack&#39;, &#39;J2 shoulder (CAN 12, moteus)&#39;, &#39;five-bar arm (J2 + C1 driven, J3 / C2 passive)&#39;, &#39;tool point (L2 tip)&#39;]
+  filter type=deployment: 2 runs -&gt; [&#39;Five-bar on the One Dof Test Rack&#39;, &#39;UR wrist on the One Dof Test Rack&#39;]
+  filter type=integrated_servo: 5 runs -&gt; [&#39;C1 crank (CAN 13, moteus)&#39;, &#39;CAN 14 wrist joint (revolute 11, moteus servo)&#39;, &#39;CAN 15 wrist joint (moteus servo)&#39;, &#39;CAN 16 wrist joint (moteus servo)&#39;, &#39;J2 shoulder (CAN 12, moteus)&#39;]
+  filter type=rigid_body_chain: 2 runs -&gt; [&#39;UR wrist (CAN 14 + 15 + 16)&#39;, &#39;five-bar arm (J2 + C1 driven, J3 / C2 passive)&#39;]
+  filter type=tool: 2 runs -&gt; [&#39;holder board #4-7 (tool)&#39;, &#39;tool point (L2 tip)&#39;]
+  reports in the project: [&#39;Sim2Real · Deployment · Five-bar on the One Dof Test Rack&#39;, &#39;Sim2Real · Deployment · UR wrist on the One Dof Test Rack&#39;, &#39;Sim2Real · Overview&#39;, &#39;Sim2Real · Type · deployment&#39;, &#39;Sim2Real · Type · integrated_servo&#39;, &#39;Sim2Real · Type · rigid_body_chain&#39;, &#39;Sim2Real · Type · tool&#39;, &#39;Sim2Real · servo joints across rigs&#39;]
+  registry: 7 reports, 6 saved views
+VERIFY: PASS</code></pre>
+<p>Not done: the reports and views were read back through the API
+(blocks, panels, filters), not looked at in a signed-in browser; no run
+was deleted.</p>
+<h2 id="sources">Sources</h2>
+<ul>
+<li><strong>Decision:</strong> vault
+<code>Projects/robot_msgs/Sim2Real KPIs and Gates — 3 Proposals and What Good Looks Like per Type (2026-11-11).md</code>
+(proposal C, the per-type tables).</li>
+<li><strong>Code (sim2real):</strong>
+<code>src/sim2real/result.py</code> (<code>QUESTIONS</code>,
+<code>FLOOR_CHECK</code>, <code>RULER_TWINNED</code> 1.5,
+<code>RULER_CLOSE</code> 3.0, <code>TOOL_GATE_MM</code> 1.0,
+<code>verdicts()</code>), <code>src/sim2real/rack_results.py</code>
+(both rigs&#39; trees, the passive N/A reasons, the joint shares),
+<code>src/sim2real/metrics/series.py</code> (<code>repeat_floor</code>,
+<code>SAME_INPUT_TOLERANCE_RAD</code> 0.01°,
+<code>FLOOR_MIN_REPEATS</code> 5),
+<code>src/sim2real/cards/servo_gates.py</code> (T1–T11,
+<code>MINIMUM_COVERAGE_PCT</code> 40, <code>TYPE_GATES</code>,
+<code>UNIT_GATES</code>), <code>src/sim2real/cards/schema.py</code>
+(<code>TWINNED_LIMIT</code>, <code>DRIFT_THRESHOLD</code> 1.25),
+<code>src/sim2real/cards/ladders.py</code> (<code>LEARNED_PCT</code> 95,
+<code>LEARNED_SAMPLES</code> 200, <code>DEPLOYED_PCT</code> 99),
+<code>src/sim2real/cards/domain_v3.json</code> (11 types, their gates
+and coverage), <code>src/sim2real/cards/calibration.py</code> (the
+routines), <code>sysid/acceptance.json</code>,
+<code>sysid/noise_ladder.json</code>.</li>
+<li><strong>Data (read-only):</strong>
+<code>/archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/</code>
+(<code>repeat_floor/floor_scores.json</code>,
+<code>twin_scores.json</code>, <code>coverage/summary_real.json</code>,
+<code>coverage/multi3/multi_scores.json</code>,
+<code>coverage/refit_rig/it5/refit.json</code>),
+<code>/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/</code>
+(the ladders, the refits,
+<code>refit_repeats_025953/after_twin.json</code>),
+<code>src/sim2real/data/fivebar_dwell_2026-11-11.json</code>,
+<code>ur_wrist_one_click_2026-11-11.json</code>,
+<code>tool_levers_2026-11-11.json</code>.</li>
+<li><strong>This page&#39;s code:</strong>
+<code>src/sim2real/tracking/curriculum.py</code>,
+<code>src/sim2real/tracking/wandb_log.py</code>,
+<code>docs/build_kpis_gates_curriculum.py</code>,
+<code>tests/test_tracking.py</code>.</li>
+</ul>
+</body>
+</html>
