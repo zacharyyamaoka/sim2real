@@ -331,7 +331,10 @@ def ur_wrist() -> CalibrationResult:
 
 
 FIVEBAR_LADDERS = {"ladder_real_101015": "stock", "ladder_real_104843": "winners", "ladder_real_113617": "winners",
-                   "ladder_real_122045": "winners", "ladder_real_124755": "winners + lumped comp"}
+                   "ladder_real_122045": "winners", "ladder_real_124755": "winners + lumped comp",
+                   # five identical repeats of the 0.05 m/s rungs (2026-11-11 night): the floor's repeats
+                   **{name: "winners" for name in ("ladder_real_repeat1_012235", "ladder_real_repeat2_013240", "ladder_real_repeat3_014218",
+                                                   "ladder_real_repeat4_015157", "ladder_real_repeat5_020134")}}
 FIVEBAR_STAGES = (("study", "study twin (nominal)", None), ("massid", "+ mass-ID gravity", ("refit_both_111322", "held_out_before")),
                   ("dynamics", "+ dynamics refit", ("refit_both_111322", "held_out_after")),
                   ("tick", "refit on the tick clock", ("refit_breakdown_123729", "held_out_before")))
@@ -385,7 +388,9 @@ def fivebar() -> CalibrationResult:
             if sim["measured_tool"].shape == real["measured_tool"].shape:
                 stop_sim += list(np.linalg.norm(sim["measured_tool"][still] * 1e3 - tool_xy[still], axis=1))
             stop_target += list(np.linalg.norm(target[still] - tool_xy[still], axis=1))
-            repeats[(gainset, step["name"])].append((t, real["target_motors"], q))
+            # WHY the tick: the ladder logs one row per plan tick, so the row index is the tape's own clock; its t is host time, whose
+            # ~1 ms jitter put identical tapes 1.6-3.1 deg apart on a wall clock (metrics.series.repeat_floor compares per tick)
+            repeats[(gainset, step["name"])].append((t, real["target_motors"], q, np.arange(t.size)))
             rung_key = f"{ladder}:{step['name']}"
             held_out = rung_key not in train
             label = f"{ladder[-6:]} {step['speed_m_s']:.2f} m/s {step['ff_mode']}"
@@ -411,11 +416,13 @@ def fivebar() -> CalibrationResult:
                                            "sim_real_before_deg": _r(values.get(stages[0])), "run_view": run_view(run_slug)})
     dt = float(np.median(dt_all))
     for k, (joint, node) in enumerate(joints.items()):
-        floors = {key: repeat_floor([(t, c[:, k], q[:, k]) for t, c, q in runs]) for key, runs in repeats.items() if len(runs) > 1}
+        floors = {key: repeat_floor([(t, c[:, k], q[:, k], tick) for t, c, q, tick in runs]) for key, runs in repeats.items() if len(runs) > 1}
         key, floor = best_floor(floors)
         node.floor_deg = math.degrees(floor.value) if floor is not None and floor.known else None
         node.coverage, node.coverage_summary = joint_coverage(*(np.concatenate(c) for c in cover[joint]), dt)
-        same = [r for r in per_run[joint] if r[0] == key and r[1]] or [r for r in per_run[joint] if r[1]]
+        # the twin on the floor's own group when the after twin scored it, else on every held-out rung the after twin scored
+        same = ([r for r in per_run[joint] if r[0] == key and r[1] and r[2] is not None]
+                or [r for r in per_run[joint] if r[1] and r[2] is not None])
         summary_rows = node.coverage_summary
         node.questions = joint_questions(
             floors, key, floor, _median([r[2] for r in same]), _median([r[3] for r in same]), _median([r[4] for r in same]),
@@ -477,8 +484,9 @@ def fivebar() -> CalibrationResult:
     root.gate = tool.gate
     notes = ["Errors: the study twin from each rung's own sim (pair_rms on the tick clock); the refits from their per-rung held-out scores "
              "(refit_both / refit_breakdown). Held out = not in refit_both's train set.",
-             "Floors: same-input repeats only (sim2real.metrics.series.repeat_floor): the rungs run on more than one ladder with the same "
-             "gains; their commanded motors differ (homing), so no pair qualifies and the floor is unknown.",
+             "Floors: same-input repeats only (sim2real.metrics.series.repeat_floor), compared per plan tick: the five repeat ladders of the "
+             "0.05 m/s rungs (identical tapes); the earlier ladders' runs of those rungs start from other homings and are rejected. The twin "
+             "ratio divides the after twin's held-out rungs by that floor (the repeats were scored on the study twin only).",
              "Tool: Twin = the study twin's tool vs the real tool at stops; Job = the real tool vs commanded at stops, both by encoder kinematics."]
     return CalibrationResult("fivebar-2026-11-11", "Five-bar calibration · One Dof Test Rack · 2026-11-11", stages,
                              [root, arm, joints["j2"], joints["c1"], tool], source=str(FIVEBAR), notes=notes, messages=_messages(files))

@@ -99,17 +99,40 @@ class RepeatFloor:
         return self.value is not None and self.runs >= self.min_repeats
 
 
-def repeat_floor(runs: Sequence[tuple[np.ndarray, np.ndarray, np.ndarray]], *, tolerance: float = SAME_INPUT_TOLERANCE_RAD,
+def _on_ticks(a, b) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+    """Two runs' (command, response) on the plan ticks both sent, by tick index; None when either run has no tick clock."""
+    if len(a) < 4 or len(b) < 4 or a[3] is None or b[3] is None:
+        return None
+    ticks, ia, ib = np.intersect1d(np.asarray(a[3]), np.asarray(b[3]), return_indices=True)
+    return np.asarray(a[1])[ia], np.asarray(b[1])[ib], np.asarray(a[2])[ia], np.asarray(b[2])[ib]
+
+
+def repeat_floor(runs: Sequence[tuple], *, tolerance: float = SAME_INPUT_TOLERANCE_RAD,
                  min_repeats: int = FLOOR_MIN_REPEATS, dt: float = 0.002, length_tolerance: float = 0.03) -> RepeatFloor:
-    """The floor over every pair of `runs` (each ``(t from 0, command, response)``, one signal) whose commands agree within `tolerance`
-    RMS on a common clock and whose lengths agree within `length_tolerance`; the rest are counted as rejected, never pooled."""
+    """The floor over every pair of `runs` whose commands agree within `tolerance` RMS and whose lengths agree within `length_tolerance`;
+    the rest are counted as rejected, never pooled. A run is ``(t from 0, command, response)`` or ``(t, command, response, tick)``.
+
+    WHY the tick clock first (2026-11-11, the five-bar's 5 repeats): a run that carries its plan tick (the commanded tape's sample index)
+    is compared tick for tick, command and response alike; on the host wall clock, jitter put identical tapes 1.6-3.1 deg apart and
+    rejected every true pair. Without a tick, both are aligned on a common wall clock (``pair_rms``)."""
 
     values, members, rejected = [], set(), 0
-    for (i, (t_a, c_a, y_a)), (j, (t_b, c_b, y_b)) in itertools.combinations(enumerate(runs), 2):
-        if abs(t_a[-1] - t_b[-1]) > length_tolerance * max(t_a[-1], t_b[-1]) or not pair_rms((t_a, c_a), (t_b, c_b), dt=dt) <= tolerance:
+    for (i, a), (j, b) in itertools.combinations(enumerate(runs), 2):
+        ticked = _on_ticks(a, b)
+        if ticked is not None:
+            c_a, c_b, y_a, y_b = ticked
+            span = max(len(a[3]), len(b[3]))
+            same_length = abs(len(a[3]) - len(b[3])) <= length_tolerance * span and len(c_a) >= (1 - length_tolerance) * span
+            same_input = same_length and rms(c_b - c_a) <= tolerance
+            value = rms(y_b - y_a) if same_input else math.nan
+        else:
+            (t_a, c_a, y_a), (t_b, c_b, y_b) = a[:3], b[:3]
+            same_input = (abs(t_a[-1] - t_b[-1]) <= length_tolerance * max(t_a[-1], t_b[-1])
+                          and pair_rms((t_a, c_a), (t_b, c_b), dt=dt) <= tolerance)
+            value = pair_rms((t_a, y_a), (t_b, y_b), dt=dt) if same_input else math.nan
+        if not same_input:
             rejected += 1
             continue
-        value = pair_rms((t_a, y_a), (t_b, y_b), dt=dt)
         if math.isfinite(value):
             values.append(value)
             members.update((i, j))
