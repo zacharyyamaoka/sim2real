@@ -54,7 +54,20 @@ ALGORITHM_DESC = {
     "A2": "minimal POE (equivalence check)",
     "A3b": "Gauss-Helmert errors-in-variables (equivalence check)",
     "A0fb": "A0 + five-bar map (BAM only)",
+    # bam_calibration recovery.py (the rigid-wrist study, 2026-11-12)
+    "A0sc": "A0 on the five-bar scalar chart, gauge-fixed, the bar held to its drawing (CMM tolerance)",
+    "A0sc.fitbar": "A0sc with the bar's transform fitted (an unknown bar)",
+    "A0sc.n3": "A0sc + per-joint half-backlash and compliance fitted from the logged torque",
 }
+# The BAM board's columns (title, summary key, minimize): WHY not K4d alone - Zach asked whether the true parameters come back
+# (2026-11-12), so the board ranks recovery next to the tool error
+BAM_COLUMNS = (
+    ("K4d mean, worst arm (mm)", "k4d_pos_mean_mm", True),
+    ("Within tolerance (median count)", "within_tolerance", False),
+    ("Worst parameter error / tolerance", "worst_ratio_to_tolerance", True),
+)
+BAM_LEADERBOARD = "Kinematic Calibration · BAM pair, rigid wrist"
+BAM_SCORERS = ["k4d_pos_mean_mm", "within_tolerance", "worst_ratio_to_tolerance"]
 V1_CONFIG = ("topology", "arms", "sessions", "poses_per_session", "fit", "tilt_rad")
 # WHY several names: the per-parameter recovery block of a BAM row is not written yet; take the first one a row carries
 RECOVERY_KEYS = ("parameter_recovery", "recovery", "parameters_recovery")
@@ -108,9 +121,13 @@ def _recovery_rows(record: dict) -> list[dict]:
 
 
 def _v2_algorithm(record: dict) -> dict:
-    arm, mean = _worst_arm(record["kpi"])
-    k4d = record["kpi"][arm]["K4d"]["pos_mm"]
-    out = {"k4d_pos_mean_mm": mean, "k4d_pos_p95_mm": k4d["p95"], "k4d_pos_max_mm": k4d["max"], "worst_arm": arm,
+    if record.get("kpi"):
+        arm, mean = _worst_arm(record["kpi"])
+        k4d = record["kpi"][arm]["K4d"]["pos_mm"]
+        p95, worst = k4d["p95"], k4d["max"]
+    else:   # WHY: a fit that diverged is reported unscored (kpi None) by the rigid-wrist study, never a failed run
+        arm = mean = p95 = worst = None
+    out = {"k4d_pos_mean_mm": mean, "k4d_pos_p95_mm": p95, "k4d_pos_max_mm": worst, "worst_arm": arm, "status": record.get("status"),
            "form": record.get("form"), "converged": record.get("converged"), "iterations": record.get("iterations"),
            "runtime_s": record.get("runtime_s"), "parameters": record.get("parameters"),
            "ur_accept": (record.get("ur") or {}).get("accept")}
@@ -120,12 +137,34 @@ def _v2_algorithm(record: dict) -> dict:
     return out
 
 
+# WHY trimmed (2026-11-12): the committed compact ledger must stay small (tests: < 1.5 MB); a graded quantity keeps what grades it, a
+# not-identified one only its raw drift, so a blind parameter is shown drifting and never read as recovered. The source ledger has the rest.
+_RECOVERY_FIELDS = ("key", "tag", "true", "fitted", "graded_error", "tolerance", "within")
+_BLIND_FIELDS = ("key", "tag", "error")
+
+
 def _v2_seed(row: dict) -> dict:
     head = row["headline"]
-    return {"seed_index": row["seed_index"], "batch_id": row.get("batch_id"), "started_at": row["started_at"],
+    algorithms = {alg: _v2_algorithm(record) for alg, record in row["algorithms"].items()}
+    seed = {"seed_index": row["seed_index"], "batch_id": row.get("batch_id"), "started_at": row["started_at"],
             "git_sha": row.get("git_sha"), "code_hash": row.get("code_hash"), "before_mm": head.get("before"),
-            "floor_mm": head.get("floor"),
-            "algorithms": {alg: _v2_algorithm(record) for alg, record in row["algorithms"].items()}}
+            "floor_mm": head.get("floor"), "algorithms": algorithms}
+    # WHY row level: the rigid-wrist study (bam_calibration recovery.py, kincal-recovery/1) grades every quantity against the hidden
+    # truth once per estimator under row["recovery"]["estimators"], beside the run's algorithms, not inside them
+    recovery = row.get("recovery") or {}
+    ident = recovery.get("identifiability") or {}
+    if ident:
+        seed["identifiability"] = {k: ident.get(k) for k in ("parameters", "rank", "null_dim")}
+    for alg, block in (recovery.get("estimators") or {}).items():
+        target = algorithms.setdefault(alg, _v2_algorithm({"status": block.get("status")}))
+        target["parameter_recovery"] = [{k: item.get(k) for k in (_BLIND_FIELDS if item.get("tag") == "not_identified" else _RECOVERY_FIELDS)}
+                                        for item in block.get("rows") or []]
+        summary = block.get("summary") or {}
+        worst = summary.get("worst") or {}
+        target["recovery_summary"] = {"quantities": summary.get("quantities"), "graded": summary.get("graded"),
+                                      "within": summary.get("within"), "worst_key": worst.get("key"),
+                                      "worst_ratio_to_tolerance": worst.get("ratio_to_tolerance"), "scale_ppm": summary.get("scale_ppm")}
+    return seed
 
 
 def _v1_seed(row: dict) -> dict:
@@ -190,7 +229,8 @@ def paired_ratios(cell: dict, algorithm: str, baseline: str = BASELINE) -> list[
     out = []
     for seed in cell["seeds"]:
         algorithms = seed["algorithms"]
-        if algorithm in algorithms and baseline in algorithms and algorithms[baseline]["k4d_pos_mean_mm"] > 0:
+        if (algorithm in algorithms and baseline in algorithms and algorithms[algorithm]["k4d_pos_mean_mm"] is not None
+                and (algorithms[baseline]["k4d_pos_mean_mm"] or 0) > 0):
             out.append((seed["seed_index"], algorithms[algorithm]["k4d_pos_mean_mm"] / algorithms[baseline]["k4d_pos_mean_mm"]))
     return out
 
@@ -242,7 +282,7 @@ def _unique(values) -> list:
 def _v2_record(cell_id: str, cell: dict, algorithm: str) -> dict:
     seeds = [s for s in cell["seeds"] if algorithm in s["algorithms"]]
     runs = [s["algorithms"][algorithm] for s in seeds]
-    means = [r["k4d_pos_mean_mm"] for r in runs]
+    means = [r["k4d_pos_mean_mm"] for r in runs if r["k4d_pos_mean_mm"] is not None]
     ratios = dict(paired_ratios(cell, algorithm))
     evaluation = evaluation_digest_v2(cell, cell_id, algorithm)
     arm = (cell.get("setup") or {}).get("arm", "ur5e")
@@ -253,7 +293,18 @@ def _v2_record(cell_id: str, cell: dict, algorithm: str) -> dict:
               "seeds": [s["seed_index"] for s in seeds], "git_shas": _unique(s["git_sha"] for s in seeds),
               "code_hashes": _unique(s["code_hash"] for s in seeds), "result_id": f"kincal-v2-{cell_id}-{algorithm}",
               "evaluation": evaluation, "evaluation_state": "latest"}
-    summary = {f"k4d_pos_mean_mm_worst_arm_{k}": v for k, v in spread(means).items()}
+    summary = {f"k4d_pos_mean_mm_worst_arm_{k}": v for k, v in spread(means).items()} if means else {}
+    summary["unscored"] = len(runs) - len(means)
+    graded = [r["recovery_summary"] for r in runs if r.get("recovery_summary")]
+    if graded:
+        summary.update({"graded_median": _median([g["graded"] for g in graded]),
+                        "within_tolerance_median": _median([g["within"] for g in graded]),
+                        "worst_ratio_to_tolerance_median": _median([g["worst_ratio_to_tolerance"] for g in graded]),
+                        "scale_ppm_median": _median([g["scale_ppm"] for g in graded])})
+    ident = [s["identifiability"] for s in seeds if s.get("identifiability")]
+    if ident:
+        summary.update({"identifiable_rank": _median([i["rank"] for i in ident]), "null_dim": _median([i["null_dim"] for i in ident]),
+                        "chart_parameters": _median([i["parameters"] for i in ident])})
     summary.update({"k4d_pos_p95_mm_worst_arm_median": _median([r["k4d_pos_p95_mm"] for r in runs]),
                     "before_mm_median": _median([s["before_mm"] for s in seeds]),
                     "floor_mm_median": _median([s["floor_mm"] for s in seeds]),
@@ -263,11 +314,12 @@ def _v2_record(cell_id: str, cell: dict, algorithm: str) -> dict:
     if ratios:
         summary["ratio_vs_A0"] = statistics.median(ratios.values())
         summary["wins_vs_A0"] = sum(1 for r in ratios.values() if r < 1)
-    table = [{"seed_index": s["seed_index"], "k4d_pos_mean_mm_worst_arm": r["k4d_pos_mean_mm"],
+    table = [{"seed_index": s["seed_index"], "status": r.get("status"), "k4d_pos_mean_mm_worst_arm": r["k4d_pos_mean_mm"],
               "k4d_pos_p95_mm_worst_arm": r["k4d_pos_p95_mm"], "k4d_pos_max_mm_worst_arm": r["k4d_pos_max_mm"],
               "worst_arm": r["worst_arm"], "before_mm": s["before_mm"], "floor_mm": s["floor_mm"],
               "ratio_vs_A0": ratios.get(s["seed_index"]), "converged": r["converged"], "iterations": r["iterations"],
-              "runtime_s": r["runtime_s"], "ur_accept": r["ur_accept"], "git_sha": s["git_sha"], "code_hash": s["code_hash"]}
+              "runtime_s": r["runtime_s"], "ur_accept": r["ur_accept"], "git_sha": s["git_sha"], "code_hash": s["code_hash"],
+              **{f"recovery_{k}": v for k, v in (r.get("recovery_summary") or {}).items()}}
              for s, r in zip(seeds, runs)]
     tables = {"seeds": table}
     recovery = [{"seed_index": s["seed_index"], **row} for s, r in zip(seeds, runs) for row in r.get("parameter_recovery", [])]
@@ -312,10 +364,18 @@ def records(compact: dict) -> list[dict]:
 # ---------------------------------------------------------------------------------------------------------------- Weave
 
 
-def scored_runs(bbo, compact: dict) -> list:
-    """The v2 leaderboard's entries: black box = algorithm, environment = cell, episodes = seeds."""
+def is_ur_cell(cell: dict) -> bool:
+    """WHY split: the UR board compares UR's own method on UR arms; the BAM cells run other estimators and are graded on parameter
+    recovery, so they get their own board (a cell with no setup is a UR horse cell, as every v2 cell was before 2026-11-12)."""
+    return (cell.get("setup") or {}).get("arm", "ur5e") == "ur5e"
+
+
+def scored_runs(bbo, compact: dict, cells: list[str] | None = None) -> list:
+    """The v2 leaderboard's entries: black box = algorithm, environment = cell, episodes = seeds (scored ones; unscored are skipped)."""
     out = []
     for cell_id, cell in compact["v2"].items():
+        if cells is not None and cell_id not in cells:
+            continue
         for algorithm in algorithms_of(cell):
             ratios = dict(paired_ratios(cell, algorithm))
             episodes, means, p95s = [], [], []
@@ -323,17 +383,30 @@ def scored_runs(bbo, compact: dict) -> list:
                 if algorithm not in seed["algorithms"]:
                     continue
                 record = seed["algorithms"][algorithm]
+                if record["k4d_pos_mean_mm"] is None:
+                    continue
                 scores = {"k4d_pos_mean_mm": float(record["k4d_pos_mean_mm"])}
                 if seed["seed_index"] in ratios:
                     scores["ratio_vs_A0"] = float(ratios[seed["seed_index"]])
+                graded = record.get("recovery_summary") or {}
+                if graded.get("within") is not None:
+                    scores["within_tolerance"] = float(graded["within"])
+                if graded.get("worst_ratio_to_tolerance") is not None:
+                    scores["worst_ratio_to_tolerance"] = float(graded["worst_ratio_to_tolerance"])
                 means.append(record["k4d_pos_mean_mm"])
                 p95s.append(record["k4d_pos_p95_mm"])
                 episodes.append(bbo.Episode(inputs={"seed_index": seed["seed_index"]},
                                             output={"worst_arm": record["worst_arm"], "converged": record["converged"]},
                                             scores=scores))
+            if not episodes:
+                continue
             summary = {"k4d_pos_mean_mm": statistics.median(means), "k4d_pos_p95_mm": statistics.median(p95s)}
             if ratios:
                 summary["ratio_vs_A0"] = statistics.median(ratios.values())
+            for key in ("within_tolerance", "worst_ratio_to_tolerance"):
+                values = [e.scores[key] for e in episodes if key in e.scores]
+                if values:
+                    summary[key] = statistics.median(values)
             evaluation = evaluation_digest_v2(cell, cell_id, algorithm)
             out.append(bbo.ScoredRun(
                 black_box=algorithm,
@@ -348,7 +421,7 @@ def log(compact: dict, *, weave: bool = True) -> dict:
     batch = records(compact)
     runs = push(batch, project=PROJECT)
     retired = sum(retire(record["config"]["result_id"], record["config"]["evaluation"], project=PROJECT) for record in batch)
-    board = None
+    board, boards = None, {}
     if weave:
         from .rigs import load_bbo  # noqa: PLC0415 -- bbo by file, the house template on bam_ws main
 
@@ -357,15 +430,27 @@ def log(compact: dict, *, weave: bool = True) -> dict:
         bbo.delete_unended = lambda client: 0
         bbo.prune_superseded = lambda client, runs, columns=None: 0
         entity_project = f"{ENTITY}/{PROJECT}"
-        refs = bbo.log_evaluations(entity_project, scored_runs(bbo, compact), scorers=SCORERS)
-        metrics = [bbo.Metric(title, key, minimize=minimize) for title, key, minimize in COLUMNS]
-        board = bbo.publish_leaderboard(
-            entity_project, LEADERBOARD,
-            "Zach's kinematic-calibration simulation (bam_calibration v2): UR's own dual-arm method (patent US 9,248,573) and its "
-            "variants as black boxes on UR's calibration horse; K4d position error of the worst arm, per cell, over seeds.",
-            refs, metrics, list(compact["v2"]))
+        ur_cells = [c for c, cell in compact["v2"].items() if is_ur_cell(cell)]
+        bam_cells = [c for c, cell in compact["v2"].items() if not is_ur_cell(cell)]
+        if ur_cells:
+            refs = bbo.log_evaluations(entity_project, scored_runs(bbo, compact, ur_cells), scorers=SCORERS)
+            metrics = [bbo.Metric(title, key, minimize=minimize) for title, key, minimize in COLUMNS]
+            board = boards[LEADERBOARD] = bbo.publish_leaderboard(
+                entity_project, LEADERBOARD,
+                "Zach's kinematic-calibration simulation (bam_calibration v2): UR's own dual-arm method (patent US 9,248,573) and its "
+                "variants as black boxes on UR's calibration horse; K4d position error of the worst arm, per cell, over seeds.",
+                refs, metrics, ur_cells)
+        if bam_cells:
+            refs = bbo.log_evaluations(entity_project, scored_runs(bbo, compact, bam_cells), scorers=BAM_SCORERS)
+            metrics = [bbo.Metric(title, key, minimize=minimize) for title, key, minimize in BAM_COLUMNS]
+            boards[BAM_LEADERBOARD] = bbo.publish_leaderboard(
+                entity_project, BAM_LEADERBOARD,
+                "Two BAM five-bar arms on one plate, wrists bolted to one rigid bar (bam_calibration rigid-wrist study, 2026-11-12): "
+                "each estimator's tool error and how many of the closure-identified parameters land within tolerance of the hidden "
+                "truth, per noise level (x0, x1, x3, x10 of the rig's measured noise), over seeds.",
+                refs, metrics, bam_cells)
     return {"project": PROJECT, "runs": len(runs), "new": sum(1 for r in runs if not r["resumed"]), "retired": retired,
-            "urls": {r["name"]: browser_url(r["url"]) for r in runs}, "leaderboard": board}
+            "urls": {r["name"]: browser_url(r["url"]) for r in runs}, "leaderboard": board, "leaderboards": boards}
 
 
 def main(argv=None) -> int:

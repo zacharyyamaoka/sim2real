@@ -133,12 +133,19 @@ def test_compact_is_json_round_trippable():
 
 def test_the_committed_ledger_holds_what_the_source_had():
     data = json.loads(DATA.read_text())
-    assert DATA.stat().st_size < 1_000_000
+    # WHY 1.5 MB, was 1 MB (2026-11-12): the rigid-wrist study's per-parameter recovery rows (every quantity, every seed, three
+    # estimators) are the point of that run; trimmed to the fields that grade them they take the file to ~1.2 MB
+    assert DATA.stat().st_size < 1_500_000
     assert (data["sources"]["v1"]["rows"], len(data["v1"])) == (348, 52)
-    assert data["sources"]["v2"]["rows"] == 116 and data["sources"]["v2"]["kept"] == 54
+    # the UR horse ledger (116 rows, 54 kept) + the rigid-wrist ledger (32 rows, all kept)
+    assert data["sources"]["v2"]["rows"] == 116 + 32 and data["sources"]["v2"]["kept"] == 54 + 32
     assert sum(len(c["seeds"]) for c in data["v1"].values()) == 348
-    assert len(data["v2"]) == 8
-    assert sum(len(s["algorithms"]) for c in data["v2"].values() for s in c["seeds"]) == 42 * 11 + 12 * 2
+    assert len(data["v2"]) == 8 + 4
+    ur = [c for c in data["v2"].values() if kincal.is_ur_cell(c)]
+    assert sum(len(s["algorithms"]) for c in ur for s in c["seeds"]) == 42 * 11 + 12 * 2
+    bam = [c for c in data["v2"].values() if not kincal.is_ur_cell(c)]
+    rows = [r for c in bam for s in c["seeds"] for a in s["algorithms"].values() for r in a.get("parameter_recovery", [])]
+    assert rows and all(set(r) == {"key", "tag", "error"} for r in rows if r["tag"] == "not_identified")
 
 
 # ---------------------------------------------------------------------------------------------------------------- records
@@ -316,3 +323,71 @@ def test_a_parameter_recovery_block_becomes_a_parameters_table():
     assert table[1] == {"seed_index": 0, "parameter": "q2", "value": 0.5}
     assert table[2] == {"seed_index": 1, "parameter": "q1", "error": 0.2}
     assert "parameters" not in runs["A0 · R1.bam.pair.rigid_wrist"]["tables"]
+
+
+# ---------------------------------------------------------------------------------------------------------------- the real BAM ledger (2026-11-12)
+
+
+def rigidwrist_row(seed=0, started="2026-11-12T18:00:00-07:00", *, a0sc_kpi=True, within=2, worst_ratio=7.5):
+    """A row shaped like the rigid-wrist study's: the recovery block sits at ROW level under recovery.estimators, one entry per
+    estimator, and an estimator that diverged carries kpi None (reported unscored, not failed)."""
+    row = v2_row(cell="R3.pair.bam.rigidwrist.x1", seed=seed, started=started)
+    row["rung"] = "R3"
+    row["setup"] = {"kind": "rigid_wrist", "arm": "bam"}
+    a0sc = copy.deepcopy(row["algorithms"]["A0"])
+    if not a0sc_kpi:
+        a0sc["kpi"], a0sc["status"] = None, "unscored"
+    row["algorithms"] = {"A0": row["algorithms"]["A0"], "A0sc": a0sc}
+    row["recovery"] = {
+        "schema": "kincal-recovery/1", "tolerance": {"length_m": 1e-4, "angle_rad": 2e-4},
+        "identifiability": {"parameters": 62, "rank": 41, "null_dim": 21, "named": [{"key": "scale", "words": "overall scale"}]},
+        "estimators": {"A0sc": {
+            "bar": "drawing", "status": "ok",
+            "summary": {"quantities": 5, "graded": 3, "within": within,
+                        "worst": {"key": "front_right.L_c1", "ratio_to_tolerance": worst_ratio}},
+            "rows": [{"key": "front_right.L_c1", "arm": "front_right", "unit": "m", "words": "L_c1", "true": 0.12, "nominal": 0.12,
+                      "fitted": 0.121, "error": 0.001, "tag": "closure", "graded_error": 0.001, "tolerance": 1e-4, "within": False,
+                      "leverage": 0.3}]}}}
+    return row
+
+
+def test_the_row_level_recovery_block_becomes_a_parameters_table_and_recovery_numbers():
+    data = compact([rigidwrist_row(seed=0, within=2, worst_ratio=7.5), rigidwrist_row(seed=1, within=3, worst_ratio=2.5)])
+    runs = {r["name"]: r for r in kincal.records(data)}
+    run = runs["A0sc · R3.pair.bam.rigidwrist.x1"]
+    table = run["tables"]["parameters"]
+    assert table[0]["seed_index"] == 0 and table[0]["key"] == "front_right.L_c1" and table[0]["within"] is False
+    assert table[0]["graded_error"] == 0.001 and len(table) == 2
+    assert run["summary"]["graded_median"] == 3 and run["summary"]["within_tolerance_median"] == 2.5
+    assert run["summary"]["worst_ratio_to_tolerance_median"] == 5.0
+    assert run["summary"]["identifiable_rank"] == 41 and run["summary"]["null_dim"] == 21
+    assert "parameters" not in runs["A0 · R3.pair.bam.rigidwrist.x1"]["tables"]
+
+
+def test_an_unscored_fit_is_counted_not_crashed():
+    data = compact([rigidwrist_row(seed=0), rigidwrist_row(seed=1, a0sc_kpi=False), rigidwrist_row(seed=2)])
+    run = next(r for r in kincal.records(data) if r["name"] == "A0sc · R3.pair.bam.rigidwrist.x1")
+    assert run["summary"]["unscored"] == 1 and run["summary"]["n_seeds"] == 3
+    assert run["summary"]["k4d_pos_mean_mm_worst_arm_median"] == 10.0   # over the two scored seeds only
+    cell = data["v2"]["R3.pair.bam.rigidwrist.x1"]
+    assert [seed for seed, _ in kincal.paired_ratios(cell, "A0sc")] == [0, 2]
+    scored = next(r for r in kincal.scored_runs(fake_bbo(), data) if r.black_box == "A0sc")
+    assert len(scored.episodes) == 2
+
+
+def test_bam_cells_get_their_own_board_and_stay_off_the_ur_one(monkeypatch):
+    bbo, boards = fake_bbo(), []
+    publish = bbo.publish_leaderboard
+    bbo.publish_leaderboard = lambda *args: boards.append(args) or publish(*args)
+    monkeypatch.setattr(kincal, "push", lambda batch, project: [{"id": r["id"], "url": "https://wandb.ai/x", "name": r["name"],
+                                                                  "resumed": False} for r in batch])
+    monkeypatch.setattr(kincal, "retire", lambda result_id, evaluation, project: 0)
+    monkeypatch.setattr(rigs, "load_bbo", lambda: bbo)
+    out = kincal.log(compact([v2_row(seed=0), rigidwrist_row(seed=0)]))
+    by_name = {b[1]: b for b in boards}
+    # publish_leaderboard(entity_project, name, description, refs, metrics, environments)
+    assert by_name["Kinematic Calibration · UR horse (v2)"][5] == ["R1.horse.ur5e.Nur"]
+    bam = by_name["Kinematic Calibration · BAM pair, rigid wrist"]
+    assert bam[5] == ["R3.pair.bam.rigidwrist.x1"]
+    assert ("Within tolerance (median count)", "within_tolerance", False) in bam[4]
+    assert set(out["leaderboards"]) == {"Kinematic Calibration · UR horse (v2)", "Kinematic Calibration · BAM pair, rigid wrist"}
