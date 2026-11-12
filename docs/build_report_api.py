@@ -44,14 +44,15 @@ def read(path: Path) -> str | None:
 
 
 def inline(text: str) -> str:
-    parts = re.split(r"(`[^`]+`)", text)
-    out = []
-    for part in parts:
-        if part.startswith("`") and part.endswith("`") and len(part) > 1:
-            out.append(f"<code>{e(part[1:-1])}</code>")
-        else:
-            out.append(re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", e(part)))
-    return "".join(out)
+    """`code` and **bold**, where a bold run may hold a code span (**`models`:**): the spans are set aside first, then put back."""
+    spans: list[str] = []
+
+    def keep(m: re.Match) -> str:
+        spans.append(f"<code>{e(m.group(1))}</code>")
+        return f"\x00{len(spans) - 1}\x00"
+
+    out = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", e(re.sub(r"`([^`]+)`", keep, text)))
+    return re.sub(r"\x00(\d+)\x00", lambda m: spans[int(m.group(1))], out)
 
 
 def markdown(text: str) -> str:
@@ -202,20 +203,35 @@ def parameters_table(run: dict | None) -> str:
             if v is None:
                 continue
             fitted = v.get("basis") == "measured"
-            interval = f"[{g(v.get('low'), 5)}, {g(v.get('high'), 5)}]" if v.get("low") is not None else "—"
+            noted = re.search(r"95 % interval \[([^\]]+)\]", v.get("notes", ""))
+            # WHY said, not blanked: robot_msgs Value refuses low/high that do not bracket the value, so such an interval stays in the notes
+            interval = (f"[{g(v.get('low'), 5)}, {g(v.get('high'), 5)}]" if v.get("low") is not None else
+                        f"<span class='mut'>in notes: [{e(noted.group(1))}], does not bracket the value</span>" if noted else "—")
             rows.append(f"<tr class='{'fit' if fitted else ''}'><th scope='row'><code>{e(instance)}.{e(name)}</code></th><td>{e(v.get('unit', ''))}</td>"
-                        f"<td>{g(None if prior is None else prior['value'])}</td><td><b>{g(v['value'])}</b></td><td>{e(interval)}</td>"
+                        f"<td>{g(None if prior is None else prior['value'])}</td><td><b>{g(v['value'])}</b></td><td>{interval if noted and v.get('low') is None else e(interval)}</td>"
                         f"<td>{e(v.get('basis', ''))}</td><td class='mut'>{e(v.get('source', ''))}</td></tr>")
     return ("<div class='scroll'><table><thead><tr><th>parameter</th><th>unit</th><th>prior</th><th>fitted.parameters</th><th>95 % interval (low, high)</th>"
             "<th>basis</th><th>source</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>")
 
 
 def slow_summary() -> str:
+    """Each slow test's verdict from its own capture (green.json / red.json) and pytest's closing line once the run ends."""
     log = read(MEDIA / "slow" / "slow.log")
     if log is None:
         return "<p class='mut'>Not run yet.</p>"
-    tail = [line for line in log.splitlines() if re.search(r"passed|failed|error|^exit ", line)]
-    return f"<pre>{e(chr(10).join(tail[-3:]))}</pre>"
+    lines = []
+    for name, want in (("green", "calibration and eval both pass"), ("red", "calibration and eval both fail")):
+        cap = MEDIA / "slow" / f"{name}.json"
+        if not cap.is_file():
+            lines.append(f"{name}: running (no capture yet)")
+            continue
+        run = json.loads(cap.read_text(encoding="utf-8"))
+        cal, rep = run["calibration"], run["report"]
+        gates = ", ".join(f"{gt['id']} {'pass' if gt['passed'] else 'FAIL'}" for gt in rep["gates"])
+        lines.append(f"{name}: calibration {'PASS' if cal['passed'] else 'FAIL'}"
+                     + (f" (failing {', '.join(cal['failing'])})" if cal["failing"] else "") + f"; eval {'PASS' if rep['passed'] else 'FAIL'} ({gates}); wanted: {want}")
+    closing = [line for line in log.splitlines() if re.match(r"^=*\s*\d+ (passed|failed)|^exit ", line.strip())]
+    return f"<pre>{e(chr(10).join(lines + closing))}</pre>"
 
 
 def main() -> None:
