@@ -975,8 +975,9 @@ def coverage(out: Path, base) -> dict:
                     continue
                 why = ("its front pass already misses at this level: the level breaks whatever the dynamics do" if front_breaks else
                        "a whole seed already misses at this level (the level breaks); another seed would only add a count" if whole_breaks else
-                       "wall-time budget (a whole cell is ~1 h on the shared host; seed 20261111 ran whole below each break, the front "
-                       "pass ran every seed)")
+                       "wall-time and memory budget (a whole cell is ~1 h on the shared host; on 2026-11-12 at 00:40 its swap was full "
+                       "with 1.5 GB free, so overall-0 and truth-2's other seeds were shed mid-run; seed 20261111 ran whole below each "
+                       "break, the front pass ran every seed)")
                 dropped.append({"label": lb, "why": why})
     return {"rows": rows, "dropped": dropped, "whole_cells": len(full), "front_cells": len(front)}
 
@@ -990,6 +991,20 @@ def coverage_html(cov: dict) -> str:
             "whole run's (tests/test_stress_wrist.py pins it). Whole seeds are named by their last digit (1 = 20261111).</p>"
             + _table(["ladder", "level", "whole seeds", "front seeds", "front breaks"], body)
             + f"<details><summary class=m>{len(cov['dropped'])} whole cells not run, and why</summary><ul class=s>{dropped}</ul></details>")
+
+
+def _far_candidates(key: str, far: Mapping[float, dict]) -> str:
+    """The truth ladder's dynamics miss: the candidate causes that fit ``key``. The damping-bound one only where this joint's fitted damping
+    sits on its 0 bound at every failing level and the missed value is its Coulomb (the term that takes the slope damping cannot)."""
+    iterations = ("the inertia and delay inference runs a fixed 8 iterations at gain 0.7 (II_ITERATIONS; each leaves ~0.69 of what is left, "
+                  "so ~5 % of a start's offset survives and a far start hands the regression a larger inertia error to absorb)")
+    joint = key.split(".")[0]
+    failing = [r for r in far.values() if key in misses(r)]
+    damping = [next((x["recovered"] for x in r["calibration"]["rows"] if x["key"] == f"{joint}.damping_nm_s_rad"), None) for r in failing]
+    if key.endswith(".coulomb_nm") and failing and all(d == 0 for d in damping):
+        return ("Two candidates, not yet separated: " + iterations + "; and the fit's damping on this joint sits on its bound 0 at every "
+                "failing level, so any slope the fit picks up cannot go into damping and lands in Coulomb")
+    return "Candidate, not yet confirmed: " + iterations
 
 
 def findings(out: Path) -> list[dict]:
@@ -1093,6 +1108,31 @@ def findings(out: Path) -> list[dict]:
                     "velocity noise (reading_noise() reads it ~3x high) and add slow constant-speed sweeps both ways on this joint to the "
                     "dynamics plan, where Coulomb separates from damping"),
             "measured": "whole cells only (seed 20261111 below the front's break); |error| / tolerance in brackets"})
+    # the truth ladder's own dynamics miss: the front routines recover every value at the far truth, so the miss is the fit's, and how it
+    # grows with the distance says which part of the fit (added 2026-11-12 when truth-2-s20261111 ran whole and moved the break from 3 to 2)
+    far = {r["cell"]["level"]: r for r in full if r["cell"]["ladder"] == "truth" and r["cell"]["level"] != 1}
+    if far:
+        truth_fronts = [r for r in read_records(out, "front") if r["cell"]["ladder"] == "truth" and "error" not in r]
+        far_front = {lv for lv in {r["cell"]["level"] for r in truth_fronts}
+                     if sum(1 for r in truth_fronts if r["cell"]["level"] == lv) == len(SEEDS)
+                     and not any(misses(r) for r in truth_fronts if r["cell"]["level"] == lv)}
+        keys = sorted({k for r in far.values() for k in misses(r) if k not in front_keys})
+        for key in keys:
+            base_ratios = [_ratio(next(x for x in r["calibration"]["rows"] if x["key"] == key)) for r in full if r["label"].startswith("baseline-")]
+            series = [("1", _median(base_ratios))] + [(f"{lv:g}", misses(r).get(key) or _ratio(next(x for x in r["calibration"]["rows"] if x["key"] == key)))
+                                                      for lv, r in sorted(far.items())]
+            found.append({
+                "id": f"truth-distance-{key}", "routine": "servo.dynamics_regression",
+                "breaks": "the truth ladder at " + ", ".join(f"{lv:g}" for lv in sorted(far) if key in misses(far[lv])) + " (seed 20261111 whole)",
+                "params": key,
+                "cause": ("its own, not carried in: the front routines recover all 9 of their values at "
+                          + ", ".join(f"{lv:g}x" for lv in sorted(far_front & set(far))) + " on every seed. The miss grows faster than the "
+                          "distance (|error| / tolerance by distance: " + ", ".join(f"{lv}x {v:.2f}" for lv, v in series if v is not None)
+                          + "), so it is not a bias proportional to the offset. " + _far_candidates(key, far)),
+                "fix": ("iterate the inference until its step is under a tenth of each tolerance (cap ~16) and log the last step, so a far "
+                        "start converges or says it did not; to confirm the cause, let dynamics_downstream play a variant's world "
+                        "(it refuses the truth ladder today) and refit with 16 iterations"),
+                "measured": "whole cells only; the separating probe is not written"})
     lumped_bp = None
     mism = [r for r in full if r["cell"]["ladder"] == "mismatch" and r.get("variant", {}).get("motor_friction_nm")]
     if mism:
