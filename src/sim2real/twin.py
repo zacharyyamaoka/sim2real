@@ -323,6 +323,10 @@ class SimRunner:
         if unknown:
             raise KeyError(f"no hidden value {unknown} in {self.description.id}'s world (it has {sorted(real.truth)})")
         real.truth = {**real.truth, **moved}  # the world plays the moved values; RealWorld.twin reads .truth
+        # the noise the world plays (world.json's block at the ladder's scale, as RealWorld loaded it): the record's `noise`
+        scale = getattr(hidden, "_NOISE_SCALE", [1.0])[-1]
+        noise = {**real.noise, "level": scale, "seed": real.seed,
+                 "sources": {name: f"sysid/examples/{self.description.id}/world.json noise block x{scale:g} (sysid.hidden.load)" for name in real.noise}}
         measured = real.measure(plan)
         with hidden.sealed():
             fit = module.identify(d, measured.train)
@@ -336,8 +340,13 @@ class SimRunner:
             ci = fit.ci95[rung].get(name)
             values[name] = None if value is None else Value(float(value), unit, basis=Basis.MEASURED, measured_by=f"sim2real.RobotTwin.calibrate(on='sim', truth='sealed'), {model}",
                                                            source=fit.methods[rung], notes=f"95 % interval [{ci[0]:.6g}, {ci[1]:.6g}]" if ci else "")
+        # the rungs identify() fitted, in its order, each with only the values it estimated (the ones with a bootstrap interval; the
+        # rest are a rung's structural constants, such as M0's zero friction): the record's plan and routines (CalibrationRecord.from_sysid)
+        card = ORACLE_CARD[servo.type]
+        fits = [{"rung": k, "model": dm.RUNG_MODELS.get((card, k), (k,))[0],
+                 "found": {f"{servo.id}.{name}": fit.values[k][name] for name in fit.values[k] if name in fit.ci95.get(k, {})}} for k in fit.values]
         state = {"d": d, "plan": plan, "measured": measured, "fit": fit, "ruler": ruler, "model": model, "rung": rung, "module": module,
-                 "servo": servo}
+                 "servo": servo, "noise": noise, "fits": fits, "noise_level": f"{scale:g}x"}
         return Calibration("sim", model, rung, values, {k: dict(v) for k, v in fit.values.items()}, rows, moved,
                            round(time.monotonic() - started, 1),
                            {"train_runs": len(plan.train), "held_out_runs": len(plan.held_out), "digest": plan.digest,
@@ -524,7 +533,16 @@ class RobotTwin:
         fitted.intervals_ = {k: tuple(r["ci95"]) for k, r in ((r["name"], r) for r in calibration.rows) if r["ci95"]}
         fitted.rungs_ = calibration.rungs
         fitted.calibration_ = calibration
-        fitted.plan_ = fitted.record_ = None  # WHY: the tracer runs sysid's pipeline, not planned routines on the seam
+        # WHY a sysid plan and not the catalog's (PEP 0001 section 7: a fitted twin carries plan_ and record_): the tracer runs sysid's
+        # pipeline, so its plan lists the model rungs identify() actually fitted (sysid.<example>.<rung>, source "sysid"), never catalog
+        # routines that did not run
+        from .calibration.record import CalibrationRecord, sysid_plan  # noqa: PLC0415
+
+        fitted.plan_ = sysid_plan(self.description.id, state["fits"], level=state["noise_level"], wall_time_s=calibration.seconds,
+                                  description=self.description)
+        fitted.record_ = CalibrationRecord.from_sysid(calibration.to_dict(), fits=state["fits"], plan=fitted.plan_,
+                                                      runs=len(state["measured"].train), noise=state["noise"], twin=self.description.id,
+                                                      description=self.description)
         return fitted
 
     def noise(self):
