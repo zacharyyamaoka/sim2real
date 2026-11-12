@@ -79,6 +79,18 @@ def default_out() -> Path:
     return main_checkout() / "reports" / "media" / SLUG / "wrist"
 
 
+def load_twin(workers: int = 6):
+    """The wrist's twin on either side of sim2real's 2026-11-11 rename (9007994): sim2real.examples.ur_wrist_test_rig() where it exists,
+    else Twin.load(NAME). WHY both: the ladder's cells ran on the branch's base (Twin.load); the lane lands on a main that has only the
+    fixture, and the numbers must not depend on which one built the twin (same manifest, same runner)."""
+    import sim2real  # noqa: PLC0415
+
+    examples = getattr(sim2real, "examples", None)
+    if examples is not None and hasattr(examples, "ur_wrist_test_rig"):
+        return examples.ur_wrist_test_rig(workers=workers)
+    return sim2real.Twin.load(NAME, workers=workers)
+
+
 # --- the ladders -------------------------------------------------------------------------------------------------------------------------
 
 
@@ -250,7 +262,7 @@ def run_cell(cell: Cell, *, workers: int = 6, out: Path | None = None) -> dict:
     from sim2real import rig as seam  # noqa: PLC0415
 
     started = time.monotonic()
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     base = twin.noise()
     noise = noise_for(cell.ladder, cell.level, cell.seed, base)
     variant = variant_for(cell.ladder, cell.level)
@@ -269,7 +281,7 @@ def run_cell(cell: Cell, *, workers: int = 6, out: Path | None = None) -> dict:
             t0 = time.monotonic()
             fitted = twin.calibrate(on="sim", truth="sealed", noise=noise)
             t1 = time.monotonic()
-            report = fitted.eval_twin()
+            report = (fitted.eval if hasattr(fitted, "eval") else fitted.eval_twin)()
             t2 = time.monotonic()
         cal = fitted.calibration_
         record.update({"calibration": cal.to_dict(), "report": report.to_dict(),
@@ -325,7 +337,7 @@ def run_front_cell(cell: Cell, *, workers: int = 3, out: Path | None = None) -> 
     from sim2real import rig as seam  # noqa: PLC0415
 
     started = time.monotonic()
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     base = twin.noise()
     noise = noise_for(cell.ladder, cell.level, cell.seed, base)
     variant = variant_for(cell.ladder, cell.level)
@@ -1045,8 +1057,15 @@ def findings(out: Path) -> list[dict]:
             "cause": ("gap: every crossing lands at the same phase of the step, so the five widths are identical and neither median nor mean "
                       f"resolves below a step (CAN 14 reads {gap[0]['gap_median']['arcmin']:.2f} against {gap[0]['gap_truth_arcmin']:.0f} arcmin)" if gap else "gap: -")
                      + "; breakaway: the 0.05 deg leave is under one 10x step, so a single step's flip during windup reads as a departure",
-            "fix": ("breakaway: leave at max(0.05 deg, 3 encoder steps). gap: dither each crossing's start by a fraction of a step (k/N of the "
-                    "step over the N crossings) so the widths sample the phase and their mean resolves below a step - the dither is not probed yet"),
+            # WHY no dither for the gap (checked 2026-11-12, replacing the earlier "dither each crossing's start" proposal): the flanks sit at
+            # fixed motor angles, so where the encoder's grid falls on them is fixed too, and the only thing that moves the read point is the
+            # mesh's windup - one 10x step (3.3 arcmin) at 2 N.m/arcmin is 6.6 N.m, ~130x the 49 mN.m threshold. With no encoder white noise
+            # (0 at 1x) the widths are a whole number of steps whatever the plan does: an identifiability floor, not the routine's bug
+            "fix": ("breakaway: leave at max(0.05 deg, 3 encoder steps). gap: none in the routine - it is the encoder's floor: the widths are "
+                    "a whole number of steps (CAN 14: 3 steps = 9.89 arcmin against 12, every seed and crossing alike) because the flanks are "
+                    "fixed in the encoder's grid and the mesh is too stiff (one 10x step = 6.6 N.m of windup) for any torque to move the read "
+                    "point; a gap is identifiable only while the step is under its tolerance (10x: 3.3 arcmin against CAN 14's 1.2; the real "
+                    "1x step 0.33 arcmin is 0.27 of it). The gate should say so: a backlash tolerance below the encoder's step is unmeasurable"),
             "measured": (f"breakaway worst |error| / tolerance {max(r['static_committed']['err_over_tol'] for r in enc):.2f} -> "
                          f"{max(r['static_leave_3_steps']['err_over_tol'] for r in enc):.2f} with the 3-step leave; gap unchanged by the mean "
                          f"({max(r['gap_mean']['err_over_tol'] for r in enc):.2f})")})
@@ -1251,7 +1270,7 @@ def probe_dead_band(multipliers=(0, 1, 2, 3, 5, 10), seeds=SEEDS, workers: int =
     import numpy as np  # noqa: PLC0415
     import sim2real  # noqa: PLC0415
 
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     wr = importlib.import_module(RIG_MODULE)
     from bam_fb_test_rig.backlash import dead_band  # noqa: PLC0415
 
@@ -1309,7 +1328,7 @@ def probe_reading_noise(multipliers=(0, 1, 3, 10), seed: int = SEEDS[0], workers
     import numpy as np  # noqa: PLC0415
     import sim2real  # noqa: PLC0415
 
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     wr = importlib.import_module(RIG_MODULE)
     rig, base = twin.runner.rig, twin.noise()
     world, nominal = _world(twin)
@@ -1368,7 +1387,7 @@ def probe_motor_friction(levels_mnm=(0, 10, 20, 40), workers: int = 1) -> list[d
 
     import sim2real  # noqa: PLC0415
 
-    twin = sim2real.Twin.load(NAME, workers=1)
+    twin = load_twin(1)
     wr = importlib.import_module(RIG_MODULE)
     world, nominal = _world(twin)
     runs = {r.spec["can"]: r for r in wr.Breakaway().runs({**nominal, **{k: world[k] for k in world if k.endswith(".backlash_rad")}})}
@@ -1417,7 +1436,7 @@ def probe_dynamics_fix(seed: int = SEEDS[0], workers: int = 4, out: Path | None 
     # the values the first three routines found: the whole run's record, or the front pass's (the same to the bit: front_check)
     whole, front = out / "cells" / f"baseline-s{seed}.json", out / "front" / f"baseline-s{seed}.json"
     cell = json.loads((whole if whole.exists() else front).read_text())
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     wr = importlib.import_module(RIG_MODULE)
     rig, base = twin.runner.rig, twin.noise()
     world, nominal = _world(twin)
@@ -1481,7 +1500,7 @@ def probe_dynamics_downstream(label: str, front: str = "truth", velocity: str = 
     cell = Cell(**cell_record["cell"])
     if variant_for(cell.ladder, cell.level):
         raise ValueError(f"{label}: the downstream probe plays the committed world only (noise-only ladders)")
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     wr = importlib.import_module(RIG_MODULE)
     rig, base = twin.runner.rig, twin.noise()
     world, nominal = _world(twin)
@@ -1537,7 +1556,7 @@ def probe_encoder_fix(multiplier: float = 10.0, seeds=SEEDS, workers: int = 4) -
     import numpy as np  # noqa: PLC0415
     import sim2real  # noqa: PLC0415
 
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     wr = importlib.import_module(RIG_MODULE)
     from bam_fb_test_rig.backlash import dead_band  # noqa: PLC0415
 
@@ -1599,7 +1618,7 @@ def probe_breakaway_fix(levels_mnm=(0, 20, 40), workers: int = 1, dry: bool = Tr
 
     import sim2real  # noqa: PLC0415
 
-    twin = sim2real.Twin.load(NAME, workers=1)
+    twin = load_twin(1)
     wr = importlib.import_module(RIG_MODULE)
     world, nominal = _world(twin)
     gaps = {k: world[k] for k in world if k.endswith(".backlash_rad")}
@@ -1639,7 +1658,7 @@ def probe_reversal_crossing(levels_mnm=(0, 20, 40), seeds=SEEDS, workers: int = 
 
     import sim2real  # noqa: PLC0415
 
-    twin = sim2real.Twin.load(NAME, workers=workers)
+    twin = load_twin(workers)
     wr = importlib.import_module(RIG_MODULE)
     from bam_fb_test_rig.backlash import dead_band  # noqa: PLC0415
 

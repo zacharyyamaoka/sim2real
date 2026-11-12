@@ -70,7 +70,7 @@ def missed(record: dict, truth: dict, params: dict) -> dict:
 
 @pytest.fixture(scope="module")
 def twin():
-    return sim2real.Twin.load(NAME, workers=1)
+    return sw.load_twin(1)   # either side of the 2026-11-11 rename (Twin.load -> sim2real.examples)
 
 
 @pytest.fixture(scope="module")
