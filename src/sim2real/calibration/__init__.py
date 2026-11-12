@@ -2,8 +2,20 @@
 parameters, select the catalog routines that identify them by metric, order them from their declared dependencies, steer the whole run
 with a CalibrationConfig, and return one stable record.
 
-The designer's base commit holds only ``recovery`` (the one reader of the routines' recovery ladders, shared by the planner and the docs
-site). The backend lane adds plan.py, config.py and record.py here and exports their names from this file.
+The one recovery reader is ``recovery`` (shared by the planner and the docs site); plan.py orders and selects, config.py steers,
+record.py is what calibrate() returns, options.py is each type's offer, collect.py splits collect from fit (docs/CALIBRATE.md).
 
 Layer: like twin.py and rig.py, right of every folder (tests/test_layers.py names the folders); no layer folder imports this package.
 """
+
+from . import recovery
+from .collect import CalibrationData, collect
+from .config import Budget, CalibrationConfig, RoutineOptions
+from .options import TypeOptions, options
+from .plan import (CalibrationCycleError, CalibrationPlan, CalibrationPlanError, Declaration, PlanStep, Selection, declaration, order, plan,
+                   select)
+from .record import RECORD_SCHEMA, CalibrationRecord
+
+__all__ = ["RECORD_SCHEMA", "Budget", "CalibrationConfig", "CalibrationCycleError", "CalibrationData", "CalibrationPlan", "CalibrationPlanError",
+           "CalibrationRecord", "Declaration", "PlanStep", "RoutineOptions", "Selection", "TypeOptions", "collect", "declaration", "options",
+           "order", "plan", "recovery", "select"]
