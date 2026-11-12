@@ -499,7 +499,10 @@ class RigRunner:
             ok = None
             if gated:
                 kind, tol = p.tolerance
-                ok = recovered is not None and abs(recovered - true) <= (tol if kind == "abs" else tol * abs(true))
+                limit = tol if kind == "abs" else tol * abs(true)
+                # WHY a part in 1e9 of slack: a value one tolerance away passes by the rule, and a grid of whole physics steps (0.4 vs 0.6 ms
+                # read 2.0000000000000004e-4 against 2e-4) must not have its verdict decided by binary floating point
+                ok = recovered is not None and abs(recovered - true) <= limit * (1.0 + 1e-9)
             rows.append({"key": key, "title": p.title or key, "unit": p.unit, "display": p.display, "nominal": nominal.get(key), "true": true,
                          "recovered": recovered, "ci95": None if e is None or not e.ci95 else [float(v) for v in e.ci95],
                          "error": None if recovered is None or true is None else recovered - true,

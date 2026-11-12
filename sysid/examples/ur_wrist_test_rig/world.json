@@ -16,7 +16,7 @@
   "can16.coulomb_nm": 0.061131420379877066,
   "can16.static_friction_nm": 0.21,
   "can16.damping_nm_s_rad": 0.0,
-  "can14.backlash_rad": 0.004363323129985824,
+  "can14.backlash_rad": 0.0034906585039886587,
   "can15.backlash_rad": 0.005235987755982988,
   "can16.backlash_rad": 0.0037815467126543806,
   "can14.zero_offset_rad": 1.4784684093643965,
@@ -54,7 +54,7 @@
   "wrist.gravity_*": "the measured up (the description's) tilted +1.5 deg in polar and -2.5 deg in azimuth: a mount tilt the fit must recover",
   "can16.armature_kg_m2, can16.static_friction_nm": "set apart from it5's (0.00111, 0.186: within 11 % and 6 % of the prior) to +25 % and +20 %, so a fit that hands back the prior fails",
   "can14.*": "set apart from the GIM card's priors (+20 % armature, +26 % sliding, +14 % breakaway); its zero 0.6 deg off the camera-inferred one",
-  "can*.backlash_rad": "Zach 2026-11-11: about 10-20 arcmin per joint (15, 18, 13)",
+  "can*.backlash_rad": "Zach 2026-11-11: about 10-20 arcmin per joint; each drive its own value around the GIM4305-10's rated 15 (the description's prior) as the five-bar lane does around its 3 (bam_fb_test_rig.backlash.HIDDEN_ARCMIN): 12, 18, 13, every one set apart from the rating",
   "can15.zero_offset_rad, can16.zero_offset_rad": "a power-up that latched one rotor turn (36 deg at the output) away from the nominal session: + for CAN 15, - for CAN 16",
   "can*.gravity_*": "derived from the masses and gravity's direction above with MuJoCo at the held pose (rig.gravity_profile); the rig re-derives them from the played values",
   "can*.axis_inertia_kg_m2": "derived from the armature and the masses above (MuJoCo's mass matrix at the held pose); the rig re-derives it from the played values"

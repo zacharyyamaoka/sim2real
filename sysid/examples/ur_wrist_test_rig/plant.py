@@ -27,7 +27,12 @@ BAM_WS = Path("/home/bam/bam_ws")
 # bam_rack_twin's venv (sysid's runtime) already carries their dependencies (moteus_servo, cad2robot_payload, MuJoCo 3.11)
 SOURCES = (BAM_WS / "src/dev/bam_ur_wrist", BAM_WS / "src/dev/bam_ur_wrist_coverage", BAM_WS / "src/core/mdp/agent/actuators/gear_backlash/src",
            BAM_WS / "src/core/mdp/setup/bam_homing/src")
-for _path in SOURCES:
+# The five-bar lane's backlash estimator (bam_fb_test_rig.backlash.dead_band), the one both rigs read a dead band with. WHY two homes, main's
+# first (the coordinator, 2026-11-11: "reuse these in the one-click seam; don't re-implement them"): it is on claude/fivebar-test-rig-model
+# (b6f8bfce3, tested against here) and not yet on bam_ws main, whose bam_fb_test_rig has no backlash.py; once it lands, main's copy is taken
+FIVEBAR_TEST_RIG = next((home for home in (BAM_WS / "src/dev/bam_fb_test_rig", Path("/home/bam/bam_ws-worktrees/fivebar-test-rig-model/src/dev/bam_fb_test_rig"))
+                         if (home / "bam_fb_test_rig" / "backlash.py").is_file()), None)
+for _path in SOURCES + ((FIVEBAR_TEST_RIG,) if FIVEBAR_TEST_RIG else ()):
     if _path.is_dir() and str(_path) not in sys.path:
         sys.path.append(str(_path))
 

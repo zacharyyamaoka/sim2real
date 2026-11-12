@@ -4,15 +4,18 @@ MuJoCo twin, so ``sim2real.Twin.load("ur_wrist_test_rig").calibrate(on="sim", tr
 The sequence (each a cards.calibration routine; each uses what the ones before it found):
 
 1. servo.backlash_reversal_held   per moving joint, at its rest pose: the motor reverses slowly under a torque cap below the output's
-                                  breakaway, so the output holds while the motor crosses the gear's gap; the gap is the motor encoder's span
-                                  between the two flanks (two-sided by construction), less the gear's give at the cap
-2. homing.single_touch            Zach's tview procedure (bam_ur_wrist.homing.tview_home_one, unchanged): seek the stop, relabel; the stall
+                                  breakaway, so the output holds while the motor crosses the gear's gap; the five-bar lane's estimator
+                                  (bam_fb_test_rig.backlash.dead_band) reads the gap off (encoder, torque), two-sided by construction
+2. servo.breakaway_two_sided      per moving joint, at its rest pose: the motor walks onto one flank under a low cap, then the cap ramps
+                                  until the output leaves; both ways; the breakaway is half the two caps' sum, the load half their difference
+3. homing.single_touch            Zach's tview procedure (bam_ur_wrist.homing.tview_home_one, unchanged): seek the stop, relabel; the stall
                                   reads the motor half a gap (and the gear's give) past the stop, corrected by step 1's gap
-3. servo.dynamics_regression      the coverage lane's refit (bam_ur_wrist.refit.fit: equation error per joint + the chain's gravity) on the
-                                  house schedule's train runs, played in step 2's homed frame, then indirect inference against the twin
-                                  (bam_ur_wrist.refit_rig's rule) with step 1's gaps in it
-4. servo.command_delay_scan       the twin replayed over the train chirps at a grid of command delays (bam_ur_wrist.delay_scan's rule, on
-                                  train runs only), with step 3's dynamics; the output-error minimum
+4. servo.dynamics_regression      the coverage lane's refit (bam_ur_wrist.refit.fit: equation error per joint + the chain's gravity) on the
+                                  house schedule's train runs, played in step 3's homed frame, then indirect inference against the twin
+                                  (bam_ur_wrist.refit_rig's rule) with step 1's gaps and step 2's breakaways in it
+5. arm.gravity_direction          the mount tilt's azimuth from the load step 4 found on CAN 14 (the five-bar's J1-tilt rule)
+6. servo.command_delay_scan       the twin replayed over the train chirps at a grid of command delays (bam_ur_wrist.delay_scan's rule, on
+                                  train runs only), with step 4's dynamics; the output-error minimum
 
 WHY these and not every routine that names a wrist type: the rest need equipment the rig has not got or code that does not exist; the
 calibration's ``not_run`` list says which and why (docs/one-click-seam.md).
@@ -122,10 +125,10 @@ def _servo_rows(can: int) -> list[seam.Parameter]:
         P(f"{i}.armature_kg_m2", "kg·m²", title="armature (reflected rotor inertia)",
           why_not=why if held else ("only the axis inertia is seen (armature + the links it turns: {0}.axis_inertia_kg_m2): the CAD links' inertia "
                                     "is a prior the hidden masses move, so any error in it lands in the armature one for one (on CAN 14 the links "
-                                    "carry twice its armature); the fit sets it for the twin as the axis inertia less the CAD links").format(i)),
+                                    "carry twice its armature); the fit sets it for the twin as the axis inertia less the links at the twin's masses").format(i)),
         row("coulomb_nm", "N·m", ("rel", 0.10), "proposed: 10 %, the pendulum oracle's frictionloss tolerance (sysid/acceptance.json)", dyn,
             title="sliding (Coulomb) friction, the M2 frictionloss level"),
-        row("static_friction_nm", "N·m", ("rel", 0.10), "proposed: 10 %, as the sliding level", dyn,
+        row("static_friction_nm", "N·m", ("rel", 0.10), "proposed: 10 %, as the sliding level", "servo.breakaway_two_sided",
             title="breakaway (static) friction, the M3 frictionloss level"),
         row("damping_nm_s_rad", "N·m·s/rad", ("abs", 0.001), "proposed: 1e-3 N.m.s/rad absolute (6 mN.m at the 6 rad/s ceiling; the truth may be 0)", dyn,
             title="viscous friction"),
@@ -343,7 +346,7 @@ def _seed(noise_seed: int, stream: str, run_id: str) -> list[int]:
 
 def play(job: dict) -> dict:
     """One run on a plant at ``job["values"]``: a tape (measured on a fresh world, or replayed from a recording's own commands and clock),
-    a held reversal, or a homing seek. Returns the recording: the host's board readings and the commands it sent, plus the world's own
+    a held reversal, a two-sided breakaway, or a homing seek. Returns the recording: the host's board readings and the commands it sent, plus the world's own
     output angles (``world_link_rad``, the score's tool gate only: no fit reads them)."""
     kind = job["kind"]
     values = job["values"]
@@ -355,6 +358,8 @@ def play(job: dict) -> dict:
         return _reversal(job)
     if kind == "homing":
         return _homing(job)
+    if kind == "breakaway":
+        return _breakaway(job)
     raise ValueError(f"no play kind {kind!r}")
 
 
@@ -508,39 +513,181 @@ class BacklashReversal:
         return out
 
     def fit(self, measured, values, twin):
+        from bam_fb_test_rig.backlash import dead_band  # noqa: PLC0415
+
         out = {}
         for rec in measured.values():
             key = f"{INSTANCE[rec['can']]}.backlash_rad"
-            spans = reversal_spans(rec)
-            give = 2.0 * rec["cap_nm"] / MESH_STIFFNESS_NM_PER_RAD   # the gear's give at the cap, both flanks (the stiffness prior)
-            gap = float(np.median(spans)) - give
+            threshold = DEAD_BAND_THRESHOLD_FRACTION * rec["cap_nm"]
+            band = dead_band(rec["q"], rec["tau"], threshold_nm=threshold, mesh_stiffness_nm_per_rad=MESH_STIFFNESS_NM_PER_RAD)
+            if not band.observable:
+                raise ValueError(f"CAN {rec['can']}: {band.why}")
+            widths = np.asarray(band.widths_rad, float)
+            windup = 2.0 * threshold / MESH_STIFFNESS_NM_PER_RAD   # what dead_band took off: the mesh's windup at the threshold, both flanks
             rng = np.random.default_rng(0)
-            boot = [float(np.median(rng.choice(spans, spans.size))) - give for _ in range(200)]
+            boot = [float(np.median(rng.choice(widths, widths.size))) - windup for _ in range(200)]
             lo, hi = np.percentile(boot, (2.5, 97.5))
-            # WHY widened by the encoder's step: a few spans read in whole steps resample to one value, and an interval of zero width would
+            # WHY widened by the encoder's step: a few widths read in whole steps resample to one value, and an interval of zero width would
             # claim a precision the board's 2 pi / 65536 rad steps do not have
-            out[key] = seam.Estimate(gap, (float(lo) - QUANTUM_RAD, float(hi) + QUANTUM_RAD),
-                                     f"held reversal: median of {spans.size} flank-to-flank motor spans (each push saturated at the "
-                                     f"{rec['cap_nm'] * 1e3:.0f} mN.m cap) less the gear's give 2 cap / k ({give / ARCMIN:.2f} arcmin)")
+            out[key] = seam.Estimate(band.backlash_rad, (float(lo) - QUANTUM_RAD, float(hi) + QUANTUM_RAD),
+                                     f"held reversal under a {rec['cap_nm'] * 1e3:.0f} mN.m cap, read by bam_fb_test_rig.backlash.dead_band (the "
+                                     f"five-bar lane's estimator, threshold {threshold * 1e3:.0f} mN.m): {band.why}; 95 % by a bootstrap over the crossings")
         return out
 
 
-def reversal_spans(rec: dict) -> np.ndarray:
-    """Each half cycle's flank-to-flank span: the motor's median while pushing at +cap minus its median at the -cap push that follows."""
-    tau, q, cap = rec["tau"], rec["q"], rec["cap_nm"]
-    side = np.where(tau >= 0.9 * cap, 1, np.where(tau <= -0.9 * cap, -1, 0))
-    segments, current, start = [], 0, 0
-    for k, s in enumerate(side):
-        if s != current:
-            if current != 0 and k - start >= 3:
-                segments.append((current, float(np.median(q[start:k]))))
-            current, start = s, k
-    if current != 0 and side.size - start >= 3:
-        segments.append((current, float(np.median(q[start:]))))
-    spans = [a[1] - b[1] if a[0] > 0 else b[1] - a[1] for a, b in zip(segments, segments[1:]) if a[0] == -b[0]]
-    if not spans:
-        raise ValueError(f"{rec['can']}: the reversal never pushed both flanks to the cap: no gap to read")
-    return np.asarray(spans, float)
+# WHY the held reversal's own drive and not bam_fb_test_rig.backlash.measure's torque probe (measured 2026-11-11 on this world at 1x, every joint
+# "not observable: the link left"): the probe lets the rotor cross the gap as a free mass under a torque ramp, and on these light outputs it hits
+# the far flank hard enough to break the output loose (a ~0.4 m/s-class impact on a 2 N.m/arcmin mesh peaks near 1 N.m against ~0.2 N.m of
+# breakaway); the probe's torque, above the output's 0.05 N.m sliding level, then drags it 2 deg. The five-bar's outputs hold 0.74 N.m. Under
+# the position loop the motor crosses at the target's 0.5 deg/s and lands softly. WHY 0.7 of the cap (measured the same day): at 0.3 the 1x
+# torque noise (10 mN.m against a 70 mN.m cap) split CAN 15's crossings into spurious ones and read 3.9 arcmin of an 18 arcmin gap; 0.5 and 0.7
+# read 18.1
+DEAD_BAND_THRESHOLD_FRACTION = 0.7
+
+
+class WristDrive:
+    """One wrist board behind bam_fb_test_rig.backlash.ProbeDrive's five calls (what a probe needs of a board), on a plant: the board's
+    reading (taken once per host period, as the host gets it), a position hold, a pure torque, one tick; the other two boards stopped."""
+
+    def __init__(self, plant, axis: int) -> None:
+        self.plant, self.axis = plant, int(axis)
+        self.reading = plant.read()
+
+    def position_rad(self) -> float:
+        return float(self.reading.position_rad[self.axis])
+
+    def torque_nm(self) -> float:
+        return float(self.reading.torque_nm[self.axis])
+
+    def _send(self, command) -> None:
+        commands = [None, None, None]
+        commands[self.axis] = command
+        self.plant.send(commands)
+
+    def command(self, position_rad: float, velocity_rad_s: float, max_torque_nm: float) -> None:
+        self._send(_command(position_rad, velocity_rad_s, 0.0, 1.0, 1.0, max_torque_nm))
+
+    def command_torque(self, torque_nm: float) -> None:
+        self._send(_command(math.nan, 0.0, torque_nm, 0.0, 0.0, abs(torque_nm) + 0.5))
+
+    def tick(self) -> float:
+        before = self.plant.clock_s
+        self.reading = self.plant.step()
+        return self.plant.clock_s - before
+
+
+BREAKAWAY = {"cycles": 3, "approach_rad_s": 0.25 * DEG, "past_rad": 0.5 * DEG, "lead_rad": 5.0 * DEG, "low_cap_fraction": 0.6,
+             "rate_nm_s": 0.05, "leave_rad": 0.05 * DEG, "settle_s": 0.6, "board_cap_nm": 1.0}
+
+
+def hold(drive, position_rad: float, seconds: float, max_torque_nm: float) -> None:
+    elapsed = 0.0
+    while elapsed < seconds:
+        drive.command(position_rad, 0.0, max_torque_nm)
+        elapsed += drive.tick()
+
+
+def settle(drive, seconds: float, max_torque_nm: float) -> None:
+    """A brake in ProbeDrive's five calls: each tick the target is where the encoder is, at zero speed, so only the loop's damping acts."""
+    elapsed = 0.0
+    while elapsed < seconds:
+        drive.command(drive.position_rad(), 0.0, max_torque_nm)
+        elapsed += drive.tick()
+
+
+def breakaway(drive, direction: int, *, gap_rad: float, low_cap_nm: float, approach_rad_s: float, past_rad: float, lead_rad: float,
+              rate_nm_s: float, leave_rad: float, settle_s: float, board_cap_nm: float) -> dict:
+    """The breakaway one way, on any ProbeDrive (a real board answers the same five calls): the position target walks ``direction`` across
+    the gap and ``past_rad`` beyond it at ``approach_rad_s`` under ``low_cap_nm`` (the motor lands on that flank and presses it at the cap,
+    the output held by its friction), jumps ``lead_rad`` ahead, then the command's torque cap ramps at ``rate_nm_s`` until the encoder leaves
+    the flank by ``leave_rad``: the output broke away at that cap. Then a brake under the low cap for ``settle_s`` (``settle``), so the
+    output stops and sticks again before the next push.
+
+    WHY a cap and not a torque command (measured 2026-11-11): a pure torque lets the rotor cross the gap as a free mass, and its impact breaks
+    these light outputs loose at a fifth of their breakaway (see DEAD_BAND_THRESHOLD_FRACTION); under the position loop the motor lands at the
+    walk's speed. WHY the walk at 0.25 deg/s and a brake after the leave, not a hold (measured the same day on the noise-free world): after a
+    breakaway the output is loose, and MuJoCo's friction is soft: a hold at the leave pulled the overshot motor back at the low cap and
+    crept the output with it at 0.45 deg/s, above the plant's stick speed (bam_ur_wrist.plant.STICK_SPEED_RAD_S, 0.29 deg/s), so it never
+    stuck again and the next push left at the low cap. A brake pushes nothing once the motor stops, and a walk slower than the stick speed
+    lets an output it pushes stick again. WHY
+    ``lead_rad`` 5 deg: the loop's kp 75 N.m/rev must stay saturated past the largest breakaway plus load (~0.5 N.m), so the cap and not
+    the error sets the torque. Returns the cap at the leave (the mean of the last two ticks': the output leaves within one tick of breaking
+    away) and where the flank was."""
+    target = drive.position_rad()
+    goal = target + direction * (gap_rad + past_rad)
+    while direction * (goal - target) > 0.0:
+        dt = drive.tick()
+        target += direction * min(approach_rad_s * dt, direction * (goal - target))
+        drive.command(target, 0.0, low_cap_nm)
+    target += direction * lead_rad
+    hold(drive, target, 0.3, low_cap_nm)
+    flank = drive.position_rad()
+    cap, previous, ticks = low_cap_nm, low_cap_nm, 0
+    left = False
+    while cap < board_cap_nm and not left:
+        dt = drive.tick()
+        previous, cap = cap, cap + rate_nm_s * dt
+        drive.command(target, 0.0, cap)
+        ticks += 1
+        left = direction * (drive.position_rad() - flank) > leave_rad
+    settle(drive, settle_s, low_cap_nm)
+    return {"direction": int(direction), "cap_nm": 0.5 * (cap + previous) if left else math.nan, "left": bool(left), "ticks": ticks,
+            "flank_rad": float(flank)}
+
+
+def _breakaway(job: dict) -> dict:
+    """servo.breakaway_two_sided on one joint, at its rest pose: ``cycles`` breakaways up then down (relative moves only: no frame needed)."""
+    spec, values = job["spec"], job["values"]
+    can, axis = spec["can"], CANS.index(spec["can"])
+    plant = build_plant(values, _rest_cad(), noise=job["noise"], seed=job["seed"])
+    drive = WristDrive(plant, axis)
+    hold(drive, drive.position_rad(), 0.3, spec["low_cap_nm"])
+    keys = ("approach_rad_s", "past_rad", "lead_rad", "rate_nm_s", "leave_rad", "settle_s", "board_cap_nm")
+    pushes = [breakaway(drive, direction, gap_rad=spec["gap_rad"], low_cap_nm=spec["low_cap_nm"], **{k: spec[k] for k in keys})
+              for _ in range(spec["cycles"]) for direction in (+1, -1)]
+    return {"kind": "breakaway", "can": can, "axis": axis, "pushes": pushes, "reason": "complete"}
+
+
+class Breakaway:
+    id = "servo.breakaway_two_sided"
+    identifies = tuple(f"{INSTANCE[c]}.static_friction_nm" for c in MOVING)
+
+    def runs(self, values):
+        out = []
+        for can in MOVING:
+            i = INSTANCE[can]
+            # WHY the low cap at 0.6 of the SLIDING prior, not a fraction of the breakaway (measured 2026-11-11 on the noise-free world): a
+            # quarter of the breakaway prior (44 mN.m) sat above the description's 41 mN.m sliding level, so an output a departure had left
+            # loose slid with the walk and the next push found no flank (CAN 15 at a 0.12 N.m breakaway: one way of three cycles never left);
+            # below the sliding level a walk cannot drag the output, stuck or loose. The gap is step 1's, so the walk crosses it
+            spec = {"kind": "breakaway", "can": can, "gap_rad": float(values[f"{i}.backlash_rad"]),
+                    "low_cap_nm": BREAKAWAY["low_cap_fraction"] * float(values[f"{i}.coulomb_nm"]),
+                    **{k: v for k, v in BREAKAWAY.items() if k != "low_cap_fraction"}}
+            out.append(seam.Run(f"{i}/breakaway", "train", spec))
+        return out
+
+    def fit(self, measured, values, twin):
+        out = {}
+        for rec in measured.values():
+            i = INSTANCE[rec["can"]]
+            ups = [p["cap_nm"] for p in rec["pushes"] if p["direction"] > 0]
+            downs = [p["cap_nm"] for p in rec["pushes"] if p["direction"] < 0]
+            if not all(map(math.isfinite, ups + downs)):
+                raise ValueError(f"CAN {rec['can']}: the output never left under the board's cap one way: no breakaway to read")
+            # each cycle's pair: up = S - load, down = S + load (the load the output carries at the pose, signed up)
+            pairs = np.array([0.5 * (u + d) for u, d in zip(ups, downs)])
+            loads = np.array([0.5 * (d - u) for u, d in zip(ups, downs)])
+            value = float(np.median(pairs))
+            rng = np.random.default_rng(0)
+            boot = [float(np.median(rng.choice(pairs, pairs.size))) for _ in range(200)]
+            lo, hi = np.percentile(boot, (2.5, 97.5))
+            # WHY widened by one tick of the ramp: the output leaves within a tick of breaking away, so no pair resolves finer
+            tick = BREAKAWAY["rate_nm_s"] * PERIOD_S
+            out[f"{i}.static_friction_nm"] = seam.Estimate(value, (float(lo) - tick, float(hi) + tick),
+                                                           f"two-sided breakaway at the rest pose, {pairs.size} cycles: up {np.round(ups, 4).tolist()} N.m, "
+                                                           f"down {np.round(downs, 4).tolist()} N.m (the cap at which the output left the flank); "
+                                                           f"the load there {np.median(loads) * 1e3:+.1f} mN.m; 95 % by a bootstrap over the cycles")
+        return out
 
 
 class Homing:
@@ -581,7 +728,9 @@ class GravityDirection:
     come from the description (the five-bar takes its masses from a vertical ID first); a CoM direction error would bias the azimuth as much."""
     id = "arm.gravity_direction"
     identifies = ("wrist.gravity_azimuth_rad",)
-    adjusts = MASS_KEYS
+    # WHY the armatures too: the masses this routine sets for the twin move its links' inertia, so each armature is set again as the axis
+    # inertia the dynamics identified less the links at these masses (the twin's axis inertia stays the identified one)
+    adjusts = MASS_KEYS + tuple(f"{INSTANCE[c]}.armature_kg_m2" for c in MOVING)
 
     def runs(self, values):
         return []   # no motion of its own: the dynamics routine's gravity sweeps
@@ -603,6 +752,12 @@ class GravityDirection:
                   f"{math.degrees(check_bottom):.2f} deg)")
         out = {"wrist.gravity_azimuth_rad": seam.Estimate(azimuth, None, method)}
         out.update({k: seam.Estimate(v, None, "the CAD masses x the scale CAN 14's load asks") for k, v in _mass_values(scaled).items()})
+        links = _link_inertia(_prior_masses({**values, **_mass_values(scaled)}))
+        for can in MOVING:
+            i = INSTANCE[can]
+            armature = max(float(values[f"{i}.axis_inertia_kg_m2"]) - links[can], ARMATURE_FLOOR_KG_M2)
+            out[f"{i}.armature_kg_m2"] = seam.Estimate(armature, None, f"the dynamics' axis inertia less the links at these masses "
+                                                                         f"({links[can]:.6f} kg.m2)")
         return out
 
 
@@ -624,7 +779,7 @@ class Dynamics:
     # set for the twin, never claimed: the regression's gravity first moments on their visible subspace, and each armature (the axis
     # inertia less the CAD links': the axis inertia is what is identified)
     adjusts = MASS_KEYS + tuple(f"{INSTANCE[c]}.armature_kg_m2" for c in MOVING) + ("wrist.command_delay_s",)
-    identifies = tuple([f"{INSTANCE[c]}.{t}" for c in MOVING for t in DYN_TERMS if t != "armature_kg_m2"]
+    identifies = tuple([f"{INSTANCE[c]}.{t}" for c in MOVING for t in DYN_TERMS if t not in ("armature_kg_m2", "static_friction_nm")]
                        + [f"{INSTANCE[c]}.axis_inertia_kg_m2" for c in MOVING]
                        + [f"{INSTANCE[c]}.gravity_{n}" for c in (14,) for n in ("nm", "bottom_rad")])
 
@@ -649,6 +804,12 @@ class Dynamics:
         current = {**values, **_mass_values(masses)}
         target = _theta(first, {})
         theta = np.maximum(np.nan_to_num(target), 0.0)  # the plain fit is the first guess (refit_rig.indirect_inference)
+        # WHY the breakaway held at servo.breakaway_two_sided's value, out of the inference (measured 2026-11-11, the full run at 1x): refit's
+        # breakaway is the 90th percentile of the torque around motion onsets, and with a gap in the gear an onset is the motor crossing it at
+        # ~0 N.m; the higher the twin's breakaway the more its onsets are crossings, so the statistic stopped rising and the inference walked
+        # CAN 14's to the board's 1.0 N.m cap (truth 0.20) and CAN 15's to 0.46 (0.14), pulling CAN 14's axis inertia 45 % low with it
+        static = [DYN_TERMS.index("static_friction_nm") * len(MOVING) + k for k in range(len(MOVING))]
+        theta[static] = [float(values[f"{INSTANCE[c]}.static_friction_nm"]) for c in MOVING]
         chirps = [n for n in names if "/chirp-" in n]
         lag_world = float(np.mean([command_lag_s(measured[n]) for n in chirps])) if chirps else None
         delay = float(values["wrist.command_delay_s"])
@@ -670,13 +831,17 @@ class Dynamics:
             replays = {n: noisy_like(r, sigmas, rng) for n, r in twin.predict(measured, trial).items()}
             estimate = refit_fit(b, [as_fit_run(replays[n], n) for n in names], masses=prior)
             gap = np.nan_to_num(target - _theta(estimate, {}))
+            gap[static] = 0.0
             lag_gap = 0.0 if lag_world is None else lag_world - float(np.mean([command_lag_s(replays[n]) for n in chirps]))
             history.append([*np.round(gap, 6).tolist(), round(lag_gap, 6)])
             theta = np.maximum(theta + gap, 0.0)
             delay = max(0.0, delay + lag_gap)
-        found = _from_theta(theta)
+        found = {k: v for k, v in _from_theta(theta).items() if not k.endswith(".static_friction_nm")}
         boot = _bootstrap(runs, prior, theta - target, gravity_vector(values), workers=getattr(twin, "workers", 1))
-        links = _link_inertia(prior)   # the CAD links' inertia about each axis at the held pose: what the regression's own model holds
+        # WHY the links at the regression's masses and not the prior's (found 2026-11-11 reading the full run): the inference holds the
+        # TWIN's axis inertia, armature + its links, to the world's, and the twin carries `current`'s masses; adding the prior's links back
+        # put each joint's axis inertia off by the two links' difference (~ -1/6 of the links where the truth is the CAD x 1.2)
+        links = _link_inertia(_prior_masses(current))
         for can in MOVING:
             i = INSTANCE[can]
             found[f"{i}.axis_inertia_kg_m2"] = found[f"{i}.armature_kg_m2"] + links[can]
@@ -895,7 +1060,7 @@ class WristRig:
     model = "it5 twin of record (Karnopp Coulomb, command delay, gravity) + gear backlash: servo M4.dynamics.twin x3, chain M0.dynamics.rigid"
 
     def __init__(self) -> None:
-        self._routines = (BacklashReversal(), Homing(), Dynamics(), GravityDirection(), DelayScan())
+        self._routines = (BacklashReversal(), Breakaway(), Homing(), Dynamics(), GravityDirection(), DelayScan())
 
     def parameters(self):
         return parameter_table()
@@ -978,6 +1143,13 @@ class WristRig:
         run = next(r for r in BacklashReversal().runs(values) if r.spec["can"] == 15)
         rec = play({"kind": "reversal", "spec": run.spec, "values": values, "noise": {}, "seed": None})
         return float(BacklashReversal().fit({run.id: rec}, values, None)["can15.backlash_rad"].value)
+
+    def breakaway_check(self, static_nm: float) -> float:
+        """The breakaway routine's static friction on a noise-free world whose CAN 15 breaks away at ``static_nm`` (its own play and fit)."""
+        values = {**self.nominal_values(), "can15.static_friction_nm": float(static_nm)}
+        run = next(r for r in Breakaway().runs(self.nominal_values()) if r.spec["can"] == 15)
+        rec = play({"kind": "breakaway", "spec": run.spec, "values": values, "noise": {}, "seed": None})
+        return float(Breakaway().fit({run.id: rec}, values, None)["can15.static_friction_nm"].value)
 
     def floor_check(self, noise, *, workers: int = 8, repeats: int = 5) -> dict[str, float]:
         """The sim's own repeat floor per joint (deg): each joint's floor tape (the house schedule's +-10 deg out and back) ``repeats`` times

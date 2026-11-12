@@ -186,8 +186,8 @@
   },
   "can14.backlash_rad": {
    "unit": "rad",
-   "value": 0.0,
-   "source": "the twin of record it5 is rigid (no gap modelled); the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
+   "value": 0.004363323129985824,
+   "source": "SteadyWin GIM4305-10 datasheet, 15 arcmin reducer gear backlash (robotparts parts/aifitlab-8541438771336/part.py backlash_arcmin, from https://www.steadywin.cn/en/h-pd-9.html): the rated value every joint's prior starts from; the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
   },
   "can14.zero_offset_rad": {
    "unit": "rad",
@@ -231,8 +231,8 @@
   },
   "can15.backlash_rad": {
    "unit": "rad",
-   "value": 0.0,
-   "source": "the twin of record it5 is rigid (no gap modelled); the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
+   "value": 0.004363323129985824,
+   "source": "SteadyWin GIM4305-10 datasheet, 15 arcmin reducer gear backlash (robotparts parts/aifitlab-8541438771336/part.py backlash_arcmin, from https://www.steadywin.cn/en/h-pd-9.html): the rated value every joint's prior starts from; the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
   },
   "can15.zero_offset_rad": {
    "unit": "rad",
@@ -276,8 +276,8 @@
   },
   "can16.backlash_rad": {
    "unit": "rad",
-   "value": 0.0,
-   "source": "the twin of record it5 is rigid (no gap modelled); the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
+   "value": 0.004363323129985824,
+   "source": "SteadyWin GIM4305-10 datasheet, 15 arcmin reducer gear backlash (robotparts parts/aifitlab-8541438771336/part.py backlash_arcmin, from https://www.steadywin.cn/en/h-pd-9.html): the rated value every joint's prior starts from; the rack's CAN 14 card measured 12.2 arcmin on the same motor, not this joint"
   },
   "can16.zero_offset_rad": {
    "unit": "rad",

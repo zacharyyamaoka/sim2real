@@ -6699,7 +6699,8 @@
    "note": "small next to the floor on the JMC",
    "routines": [
     "servo.dynamics_regression",
-    "servo.dynamometer"
+    "servo.dynamometer",
+    "servo.breakaway_two_sided"
    ]
   },
   {
@@ -12437,6 +12438,31 @@
    "configures": []
   },
   {
+   "id": "servo.breakaway_two_sided",
+   "title": "Breakaway from a held flank, both ways (the cap ramped until the output leaves)",
+   "package": "servo_dynamic.actuator",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "integrated_servo",
+     "model": "M3.dynamics.stribeck",
+     "parameter": "friction_stribeck_drop_nm"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "servo",
+     "rung": "M3",
+     "parameters": [
+      "friction_stribeck_drop_nm"
+     ]
+    }
+   ],
+   "configures": []
+  },
+  {
    "id": "servo.command_delay_scan",
    "title": "Command delay from twin replays of the train chirps at a grid of delays",
    "package": "servo_dynamic.actuator",
@@ -13563,7 +13589,8 @@
    "friction_weakening_nm_s_rad": [],
    "friction_stribeck_drop_nm": [
     "servo.dynamics_regression",
-    "servo.dynamometer"
+    "servo.dynamometer",
+    "servo.breakaway_two_sided"
    ],
    "friction_capture_nm": [],
    "ripple_harmonics": [],

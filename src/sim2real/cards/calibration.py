@@ -305,7 +305,7 @@ ROUTINES = (
          tests=("servo.full_schedule", "servo.plateaus", "servo.gravity", "servo.chirp"),
          code=(CodeHome(SIM2REAL, "sysid/examples/pendulum_can11/pipeline.py", note="identify()"),), status="implemented",
          oracle=("pendulum_can11:servo.dynamics_regression",),
-         alternatives=("servo.dynamometer", "servo.stock_quasistatic", "servo.live_reid_t10"),
+         alternatives=("servo.dynamometer", "servo.stock_quasistatic", "servo.live_reid_t10", "servo.breakaway_two_sided"),
          references=(refs.SWEVERS_1997, refs.ARMSTRONG_1994, refs.HOLLERBACH_2016)),
     routine("servo.stock_quasistatic", "Servo dynamics, quasi-static: gravity sweeps, plateaus and chirps (bam_rack_twin.identify)",
          "servo_dynamic.actuator",
@@ -436,18 +436,46 @@ ROUTINES = (
          Q(0, "s", "the joint's own motor and encoder; no person or fixture"), (),
          "a slow triangle of the position target at a held pose, under a torque cap below the output's breakaway (40 % of its prior)",
          "both flanks, at one pose per joint", 6,
-         "the output holds by its own static friction while the motor crosses the gear's gap; each half cycle the motor encoder's span between "
-         "the two flank pushes (each saturated at the cap) is the gap plus the gear's give at the cap (2 cap / k, k the stiffness prior), "
-         "two-sided by construction; the median over the spans, 95 % by a bootstrap over them",
-         code=(CodeHome(SIM2REAL, "sysid/examples/ur_wrist_test_rig/rig.py", note="BacklashReversal, reversal_spans"),),
+         "the output holds by its own static friction while the motor crosses the gear's gap under the position loop; the five-bar lane's "
+         "estimator (bam_fb_test_rig.backlash.dead_band) reads the gap off (encoder, torque): the encoder's travel between the last sample "
+         "loaded on one flank and the first on the other (|torque| past 0.7 of the cap), less the mesh's windup at that threshold (the "
+         "stiffness prior); two-sided by construction, the median over the crossings, 95 % by a bootstrap over them",
+         code=(CodeHome(SIM2REAL, "sysid/examples/ur_wrist_test_rig/rig.py", note="BacklashReversal: the drive (a held triangle) and the fit"),
+               CodeHome(BAM_WS, "src/dev/bam_fb_test_rig/bam_fb_test_rig/backlash.py",
+                        note="dead_band: the estimator both rigs share (claude/fivebar-test-rig-model @ b6f8bfce3 until it lands on main)")),
          status="implemented",
          oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
                      "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
          alternatives=("servo.backlash_reversals_camera", "servo.backlash_clamp"),
          note="needs an output that holds under the cap: a joint whose gravity load beats its breakaway less the cap slips, and the routine "
-              "then reads the slip as gap (the cap is the operator's to lower); the homing lane's generic two-sided measurement is to replace it "
-              "when it lands",
+              "then reads the slip as gap (the cap is the operator's to lower). WHY not the five-bar lane's torque probe "
+              "(bam_fb_test_rig.backlash.measure, measured 2026-11-11 on the wrist's world): it lets the rotor cross the gap free under a "
+              "torque ramp, and on a light output (~0.2 N.m breakaway) the far flank's impact breaks it loose and the probe drags it; the "
+              "five-bar's outputs hold 0.74 N.m",
          references=(refs.NORDIN_2002,)),
+    # 2026-11-11 (the one-click lane, the wrist's first full run at 1x): refit's onset percentile walked CAN 14's breakaway to the board's cap
+    # once the gear had a gap (its onsets became gap crossings at ~0 N.m), so the breakaway is measured where it happens
+    routine("servo.breakaway_two_sided", "Breakaway from a held flank, both ways (the cap ramped until the output leaves)",
+         "servo_dynamic.actuator",
+         (I("servo", "M3", "friction_stribeck_drop_nm"),), "both",
+         Q(3 * 2 * 6.0, "s", "3 cycles both ways per moving joint, each a ~1 deg walk at 0.5 deg/s and a 0.05 N.m/s cap ramp to the "
+                              "breakaway (sysid/examples/ur_wrist_test_rig/rig.py BREAKAWAY): estimate"),
+         Q(0, "s", "the joint's own motor and encoder; no person or fixture"), (),
+         "the position target walks across the gap under a low cap (a quarter of the breakaway prior) until it leads by 5 deg, then the "
+         "command's torque cap ramps until the encoder leaves the flank by 0.05 deg",
+         "both flanks, at one pose per joint", 6,
+         "the cap at which the output left, each way: up = S - load, down = S + load at the pose, so the breakaway S is the pair's mean and "
+         "the load half their difference; the median over the cycles, 95 % by a bootstrap over them widened by one tick of the ramp. "
+         "WHY a cap and not a torque command: under the position loop the motor reaches the flank at the walk's speed, where a free "
+         "rotor's impact would break a light output loose early",
+         code=(CodeHome(SIM2REAL, "sysid/examples/ur_wrist_test_rig/rig.py", note="Breakaway, breakaway (any ProbeDrive: the five calls a board answers)"),),
+         status="implemented",
+         oracle_note="graded on the one-click seam against the UR wrist's sealed truth (tests/test_ur_wrist_one_click.py, sim2real.rig), not "
+                     "in sysid's noise ladder: the ladder runs the five-function pipelines, not rigs on the seam",
+         alternatives=("servo.dynamics_regression",),
+         note="needs an output whose load at the pose is inside its breakaway (it holds at rest); written against the five-bar lane's "
+              "ProbeDrive (bam_fb_test_rig.backlash), so it can live beside measure once that lands",
+         references=(refs.ARMSTRONG_1994,)),
     routine("servo.command_delay_scan", "Command delay from twin replays of the train chirps at a grid of delays", "servo_dynamic.actuator",
          (I("servo", "M4", "command_delay_s"),), "both",
          Q(2 * 16.0, "s", "no motion of its own: the dynamics routine's train chirps, 16 s per moving joint (the coverage plans' can*_07_chirp)"),

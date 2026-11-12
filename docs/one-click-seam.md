@@ -87,5 +87,21 @@ seeded by `(seed, crc32(stream), crc32(run id))`, so the same call draws the sam
 
 `sysid/examples/<fivebar>/{description.json, world.json, rig.py}`: its parameters (each joint a servo, the chain's closure), its 1x noise
 from its real runs, its sequence (homing, backlash, mass ID, dynamics, delay: each a registered routine, registered additively in
-`src/sim2real/cards/calibration.py` if new), `measure` / `predict` on its own plant (bam_fivebar.plant), and `score`. Nothing in
-`sim2real.rig` changes; if it must, change `tests/test_one_click_seam.py` first and say why.
+`src/sim2real/cards/calibration.py` if new), `measure` / `predict` on its own plant, and `score`. Nothing in `sim2real.rig` changes; if it
+must, change `tests/test_one_click_seam.py` first and say why.
+
+The parts already built for it (the mount lane, bam_ws `claude/fivebar-test-rig-model` @ b6f8bfce3, not yet on main), and where each goes:
+
+| Seam slot | The five-bar's part | Note |
+|---|---|---|
+| `RigBackend.measure` / `predict` (the plant) | `rig = bench_rig(load_bundle()); CadPlant(rig.bundle, rest_poses(rig)["bowl"], rig=rig)` (`bam_fb_test_rig.rig`, `.homing`) | the real RACK_MOUNT; the CAD is ~1.12x too light, which mass ID must recover |
+| world.json's hidden backlash | `bam_fb_test_rig.backlash.hidden_specs()` (J1 3.5', J2 2.5', C1 4.0' around the AD064's 3') | the same gear_backlash `BacklashModel` double joint the wrist's world uses |
+| a backlash routine | `bam_fb_test_rig.backlash.measure(SimDrive(...), mesh_stiffness_nm_per_rad=...)` after `find_balance(drive)`; `dead_band(position, torque)` reads the trace | recovers 2.501' / 4.000' / 3.501'; measured where the load crosses zero, not at the gravity-loaded stops |
+| a breakaway routine | `sysid/examples/ur_wrist_test_rig/rig.py` `breakaway(drive, direction, ...)`: any `ProbeDrive` | written against the same five calls, so it runs on `SimDrive` unchanged |
+
+What the wrist learned that the five-bar should know (measured 2026-11-11 on the wrist's world at 1x): `measure`'s torque probe does not
+transfer to a light output. It lets the rotor cross the gap as a free mass, and the far flank's impact breaks a ~0.2 N.m output loose; the
+probe's torque, above the output's ~0.05 N.m sliding level, then drags it 2 deg ("not observable here: the link left" on all three joints).
+The wrist therefore drives its reversal under the position loop (the motor crosses at the target's 0.5 deg/s) and reads the trace with the
+same `dead_band`; its breakaway ramps the command's torque cap with the target 5 deg ahead, for the same reason. On the five-bar's 0.74 N.m
+outputs the probe works as built.
