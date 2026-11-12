@@ -4205,7 +4205,8 @@
    },
    "alternatives": [
     "hand_eye.ax_xb",
-    "camera.intrinsics_charuco"
+    "camera.intrinsics_charuco",
+    "aruco.bundle_adjustment"
    ],
    "references": [
     "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence.",
@@ -5887,7 +5888,8 @@
    },
    "recovery": {},
    "alternatives": [
-    "camera.exposure_lock"
+    "camera.exposure_lock",
+    "camera.exposure_for_aruco"
    ],
    "references": [],
    "note": ""
@@ -6759,6 +6761,350 @@
    "recovery": {},
    "alternatives": [],
    "references": [],
+   "note": ""
+  },
+  {
+   "routine": "aruco.id_confirm",
+   "title": "ArUco ID confirmation: every expected id read, no duplicate, no stranger, the dictionary actually printed",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 10.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "one view of each sticker; detection takes milliseconds"
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "unattended, the stickers in view"
+   },
+   "equipment": [],
+   "equipment_cost": {
+    "value": 0.0,
+    "unit": "USD",
+    "source": "nothing beyond the robot's own sensors",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "aruco_marker",
+     "rung": "M0",
+     "parameters": [
+      "dictionary",
+      "marker_ids"
+     ]
+    }
+   ],
+   "parameters_covered": 2,
+   "excitation": "one still view of every sticker in the cell camera",
+   "coverage": "every sticker the robot carries, each in view once",
+   "repeats": 3,
+   "how": "detect every marker of the expected dictionary (OpenCV ArucoDetector) in each view; flag expected ids never read, ids read twice in one view (two stickers printed with one id) and ids nobody expects; when ids are missing, try every predefined dictionary and name the one that decodes more markers (a sheet printed in DICT_5X5_50 reads as nothing in DICT_4X4_50)",
+   "tests": [
+    "aruco_marker.id_check",
+    "aruco_marker.id_in_service"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/aruco.py",
+     "ref": "",
+     "note": "confirm_ids"
+    },
+    {
+     "repo": "/home/bam/aruco-studio",
+     "path": "aruco_studio/verify/sheet_check.py",
+     "ref": "",
+     "note": "aruco-studio's printed-sheet check: ids and the 100 mm ruler bar on a scan of the sheet"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example films stickers; the hidden-truth test is tests/test_aruco_marker.py (OpenCV-rendered tags with noise: a duplicate, a stranger and two missing ids flagged exactly, a DICT_5X5_50 sheet named as such); ladder routine_ladders/aruco.id_confirm.json"
+   },
+   "recovery": {},
+   "alternatives": [],
+   "references": [
+    "Garrido-Jurado, Mu\u00f1oz-Salinas, Madrid-Cuevas, Mar\u00edn-Jim\u00e9nez (2014). Automatic generation and detection of highly reliable fiducial markers under occlusion. Pattern Recognition 47(6):2280-2292."
+   ],
+   "note": ""
+  },
+  {
+   "routine": "aruco.caliper_size",
+   "title": "ArUco print size by caliper: the 100 mm ruler bar (or a marker side) against its spec",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "five readings per sticker"
+   },
+   "operator_time": {
+    "value": 120.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "an operator with the caliper"
+   },
+   "equipment": [
+    {
+     "id": "caliper",
+     "title": "A 150 mm digital caliper reading 0.01 mm",
+     "cost": {
+      "value": 30.0,
+      "unit": "USD",
+      "source": "estimate",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 30.0,
+    "unit": "USD",
+    "source": "estimate (caliper)",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "aruco_marker",
+     "rung": "M2",
+     "parameters": [
+      "print_scale"
+     ]
+    }
+   ],
+   "parameters_covered": 1,
+   "excitation": "an operator closes the caliper on the sheet's 100 mm ruler bar (or a marker's black square) five times",
+   "coverage": "one length per sticker, read n times",
+   "repeats": 5,
+   "how": "print scale = mean reading / nominal length with a Student-t 95 % interval whose spread never falls below one caliper count; in or out of a 0.5 % print tolerance (out: reprint the sticker or carry its scale into the twin)",
+   "tests": [
+    "aruco_marker.caliper"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/aruco.py",
+     "ref": "",
+     "note": "caliper_scale"
+    },
+    {
+     "repo": "/home/bam/aruco-studio",
+     "path": "aruco_studio/verify/sheet_check.py",
+     "ref": "",
+     "note": "the sheet's 100 mm ruler bar it is read on"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example; the hidden-truth test is tests/test_aruco_marker.py (true scale 0.98493, the five-bar's L2 strip; five readings at 0.03 mm operator sigma; recovered within 0.05 %); ladder routine_ladders/aruco.caliper_size.json"
+   },
+   "recovery": {},
+   "alternatives": [
+    "aruco.bundle_adjustment"
+   ],
+   "references": [
+    "Strobl, Hirzinger (2011). More accurate pinhole camera calibration with imperfect planar target. IEEE International Conference on Computer Vision Workshops.",
+    "BAM (2026). bam_rack_twin fivebar_asbuilt.py: the five-bar strips' as-built 6-DOF and print scale by bundle adjustment (bam_ws src/dev/bam_rack_twin)."
+   ],
+   "note": ""
+  },
+  {
+   "routine": "aruco.bundle_adjustment",
+   "title": "ArUco bundle adjustment: camera, as-built sticker poses, print scales and joint zeros against the encoders",
+   "package": "hand_eye",
+   "kind": "identify",
+   "setting": "deployed",
+   "status": "implemented",
+   "wall_time": {
+    "value": 600.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "30 joint poses that show every sticker, like the five-bar's strips run"
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "unattended once the stickers are on"
+   },
+   "equipment": [
+    {
+     "id": "camera_tags",
+     "title": "A calibrated camera and printed ArUco / AprilTags (on the output, a flange, a gripper or the belt)",
+     "cost": {
+      "value": 325.0,
+      "unit": "USD",
+      "source": "camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 325.0,
+    "unit": "USD",
+    "source": "camera_tags: camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+    "note": ""
+   },
+   "identifies": [
+    {
+     "card": "aruco_marker",
+     "rung": "M1",
+     "parameters": [
+      "as_built_offset"
+     ]
+    },
+    {
+     "card": "aruco_marker",
+     "rung": "M2",
+     "parameters": [
+      "print_scale"
+     ]
+    },
+    {
+     "card": "camera_rgb",
+     "rung": "M0",
+     "parameters": [
+      "extrinsics"
+     ]
+    }
+   ],
+   "parameters_covered": 3,
+   "excitation": "joint poses that carry each moving sticker through a wide arc (the test's strip turns 100 deg over 30 views) while the fixed stickers stay in view",
+   "coverage": "every sticker in view in many poses; a moving sticker over a wide joint arc",
+   "repeats": 1,
+   "how": "Levenberg-Marquardt (fit/least_squares.py) on every corner's reprojection through the forward kinematics, robust soft-L1 at 1 px: the camera's pose, each free sticker's 6-DOF as-built correction and print scale, the joints' zeros; one gauge sticker held exactly at CAD with scale 1.0; CAD pose and joint-zero priors, the caliper's scale where it ran (else a weak 2 % prior); says which scales the views alone could not see (a static sticker's scale trades with its depth from one fixed camera)",
+   "tests": [
+    "aruco_marker.bundle",
+    "camera_rgb.tag_poses"
+   ],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/fit/aruco.py",
+     "ref": "",
+     "note": "bundle_adjust"
+    },
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/dev/bam_rack_twin/bam_rack_twin/calib.py",
+     "ref": "",
+     "note": "the rack's: camera and joints against the CAD by bundle adjustment over ArUco corners"
+    },
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/dev/bam_rack_twin/bam_rack_twin/asbuilt.py",
+     "ref": "",
+     "note": "the rack's as-built sticker poses"
+    },
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/dev/bam_rack_twin/bam_rack_twin/fivebar_asbuilt.py",
+     "ref": "",
+     "note": "the five-bar strips: 6-DOF in the sticker frame plus a print scale"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid example; the hidden-truth test is tests/test_aruco_marker.py (one fixed camera, a gauge plate, a free plate and a strip turning +-50 deg; corners within 2 mm, camera within 1.5 mm and 0.2 deg, print scale within 0.2 %); ladder routine_ladders/aruco.bundle_adjustment.json"
+   },
+   "recovery": {},
+   "alternatives": [
+    "cell.tags_bundle_adjustment",
+    "aruco.caliper_size"
+   ],
+   "references": [
+    "Triggs, McLauchlan, Hartley, Fitzgibbon (2000). Bundle adjustment: a modern synthesis. Vision Algorithms: Theory and Practice, LNCS 1883, Springer.",
+    "BAM (2026). bam_rack_twin fivebar_asbuilt.py: the five-bar strips' as-built 6-DOF and print scale by bundle adjustment (bam_ws src/dev/bam_rack_twin).",
+    "Zhang (2000). A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence."
+   ],
+   "note": "it also fits the joints' zeros, but claims none: grading is on the corners, because a sticker turned about its joint's axis and that joint's zero project the same from one fixed camera"
+  },
+  {
+   "routine": "camera.exposure_for_aruco",
+   "title": "Exposure, gain and frame rate tuned for ArUco corner accuracy (not mean grey, not markers read)",
+   "package": "camera.rgb",
+   "kind": "tune",
+   "setting": "both",
+   "status": "implemented",
+   "wall_time": {
+    "value": 90.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "54 exposure x gain x frame-rate settings of 5 frames each, settling between"
+   },
+   "operator_time": {
+    "value": 0.0,
+    "unit": "s",
+    "source": "estimate",
+    "note": "unattended, a known board in view"
+   },
+   "equipment": [
+    {
+     "id": "camera_tags",
+     "title": "A calibrated camera and printed ArUco / AprilTags (on the output, a flange, a gripper or the belt)",
+     "cost": {
+      "value": 325.0,
+      "unit": "USD",
+      "source": "camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+      "note": ""
+     }
+    }
+   ],
+   "equipment_cost": {
+    "value": 325.0,
+    "unit": "USD",
+    "source": "camera_tags: camera-atlas data/cameras.json realsense-d405: USD 325, the RealSense store, accessed 2026-10-18 (/home/bam/camera-atlas); printed tags cost next to nothing",
+    "note": ""
+   },
+   "identifies": [],
+   "parameters_covered": 0,
+   "excitation": "an exposure x gain x frame-rate grid (exposure up to one frame period), a known board of markers in view",
+   "coverage": "exposures from 2 ms to 133 ms, gains 1 to 16, 6 to 30 fps",
+   "repeats": 5,
+   "how": "per setting: the board's PnP reprojection RMS (the corners' noise), 5 px for each marker not read, and the blur length (the board's image speed measured at the fastest rate x the exposure); the first two pooled over the frame rates of one exposure and gain; the lowest score wins, near-ties to the higher frame rate (in the dark the rate drops to 6 fps for a 133 ms exposure)",
+   "tests": [],
+   "code": [
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/schedule/aruco_exposure.py",
+     "ref": "",
+     "note": "tune"
+    },
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/core/mdp/setup/bam_camera_calibration/src/bam_camera_calibration/task.py",
+     "ref": "",
+     "note": "the house rule it replaces for accuracy: aruco_score, markers read"
+    },
+    {
+     "repo": "/home/bam/bam_ws",
+     "path": "src/dev/bam_rack_twin/bam_rack_twin/hardware/d435_exposure.py",
+     "ref": "",
+     "note": "the rack's mean-grey exposure band and the 6 fps still look (D435_STILL_LOOK)"
+    }
+   ],
+   "oracle": {
+    "status": "not checked",
+    "checks": [],
+    "note": "no sysid check: tuning recovers no hidden value; tests/test_aruco_marker.py renders the board with shot and read noise and motion blur and scores every candidate by its true corner error (picks within 1.15x + 0.02 px static, 1.30x + 0.05 px moving); ladder routine_ladders/camera.exposure_for_aruco.json"
+   },
+   "recovery": {},
+   "alternatives": [
+    "camera.exposure_for_task"
+   ],
+   "references": [
+    "Garrido-Jurado, Mu\u00f1oz-Salinas, Madrid-Cuevas, Mar\u00edn-Jim\u00e9nez (2014). Automatic generation and detection of highly reliable fiducial markers under occlusion. Pattern Recognition 47(6):2280-2292."
+   ],
    "note": ""
   }
  ],
@@ -17726,7 +18072,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -17837,7 +18184,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -17948,7 +18296,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -18059,7 +18408,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -18170,7 +18520,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -18281,7 +18632,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:cell.tags_bundle_adjustment"
@@ -18828,7 +19180,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -18912,7 +19265,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -18996,7 +19350,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -19080,7 +19435,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -19164,7 +19520,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -19248,7 +19605,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "dual_arm_cell:camera.pose_recal_belt_tags"
@@ -23840,7 +24198,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -23951,7 +24310,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -24062,7 +24422,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -24173,7 +24534,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -24284,7 +24646,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -24395,7 +24758,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "checks": [
     "linescan_cell:rgbd.dot_card"
@@ -25149,7 +25513,8 @@
     "hand_eye.ax_xb",
     "camera.pose_recal_belt_tags",
     "rgbd.dot_card",
-    "conveyor_belt.camera_to_camera"
+    "conveyor_belt.camera_to_camera",
+    "aruco.bundle_adjustment"
    ],
    "distortion": [
     "camera.intrinsics_charuco"
@@ -25208,6 +25573,25 @@
    "latency_s": [],
    "eccentricity_harmonics": [],
    "eccentricity_growth_mrad_per_sqrt_h": []
+  },
+  "aruco_marker": {
+   "dictionary": [
+    "aruco.id_confirm"
+   ],
+   "marker_ids": [
+    "aruco.id_confirm"
+   ],
+   "marker_length_m": [],
+   "layout_m": [],
+   "pose_on_link": [],
+   "as_built_offset": [
+    "aruco.bundle_adjustment"
+   ],
+   "print_scale": [
+    "aruco.caliper_size",
+    "aruco.bundle_adjustment"
+   ],
+   "flatness_m": []
   }
  }
 }

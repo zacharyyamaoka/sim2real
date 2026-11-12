@@ -22,6 +22,7 @@ from sim2real.metrics.gate import rule_of
 
 from . import references as R
 from . import servo_gates
+from .calibration import FIVEBAR_ASBUILT, GARRIDO_2014, STROBL_2011, TRIGGS_2000
 from .schema import DRIFT_MESSAGE, DRIFT_THRESHOLD, Architecture, CoverageNeed, Diagnostic, Forecast, Gate, Limit, Rung, TestType, Wear
 
 LEARNED_PCT = 95.0       # % of reachable cells a learned rung's train split must fill
@@ -593,8 +594,53 @@ def conveyor(reg, card):
     return (m0, m2, m3, m4, m4w, res, net), diagnostics, gates, tests
 
 
+# --- ArUco marker (a target: PEP 0001, Zach 2026-11-11) -------------------------------------------------------------------------------
+# its references live beside its routines (cards/calibration.py: GARRIDO_2014, TRIGGS_2000, STROBL_2011, FIVEBAR_ASBUILT)
+
+
+def aruco_marker(reg, card):
+    m = card.model.parameters
+    m0 = phys(card, "M0", "Nominal from CAD: the sheet as designed, where CAD put it",
+              pick(m, "dictionary", "marker_ids", "marker_length_m", "layout_m", "pose_on_link"), (GARRIDO_2014, R.ZHANG_2000),
+              "X_corner = FK(q) · pose_on_link · layout_corner", implemented="cad2robot bundle + aruco-studio sheet record")
+    m1 = phys(card, "M1", "+ as-built offset: how the sticker was actually stuck down", grow(m0, *pick(m, "as_built_offset")), (TRIGGS_2000, FIVEBAR_ASBUILT),
+              "X_corner = FK(q) · pose_on_link · as_built_offset · layout_corner", implemented="sim2real fit/aruco.py bundle_adjust")
+    m2 = phys(card, "M2", "+ print scale (today's model)", m, (STROBL_2011, FIVEBAR_ASBUILT), card.model.equation, current=True,
+              implemented="sim2real fit/aruco.py bundle_adjust + caliper_scale; bam_rack_twin fivebar_asbuilt.py")
+    m3 = phys(card, "M3", "+ curl: a sticker that is not flat", grow(m2, P(reg, "flatness_m", "m", None, "unknown (a printed sticker lifting at its "
+                                                                      "ends or a plate's bow)", "a straight edge and feeler gauge, or a depth "
+                                                                      "camera's plane fit across the sticker", "partial",
+                                                                      "the sheet's out-of-plane bow at its far end")),
+              (STROBL_2011,), "layout_corner z = flatness · (2 x / L)^2 (a bow across the sheet's length L)")
+    diagnostics = (dx("aruco.reprojection", "<=", 2.0, "× floor"),
+                   dx("aruco.corner_position", "<=", 2.0, "mm", "Zach's manual-diagnosis line: past 2 mm / 2° a sticker is checked by hand"),
+                   dx("aruco.ids_read", ">=", 100.0, "%", "every expected id, every view it is in"),
+                   drift("aruco_marker", "aruco.reprojection", note="a sticker knocked or peeling moves its corners off where the bundle put them"))
+    gates = (gate("aruco.reprojection", "<=", 1.5, "× floor"), gate("aruco.corner_position", "<=", 2.0, "mm"))
+    tests = (
+        T("aruco_marker", "cad_read", "Nominal read from CAD", "bench", ("dictionary", "marker_ids", "marker_length_m", "layout_m", "pose_on_link"),
+          "each sticker's link, pose and layout from the CAD bundle; its dictionary and ids from the sheet's generator record",
+          exists="cad2robot bundle; aruco-studio sheet record"),
+        T("aruco_marker", "id_check", "ID confirmation", "bench", ("dictionary", "marker_ids"),
+          "one view of every sticker: each expected id read once, no duplicate, no stranger, the dictionary that actually decodes",
+          exists="sim2real fit/aruco.py confirm_ids; aruco-studio verify/sheet_check.py"),
+        T("aruco_marker", "caliper", "Caliper on the ruler bar", "bench", ("print_scale", "marker_length_m"),
+          "an operator calipers the sheet's 100 mm ruler bar (or a marker side) five times", ("a digital caliper",), recalibration=True,
+          exists="sim2real fit/aruco.py caliper_scale"),
+        T("aruco_marker", "flatness", "Flatness across the sticker", "bench", ("flatness_m",), "a straight edge and feeler gauge, or a depth "
+          "camera's plane fit across the sticker", exists="proposed"),
+        T("aruco_marker", "bundle", "Bundle adjustment in the cell", "deployed", ("as_built_offset", "print_scale", "pose_on_link"),
+          "arm poses that show every sticker to the fixed camera, the joints read by their encoders", ("the cell camera",), recalibration=True,
+          exists="sim2real fit/aruco.py bundle_adjust; bam_rack_twin calib.py / fivebar_asbuilt.py"),
+        T("aruco_marker", "id_in_service", "IDs in service", "deployed", ("marker_ids",), "every frame the cell already takes: an expected id that "
+          "stops reading, or a stranger, is flagged", exists="sim2real fit/aruco.py confirm_ids on live frames (proposed wiring)"),
+    )
+    return (m0, m1, m2, m3), diagnostics, gates, tests
+
+
 LADDERS = {"servo": servo, "motor": motor, "gearbox": gearbox, "driver": driver, "encoder": encoder, "arm_subassembly": arm_sub, "arm_6dof": arm,
-           "arm_6dof_gripper": arm_gripper, "camera_rgb": camera_rgb, "camera_rgbd": camera_rgbd, "camera_hsi": camera_hsi, "conveyor": conveyor}
+           "arm_6dof_gripper": arm_gripper, "camera_rgb": camera_rgb, "camera_rgbd": camera_rgbd, "camera_hsi": camera_hsi, "conveyor": conveyor,
+           "aruco_marker": aruco_marker}
 GATE_PCT = servo_gates.MINIMUM_COVERAGE_PCT  # the schedule's coverage gate: visiting a cell once is what a schedule can promise before it runs
 
 

@@ -1,0 +1,33 @@
+{
+ "generated_by": "tests/test_aruco_marker.py",
+ "levels": {
+  "0x": {
+   "flags_wrong": 0,
+   "pass": true,
+   "worst_error_over_tolerance": 0.0
+  },
+  "10x": {
+   "flags_wrong": 0,
+   "pass": true,
+   "worst_error_over_tolerance": 0.0
+  },
+  "1x": {
+   "flags_wrong": 0,
+   "pass": true,
+   "worst_error_over_tolerance": 0.0
+  },
+  "3x": {
+   "flags_wrong": 0,
+   "pass": true,
+   "worst_error_over_tolerance": 0.0
+  }
+ },
+ "routine": "aruco.id_confirm",
+ "schema": "sim2real.routine_ladder/1",
+ "tolerance": {
+  "flags": {
+   "kind": "abs",
+   "value": 0
+  }
+ }
+}

@@ -41,7 +41,8 @@ def robotdx():
 
 def test_the_ten_cards_of_zachs_list_exist():
     assert CARD_IDS <= set(reg.CARDS), sorted(CARD_IDS - set(reg.CARDS))
-    assert {c.group for c in reg.CARDS.values()} == {"actuator", "sensor"}
+    # WHY "target" (PEP 0001 §8, Zach 2026-11-11): the ArUco marker card is neither driven nor sensing; a sensor reads it
+    assert {c.group for c in reg.CARDS.values()} == {"actuator", "sensor", "target"}
     assert list(reg.CARDS) == list(reg.ORDER)
 
 

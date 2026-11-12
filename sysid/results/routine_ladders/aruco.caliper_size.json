@@ -1,0 +1,53 @@
+{
+ "generated_by": "tests/test_aruco_marker.py",
+ "levels": {
+  "0x": {
+   "pass": true,
+   "recovered": {
+    "print_scale": 0.9848999999999999
+   },
+   "true": {
+    "print_scale": 0.98493
+   },
+   "worst_error_over_tolerance": 0.06000000000017103
+  },
+  "10x": {
+   "pass": false,
+   "recovered": {
+    "print_scale": 0.98566
+   },
+   "true": {
+    "print_scale": 0.98493
+   },
+   "worst_error_over_tolerance": 1.4600000000000168
+  },
+  "1x": {
+   "pass": true,
+   "recovered": {
+    "print_scale": 0.98502
+   },
+   "true": {
+    "print_scale": 0.98493
+   },
+   "worst_error_over_tolerance": 0.180000000000069
+  },
+  "3x": {
+   "pass": true,
+   "recovered": {
+    "print_scale": 0.98514
+   },
+   "true": {
+    "print_scale": 0.98493
+   },
+   "worst_error_over_tolerance": 0.42000000000008697
+  }
+ },
+ "routine": "aruco.caliper_size",
+ "schema": "sim2real.routine_ladder/1",
+ "tolerance": {
+  "print_scale": {
+   "kind": "abs",
+   "value": 0.0005
+  }
+ }
+}

@@ -348,7 +348,7 @@ class PhysicalDeployment:
 # --- the migration from the v2 cards --------------------------------------------------------------------------------------------------
 
 TYPE_ORDER = ("rigid_body_chain", "integrated_servo", "bldc_motor", "gearbox", "foc_controller", "encoder", "gripper", "conveyor", "camera",
-              "depth_camera", "hyperspectral_camera")
+              "depth_camera", "hyperspectral_camera", "aruco_marker")
 META = {  # title, Zach's word, what it covers, its v2 cards (the primary first), its families
     "rigid_body_chain": ("Rigid Body Chain", "Rigid Body Chain (ie Robot Arm)", "any chain of rigid links and joints, open or closed: a "
                          "6-DOF arm, a wrist, a five-bar shoulder", ("arm_6dof", "arm_subassembly"), ("kinematics", "dynamics")),
@@ -365,6 +365,9 @@ META = {  # title, Zach's word, what it covers, its v2 cards (the primary first)
     "depth_camera": ("Depth Camera", "Camera (RGBD)", "a stereo depth camera: depth on top of a colour stream", ("camera_rgbd",), ("measurement",)),
     "hyperspectral_camera": ("Hyperspectral Camera", "Camera (hyperspectral)", "a line-scan spectral camera over a belt", ("camera_hsi",),
                              ("measurement",)),
+    # WHY kinematics (PEP 0001, Zach 2026-11-11): a sticker's model is where its corners are on its link; a camera reads it
+    "aruco_marker": ("ArUco Marker", "ArUco Marker", "one printed sticker carrying one or more ArUco markers rigidly, its layout from CAD (a "
+                     "five-bar strip, a plate, a single tag)", ("aruco_marker",), ("kinematics",)),
 }
 CARD_TYPE = {card: tid for tid, meta in META.items() for card in meta[3]}
 
@@ -379,6 +382,7 @@ SINGLE = {
     "camera_rgb": {"M0": "pinhole", "M1": "distortion", "M2": "exposure_latency", "M3": "rolling_shutter", "M3.wear": "wear", "M6": "residual"},
     "camera_rgbd": {"M0": "stereo", "M1": "disparity_noise", "M2": "depth_bias", "M2.wear": "wear", "M6": "residual"},
     "camera_hsi": {"M0": "bands", "M1": "band_widths", "M2": "smile_keystone", "M3": "pushbroom", "M3.wear": "wear"},
+    "aruco_marker": {"M0": "nominal", "M1": "as_built", "M2": "print_scale", "M3": "curl"},
 }
 
 # v2 parameter names that change; every other keeps its name on its type
@@ -492,6 +496,7 @@ PINNED = {
     "rigid_body_chain": ("arm.tool_error_at_stop", "arm.sim_vs_real"), "gripper": ("pick.sppm", "pick.grasp_pose_error", "pick.twin_grasp_fidelity"),
     "conveyor": ("conveyor.object_position", "conveyor.twin_fidelity"), "camera": ("camera.tag_detect", "camera.intrinsics", "camera.sim_overlay"),
     "depth_camera": ("depth.z_accuracy", "depth.cloud_vs_sim"), "hyperspectral_camera": ("hsi.spectral_angle", "hsi.twin_cube"),
+    "aruco_marker": ("aruco.corner_position", "aruco.reprojection"),
 }
 # WHY these (Zach: "the most important ones we kinda pin to the top they are the ones we quickly want to look at"): the type's headline
 # performance metric (what the robot's job needs: tracking and a stop, the tool at rest, a pick, an object's place, seeing a tag) and its
@@ -851,10 +856,34 @@ def fitted_model(routine_id: str, type_id: str, family: str) -> str | None:
     return next(m.id for m in entity_type(type_id).models if m.family == family and m.kind == "physics" and want <= set(m.parameters))
 
 
-def routines_identifying(type_id: str, name: str) -> tuple:
-    """Parameter -> routines: every v2 CalibrationRoutine that identifies the type's parameter (reg.ROUTINES order)."""
+class RoutineId(str):
+    """A routine's id that also answers as its CalibrationRoutine: `str(r)`, `r == "aruco.caliper_size"`, a set of ids and an f-string
+    read the id; `r.id`, `r.kind`, `r.setting` and every other field read the catalog's routine.
+
+    WHY both (PEP 0001): the docs site and the planner treat a parameter's routines as ids (links, sets of ids), while the v2/v3 callers
+    read their fields (`r.id`); one value serves both without a second query or a fork of the catalog."""
+
+    __slots__ = ()
+
+    @property
+    def id(self) -> str:
+        return str.__str__(self)
+
+    @property
+    def routine(self):
+        return reg.routine(self.id)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return getattr(reg.routine(str.__str__(self)), name)
+
+
+def routines_identifying(type_id: str, name: str) -> tuple[RoutineId, ...]:
+    """Parameter -> routines: every v2 CalibrationRoutine that identifies the type's parameter (reg.ROUTINES order), each as a RoutineId
+    (an id string that also reads as the routine)."""
     parameter(type_id, name)
-    return tuple(r for r in reg.ROUTINES if any(t == type_id and n == name for t, _m, n in routine_parameters(r.id)))
+    return tuple(RoutineId(r.id) for r in reg.ROUTINES if any(t == type_id and n == name for t, _m, n in routine_parameters(r.id)))
 
 
 def parameter_routines() -> dict[str, dict[str, list[str]]]:
