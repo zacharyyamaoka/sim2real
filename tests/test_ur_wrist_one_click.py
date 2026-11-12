@@ -117,8 +117,10 @@ def test_every_hidden_value_is_a_row_identified_or_said_why_not(twin):
             assert p.tolerance is not None and p.tolerance_source, f"{key}: an identified parameter has a tolerance and its source"
     # every joint is driven: each servo's own terms are identified
     for can in MOVING:
-        for name in ("armature_kg_m2", "coulomb_nm", "static_friction_nm", "damping_nm_s_rad", "backlash_rad", "zero_offset_rad"):
+        for name in ("axis_inertia_kg_m2", "coulomb_nm", "static_friction_nm", "damping_nm_s_rad", "backlash_rad", "zero_offset_rad"):
             assert params[f"{can}.{name}"].routine is not None, f"{can}.{name}"
+        # only the axis inertia is seen: the armature apart from the links it turns is not (the CAD links are a prior the masses move)
+        assert params[f"{can}.armature_kg_m2"].routine is None and "axis inertia" in params[f"{can}.armature_kg_m2"].why_not
     assert params["wrist.command_delay_s"].routine == "servo.command_delay_scan"
     # on its side, CAN 14 carries the wrist's gravity and 15 / 16 next to none: only CAN 14's is identified, the others say why
     assert params["can14.gravity_nm"].routine == "servo.dynamics_regression"
@@ -168,7 +170,9 @@ def test_the_noise_model_at_one_is_the_real_wrists(twin):
     assert terms["encoder_quantum_rad"] == pytest.approx(2 * math.pi / 65536, rel=1e-6)
     # the real host loop: median 10.57 ms, mean 10.71 ms over the same runs; overrun = the mean past the plan's 10 ms tick
     assert terms["period_overrun_s"] == pytest.approx(0.71e-3, rel=0.1)
-    assert terms["torque_noise_nm"] > 0.0 and terms["latency_jitter_s"] > 0.0
+    assert terms["torque_noise_nm"] > 0.0
+    # the unmeasured terms are set by the floor anchor (test_the_sims_repeat_floor_at_one_is_the_real_floor), and say so
+    assert "anchor" in noise.sources["latency_jitter_s"] and "anchor" in noise.sources["torque_disturbance_nm"]
     for term in seam.NoiseModel.TERMS:
         assert noise.sources.get(term), f"{term} says where its 1x value comes from"
 

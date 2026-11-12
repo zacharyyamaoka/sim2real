@@ -164,6 +164,11 @@
    "from": "mjcf:joint:revolute_11:armature",
    "note": "the bundle's placeholder (the exporter's N^2 x 1e-5)"
   },
+  "can14.axis_inertia_kg_m2": {
+   "unit": "kg·m²",
+   "value": 0.0029868656333158832,
+   "source": "derived: the armature + the CAD links' inertia about the axis at the held pose (MuJoCo's mass matrix, rig.derived)"
+  },
   "can14.coulomb_nm": {
    "unit": "N·m",
    "value": 0.0413,
@@ -204,6 +209,11 @@
    "from": "mjcf:joint:revolute_14:armature",
    "note": "the bundle's placeholder (the exporter's N^2 x 1e-5)"
   },
+  "can15.axis_inertia_kg_m2": {
+   "unit": "kg·m²",
+   "value": 0.0013427397784015534,
+   "source": "derived: the armature + the CAD links' inertia about the axis at the held pose (MuJoCo's mass matrix, rig.derived)"
+  },
   "can15.coulomb_nm": {
    "unit": "N·m",
    "value": 0.0413,
@@ -243,6 +253,11 @@
    "unit": "kg·m²",
    "from": "mjcf:joint:revolute_17:armature",
    "note": "the bundle's placeholder (the exporter's N^2 x 1e-5)"
+  },
+  "can16.axis_inertia_kg_m2": {
+   "unit": "kg·m²",
+   "value": 0.0010293386960019287,
+   "source": "derived: the armature + the CAD links' inertia about the axis at the held pose (MuJoCo's mass matrix, rig.derived)"
   },
   "can16.coulomb_nm": {
    "unit": "N·m",

@@ -42,7 +42,10 @@
   "can15.gravity_nm": 0.004084148059627338,
   "can15.gravity_bottom_rad": -0.12415877384971861,
   "can16.gravity_nm": 0.0024311838988400228,
-  "can16.gravity_bottom_rad": 3.0686963587656733
+  "can16.gravity_bottom_rad": 3.0686963587656733,
+  "can14.axis_inertia_kg_m2": 0.0035842387599790615,
+  "can15.axis_inertia_kg_m2": 0.0017583816376514452,
+  "can16.axis_inertia_kg_m2": 0.0012852064352023142
  },
  "structure": "the coverage lane's twin of record it5 (Karnopp Coulomb + its command delay + the gravity refit's masses) with gear_backlash's double joint on every board (friction and stops on the output)",
  "sources": {
@@ -53,6 +56,7 @@
   "can14.*": "set apart from the GIM card's priors (+20 % armature, +26 % sliding, +14 % breakaway); its zero 0.6 deg off the camera-inferred one",
   "can*.backlash_rad": "Zach 2026-11-11: about 10-20 arcmin per joint (15, 18, 13)",
   "can15.zero_offset_rad, can16.zero_offset_rad": "a power-up that latched one rotor turn (36 deg at the output) away from the nominal session: + for CAN 15, - for CAN 16",
-  "can*.gravity_*": "derived from the masses and gravity's direction above with MuJoCo at the held pose (rig.gravity_profile); the rig re-derives them from the played values"
+  "can*.gravity_*": "derived from the masses and gravity's direction above with MuJoCo at the held pose (rig.gravity_profile); the rig re-derives them from the played values",
+  "can*.axis_inertia_kg_m2": "derived from the armature and the masses above (MuJoCo's mass matrix at the held pose); the rig re-derives it from the played values"
  }
 }

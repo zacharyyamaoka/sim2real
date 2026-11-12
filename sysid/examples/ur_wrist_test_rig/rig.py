@@ -98,8 +98,8 @@ def wrist_models(gravity):
     finally:
         wrist_model.WristModel.__init__ = original
 REVERSAL = {"amplitude_rad": 0.6 * DEG, "speed_rad_s": 0.5 * DEG, "cycles": 3, "cap_fraction": 0.4}
-DELAY_GRID_S = (0.0, 0.0015, 0.003, 0.0045, 0.006)
-II_ITERATIONS = 3
+DELAY_GRID_S = (0.0, 0.003, 0.006)
+II_ITERATIONS = 4
 BOOTSTRAP = 40
 
 
@@ -117,8 +117,12 @@ def _servo_rows(can: int) -> list[seam.Parameter]:
 
     dyn = "servo.dynamics_regression"
     rows = [
-        row("armature_kg_m2", "kg·m²", ("rel", 0.10), "proposed: 10 % (the it5 refit's own indirect-inference gap closed to < 1 %)", dyn,
-            title="armature (reflected rotor inertia)"),
+        row("axis_inertia_kg_m2", "kg·m²", ("rel", 0.10), "proposed: 10 % (the it5 refit's own indirect-inference gap closed to < 1 %)", dyn,
+            title="axis inertia at the held pose (armature + the links it turns)"),
+        P(f"{i}.armature_kg_m2", "kg·m²", title="armature (reflected rotor inertia)",
+          why_not=why if held else ("only the axis inertia is seen (armature + the links it turns: {0}.axis_inertia_kg_m2): the CAD links' inertia "
+                                    "is a prior the hidden masses move, so any error in it lands in the armature one for one (on CAN 14 the links "
+                                    "carry twice its armature); the fit sets it for the twin as the axis inertia less the CAD links").format(i)),
         row("coulomb_nm", "N·m", ("rel", 0.10), "proposed: 10 %, the pendulum oracle's frictionloss tolerance (sysid/acceptance.json)", dyn,
             title="sliding (Coulomb) friction, the M2 frictionloss level"),
         row("static_friction_nm", "N·m", ("rel", 0.10), "proposed: 10 %, as the sliding level", dyn,
@@ -171,14 +175,19 @@ REAL_RUNS = "/archive/datasets/bam_rig/rack_2026-11-10/ur_wrist/coverage/real/ra
 def noise_1x() -> seam.NoiseModel:
     return seam.NoiseModel(
         encoder_quantum_rad=TAU / 65536.0, encoder_noise_rad=0.0, velocity_noise_rad_s=1e-3, torque_noise_nm=0.01,
-        period_overrun_s=0.71e-3, latency_jitter_s=0.4e-3,
+        period_overrun_s=0.71e-3, latency_jitter_s=0.0,
         sources={
             "encoder_quantum_rad": f"the smallest position step in the real runs, 9.587e-5 rad = 2 pi / 65536 ({REAL_RUNS})",
             "encoder_noise_rad": "0: the real board's position at rest moves by whole steps only; the step is the encoder's noise",
             "velocity_noise_rad_s": f"the real board's velocity at rest: 1.1e-3 rad/s std ({REAL_RUNS})",
             "torque_noise_nm": f"the real torque at rest: 0.014 N.m std with the loop's own chatter in it ({REAL_RUNS}); bam_ur_wrist.refit's hidden twin used 0.01",
+            "torque_disturbance_nm": ("0 at 1x: anchored on the real lane's repeat floors (CAN 14 0.100, CAN 15 0.092, CAN 16 0.241 deg driven, bam_ws "
+                                      "claude/ur-wrist-real @ 6e26aa27a), which the host loop's measured timing alone already reproduces to within "
+                                      "about 2x (WristRig.floor_check); a disturbance raised CAN 15's floor 2x and left CAN 14's"),
             "period_overrun_s": f"the real host loop: median 10.57 ms, mean 10.71 ms, std 0.53 ms against the plan's 10 ms tick ({REAL_RUNS})",
-            "latency_jitter_s": "estimate: a CAN-FD frame's queueing behind the other boards' on one fdcanusb (no measurement yet)",
+            "latency_jitter_s": ("0 at 1x, set by the floor anchor (WristRig.floor_check against the real lane's floors, 2026-11-11): the host "
+                                 "loop's measured overrun alone gives CAN 14 / 15 / 16 1.70x / 1.62x / 0.53x the real floors (geometric mean 1.13x); "
+                                 "0.4 ms of jitter took CAN 14 to 2.06x. Unmeasured on the bus; the term stays for the stress lane"),
         })
 
 
@@ -585,12 +594,25 @@ class GravityDirection:
 
 
 DYN_TERMS = ("coulomb_nm", "static_friction_nm", "armature_kg_m2", "damping_nm_s_rad")
+ARMATURE_FLOOR_KG_M2 = 1e-4   # a tenth of the GIM4305's reflected rotor (the bundle's 0.001): the least a geared joint may carry
+
+
+def _link_inertia(masses) -> dict[int, float]:
+    """Each joint's diagonal of the links' mass matrix at the held pose (no armature) under these masses (MuJoCo)."""
+    from bam_ur_wrist.model import WristModel  # noqa: PLC0415
+
+    model = WristModel(wp.stripped_bundle(), armature_kg_m2=(0.0, 0.0, 0.0), masses=masses, self_contact=False)
+    diagonal = np.diag(model.mass_matrix(_rest_cad()))
+    return {can: float(diagonal[CANS.index(can)]) for can in CANS}
 
 
 class Dynamics:
     id = "servo.dynamics_regression"
-    adjusts = MASS_KEYS   # the regression's gravity first moments on their visible subspace: the twin uses them, never claimed
-    identifies = tuple([f"{INSTANCE[c]}.{t}" for c in MOVING for t in DYN_TERMS]
+    # set for the twin, never claimed: the regression's gravity first moments on their visible subspace, and each armature (the axis
+    # inertia less the CAD links': the axis inertia is what is identified)
+    adjusts = MASS_KEYS + tuple(f"{INSTANCE[c]}.armature_kg_m2" for c in MOVING) + ("wrist.command_delay_s",)
+    identifies = tuple([f"{INSTANCE[c]}.{t}" for c in MOVING for t in DYN_TERMS if t != "armature_kg_m2"]
+                       + [f"{INSTANCE[c]}.axis_inertia_kg_m2" for c in MOVING]
                        + [f"{INSTANCE[c]}.gravity_{n}" for c in (14,) for n in ("nm", "bottom_rad")])
 
     def runs(self, values):
@@ -614,18 +636,43 @@ class Dynamics:
         current = {**values, **_mass_values(masses)}
         target = _theta(first, {})
         theta = np.maximum(np.nan_to_num(target), 0.0)  # the plain fit is the first guess (refit_rig.indirect_inference)
+        chirps = [n for n in names if "/chirp-" in n]
+        lag_world = float(np.mean([command_lag_s(measured[n]) for n in chirps])) if chirps else None
+        delay = float(values["wrist.command_delay_s"])
+        sigmas = reading_noise(measured)   # the readings' own white noise, from the data (never the noise model)
         history = []
         # indirect inference (bam_ur_wrist.refit_rig.indirect_inference's rule): theta += estimate(world) - estimate(twin at theta), the
-        # twin replaying each train recording's own commands and clock, with every value the earlier routines found (gaps, zeros) in it
+        # twin replaying each train recording's own commands and clock, with every value the earlier routines found (gaps, zeros) in it.
+        # WHY the command delay in the same loop (measured 2026-11-11 on the smoke): the twin's replays at the description's 5.5 ms put the
+        # chirps on another trajectory than the world's 0.6 ms, the estimator's bias with them, and the armature stayed 40 % low; the
+        # estimator for the delay is the chirps' command-to-response lag, which the twin's lag at its delay is held to the same way.
+        # WHY the replays get the readings' noise (estimated from the world's own data): the breakaway is a percentile of onset torques,
+        # which white torque noise lifts; a noise-free twin would leave that lift in the fit
+        rng = np.random.default_rng(20261111)
         for iteration in range(II_ITERATIONS):
-            trial = {**current, **_from_theta(theta)}
-            replays = twin.predict(measured, trial)
+            trial = {**current, **_from_theta(theta), "wrist.command_delay_s": delay}
+            for can in MOVING:
+                key = f"{INSTANCE[can]}.armature_kg_m2"
+                trial[key] = max(trial[key], ARMATURE_FLOOR_KG_M2)
+            replays = {n: noisy_like(r, sigmas, rng) for n, r in twin.predict(measured, trial).items()}
             estimate = refit_fit(b, [as_fit_run(replays[n], n) for n in names], masses=prior)
             gap = np.nan_to_num(target - _theta(estimate, {}))
-            history.append(gap.tolist())
+            lag_gap = 0.0 if lag_world is None else lag_world - float(np.mean([command_lag_s(replays[n]) for n in chirps]))
+            history.append([*np.round(gap, 6).tolist(), round(lag_gap, 6)])
             theta = np.maximum(theta + gap, 0.0)
+            delay = max(0.0, delay + lag_gap)
         found = _from_theta(theta)
         boot = _bootstrap(runs, prior, theta - target)
+        links = _link_inertia(prior)   # the CAD links' inertia about each axis at the held pose: what the regression's own model holds
+        for can in MOVING:
+            i = INSTANCE[can]
+            found[f"{i}.axis_inertia_kg_m2"] = found[f"{i}.armature_kg_m2"] + links[can]
+            if f"{i}.armature_kg_m2" in boot:
+                lo, hi = boot[f"{i}.armature_kg_m2"]
+                boot[f"{i}.axis_inertia_kg_m2"] = (lo + links[can], hi + links[can])
+            # WHY a floor (gear_backlash.wrap: two coincident hinges share one body, only the rotor's armature keeps the mass matrix
+            # invertible): a fit that reads the CAD links as heavier than the axis would hand the plant a zero armature and a singular joint
+            found[f"{i}.armature_kg_m2"] = max(found[f"{i}.armature_kg_m2"], ARMATURE_FLOOR_KG_M2)
         out = {}
         for key, value in found.items():
             ci = boot.get(key)
@@ -633,6 +680,8 @@ class Dynamics:
                                                 f"+ {II_ITERATIONS} indirect-inference iterations on the twin (last gap {np.round(history[-1], 6).tolist()})"
                                                 + ("; 95 % from a run bootstrap of the equation-error fit, shifted by the inference" if ci else ""))
         out.update({k: seam.Estimate(v, None, "bam_ur_wrist.refit_rig.gravity_masses of the regression's first moments") for k, v in _mass_values(masses).items()})
+        out["wrist.command_delay_s"] = seam.Estimate(delay, None, f"the chirps' command-to-response lag, held to the world's by indirect inference "
+                                                                  f"(world lag {1e3 * (lag_world or 0):.2f} ms); the delay scan refines it")
         for can in (14,):
             amplitude, bottom = gravity_profile(masses, can, gravity_vector(values))
             out[f"{INSTANCE[can]}.gravity_nm"] = seam.Estimate(amplitude, None, f"the refit's gravity first moments (its visible subspace around the "
@@ -641,6 +690,45 @@ class Dynamics:
                                                                "whatever direction error there is, so the load is right either way")
             out[f"{INSTANCE[can]}.gravity_bottom_rad"] = seam.Estimate(bottom, None, f"as {INSTANCE[can]}.gravity_nm: that torque's bottom")
         return out
+
+
+def command_lag_s(rec: dict, max_lag_s: float = 0.04) -> float:
+    """The lag (s) at which the commanded board target best matches the board's reading: argmin over tau of RMS(q(t) - target(t - tau)),
+    a grid of 0.5 ms then a parabola through the best three. A data-only estimator (the host knows what it sent and what it read)."""
+    t = np.asarray(rec["t"], float)
+    q = np.asarray(rec["q"], float)
+    target = np.asarray(rec["commands"]["board_target"], float)
+    keep = np.isfinite(target)
+    t, q, target = t[keep], q[keep], target[keep]
+    lags = np.arange(0.0, max_lag_s, 0.0005)
+    cost = []
+    for lag in lags:
+        inside = t - lag >= t[0]
+        cost.append(float(np.mean((q[inside] - np.interp(t[inside] - lag, t, target)) ** 2)))
+    cost = np.asarray(cost)
+    k = int(np.clip(np.argmin(cost), 1, len(lags) - 2))
+    a, b, c = cost[k - 1], cost[k], cost[k + 1]
+    shift = 0.5 * (a - c) / (a - 2 * b + c) if (a - 2 * b + c) > 0 else 0.0
+    return float(lags[k] + np.clip(shift, -1.0, 1.0) * 0.0005)
+
+
+def reading_noise(measured: dict) -> dict[str, float]:
+    """The readings' white noise, estimated from the data: 1.4826 MAD of the second differences / sqrt(6) (a white series' second
+    difference has six times its variance; the motion is smooth at 100 Hz), for the torque and the velocity."""
+    out = {}
+    for field in ("tau", "qd"):
+        d2 = np.concatenate([np.diff(np.asarray(r[field], float), 2) for r in measured.values() if len(r[field]) > 3])
+        out[field] = float(1.4826 * np.median(np.abs(d2 - np.median(d2))) / math.sqrt(6.0))
+    return out
+
+
+def noisy_like(rec: dict, sigmas: dict, rng) -> dict:
+    """A replay with the world's reading noise added (torque, velocity) and its position rounded to the board's step."""
+    out = dict(rec)
+    out["tau"] = np.asarray(rec["tau"], float) + rng.normal(0.0, sigmas["tau"], len(rec["tau"]))
+    out["qd"] = np.asarray(rec["qd"], float) + rng.normal(0.0, sigmas["qd"], len(rec["qd"]))
+    out["q"] = np.round(np.asarray(rec["q"], float) / QUANTUM_RAD) * QUANTUM_RAD
+    return out
 
 
 def _prior_masses(values):
@@ -756,16 +844,13 @@ class DelayScan:
             replays = twin.predict(measured, {**values, "wrist.command_delay_s": float(delay)})
             return np.array([np.mean((replays[n]["q"] - measured[n]["q"]) ** 2) for n in names]), np.array([measured[n]["q"].size for n in names])
 
-        grid = list(DELAY_GRID_S)
-        errors = {d: curve(d) for d in grid}
-        pooled = lambda e: float(np.sqrt(np.average(e[0], weights=e[1])))  # noqa: E731
-        best = min(grid, key=lambda d: pooled(errors[d]))
         step = wp.PHYSICS_DT_S
-        # WHY a fine pass at the physics step: the plant's delay is a whole number of 0.2 ms steps, so no finer value exists to find
-        for k in range(-3, 4):
-            d = round(best / step + k) * step
-            if d >= 0.0 and all(abs(d - g) > 1e-9 for g in errors):
-                errors[d] = curve(d)
+        start = float(values["wrist.command_delay_s"])
+        # WHY around the dynamics routine's value, every 0.2 ms physics step (the plant's delay is a whole number of them, so no finer value
+        # exists): that routine's lag already put it within a step or two; the grid's coarse points stay as a guard against a wrong start
+        grid = sorted({round(start / step + k) * step for k in range(-4, 5)} | set(DELAY_GRID_S))
+        errors = {d: curve(d) for d in grid if d >= 0.0}
+        pooled = lambda e: float(np.sqrt(np.average(e[0], weights=e[1])))  # noqa: E731
         delays = sorted(errors)
         best = min(delays, key=lambda d: pooled(errors[d]))
         rng = np.random.default_rng(20261111)
@@ -797,10 +882,14 @@ class WristRig:
     def derived(self, values):
         """The values the rig computes from others: each joint's gravity torque at the held pose from the chain's masses and gravity's
         direction (MuJoCo)."""
+        from bam_ur_wrist_coverage import twin  # noqa: PLC0415
+
         out = {}
+        links = _link_inertia(twin.mass_truth(masses_of(values)).base)
         for can in CANS:
             amplitude, bottom = gravity_profile(masses_of(values), can, gravity_vector(values))
             out[f"{INSTANCE[can]}.gravity_nm"], out[f"{INSTANCE[can]}.gravity_bottom_rad"] = amplitude, bottom
+            out[f"{INSTANCE[can]}.axis_inertia_kg_m2"] = float(values[f"{INSTANCE[can]}.armature_kg_m2"]) + links[can]
         return out
 
     def routines(self):

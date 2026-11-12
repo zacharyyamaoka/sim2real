@@ -12,7 +12,7 @@ import math
 import numpy as np
 
 from sim2real import rig as seam
-from sim2real.result import CalibrationResult, Node
+from sim2real.result import FLOOR_CHECK, RULER_TWINNED, TOOL_GATE_MM, CalibrationResult, Node
 
 STAGES = ["nominal (the description)", "fitted (one click)"]
 DISPLAY_UNIT = {"deg": "°", "arcmin": "′", "ms": "ms", "mm": "mm"}
@@ -82,6 +82,8 @@ def build(rig, description, calibration, report, state) -> CalibrationResult:
                               "floor_deg": None if floor_run is None else round(math.degrees(floor_run), 4), "run_view": None})
         if can not in wr.MOVING:
             node.note = "held (Zach's cable rule): no routine moves it, no held-out run scores it"
+        node.twin_ratio = report.ratios["fitted"].get(joint)
+        node.questions = _joint_questions(joint, node, calibration, report, measured)
         joints[can] = node
     tool = Node("rig/wrist/holder", "holder (the tool: its first ArUco board's origin)", "tool", "Tool (payload + TCP)", "tool", parent=wrist.id)
     fitted_tool = report.tool_stop_m.get("fitted")
@@ -93,6 +95,31 @@ def build(rig, description, calibration, report, state) -> CalibrationResult:
         tool.note = (f"the fitted twin's tool vs the world's where the command rests, p95 {fitted_tool * 1e3:.3f} mm; the nominal twin's "
                      f"{(report.tool_stop_m.get('nominal') or float('nan')) * 1e3:.1f} mm; two draws of the world {(report.tool_stop_m.get('floor') or float('nan')) * 1e3:.3f} mm")
         root.gate = tool.gate
+    tool_ok = fitted_tool is not None and fitted_tool <= seam.TOOL_GATE_M
+    for node in joints.values():
+        node.questions["Job"] = {"own": "yes" if tool_ok else "no", "gate": f"inside the {TOOL_GATE_MM:g} mm tool gate at a stop (judged at the holder)",
+                                 "numbers": "the holder's tool error at stops " + ("—" if fitted_tool is None else f"{fitted_tool * 1e3:.3f} mm (p95)")}
+    tool.questions = {
+        "Floor": {"own": "yes", "numbers": f"two noise draws of the world at stops: {(report.tool_stop_m.get('floor') or float('nan')) * 1e3:.3f} mm", "gate": "the sim's own repeats"},
+        "Data": {"own": "yes", "numbers": f"{len(measured)} held-out runs' stops", "gate": "every held-out run's stops"},
+        "Routines": {"own": "yes", "numbers": "rolls up the joints", "gate": "every joint's routines pass"},
+        "Twin": {"own": "yes", "numbers": "rolls up the joints", "gate": "every joint twinned"},
+        "Job": {"own": "yes" if tool_ok else "no", "numbers": "—" if fitted_tool is None else f"p95 {fitted_tool * 1e3:.3f} mm",
+                "gate": f"tool ≤ {TOOL_GATE_MM:g} mm at a stop (Zach, 2026-11-11)"},
+    }
+    passed = calibration.passed
+    unidentified_chain = [r for r in rows if r["key"].startswith("wrist.") and r["routine"] is None]
+    wrist.questions = {
+        "Floor": {"own": "yes", "numbers": "the sim's own repeat spread, every held-out run twice", "gate": "two draws under the same noise"},
+        "Data": {"own": "yes", "numbers": f"{sum(step['runs'] for step in calibration.routines)} runs over {len(calibration.routines)} routines",
+                 "gate": "every routine's runs played"},
+        "Routines": {"own": "yes" if passed else "no",
+                     "numbers": f"{sum(r['pass'] is True for r in rows)}/{sum(r['pass'] is not None for r in rows)} identified values within tolerance; "
+                                f"{len(unidentified_chain)} chain values not identifiable", "gate": "every identified hidden value within its tolerance"},
+        "Twin": {"own": "yes", "numbers": "rolls up the joints", "gate": "every joint twinned"},
+        "Job": {"own": "yes" if tool_ok else "no", "numbers": tool.questions["Job"]["numbers"], "gate": tool.questions["Job"]["gate"]},
+    }
+    root.questions = {q: {"own": "yes", "numbers": "rolls up its children", "gate": "every child passes"} for q in ("Floor", "Data", "Routines", "Twin", "Job")}
     notes = [f"Routines, in order: {', '.join(step['routine'] for step in calibration.routines)} ({calibration.seconds:.0f} s).",
              f"Recovered {sum(r['pass'] is True for r in rows)}/{sum(r['pass'] is not None for r in rows)} identified values within tolerance of the "
              f"hidden truth; not identified: {len(calibration.unidentified)} ({'; '.join(sorted({r['why_not'] for r in calibration.unidentified}))}).",
@@ -100,3 +127,30 @@ def build(rig, description, calibration, report, state) -> CalibrationResult:
              "Before = the description's nominal twin replaying each held-out run's commands; after = the fitted twin."]
     return CalibrationResult(f"{rig.name}-one-click", f"{description.title} · one-click calibration (sim oracle)", list(STAGES),
                              [root, wrist, joints[14], joints[15], joints[16], tool], source=f"sysid/examples/{rig.name}", notes=notes)
+
+
+def _joint_questions(joint, node, calibration, report, measured) -> dict:
+    """A joint's own answers (sim2real.result's proposal C) in the sim oracle: its floor is the sim's own repeat spread, its routines are
+    graded on the sealed truth, its twin on the held-out runs over that floor."""
+    rows = [r for r in calibration.rows if r["key"].startswith(f"{joint}.")]
+    graded = [r for r in rows if r["pass"] is not None]
+    failing = [r["key"] for r in graded if not r["pass"]]
+    ratio = report.ratios["fitted"].get(joint)
+    floor = report.floor.get(joint)
+    runs = sum(1 for rec in measured.values() if f"can{rec['can']}" == joint)
+    floor_note = "—" if floor is None else f"{math.degrees(floor):.4f}° (two noise draws of {runs} held-out runs)"
+    if ratio is not None and ratio < FLOOR_CHECK:
+        # WHY said and not failed: in the sim the twin replays each run's own logged clock, so the floor's draw-to-draw timing is noise the
+        # twin is never asked to predict; on the rack the same ratio means the repeats were not repeats
+        floor_note += f"; twin ÷ floor {ratio:.2f}× < {FLOOR_CHECK:.2f}: the floor holds timing the twin replays"
+    return {
+        "Floor": {"own": "yes" if floor else "no", "numbers": floor_note, "gate": "the sim's own repeats under the same noise"},
+        "Data": {"own": "yes" if runs else "no", "numbers": f"{runs} held-out runs scored", "gate": "the schedule's runs, split sealed"},
+        "Routines": {"own": "yes" if graded and not failing else ("no" if graded else "unknown"),
+                     "numbers": f"{len(graded) - len(failing)}/{len(graded)} hidden values within tolerance" + (f"; failing {', '.join(failing)}" if failing else ""),
+                     "gate": "hidden values within tolerance at this noise"},
+        "Twin": {"own": "yes" if ratio is not None and ratio <= RULER_TWINNED else "no",
+                 "numbers": "—" if ratio is None else f"held-out {math.degrees(report.errors['fitted'][joint]):.4f}° = {ratio:.2f}× floor",
+                 "gate": f"held-out ≤ {RULER_TWINNED:g}× floor"},
+        "Job": {"own": "unknown", "numbers": "", "gate": ""},
+    }
