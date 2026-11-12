@@ -23,10 +23,14 @@ vision = ["opencv-python-headless==4.11.0.86"]
 # WHY weave (2026-11-11, the coordinator): the per-rig projects are built on bam_ws bam_trackio.bbo, the house black-box template,
 # whose evaluations and leaderboards are Weave objects; same pin as bam_trackio.
 tracking = ["wandb==0.31.0", "wandb-workspaces==0.4.13", "weave==0.54.1"]
-test = ["pytest>=8"]
+# WHY its own extra (2026-11-12, the homing bench): the kinematic homing rung runs on robot_models' stop core (coal + trimesh through
+# its contact extra) and draws its starts with scipy's Sobol; sim2real's stable folders never import it.
+homing = ["robot-models[contact]", "scipy>=1.11"]
+test = ["pytest>=8", "robot-models[contact]", "scipy>=1.11"]
 
 [tool.uv.sources]
 robot-msgs = { path = "/home/bam/robot_msgs", editable = true }
+robot-models = { path = "/home/bam/robot_models", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sim2real"]
