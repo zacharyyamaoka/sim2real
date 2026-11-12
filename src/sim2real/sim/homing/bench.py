@@ -175,8 +175,9 @@ def inner_name(name: str) -> str:
     return name.removeprefix(RECOVER)
 
 
-def run_episode(name: str, plant: KinematicStopPlant, start: Start, prior: Prior, environment: str) -> Episode:
-    procedure = make_procedure(name)
+def run_episode(name: str, plant: KinematicStopPlant, start: Start, prior: Prior, environment: str, procedure=None) -> Episode:
+    """One episode on any ``HomingPlant`` (the kinematic plant or the MuJoCo rung's); ``procedure`` defaults to ``make_procedure(name)``."""
+    procedure = make_procedure(name) if procedure is None else procedure
     plant.reset(start)
     phases, outcome = [], "done"
     while (sequence := procedure.plan(prior, phases)) is not None:
@@ -299,6 +300,42 @@ def expand(row: list, procedure: str, environment: str) -> EpisodeRecord:
                          tuple(StallCheck(*s) for s in stalls), tuple(JointOutcome(*j) for j in joints))
 
 
+RULING = ("2026-11-12 coordinator: assembly-mode starts (flipped_crank, any mirror start) are judged on the MuJoCo rung; the kinematic "
+          "rung's reliability gate is 100 % over working-assembly starts; the strict xfail test_recover_first_homes_from_the_flipped_crank "
+          "stays as the kinematic record.")
+# The coordinator's ruling (2026-11-12, the decision report's "MuJoCo proves dynamics"): a start on the mirrored assembly (the flipped
+# crank, any start whose branch is ``mirror``) is an assembly-mode start, judged on the MuJoCo rung; the kinematic rung's reliability gate is
+# 100 % over the working-assembly starts only. WHY: the kinematic plant has no gravity, so nothing can carry the loop across the toggle
+# between the two assemblies; a kinematic verdict on those starts measures the plant, not the procedure. Its record stays (the strict xfail
+# test_recover_first_homes_from_the_flipped_crank); its scorecard is kept apart and labelled, never dropped.
+WORKING, ASSEMBLY_MODE = "working_assembly", "assembly_mode"
+JUDGED_ON = {"kinematic": {WORKING: "kinematic", ASSEMBLY_MODE: "MuJoCo"}, "mujoco": {WORKING: "MuJoCo", ASSEMBLY_MODE: "MuJoCo"}}
+
+
+def scope_of(branch: str) -> str:
+    return ASSEMBLY_MODE if branch == MIRROR else WORKING
+
+
+def split_scorecards(episodes: dict, starts: list[dict], rung: str, gate_deg: float) -> dict:
+    """``{scope: {model: {procedure: scorecard}}}`` over the working-assembly and the assembly-mode starts (the ruling above), from the
+    compact episode rows; each card carries ``judged_on`` (where that scope's verdict is taken) and its start count."""
+    scope = {start["name"]: scope_of(start["branch"]) for start in starts}
+    out: dict = {WORKING: {}, ASSEMBLY_MODE: {}}
+    for model, by_name in episodes.items():
+        for name, rows in by_name.items():
+            for which in (WORKING, ASSEMBLY_MODE):
+                picked = [expand(row, name, f"{rung} · {model}") for row in rows if scope[row[0]] == which]
+                if not picked:
+                    continue
+                card = scorecard(picked, gate_deg=gate_deg)
+                card["judged_on"] = JUDGED_ON[rung][which]
+                card["starts"] = sorted(r.start for r in picked) if which == ASSEMBLY_MODE else len(picked)
+                if card["judged_on"] != rung.replace("mujoco", "MuJoCo"):
+                    card["reliability_gate_pass"] = None  # not this rung's verdict (the ruling)
+                out[which].setdefault(model, {})[name] = card
+    return out
+
+
 def run_bench(*, procedures=tuple(PROCEDURES), models=MODELS, n_sobol: int = SOBOL_STARTS, workers: int = 3,
               root: Path | None = None) -> dict:
     t0 = time.time()
@@ -368,6 +405,8 @@ def run_bench(*, procedures=tuple(PROCEDURES), models=MODELS, n_sobol: int = SOB
         "stops": stops,
         "calibration": calibration,
         "scorecards": cards,
+        "scorecards_by_scope": split_scorecards(episodes, [{"name": s.name, "branch": s.branch} for s in starts], RUNG, GATE_DEG),
+        "ruling": RULING,
         "episode_columns": list(EPISODE_COLUMNS),
         "episodes": episodes,
         "notes": notes,
@@ -384,14 +423,25 @@ def main(argv=None) -> int:
     parser.add_argument("--procedures", nargs="*", default=list(PROCEDURES))
     parser.add_argument("--models", nargs="*", default=list(MODELS))
     parser.add_argument("--recover-first", action="store_true", help="put the blind recovery in front of every procedure (recover.py)")
+    parser.add_argument("--rescore", type=Path, help="add the ruling's working / assembly-mode split to this results JSON (no episode is "
+                        "re-run: the split is a denominator over the stored episodes) and write it to --out")
     args = parser.parse_args(argv)
+    if args.rescore:
+        results = json.loads(args.rescore.read_text())
+        results["scorecards_by_scope"] = split_scorecards(results["episodes"], results["starts"], results["rung"], results["gate_deg"])
+        results["ruling"] = RULING
+        args.out.write_text(json.dumps(results))
+        for name, card in results["scorecards_by_scope"][WORKING].get("B2", {}).items():
+            print(f"B2 working assembly {name:34s} rel {card['reliability_pct']:6.1f}%  gate {card['reliability_gate_pass']}")
+        return 0
     procedures = [RECOVER + inner_name(p) for p in args.procedures] if args.recover_first else args.procedures
     results = run_bench(procedures=tuple(procedures), models=tuple(args.models), n_sobol=args.sobol,
                         workers=min(args.workers, 3))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(results))
-    for model, by_name in results["scorecards"].items():
+    for model, by_name in results["scorecards_by_scope"][WORKING].items():
         for name, card in by_name.items():
+            print("working assembly", end=" ")
             print(f"{model} {name:20s} rel {card['reliability_pct']:6.1f}%  any {card['any_start_pct']:6.1f}%  "
                   f"zero p95 {card['joint_angle_error_deg']}  gap {card['backlash_error_deg']}  t {card['time_to_home_s']}")
     print(f"{results['seconds']:.0f} s")

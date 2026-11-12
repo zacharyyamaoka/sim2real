@@ -17,3 +17,25 @@ Choices, each with its why:
 3. **The stored table comes from the bench, not the truth.** single_touch and two_level_touch read the table that press_reverse's fit identified from home on the same plant (B's `identify_backlash`). Their backlash column shows '—', because they did not identify it.
 4. **tview v2 runs as typed.** Zach's set-output values are its zero. J1 and J2 are in the CAD frame to his typing precision. C1's 0.66347 rev is in his own crank frame, which sits 41.08° from CAD with nothing else to place it, so it maps by that one constant. His runner's reaches are kept: 20° on the way, 3° at home.
 5. **Its own checks are part of a procedure.** bam_homing's checked seek refuses on a rigid stop ("stiffness unresolved"). On B0 and B1 it refuses every start, and the bench reports that as the outcome.
+
+## The ruling on assembly-mode starts (2026-11-12, the coordinator)
+
+Assembly-mode starts (the flipped crank, and any start on the mirrored assembly of `loops.json`) are judged on the MuJoCo rung. The kinematic rung's reliability gate is 100 % over working-assembly starts. The strict xfail `test_recover_first_homes_from_the_flipped_crank` stays as the kinematic record. Written into robot_models PEP 0002 addendum 1.
+
+WHY: the kinematic plant has no gravity, so nothing carries the loop across the toggle between the two assemblies. A kinematic verdict on those starts measures the plant, not the procedure.
+
+How the bench shows it: `bench.split_scorecards` puts `scorecards_by_scope = {working_assembly, assembly_mode}` beside the all-starts `scorecards`. Each card names where its verdict is taken (`judged_on`). On the kinematic rung the assembly-mode card is kept but has no gate verdict (`reliability_gate_pass: null`). `tests/test_homing_mujoco_rung.py` holds the split.
+
+## The MuJoCo rung (2026-11-12)
+
+| Where | What |
+|---|---|
+| `sim2real.sim.homing.mujoco_plant` | `MujocoRigPlant`: bam_fb_test_rig's v11 twin (`RigSim` on `bench_rig`, rack mount, gravity, the exporter's stop pairs, the loop `connect`) behind the same `HomingPlant` seam. Hidden backlash is gear_backlash's double joint at J1 3.5′ / J2 2.5′ / C1 4.0′: B1 `deadzone`, B2 `passive_joint`. J2 and C1 carry `bam_fivebar.plant.JMC_COGGING` in their Craig frame; J1 has no fitted cogging. The boards are PDs fed every 10 ms the way `PlantBackend` feeds them (ilimit_scale 0, no velocity target). |
+| `sim2real.sim.homing.mujoco_bench` | the procedures (each behind recover_first) × B0/B1/B2 × the 8 named rests + the first 8 Sobol starts. Starts are placed on their assembly by walking the exporter's map, then settled unpowered. The JSON has the kinematic schema plus `verdicts` (the brief's two gates), `recovery_landing` per episode, and `--timed-recovery` DIAGNOSTIC rows. |
+
+Choices, each with its why:
+
+1. **The twin is loaded by path from bam_ws** (`mujoco_plant.bam_ws_path`). The five packages are pure Python over numpy and MuJoCo 3.11.0, which the `sim` extra pins. Taking bam_fb_test_rig's environment as a dependency would bring in ruckig and opencv-contrib. This is the same reason `tracking.rigs.load_bbo` loads bbo by file.
+2. **No gravity comp.** A blind homing run does not know its zero, so the host cannot compute a gravity torque. The real home button's comp works because it carries a homed frame by receipt. The boards are bare PDs at the rack record's kp 200 / kd 4 N·m per rev.
+3. **Starts settle unpowered.** The real arm powers up where gravity and friction left it, so the bench records the settled pose and its assembly per start.
+4. **A start is walked onto its assembly.** Gauss-Newton straight from the export pose does not converge, so the walk follows the exporter's (J2, C1) map, the mirror from its toggle seed. Each pose is checked by the passive dyad's orientation, which is the exporter's branch rule.

@@ -74,8 +74,17 @@ def records(results: dict) -> list[dict]:
                       "hardstops_sha256": results["hardstops_sha256"], "sim2real_sha": results["sim2real_sha"],
                       "robot_models_sha": results["robot_models_sha"], "gate_deg": results["gate_deg"],
                       "hidden_gap_arcmin": results["hidden_gap_arcmin"], "rig": "five-bar", "result_id": result_id,
-                      "evaluation": evaluation, "evaluation_state": "latest", "starts": len(results["starts"])}
+                      "evaluation": evaluation, "evaluation_state": "latest", "starts": len(results["starts"]),
+                      "start": f"all {len(results['starts'])} (per-start rows in the starts table)",
+                      "start_names": [s["name"] for s in results["starts"]]}
             numbers = {k: v for k, v in card.items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v is not None}
+            # the coordinator's ruling (2026-11-12): working-assembly and assembly-mode starts scored apart, each with where it is judged
+            for scope, by_model in (results.get("scorecards_by_scope") or {}).items():
+                scoped = by_model.get(model, {}).get(procedure)
+                if scoped:
+                    numbers.update({f"{scope}.{k}": v for k, v in scoped.items()
+                                    if isinstance(v, (int, float)) and not isinstance(v, bool) and v is not None})
+                    config[f"{scope}_judged_on"] = scoped.get("judged_on")
             flags = {k: v for k, v in card.items() if isinstance(v, bool)}
             out.append({"id": run_id("homing", results["rung"], model, procedure, evaluation),
                         "name": f"{procedure} · {results['rung']} · {model}", "group": f"{results['rung']} · {model}",
@@ -111,10 +120,13 @@ def scored_runs(bbo, results: dict) -> list:
     return out
 
 
-def log(results: dict, *, weave: bool = True) -> dict:
+def log(results: dict | list[dict], *, weave: bool = True) -> dict:
+    """Log one or several bench results (one per rung) into the one project and the one leaderboard. WHY several in one call: the
+    leaderboard is published from this call's evaluations, so logging the rungs one at a time would leave only the last rung's columns."""
     from .rigs import load_bbo  # noqa: PLC0415 -- bbo by file, the house template on bam_ws main
 
-    batch = records(results)
+    many = list(results) if isinstance(results, list) else [results]
+    batch = [record for one in many for record in records(one)]
     runs = push(batch, project=PROJECT)
     retired = sum(retire(record["config"]["result_id"], record["config"]["evaluation"], project=PROJECT) for record in batch)
     board = None
@@ -124,9 +136,9 @@ def log(results: dict, *, weave: bool = True) -> dict:
         bbo.delete_unended = lambda client: 0
         bbo.prune_superseded = lambda client, runs, columns=None: 0
         entity_project = f"{ENTITY}/{PROJECT}"
-        runs_weave = scored_runs(bbo, results)
+        runs_weave = [run for one in many for run in scored_runs(bbo, one)]
         refs = bbo.log_evaluations(entity_project, runs_weave, scorers=SCORERS)
-        environments = [f"{results['rung']} · {model}" for model in results["models"]]
+        environments = list(dict.fromkeys(f"{one['rung']} · {model}" for one in many for model in one["models"]))
         metrics = [bbo.Metric(title, key, minimize=minimize) for title, key, minimize in COLUMNS]
         board = bbo.publish_leaderboard(entity_project, LEADERBOARD,
                                         "Homing procedures as black boxes on the five-bar (decision report 2026-11-12): five metrics per "
@@ -138,11 +150,11 @@ def log(results: dict, *, weave: bool = True) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("results", type=Path)
+    parser.add_argument("results", type=Path, nargs="+", help="one results JSON per rung (kinematic, mujoco)")
     parser.add_argument("--no-weave", action="store_true")
     parser.add_argument("--out", type=Path, help="write what was logged (run URLs, the leaderboard ref) here")
     args = parser.parse_args(argv)
-    summary = log(json.loads(args.results.read_text()), weave=not args.no_weave)
+    summary = log([json.loads(path.read_text()) for path in args.results], weave=not args.no_weave)
     text = json.dumps(summary, indent=1)
     if args.out:
         args.out.write_text(text)
