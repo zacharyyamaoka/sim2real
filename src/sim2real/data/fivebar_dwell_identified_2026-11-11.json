@@ -1,0 +1,435 @@
+{
+ "schema": "sim2real.rack.fivebar_dwell/1",
+ "date": "2026-11-11",
+ "what": "settled tool and joint error at the same 16 three-second holds (the last second scored), on the IDENTIFIED comp: the current operating config",
+ "source": "bam_ws claude/fivebar-guard @ 6577c3627: the five-bar lane's dwell json for dwell_real_identified_035048 (report section 8)",
+ "run": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/dwell_real_identified_035048",
+ "settled_s": 1.0,
+ "summary": {
+  "encoders_fk_mm": {
+   "n": 16,
+   "median": 4.343113979946561,
+   "p95": 8.882252034606354,
+   "max": 10.227164503484298
+  },
+  "encoders_fk_as_built_lever_mm": {
+   "n": 16,
+   "median": 4.312731984836587,
+   "p95": 8.881702423350367,
+   "max": 10.332454920877252
+  },
+  "camera_vs_commanded_mm": {
+   "n": 13,
+   "median": 19.872881401985037,
+   "p95": 28.852707471986513,
+   "max": 29.440059046573086
+  },
+  "camera_vs_as_built_lever_mm": {
+   "n": 13,
+   "median": 7.805824753085962,
+   "p95": 15.857593535427021,
+   "max": 16.433213598887384
+  }
+ },
+ "rows": [
+  {
+   "pose": 0,
+   "commanded_deg": [
+    10.0,
+    -24.000000000000004,
+    88.70477758843052
+   ],
+   "motor_error_deg": [
+    -0.28078210352351235,
+    -0.254103705305048
+   ],
+   "joint_fk_cad_lever_mm": 2.329634359019951,
+   "joint_fk_as_built_lever_mm": 2.3183502735714145,
+   "camera_frames": 15,
+   "camera_why": "the model puts the hub 23.5 px from the bolt circle at best (median over 15 frames, over 5.0): the circle found is not the hub's, or the strips are misplaced: no camera pose"
+  },
+  {
+   "pose": 1,
+   "commanded_deg": [
+    82.0,
+    -24.000000000000004,
+    -170.91684986359604
+   ],
+   "motor_error_deg": [
+    -0.08412683008601934,
+    1.4964299967214987
+   ],
+   "joint_fk_cad_lever_mm": 8.37846897365708,
+   "joint_fk_as_built_lever_mm": 8.385022148862758,
+   "camera_frames": 14,
+   "camera_deg": [
+    81.17301614528844,
+    -26.07026121915141
+   ],
+   "camera_spread_deg": [
+    0.1749534034110541,
+    0.11679886620269732
+   ],
+   "camera_vs_commanded_mm": 18.348262895248634,
+   "camera_vs_commanded_as_built_lever_mm": 5.468100606306091,
+   "camera_minus_encoder_j2_deg": -0.7428570246255378,
+   "camera_minus_commanded_j3_deg": -2.070261219151426
+  },
+  {
+   "pose": 2,
+   "commanded_deg": [
+    100.0,
+    -126.0,
+    123.46438429540757
+   ],
+   "motor_error_deg": [
+    0.04880774022648255,
+    0.20845755646788042
+   ],
+   "joint_fk_cad_lever_mm": 0.9455869953002733,
+   "joint_fk_as_built_lever_mm": 0.9376934330655416,
+   "camera_frames": 13,
+   "camera_deg": [
+    98.97607735517336,
+    -129.34724258542144
+   ],
+   "camera_spread_deg": [
+    0.5384463843200653,
+    0.0957628189259671
+   ],
+   "camera_vs_commanded_mm": 20.517279911683435,
+   "camera_vs_commanded_as_built_lever_mm": 7.896255526135431,
+   "camera_minus_encoder_j2_deg": -1.0727303850531176,
+   "camera_minus_commanded_j3_deg": -3.3472425854214753
+  },
+  {
+   "pose": 3,
+   "commanded_deg": [
+    106.0,
+    -24.000000000000004,
+    -122.42025668135966
+   ],
+   "motor_error_deg": [
+    -1.5291951894610156,
+    0.9112137676101114
+   ],
+   "joint_fk_cad_lever_mm": 3.1642099838674387,
+   "joint_fk_as_built_lever_mm": 3.4328907581538144,
+   "camera_frames": 15,
+   "camera_deg": [
+    103.34693088475612,
+    -23.103013177964087
+   ],
+   "camera_spread_deg": [
+    0.20219361023895083,
+    0.4328711464749014
+   ],
+   "camera_vs_commanded_mm": 19.872881401985037,
+   "camera_vs_commanded_as_built_lever_mm": 7.805824753085962,
+   "camera_minus_encoder_j2_deg": -1.1238739257828576,
+   "camera_minus_commanded_j3_deg": 0.8969868220359453
+  },
+  {
+   "pose": 4,
+   "commanded_deg": [
+    10.0,
+    -48.00000000000001,
+    63.065698064252125
+   ],
+   "motor_error_deg": [
+    -1.2256063222735099,
+    -0.2571140248766928
+   ],
+   "joint_fk_cad_lever_mm": 6.2529279358681285,
+   "joint_fk_as_built_lever_mm": 6.212326934105402,
+   "camera_frames": 15,
+   "camera_why": "the model puts the hub 25.8 px from the bolt circle at best (median over 15 frames, over 5.0): the circle found is not the hub's, or the strips are misplaced: no camera pose"
+  },
+  {
+   "pose": 5,
+   "commanded_deg": [
+    106.0,
+    -126.0,
+    134.72866211261461
+   ],
+   "motor_error_deg": [
+    -1.0348104238360083,
+    -0.1518895966766937
+   ],
+   "joint_fk_cad_lever_mm": 10.227164503484298,
+   "joint_fk_as_built_lever_mm": 10.332454920877252,
+   "camera_frames": 14,
+   "camera_deg": [
+    104.18776629230638,
+    -127.3335651904323
+   ],
+   "camera_spread_deg": [
+    0.23993033087202303,
+    0.15768581350743885
+   ],
+   "camera_vs_commanded_mm": 13.382906474108783,
+   "camera_vs_commanded_as_built_lever_mm": 6.112173974364828,
+   "camera_minus_encoder_j2_deg": -0.7774232838576133,
+   "camera_minus_commanded_j3_deg": -1.333565190432321
+  },
+  {
+   "pose": 6,
+   "commanded_deg": [
+    64.0,
+    -24.000000000000004,
+    158.93776241023247
+   ],
+   "motor_error_deg": [
+    0.7167764902264943,
+    0.6933313947679774
+   ],
+   "joint_fk_cad_lever_mm": 4.020709028001909,
+   "joint_fk_as_built_lever_mm": 4.005476125407842,
+   "camera_frames": 13,
+   "camera_deg": [
+    64.67535517684523,
+    -29.230784873394725
+   ],
+   "camera_spread_deg": [
+    0.290109238387032,
+    0.2625104392621174
+   ],
+   "camera_vs_commanded_mm": 21.327259631835883,
+   "camera_vs_commanded_as_built_lever_mm": 8.417766914777106,
+   "camera_minus_encoder_j2_deg": -0.041421313381267026,
+   "camera_minus_commanded_j3_deg": -5.230784873394795
+  },
+  {
+   "pose": 7,
+   "commanded_deg": [
+    106.0,
+    -29.999999999999996,
+    -130.62908664161452
+   ],
+   "motor_error_deg": [
+    0.15171301366398934,
+    1.0725583763024644
+   ],
+   "joint_fk_cad_lever_mm": 4.359817005089353,
+   "joint_fk_as_built_lever_mm": 4.347441786883579,
+   "camera_frames": 14,
+   "camera_deg": [
+    105.31986308614016,
+    -32.16501086513321
+   ],
+   "camera_spread_deg": [
+    0.33476962964345097,
+    0.4875786426374963
+   ],
+   "camera_vs_commanded_mm": 17.380889771756937,
+   "camera_vs_commanded_as_built_lever_mm": 4.540712741319073,
+   "camera_minus_encoder_j2_deg": -0.8318499275238216,
+   "camera_minus_commanded_j3_deg": -2.165010865133271
+  },
+  {
+   "pose": 8,
+   "commanded_deg": [
+    16.0,
+    -24.000000000000004,
+    95.26839328895869
+   ],
+   "motor_error_deg": [
+    -0.6612752675860103,
+    -1.143280929270725
+   ],
+   "joint_fk_cad_lever_mm": 8.433947878313706,
+   "joint_fk_as_built_lever_mm": 8.398118257508072,
+   "camera_frames": 15,
+   "camera_why": "the model puts the hub 10.8 px from the bolt circle at best (median over 15 frames, over 5.0): the circle found is not the hub's, or the strips are misplaced: no camera pose"
+  },
+  {
+   "pose": 9,
+   "commanded_deg": [
+    106.0,
+    -119.99999999999999,
+    139.20956581005362
+   ],
+   "motor_error_deg": [
+    -0.33168542383601063,
+    -0.22178255192817733
+   ],
+   "joint_fk_cad_lever_mm": 1.9508552877741265,
+   "joint_fk_as_built_lever_mm": 1.9730907110993334,
+   "camera_frames": 15,
+   "camera_deg": [
+    104.63038981750343,
+    -123.28464366914149
+   ],
+   "camera_spread_deg": [
+    0.2981166163385855,
+    0.16429193118843421
+   ],
+   "camera_vs_commanded_mm": 21.87762337738869,
+   "camera_vs_commanded_as_built_lever_mm": 9.52439111540594,
+   "camera_minus_encoder_j2_deg": -1.0379247586605542,
+   "camera_minus_commanded_j3_deg": -3.2846436691414924
+  },
+  {
+   "pose": 10,
+   "commanded_deg": [
+    22.0,
+    -54.0,
+    70.52979424874562
+   ],
+   "motor_error_deg": [
+    -0.6242879628985136,
+    -0.5800969281201933
+   ],
+   "joint_fk_cad_lever_mm": 4.326410954803769,
+   "joint_fk_as_built_lever_mm": 4.278022182789595,
+   "camera_frames": 15,
+   "camera_deg": [
+    21.42315609288602,
+    -56.3997509621319
+   ],
+   "camera_spread_deg": [
+    0.26919536307299125,
+    0.14826595817115581
+   ],
+   "camera_vs_commanded_mm": 17.06066403059266,
+   "camera_vs_commanded_as_built_lever_mm": 4.383094187685996,
+   "camera_minus_encoder_j2_deg": 0.047444055784535595,
+   "camera_minus_commanded_j3_deg": -2.3997509621318693
+  },
+  {
+   "pose": 11,
+   "commanded_deg": [
+    100.0,
+    -24.000000000000004,
+    -135.63204817747763
+   ],
+   "motor_error_deg": [
+    0.3564249277264895,
+    0.8734935449780876
+   ],
+   "joint_fk_cad_lever_mm": 3.7368135002107064,
+   "joint_fk_as_built_lever_mm": 3.7196187958557174,
+   "camera_frames": 14,
+   "camera_deg": [
+    99.5172118874587,
+    -26.2091498598028
+   ],
+   "camera_spread_deg": [
+    0.1658800608587395,
+    0.26495345813858573
+   ],
+   "camera_vs_commanded_mm": 15.931967501013556,
+   "camera_vs_commanded_as_built_lever_mm": 3.0176122125350764,
+   "camera_minus_encoder_j2_deg": -0.8392130402677853,
+   "camera_minus_commanded_j3_deg": -2.2091498598028676
+  },
+  {
+   "pose": 12,
+   "commanded_deg": [
+    100.0,
+    -119.99999999999999,
+    128.15349590794315
+   ],
+   "motor_error_deg": [
+    0.34543859960148193,
+    -0.36078100919270595
+   ],
+   "joint_fk_cad_lever_mm": 5.661894097222587,
+   "joint_fk_as_built_lever_mm": 5.706809123938152,
+   "camera_frames": 13,
+   "camera_deg": [
+    99.75253980431415,
+    -124.66681943480022
+   ],
+   "camera_spread_deg": [
+    0.22136763764543665,
+    0.20033104104319938
+   ],
+   "camera_vs_commanded_mm": 25.154751169337704,
+   "camera_vs_commanded_as_built_lever_mm": 12.148235527790701,
+   "camera_minus_encoder_j2_deg": -0.5928987952873269,
+   "camera_minus_commanded_j3_deg": -4.666819434800254
+  },
+  {
+   "pose": 13,
+   "commanded_deg": [
+    70.0,
+    -24.000000000000004,
+    168.51015281326605
+   ],
+   "motor_error_deg": [
+    0.6493936777264864,
+    -0.326202562953115
+   ],
+   "joint_fk_cad_lever_mm": 2.754238462575047,
+   "joint_fk_as_built_lever_mm": 2.8463730981085256,
+   "camera_frames": 14,
+   "camera_deg": [
+    70.23073740933945,
+    -29.838989983469972
+   ],
+   "camera_spread_deg": [
+    0.5465829535646818,
+    0.2252853323105549
+   ],
+   "camera_vs_commanded_mm": 28.461139755595468,
+   "camera_vs_commanded_as_built_lever_mm": 15.473846826453448,
+   "camera_minus_encoder_j2_deg": -0.41865626838702596,
+   "camera_minus_commanded_j3_deg": -5.838989983469939
+  },
+  {
+   "pose": 14,
+   "commanded_deg": [
+    22.0,
+    -24.000000000000004,
+    102.129826947898
+   ],
+   "motor_error_deg": [
+    -0.37160241602351884,
+    -1.0448757210225867
+   ],
+   "joint_fk_cad_lever_mm": 7.045162857487944,
+   "joint_fk_as_built_lever_mm": 7.021930818732129,
+   "camera_frames": 15,
+   "camera_deg": [
+    21.407614919018727,
+    -28.609209212781987
+   ],
+   "camera_spread_deg": [
+    0.13415863518386376,
+    0.5999827241393705
+   ],
+   "camera_vs_commanded_mm": 29.440059046573086,
+   "camera_vs_commanded_as_built_lever_mm": 16.433213598887384,
+   "camera_minus_encoder_j2_deg": -0.2207826649577526,
+   "camera_minus_commanded_j3_deg": -4.609209212782029
+  },
+  {
+   "pose": 15,
+   "commanded_deg": [
+    106.0,
+    -36.0,
+    -138.18526341065487
+   ],
+   "motor_error_deg": [
+    -0.04054772852351497,
+    1.5974851453428063
+   ],
+   "joint_fk_cad_lever_mm": 6.802728496855567,
+   "joint_fk_as_built_lever_mm": 6.807208173407336,
+   "camera_frames": 13,
+   "camera_deg": [
+    105.06505008960475,
+    -37.4551998753297
+   ],
+   "camera_spread_deg": [
+    0.5753487995054618,
+    0.28427840451414266
+   ],
+   "camera_vs_commanded_mm": 15.812851419698632,
+   "camera_vs_commanded_as_built_lever_mm": 3.52855652303464,
+   "camera_minus_encoder_j2_deg": -0.8944021818717344,
+   "camera_minus_commanded_j3_deg": -1.455199875329725
+  }
+ ]
+}

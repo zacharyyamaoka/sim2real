@@ -637,7 +637,9 @@ FIVEBAR_PASSIVE_NA = {
     "c1": "no safe passive release moves it: its rest is at the closure fold (margin 0.041); gravity ~3.5 N·m/rad against 0.74 N·m friction "
           "holds a ±12° band, and larger releases fall 40-80° at up to 1,300°/s (CAD twin, fivebar_passive_twin.py)",
 }
-DWELL = Path(__file__).resolve().parent / "data" / "fivebar_dwell_2026-11-11.json"
+DWELL = Path(__file__).resolve().parent / "data" / "fivebar_dwell_2026-11-11.json"                       # the nominal comp: "before"
+# WHY the identified comp judges Job (coordinator, 2026-11-11): it is the current operating config; the nominal run stays beside it
+DWELL_IDENTIFIED = Path(__file__).resolve().parent / "data" / "fivebar_dwell_identified_2026-11-11.json"
 # the five-bar lane's reachable mask (bam_ws claude/fivebar-guard @ 6a8818843, schema bam_fivebar.reachable/1): main first, the lane's
 # worktree until it lands (as the wrist's)
 _FIVEBAR_REACHABLE = "src/dev/bam_fivebar/bam_fivebar/data/reachable_2026-11-11.json"
@@ -763,13 +765,19 @@ def fivebar() -> CalibrationResult:
             routines="the five-bar mass ID's hidden-gravity test (bam_fivebar tests/test_massid.py) grades the gravity only")
         node.twin_ratio = twin_same / driven["floor_deg"] if driven["known"] and twin_same else None
         fb_levers = json.loads(TOOL_LEVERS.read_text())["rigs"].get("fivebar") if TOOL_LEVERS.exists() else None
-        if fb_levers and DWELL.exists():
+        operating = DWELL_IDENTIFIED if DWELL_IDENTIFIED.exists() else DWELL
+        if fb_levers and operating.exists():
             lever = fb_levers["lever_mm_per_rad"][joint]
-            dwell_rows = json.loads(DWELL.read_text())["rows"]
             index = ("j2", "c1").index(joint)   # WHY by name: `k` is reused by the floors loop above
-            settled_deg = [abs(r["motor_error_deg"][index]) for r in dwell_rows if r.get("motor_error_deg")]
-            node.questions["Job"] = job_answer(joint_share_deg(lever, 2), lever, 2, settled_deg, "dwell holds (3 s, the last second)",
-                                               node.questions["Job"]["numbers"])
+
+            def settled_of(path):
+                return [abs(r["motor_error_deg"][index]) for r in json.loads(path.read_text())["rows"] if r.get("motor_error_deg")]
+
+            before = (f"before (nominal comp, the same holds): {float(np.median(settled_of(DWELL))):.3f}° median; "
+                      if operating is DWELL_IDENTIFIED and DWELL.exists() else "")
+            node.questions["Job"] = job_answer(joint_share_deg(lever, 2), lever, 2, settled_of(operating),
+                                               "dwell holds on the " + ("identified comp" if operating is DWELL_IDENTIFIED else "nominal comp"),
+                                               before + node.questions["Job"]["numbers"])
         if export:
             thresholds = export["good_data_thresholds"]
             can = {"j2": "12", "c1": "13"}[joint]
@@ -801,13 +809,18 @@ def fivebar() -> CalibrationResult:
     sim_p95, job_p95 = _pct(stop_sim, 95), _pct(stop_target, 95)
     # WHY the dwell holds (coordinator, 2026-11-11): the raster's "stops" are turnarounds (median 0.06 s), tracking at the turn; the
     # mass-ID's 16 three-second holds are the settled accuracy the 1 mm gate asks about
-    dwell = json.loads(DWELL.read_text()) if DWELL.exists() else None
+    dwell = json.loads((DWELL_IDENTIFIED if DWELL_IDENTIFIED.exists() else DWELL).read_text()) if DWELL.exists() else None
+    nominal = json.loads(DWELL.read_text()) if DWELL.exists() and DWELL_IDENTIFIED.exists() else None
     if dwell:
         enc, cam = dwell["summary"]["encoders_fk_mm"], dwell["summary"]["camera_vs_commanded_mm"]
+        built = dwell["summary"].get("camera_vs_as_built_lever_mm") or {}
         job = "no" if enc["median"] > TOOL_GATE_MM else "yes"
-        job_text = (f"settled at {enc['n']} three-second holds: {enc['median']:.1f} mm median, {enc['p95']:.1f} mm p95 by encoders + FK; "
-                    f"{cam['median']:.1f} mm median by the D435 ({cam['n']} holds); raster turnarounds (tracking, not settled) "
-                    f"{job_p95:.1f} mm p95 by encoders")
+        job_text = (f"settled at {enc['n']} three-second holds on the {'identified' if nominal else 'nominal'} comp: {enc['median']:.1f} mm "
+                    f"median, {enc['p95']:.1f} mm p95 by encoders + FK; {cam['median']:.1f} mm median by the D435 ({cam['n']} holds)"
+                    + (f", {built['median']:.1f} mm against the as-built lever's target" if built.get("median") else "")
+                    + (f"; before (nominal comp): {nominal['summary']['encoders_fk_mm']['median']:.1f} mm by encoders, "
+                       f"{nominal['summary']['camera_vs_commanded_mm']['median']:.1f} mm by the D435" if nominal else "")
+                    + f"; raster turnarounds (tracking, not settled) {job_p95:.1f} mm p95 by encoders")
     else:
         job = "no" if job_p95 is not None and job_p95 > TOOL_GATE_MM else ("yes" if job_p95 is not None else "unknown")
         job_text = f"real vs commanded {job_p95:.1f} mm p95 at raster stops, by encoder kinematics"
