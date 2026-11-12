@@ -2187,7 +2187,7 @@ requires-dist = [
     { name = "coal", marker = "extra == 'test'", specifier = "==3.0.2" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
-    { name = "robot-msgs", editable = "../../robot_msgs" },
+    { name = "robot-msgs", editable = "/home/bam/robot_msgs" },
     { name = "trimesh", marker = "extra == 'contact'", specifier = ">=4.0" },
     { name = "trimesh", marker = "extra == 'test'", specifier = ">=4.0" },
 ]
@@ -2196,7 +2196,7 @@ provides-extras = ["contact", "test"]
 [[package]]
 name = "robot-msgs"
 version = "0.2.0"
-source = { editable = "../../robot_msgs" }
+source = { editable = "/home/bam/robot_msgs" }
 dependencies = [
     { name = "dataclass-values" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
