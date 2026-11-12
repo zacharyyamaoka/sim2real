@@ -25,6 +25,7 @@ import itertools
 import json
 import math
 import re
+import statistics
 from collections import defaultdict
 from pathlib import Path
 
@@ -242,7 +243,11 @@ def joint_data(description: dict, samples: list[tuple[np.ndarray, np.ndarray, np
     edges = edges_of(description)
     reachable = reachable_cells(JointDescription.from_json(description), edges)
     origin = description["origin_rad"]
-    rows = [np.column_stack([q - origin, qd, qdd]) for q, qd, qdd in samples if len(q)]
+    # WHY wrapped into the range's own turn: a revolute joint's logged angle may sit a turn away from its description's frame (the
+    # five-bar's C1 logs 64..255 deg for a range written -304..-93 deg); wrapping into [low, low + 360) keeps a range wider than +-180
+    # (the wrist's CAN 14: -248..+73 deg from its origin) whole, where a plain +-180 wrap pushed real samples out of it
+    low = description["range_rad"][0]
+    rows = [np.column_stack([low + (q - origin - low) % (2 * np.pi), qd, qdd]) for q, qd, qdd in samples if len(q)]
     counts = occupancy(np.vstack(rows), edges) if rows else np.zeros(reachable.shape, int)
     visited = int(((counts > 0) & reachable).sum())
     pct = 100.0 * visited / max(1, int(reachable.sum()))
@@ -546,6 +551,12 @@ FIVEBAR_PASSIVE_NA = {
           "holds a ±12° band, and larger releases fall 40-80° at up to 1,300°/s (CAD twin, fivebar_passive_twin.py)",
 }
 DWELL = Path(__file__).resolve().parent / "data" / "fivebar_dwell_2026-11-11.json"
+# the five-bar lane's reachable mask (bam_ws claude/fivebar-guard @ 6a8818843, schema bam_fivebar.reachable/1): main first, the lane's
+# worktree until it lands (as the wrist's)
+_FIVEBAR_REACHABLE = "src/dev/bam_fivebar/bam_fivebar/data/reachable_2026-11-11.json"
+FIVEBAR_REACHABLE_CANDIDATES = (Path("/home/bam/bam_ws") / _FIVEBAR_REACHABLE, Path("/home/bam/bam_ws-worktrees/fivebar-guard") / _FIVEBAR_REACHABLE)
+# the tick-clock refit's twin replayed on the five repeats (bam_fivebar.refit --evaluate --start refit_breakdown_123729)
+AFTER_TWIN = FIVEBAR / "refit_repeats_025953" / "after_twin.json"
 
 
 def fivebar() -> CalibrationResult:
@@ -561,6 +572,7 @@ def fivebar() -> CalibrationResult:
 
     files: dict = {}
     per_run: dict[str, list] = {"j2": [], "c1": []}
+    samples: dict[str, list] = {"j2": [], "c1": []}   # real (q, qd, qdd), every 10th tick, for the Data question
     cover = {"j2": [[], [], []], "c1": [[], [], []]}
     workspace: dict[tuple[int, int], float] = defaultdict(float)
     repeats: dict = defaultdict(list)
@@ -593,7 +605,11 @@ def fivebar() -> CalibrationResult:
             stop_target += list(np.linalg.norm(target[still] - tool_xy[still], axis=1))
             # WHY the tick: the ladder logs one row per plan tick, so the row index is the tape's own clock; its t is host time, whose
             # ~1 ms jitter put identical tapes 1.6-3.1 deg apart on a wall clock (metrics.series.repeat_floor compares per tick)
-            repeats[(gainset, step["name"])].append((t, real["target_motors"], q, np.arange(t.size)))
+            # WHY the tape length in the key: like for like (T1) - the three earlier ladders ran this rung on a 19,791-tick tape, the five
+            # repeats on a 19,951-tick one; two tapes are two run kinds
+            repeats[(gainset, step["name"], t.size)].append((t, real["target_motors"], q, np.arange(t.size)))
+            for k, joint in enumerate(("j2", "c1")):
+                samples[joint].append((q[::10, k], qd[::10, k], np.gradient(qd[:, k], t)[::10]))
             rung_key = f"{ladder}:{step['name']}"
             held_out = rung_key not in train
             label = f"{ladder[-6:]} {step['speed_m_s']:.2f} m/s {step['ff_mode']}"
@@ -612,12 +628,15 @@ def fivebar() -> CalibrationResult:
                     phase = "before" if stage == stages[0] else ("after" if stage == stages[-1] else "")
                     joints[joint].errors.append({"run": label, "stage": stage, "held_out": held_out, "sim_real_deg": value,
                                                  "target_real_deg": target_real, "phase": phase if held_out else ""})
-                per_run[joint].append(((gainset, step["name"]), held_out, values.get(stages[-1]), values.get(stages[0]), target_real))
+                per_run[joint].append(((gainset, step["name"], t.size), held_out, values.get(stages[-1]), values.get(stages[0]), target_real))
                 joints[joint].runs.append({"run": run_slug, "label": label, "held_out": held_out, "gains": gainset,
                                            "tape": f"coverage raster {step['ff_mode']} {step['speed_m_s']:.2f} m/s",
                                            "target_real_deg": _r(target_real), "sim_real_deg": _r(values.get(stages[-1])),
                                            "sim_real_before_deg": _r(values.get(stages[0])), "run_view": run_view(run_slug)})
     dt = float(np.median(dt_all))
+    after_twin = json.loads(AFTER_TWIN.read_text()) if AFTER_TWIN.exists() else None
+    reachable_path = next((path for path in FIVEBAR_REACHABLE_CANDIDATES if path.exists()), None)
+    export = json.loads(reachable_path.read_text()) if reachable_path else None
     for k, (joint, node) in enumerate(joints.items()):
         floors = {key: repeat_floor([(t, c[:, k], q[:, k], tick) for t, c, q, tick in runs]) for key, runs in repeats.items() if len(runs) > 1}
         key, floor = best_floor(floors)
@@ -634,7 +653,15 @@ def fivebar() -> CalibrationResult:
         same = [r for r in per_run[joint] if r[0] == key]
         twin_same, which = one_twin(same)
         twins = {k: one_twin([r for r in per_run[joint] if r[0] == k])[0] for k in floors}
-        node.floors = floors_rows(floors, twins, "driven", "ladder rungs per plan tick (twin: after where it scored, else the study twin)")
+        # the after twin replayed on the repeats (coordinator, 2026-11-11): the floor's own tape, judged on the calibrated twin
+        if after_twin and key is not None and key[1] in after_twin["rungs"]:
+            twin_same = after_twin["rungs"][key[1]][joint]["after_twin_median_deg"]
+            which = "after twin (the tick-clock refit) replayed on the five repeats, refit_repeats_025953"
+        for k in floors:
+            if after_twin and k[1] in after_twin["rungs"] and floors[k].known:
+                twins[k] = after_twin["rungs"][k[1]][joint]["after_twin_median_deg"]
+        node.floors = floors_rows(floors, twins, "driven", "ladder rungs per plan tick (twin: the after twin on the repeats, after_twin.json; "
+                                                             "else the after twin where it scored, else the study twin)")
         held_after = [r for r in per_run[joint] if r[1] and r[2] is not None]
         summary_rows = node.coverage_summary
         driven = {"floor_deg": math.degrees(floor.value) if floor is not None else None, "pairs": floor.pairs if floor else 0,
@@ -646,6 +673,11 @@ def fivebar() -> CalibrationResult:
             coverage_text=f"angle {summary_rows[0]['value']}°, speed p99 {summary_rows[1]['value']}°/s, {summary_rows[3]['value']} min logged",
             routines="the five-bar mass ID's hidden-gravity test (bam_fivebar tests/test_massid.py) grades the gravity only")
         node.twin_ratio = twin_same / driven["floor_deg"] if driven["known"] and twin_same else None
+        if export:
+            thresholds = export["good_data_thresholds"]
+            can = {"j2": "12", "c1": "13"}[joint]
+            node.questions["Data"] = joint_data(export["joint_descriptions"][can], samples[joint], thresholds["per_joint_reachable_cells_pct"],
+                                                thresholds["status"])
         for rung, (folder, which, title) in enumerate(FIVEBAR_MODELS):
             per_rung = json.loads((FIVEBAR / folder / "refit.json").read_text())[which]["per_rung"]
             values = [mdeg(r[f"sim_real_{joint}_mrad"]) for key, r in per_rung.items() if key not in train]
@@ -695,10 +727,31 @@ def fivebar() -> CalibrationResult:
         "Job": {"own": job, "numbers": job_text + (f" (source: {dwell['source'].split(',')[0]})" if dwell else ""),
                 "gate": f"≤ {TOOL_GATE_MM:g} mm at a stop, measured at the tool"},
     }
+    if export:
+        thresholds, today = export["good_data_thresholds"], export["good_data_thresholds"]["pass_today"]
+        gates = (("joint cube", today["joint_cube_pct_of_allowed"], thresholds["joint_cube_pct_of_allowed"]),
+                 ("workspace (2 cm tool pixels)", today["workspace_pct_of_allowed"], thresholds["workspace_pct_of_allowed"]),
+                 ("heading (15°, for facing)", today["heading_pct_of_allowed"], thresholds["heading_pct_of_allowed"]))
+        arm_data = {"own": "yes" if all(v >= limit for _n, v, limit in gates) else "no",
+                    "numbers": "; ".join(f"{name} {v:.1f} % of allowed (≥ {limit:g} %)" for name, v, limit in gates)
+                    + f" — {today['samples']} samples, {today['runs']}; mask from {reachable_path.parents[5]}",
+                    "gate": f"cube ≥ {thresholds['joint_cube_pct_of_allowed']:g} %, workspace ≥ {thresholds['workspace_pct_of_allowed']:g} %, "
+                            f"heading ≥ {thresholds['heading_pct_of_allowed']:g} % of the allowed mask ({thresholds['status']})"}
+    else:
+        arm_data = {"own": "unknown", "numbers": f"{sum(1 for v in workspace.values() if v >= 0.5)} tool cells (20 mm) visited; reachable set not committed",
+                    "gate": "≥ 40 % of the reachable joint cube"}
+    if after_twin:
+        tool_rows = [(rung, statistics.median(r["tool_mm"]["after_twin"]), r["tool_mm"]["floor"]) for rung, r in after_twin["rungs"].items()]
+        tool.questions["Twin"] = {"own": "yes" if all(FLOOR_CHECK <= m / f <= RULER_TWINNED for _r, m, f in tool_rows) else "no",
+                                  "numbers": "; ".join(f"{rung.split('.')[-1]}: after twin {m:.1f} mm vs tool floor {f:.1f} mm = {m / f:.1f}×"
+                                                       for rung, m, f in tool_rows) + " (the five repeats, tick clock)",
+                                  "gate": "tool twin vs real ≤ 1.5× the tool floor, on the after twin"}
+        tool.questions["Floor"] = {"own": "no", "numbers": "the tool's driven floor is known on the repeats ("
+                                   + ", ".join(f"{f:.1f} mm" for _r, _m, f in tool_rows) + "); no settled revisit of one stop by camera",
+                                   "gate": "the tool at the same stop, revisited, by camera"}
     arm.questions = {
         "Floor": {"own": "no", "numbers": "no tool-pose repeats (ISO 9283 RP)", "gate": "repeatability at the tool"},
-        "Data": {"own": "unknown", "numbers": f"{sum(1 for v in workspace.values() if v >= 0.5)} tool cells (20 mm) visited; reachable set not committed",
-                 "gate": "≥ 40 % of the reachable joint cube"},
+        "Data": arm_data,
         "Routines": {"own": "unknown", "numbers": "no arm-level routine graded on a hidden truth", "gate": "per routine"},
         "Twin": {"own": "unknown", "numbers": "the coupled arm's twin is scored per joint only", "gate": "twin vs real tool pose ≤ 1.5× the tool floor"},
         "Job": {"own": job, "numbers": tool.questions["Job"]["numbers"], "gate": tool.questions["Job"]["gate"]},

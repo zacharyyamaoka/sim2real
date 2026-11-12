@@ -108,3 +108,45 @@ def test_an_unknown_driven_floor_fails_floor_and_leaves_twin_unknown():
 def test_a_twin_under_the_floor_check_fails_floor_not_passes_twin():
     q = joint(driven_floor=0.2, twin=0.1)   # 0.5x: the "repeats" were not repeats
     assert q["Floor"]["own"] == "no" and q["Twin"]["own"] == "no"
+
+
+# ── the Data question's angle frame (rack_results.joint_data; regression, 2026-11-11) ─────────────────────────────────────────────
+
+def description(low_deg: float, high_deg: float) -> dict:
+    import math
+
+    return {"name": "j", "can_id": 1, "origin_rad": 0.0, "range_rad": [math.radians(low_deg), math.radians(high_deg)], "speed_rad_s": 2.0,
+            "accel_rad_s2": 20.0, "torque_limit_nm": 5.0, "cap_command_nm": 5.0, "drive_torque_nm": 5.0, "gravity_nm": 0.0,
+            "gravity_bottom_rad": 0.0, "coulomb_nm": 0.0, "inertia_kg_m2": 0.01, "kp_nm_rad": 10.0, "kd_nm_s_rad": 1.0,
+            "integrator_scale": 0.0, "output_per_board": 1.0, "window_rad": [math.radians(low_deg), math.radians(high_deg)],
+            "overspeed_rad_s": None, "rotor_rev_rad": 0.63}
+
+
+def angles(*degrees: float):
+    import math
+
+    import numpy as np
+
+    q = np.radians(np.array(degrees, float))
+    return [(q, np.zeros_like(q), np.zeros_like(q))]
+
+
+def visited(answer: dict) -> float:
+    return float(answer["numbers"].split(" %")[0])
+
+
+def test_a_range_wider_than_180_keeps_its_samples():
+    from sim2real.rack_results import joint_data
+
+    d = description(-248.0, 73.0)   # the wrist's CAN 14 from its origin
+    inside = visited(joint_data(d, angles(-240, -200, -150), 0.0, "test"))
+    assert inside > 0 and inside == visited(joint_data(d, angles(-240, -200, -150), 0.0, "test"))
+    # -200 deg is in range: a +-180 wrap would have moved it to +160, outside, and visited one cell fewer
+    assert visited(joint_data(d, angles(-200), 0.0, "test")) > 0
+
+
+def test_an_angle_logged_a_turn_away_lands_in_the_range():
+    from sim2real.rack_results import joint_data
+
+    d = description(-304.0, -93.0)   # the five-bar's C1 is written -304..-93 and logged 64..255
+    assert visited(joint_data(d, angles(64.0, 150.0, 255.0), 0.0, "test")) == visited(joint_data(d, angles(-296.0, -210.0, -105.0), 0.0, "test")) > 0
