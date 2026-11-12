@@ -107,6 +107,10 @@ TABLE_PROPERTIES = {
                   "numbers": {"displayName": "The numbers"}, "gate": {"displayName": "The gate"},
                   "flag": {"displayName": "Flag (not a gate)"}, "cause": {"displayName": "Cause"},
                   "children_not_passing": {"displayName": "Children not passing"}, "node": {"displayName": "Node"}},
+    "job_history": {"of": {"displayName": "Level"}, "order": {"displayName": "#"}, "config": {"displayName": "Controller config"},
+                    "settled": {"displayName": "Settled error (median)"}, "unit": {"displayName": "Unit"}, "gate": {"displayName": "Gate"},
+                    "gate_ratio": {"displayName": "× gate"}, "judged": {"displayName": "Judged", "colors": {"judged": 3, "": 0}},
+                    "deployable": {"displayName": "Deployable"}, "source": {"displayName": "Source"}, "node": {"displayName": "Node"}},
     "checks": {"question": {"displayName": "Question"}, "step": {"displayName": "#"}, "check": {"displayName": "Check"},
                "answer": {"displayName": "Answer", "colors": ANSWER_COLORS}, "decides": {"displayName": "Decides"},
                "numbers": {"displayName": "The numbers"}, "gate": {"displayName": "The gate"}, "node": {"displayName": "Node"}},
@@ -136,6 +140,8 @@ class Node:
     errors: list[dict] = field(default_factory=list)        # per run x stage: {run, stage, order, held_out, sim_real_deg, target_real_deg}
     parameters: list[dict] = field(default_factory=list)    # {parameter, unit, before, after, source}
     models: list[dict] = field(default_factory=list)        # {model, held_out_deg, picked, note}
+    # the Job across controller configs, oldest first: {order, config, settled, unit, gate, gate_ratio, judged, deployable, source}
+    job_history: list[dict] = field(default_factory=list)
     runs: list[dict] = field(default_factory=list)          # {run, label, held_out, gains, tape, target_real_deg, sim_real_deg, sim_real_before_deg, run_view}
     gate: dict | None = None                  # the tool gate's numbers, on the node that carries it
     # the five questions at this node's OWN output: {question: {own: yes|no|partial|unknown, numbers: the soft numbers, gate: its rule}}
@@ -282,6 +288,7 @@ class CalibrationResult:
         level of the tree shows that level's runs; parameters and models stay on the node that owns them, plus the subtree's below."""
         verdicts = self.verdicts()
         nodes, coverage, workspace, cover_sum, errors, error_stats, params, models, runs = [], [], [], [], [], [], [], [], []
+        job_history: list[dict] = []
         questions: list[dict] = []
         checks: list[dict] = []
         floors: list[dict] = []
@@ -331,6 +338,8 @@ class CalibrationResult:
                                    if isinstance(row.get("before"), (int, float)) and isinstance(row.get("after"), (int, float)) and row["before"] else None})
                 for row in member.models:
                     models.append({"node": n.id, "of": member.label, **row})
+                for row in member.job_history:
+                    job_history.append({"node": n.id, "of": member.label, **row})
             # the trend: per stage, the median and p95 over the subtree's held-out runs and over all runs
             pool = [e for m in subtree for e in m.errors]
             for order, stage in enumerate(self.stages):
@@ -341,7 +350,7 @@ class CalibrationResult:
                                             "median_deg": _r(_median(values), 3), "p95_deg": _r(_pct(values, 95), 3),
                                             "mean_deg": _r(sum(values) / len(values), 3), "runs": len(values)})
         return {"nodes": nodes, "questions": questions, "checks": checks, "floors": floors, "coverage": coverage, "workspace": workspace, "coverage_summary": cover_sum, "errors": errors, "error_stats": error_stats,
-                "parameters": params, "models": models, "runs": runs}
+                "parameters": params, "models": models, "runs": runs, "job_history": job_history}
 
     # ---------------------------------------------------------------------------------------------------------- the page
 
@@ -482,6 +491,7 @@ datasets:
   node: data/nodes.json
   questions: data/questions.json
   checks: data/checks.json
+  job_history: data/job_history.json
   floors: data/floors.json
   coverage: data/coverage.json
   workspace: data/workspace.json
@@ -500,6 +510,7 @@ links:
   - {{ from: nodes.node, to: node.node, direction: one-way }}
   - {{ from: nodes.node, to: questions.node, direction: one-way }}
   - {{ from: nodes.node, to: checks.node, direction: one-way }}
+  - {{ from: nodes.node, to: job_history.node, direction: one-way }}
   - {{ from: nodes.node, to: floors.node, direction: one-way }}
   - {{ from: nodes.node, to: coverage.node, direction: one-way }}
   - {{ from: nodes.node, to: workspace.node, direction: one-way }}
@@ -526,6 +537,7 @@ layout:
     - {{ view: Tree, w: 12, h: 4 }}
     - {{ view: Five questions, w: 12, h: 3 }}
     - {{ view: Twin and Job checks in order, w: 12, h: 3 }}
+    - {{ view: Job history, w: 12, h: 3 }}
     - {{ view: Floors per run kind, w: 12, h: 3 }}
     - {{ view: Verdict, w: 3, h: 2 }}
     - {{ view: Twin ÷ floor, w: 3, h: 2 }}
@@ -573,6 +585,11 @@ properties:
   check: {{ displayName: Check }}
   answer: {{ displayName: Answer }}
   decides: {{ displayName: Decides }}
+  config: {{ displayName: Controller config }}
+  settled: {{ displayName: Settled error (median) }}
+  judged: {{ displayName: Judged }}
+  deployable: {{ displayName: Deployable }}
+  gate_ratio: {{ displayName: × gate }}
   sim_real_deg: {{ displayName: sim→real after }}
   sim_real_before_deg: {{ displayName: sim→real before }}
   target_real_deg: {{ displayName: target→real }}
@@ -619,6 +636,12 @@ views:
     display: {{ passes: badge, own: badge }}
     sort:
       - {{ property: order, direction: ASC }}
+  - type: table
+    name: Job history
+    from: job_history
+    groupBy: {{ property: of }}
+    order: [order, config, settled, unit, gate, gate_ratio, judged, deployable, source]
+    display: {{ judged: badge }}
   - type: table
     name: Twin and Job checks in order
     from: checks

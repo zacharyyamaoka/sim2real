@@ -732,6 +732,30 @@ FIVEBAR_PASSIVE_NA = {
 DWELL = Path(__file__).resolve().parent / "data" / "fivebar_dwell_2026-11-11.json"                       # the nominal comp: "before"
 # WHY the identified comp judges Job (coordinator, 2026-11-11): it is the current operating config; the nominal run stays beside it
 DWELL_IDENTIFIED = Path(__file__).resolve().parent / "data" / "fivebar_dwell_identified_2026-11-11.json"
+# the identified comp + the boards' settle integrator (dwell_real_settle_052708; tools/fivebar_dwell_twin.py writes both files)
+DWELL_SETTLE = Path(__file__).resolve().parent / "data" / "fivebar_dwell_settle_2026-11-11.json"
+DWELL_SETTLE_TWIN = Path(__file__).resolve().parent / "data" / "fivebar_dwell_settle_twin_2026-11-11.json"
+# The Job history, oldest first; the newest that exists is judged. WHY the settle config judges (coordinator, 2026-11-12): it is the best
+# config actually run on the arm; its integrator (ki 1000, ilimit 0.58 / 0.66 N.m) is written in RAM for the run and restored after, so
+# the page says it is not a board default
+FIVEBAR_JOB_CONFIGS = (
+    ("nominal comp", "DWELL", None, "deployable: the stock model comp"),
+    ("identified lumped comp", "DWELL_IDENTIFIED", "DWELL_TWIN", "deployable: host-side comp (fivebar_homed's default)"),
+    ("identified comp + settle integrator", "DWELL_SETTLE", "DWELL_SETTLE_TWIN",
+     "RAM only: the boards' integrator (ki 1000, ilimit 0.58 / 0.66 N·m) is not a board default; written for the run, restored after"),
+)
+
+
+def fivebar_job_configs() -> list[tuple[str, Path, Path | None, str]]:
+    """The Job history's configs whose dwell file exists, oldest first: (config, real holds, twin replay or None, deployable)."""
+    out = []
+    for config, real, twin, deployable in FIVEBAR_JOB_CONFIGS:
+        real_path, twin_path = globals()[real], (globals()[twin] if twin else None)
+        if real_path.exists():
+            out.append((config, real_path, twin_path if twin_path is not None and twin_path.exists() else None, deployable))
+    return out
+
+
 # the five-bar lane's reachable mask (bam_ws claude/fivebar-guard @ 6a8818843, schema bam_fivebar.reachable/1): main first, the lane's
 # worktree until it lands (as the wrist's)
 _FIVEBAR_REACHABLE = "src/dev/bam_fivebar/bam_fivebar/data/reachable_2026-11-11.json"
@@ -819,7 +843,9 @@ def fivebar() -> CalibrationResult:
                                            "sim_real_before_deg": _r(values.get(stages[0])), "run_view": run_view(run_slug)})
     dt = float(np.median(dt_all))
     after_twin = json.loads(AFTER_TWIN.read_text()) if AFTER_TWIN.exists() else None
-    dwell_twin = json.loads(DWELL_TWIN.read_text()) if DWELL_TWIN.exists() else None
+    configs = fivebar_job_configs()
+    judged_config, _real, judged_twin, judged_deployable = configs[-1] if configs else (None, None, None, "")
+    dwell_twin = json.loads(judged_twin.read_text()) if judged_twin else None
     reachable_path = next((path for path in FIVEBAR_REACHABLE_CANDIDATES if path.exists()), None)
     export = json.loads(reachable_path.read_text()) if reachable_path else None
     for k, (joint, node) in enumerate(joints.items()):
@@ -859,20 +885,24 @@ def fivebar() -> CalibrationResult:
             routines="the five-bar mass ID's hidden-gravity test (bam_fivebar tests/test_massid.py) grades the gravity only")
         node.twin_ratio = twin_same / driven["floor_deg"] if driven["known"] and twin_same else None
         fb_levers = json.loads(TOOL_LEVERS.read_text())["rigs"].get("fivebar") if TOOL_LEVERS.exists() else None
-        operating = DWELL_IDENTIFIED if DWELL_IDENTIFIED.exists() else DWELL
-        if fb_levers and operating.exists():
+        if fb_levers and configs:
             lever = fb_levers["lever_mm_per_rad"][joint]
             index = ("j2", "c1").index(joint)   # WHY by name: `k` is reused by the floors loop above
+            share = joint_share_deg(lever, 2)
 
             def settled_of(path):
                 return [abs(r["motor_error_deg"][index]) for r in json.loads(path.read_text())["rows"] if r.get("motor_error_deg")]
 
-            before = (f"before (nominal comp, the same holds): {float(np.median(settled_of(DWELL))):.3f}° median; "
-                      if operating is DWELL_IDENTIFIED and DWELL.exists() else "")
-            node.questions["Job"] = job_answer(joint_share_deg(lever, 2), lever, 2, settled_of(operating),
-                                               "dwell holds on the " + ("identified comp" if operating is DWELL_IDENTIFIED else "nominal comp"),
-                                               before + node.questions["Job"]["numbers"])
-            share = joint_share_deg(lever, 2)
+            history = []
+            for order, (config, path, _twin, deployable) in enumerate(configs, 1):
+                med = float(np.median(settled_of(path)))
+                judged = config == judged_config
+                history.append(f"{config} {med:.3f}°" + (" (judged)" if judged else ""))
+                node.job_history.append({"order": order, "config": config, "settled": _r(med), "unit": "°", "gate": _r(share),
+                                         "gate_ratio": _r(med / share, 1), "judged": "judged" if judged else "", "deployable": deployable,
+                                         "source": json.loads(path.read_text()).get("run", path.name).split("/")[-1]})
+            node.questions["Job"] = job_answer(share, lever, 2, settled_of(_real), f"dwell holds on the {judged_config}",
+                                               "history: " + " → ".join(history) + f"; {judged_deployable}; " + node.questions["Job"]["numbers"])
         else:
             share = None
         tracking = _median([mdeg(r[f"target_sim_{joint}_mrad"]) for key, r in refits["tick"].items() if key not in train])
@@ -881,8 +911,8 @@ def fivebar() -> CalibrationResult:
         if dwell_twin:
             sim_values = [abs(r["sim_error_deg"][joint_index]) for r in dwell_twin["rows"]]
             gap = _median([abs(r["sim_minus_real_deg"][joint_index]) for r in dwell_twin["rows"]])
-            controller = controller_check(share, sim_values, "dwell holds replayed on the after twin (the same moves and holds, "
-                                          "fivebar_homed.dwell_holds)", f"twin vs real at the holds {gap:.3f}° median; {soft}")
+            controller = controller_check(share, sim_values, f"dwell holds replayed on the after twin with the {judged_config} (the same "
+                                          "moves and holds, fivebar_homed.dwell_holds)", f"twin vs real at the holds {gap:.3f}° median; {soft}")
         else:
             controller = controller_check(share, [], "the 16 dwell holds (the dwell run was not replayed on the twin)", soft)
         order_twin_job(node.questions, controller)
@@ -917,26 +947,34 @@ def fivebar() -> CalibrationResult:
     sim_p95, job_p95 = _pct(stop_sim, 95), _pct(stop_target, 95)
     # WHY the dwell holds (coordinator, 2026-11-11): the raster's "stops" are turnarounds (median 0.06 s), tracking at the turn; the
     # mass-ID's 16 three-second holds are the settled accuracy the 1 mm gate asks about
-    dwell = json.loads((DWELL_IDENTIFIED if DWELL_IDENTIFIED.exists() else DWELL).read_text()) if DWELL.exists() else None
-    nominal = json.loads(DWELL.read_text()) if DWELL.exists() and DWELL_IDENTIFIED.exists() else None
+    dwell = json.loads(_real.read_text()) if configs else None
+    # the camera flag comes from the run whose camera was scored (the identified one; the settle run's D435 is not fitted)
+    camera_run = json.loads(DWELL_IDENTIFIED.read_text()) if DWELL_IDENTIFIED.exists() else dwell
+    for order, (config, path, _twin, deployable) in enumerate(configs, 1):
+        enc_c = json.loads(path.read_text())["summary"]["encoders_fk_mm"]
+        tool.job_history.append({"order": order, "config": config, "settled": _r(enc_c["median"], 2), "unit": "mm", "gate": TOOL_GATE_MM,
+                                 "gate_ratio": _r(enc_c["median"] / TOOL_GATE_MM, 1), "judged": "judged" if config == judged_config else "",
+                                 "deployable": deployable, "source": json.loads(path.read_text()).get("run", path.name).split("/")[-1]})
     # WHY encoders only (Zach 2026-11-11 21:50): every gate is the joint encoders through FK; the D435 / ArUco number is a "camera vs FK"
     # flag beside it, never the gate (its hub fit fails on 3 of 16 holds and reads 2-5x the encoders where it fits)
     camera_flag = ""
     if dwell:
-        enc, cam = dwell["summary"]["encoders_fk_mm"], dwell["summary"]["camera_vs_commanded_mm"]
-        built = dwell["summary"].get("camera_vs_as_built_lever_mm") or {}
+        enc = dwell["summary"]["encoders_fk_mm"]
         job = "no" if enc["median"] > TOOL_GATE_MM else "yes"
-        job_text = (f"settled at {enc['n']} three-second holds on the {'identified' if nominal else 'nominal'} comp: {enc['median']:.1f} mm "
-                    f"median, {enc['p95']:.1f} mm p95 by the joint encoders through FK"
-                    + (f"; before (nominal comp): {nominal['summary']['encoders_fk_mm']['median']:.1f} mm by encoders + FK" if nominal else "")
-                    + f"; raster turnarounds (tracking, not settled) {job_p95:.1f} mm p95 by encoders + FK")
-        j2_gap = _median([r.get("camera_minus_encoder_j2_deg") for r in dwell["rows"]])
-        camera_flag = (f"camera vs FK ({RULING_2150}: a flag, never a gate): the D435 puts the tool {cam['median']:.1f} mm median from commanded "
-                       f"on {cam['n']} of {enc['n']} holds where encoders + FK say {enc['median']:.1f} mm"
+        job_text = (f"settled at {enc['n']} three-second holds on the {judged_config}: {enc['median']:.2f} mm median, {enc['p95']:.2f} mm p95 by "
+                    "the joint encoders through FK; history: " + " → ".join(f"{r['config']} {r['settled']:.2f} mm" for r in tool.job_history)
+                    + f"; {judged_deployable}; raster turnarounds (tracking, not settled) {job_p95:.1f} mm p95 by encoders + FK")
+    if camera_run and "camera_vs_commanded_mm" in camera_run["summary"]:
+        enc_cam, cam = camera_run["summary"]["encoders_fk_mm"], camera_run["summary"]["camera_vs_commanded_mm"]
+        built = camera_run["summary"].get("camera_vs_as_built_lever_mm") or {}
+        j2_gap = _median([r.get("camera_minus_encoder_j2_deg") for r in camera_run["rows"]])
+        camera_flag = (f"camera vs FK ({RULING_2150}: a flag, never a gate), on the identified run (the settle run's D435 is not fitted): the "
+                       f"D435 puts the tool {cam['median']:.1f} mm median from commanded on {cam['n']} of {enc_cam['n']} holds where encoders + FK "
+                       f"say {enc_cam['median']:.1f} mm"
                        + (f" ({built['median']:.1f} mm on the as-built lever)" if built.get("median") else "")
                        + (f"; camera − encoder at J2 {j2_gap:+.2f}° median" if j2_gap is not None else "")
                        + "; the camera disagrees with FK by more than the gate, so check the stickers / hub fit before trusting it")
-    else:
+    if not dwell:
         job = "no" if job_p95 is not None and job_p95 > TOOL_GATE_MM else ("yes" if job_p95 is not None else "unknown")
         job_text = f"real vs commanded {job_p95:.1f} mm p95 at raster stops, by encoder kinematics"
     tool.gate = {"gate_mm": TOOL_GATE_MM, "sim_real_mm": sim_p95,
@@ -983,8 +1021,8 @@ def fivebar() -> CalibrationResult:
         gap_mm = _median([r["sim_real_tool_mm"] for r in rows])
         tool.questions["Twin"]["numbers"] += (f"; at the 16 dwell holds the after twin's tool is {gap_mm:.1f} mm median from the real one "
                                               "(encoders + FK, the holds replayed)")
-        tool_controller = controller_check(TOOL_GATE_MM, [r["target_sim_tool_mm"] for r in rows], "dwell holds replayed on the after twin "
-                                           "(by FK)", f"twin vs real at the holds {gap_mm:.1f} mm median; {raster}", unit=" mm")
+        tool_controller = controller_check(TOOL_GATE_MM, [r["target_sim_tool_mm"] for r in rows], f"dwell holds replayed on the after twin "
+                                           f"with the {judged_config} (by FK)", f"twin vs real at the holds {gap_mm:.1f} mm median; {raster}", unit=" mm")
     else:
         tool_controller = controller_check(None, [], "the 16 dwell holds (the dwell run was not replayed on the twin)", raster, unit=" mm")
     order_twin_job(tool.questions, tool_controller)
@@ -1009,9 +1047,9 @@ def fivebar() -> CalibrationResult:
              "Floors: same-input repeats only (sim2real.metrics.series.repeat_floor), compared per plan tick: the five repeat ladders of the "
              "0.05 m/s rungs (identical tapes); the earlier ladders' runs of those rungs start from other homings and are rejected. The twin "
              "ratio divides the after twin's held-out rungs by that floor (the repeats were scored on the study twin only).",
-             "Tool: Twin = the after twin's tool vs the real tool on the repeats; Job = the settled tool at the 16 dwell holds on the identified "
-             "comp (data/fivebar_dwell_identified_2026-11-11.json), by the joint encoders through FK; the D435 is a camera-vs-FK flag, never "
-             f"a gate ({RULING_2150}).",
+             "Tool: Twin = the after twin's tool vs the real tool on the repeats; Job = the settled tool at the 16 dwell holds on the newest "
+             "config run (Job history: nominal comp → identified comp → identified comp + settle integrator, data/fivebar_dwell_*.json), by "
+             f"the joint encoders through FK; the settle integrator is RAM only, not a board default; the D435 is a camera-vs-FK flag, never a gate ({RULING_2150}).",
              f"Twin and Job check in order: target vs sim (the controller), then sim vs real, then target vs real ({RULING_2150}); target vs "
              "sim = the 16 dwell holds replayed on the after twin through the real lane's own dwell_holds (data/fivebar_dwell_twin_2026-11-11.json, "
              "tools/fivebar_dwell_twin.py).",

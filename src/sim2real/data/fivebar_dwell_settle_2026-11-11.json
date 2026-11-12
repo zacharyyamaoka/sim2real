@@ -1,0 +1,235 @@
+{
+ "schema": "sim2real.rack.fivebar_dwell/1",
+ "date": "2026-11-12",
+ "run": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/dwell_real_settle_052708",
+ "settled_s": 1.0,
+ "what": "settled tool and joint error at the same 16 three-second holds on the IDENTIFIED comp + the settle integrator (the boards' ki 1000, ilimit [0.58, 0.66] N.m in RAM only, restored after; not a board default)",
+ "source": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/dwell_real_settle_052708/fivebar_homed.json (dwell.holds), bam_ws claude/fivebar-guard; tool by bam_fivebar forward_pose + tool_point",
+ "settle": {
+  "after_s": 0.3,
+  "fade_s": 0.3,
+  "ki": 1000.0,
+  "ilimit_nm": [
+   0.58,
+   0.66
+  ]
+ },
+ "boards": {
+  "J2": {
+   "can_id": 12,
+   "ki": 1000.0,
+   "ilimit": 0.58,
+   "kp": 144.0,
+   "kd": 8.0
+  },
+  "C1": {
+   "can_id": 13,
+   "ki": 1000.0,
+   "ilimit": 0.66,
+   "kp": 200.0,
+   "kd": 4.0
+  }
+ },
+ "summary": {
+  "encoders_fk_mm": {
+   "n": 16,
+   "median": 2.409504627645367,
+   "p95": 7.072353605525797,
+   "max": 11.356651787175299
+  }
+ },
+ "rows": [
+  {
+   "pose": 0,
+   "commanded_deg": [
+    10.0,
+    88.70477758843052
+   ],
+   "motor_error_deg": [
+    -0.20937097071101438,
+    -0.292555853742587
+   ],
+   "joint_fk_cad_lever_mm": 2.320050681982642
+  },
+  {
+   "pose": 1,
+   "commanded_deg": [
+    82.0,
+    -170.91684986359604
+   ],
+   "motor_error_deg": [
+    -0.2708944082110199,
+    0.28244073890899496
+   ],
+   "joint_fk_cad_lever_mm": 1.8738882970084374
+  },
+  {
+   "pose": 2,
+   "commanded_deg": [
+    100.0,
+    123.46438429540757
+   ],
+   "motor_error_deg": [
+    0.06803381444523934,
+    0.26338919709289255
+   ],
+   "joint_fk_cad_lever_mm": 1.133642078110066
+  },
+  {
+   "pose": 3,
+   "commanded_deg": [
+    106.0,
+    -122.42025668135966
+   ],
+   "motor_error_deg": [
+    -0.4745076894610065,
+    0.9441727519851085
+   ],
+   "joint_fk_cad_lever_mm": 3.096675854315706
+  },
+  {
+   "pose": 4,
+   "commanded_deg": [
+    10.0,
+    63.065698064252125
+   ],
+   "motor_error_deg": [
+    -1.1487020253985083,
+    -0.17471656393917465
+   ],
+   "joint_fk_cad_lever_mm": 5.64425421164263
+  },
+  {
+   "pose": 5,
+   "commanded_deg": [
+    106.0,
+    134.72866211261461
+   ],
+   "motor_error_deg": [
+    -1.1281942128985085,
+    -0.12991694042667865
+   ],
+   "joint_fk_cad_lever_mm": 11.356651787175299
+  },
+  {
+   "pose": 6,
+   "commanded_deg": [
+    64.0,
+    158.93776241023247
+   ],
+   "motor_error_deg": [
+    0.8595987558514903,
+    0.556002293205498
+   ],
+   "joint_fk_cad_lever_mm": 3.2410314022244617
+  },
+  {
+   "pose": 7,
+   "commanded_deg": [
+    106.0,
+    -130.62908664161452
+   ],
+   "motor_error_deg": [
+    0.014383912101484446,
+    1.0780515403649809
+   ],
+   "joint_fk_cad_lever_mm": 4.301773554804175
+  },
+  {
+   "pose": 8,
+   "commanded_deg": [
+    16.0,
+    95.26839328895869
+   ],
+   "motor_error_deg": [
+    -0.051534056648512946,
+    -0.17648405427077604
+   ],
+   "joint_fk_cad_lever_mm": 1.1686799040632831
+  },
+  {
+   "pose": 9,
+   "commanded_deg": [
+    106.0,
+    139.20956581005362
+   ],
+   "motor_error_deg": [
+    -0.4360555410235057,
+    -0.10642610661566203
+   ],
+   "joint_fk_cad_lever_mm": 3.6167702600528533
+  },
+  {
+   "pose": 10,
+   "commanded_deg": [
+    22.0,
+    70.52979424874562
+   ],
+   "motor_error_deg": [
+    0.07334387303899298,
+    0.018657954692347378
+   ],
+   "joint_fk_cad_lever_mm": 0.34789950057592106
+  },
+  {
+   "pose": 11,
+   "commanded_deg": [
+    100.0,
+    -135.63204817747763
+   ],
+   "motor_error_deg": [
+    0.09275305272648718,
+    0.3571361231030652
+   ],
+   "joint_fk_cad_lever_mm": 1.5093985921781787
+  },
+  {
+   "pose": 12,
+   "commanded_deg": [
+    100.0,
+    128.15349590794315
+   ],
+   "motor_error_deg": [
+    0.13120520116398804,
+    -0.27838354825518774
+   ],
+   "joint_fk_cad_lever_mm": 3.043560571970397
+  },
+  {
+   "pose": 13,
+   "commanded_deg": [
+    70.0,
+    168.51015281326605
+   ],
+   "motor_error_deg": [
+    0.8636270761639929,
+    -0.21084611764059968
+   ],
+   "joint_fk_cad_lever_mm": 2.498958573308092
+  },
+  {
+   "pose": 14,
+   "commanded_deg": [
+    22.0,
+    102.129826947898
+   ],
+   "motor_error_deg": [
+    0.11728918553898487,
+    0.14164771647741076
+   ],
+   "joint_fk_cad_lever_mm": 1.1078525538840445
+  },
+  {
+   "pose": 15,
+   "commanded_deg": [
+    106.0,
+    -138.18526341065487
+   ],
+   "motor_error_deg": [
+    -0.08449304102350687,
+    0.22968729378032468
+   ],
+   "joint_fk_cad_lever_mm": 0.9943973336781018
+  }
+ ]
+}

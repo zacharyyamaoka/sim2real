@@ -1,0 +1,392 @@
+{
+ "schema": "sim2real.rack.fivebar_dwell_twin/1",
+ "date": "2026-11-11",
+ "run": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/dwell_real_settle_052708",
+ "twin": "Coulomb 0.74 N.m, viscous 0.100 N.m.s/rad, armature x1.00, delay 2.5 ms",
+ "twin_source": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar_real/refit_breakdown_123729/refit.json",
+ "gravity": "/home/bam/bam_ws-worktrees/fivebar-guard/src/dev/bam_rack_twin/records/fivebar-bench/gravity_params_massid_real_093852.json",
+ "coulomb_ff_nm": [
+  0.7,
+  0.78
+ ],
+ "hold_kd_scale": 4.0,
+ "board_gains": [
+  {
+   "kp": 144.0,
+   "kd": 8.0,
+   "ki": 1000.0,
+   "ilimit": 0.58
+  },
+  {
+   "kp": 200.0,
+   "kd": 4.0,
+   "ki": 1000.0,
+   "ilimit": 0.66
+  }
+ ],
+ "settle": {
+  "after_s": 0.3,
+  "fade_s": 0.3,
+  "ki": 1000.0,
+  "ilimit_nm": [
+   0.58,
+   0.66
+  ]
+ },
+ "player": "bam_rack_twin.hardware.fivebar_homed.dwell_holds on bam_fivebar.refit.twin_plant (bam_ws claude/fivebar-guard, read-only)",
+ "settled_s": 1.0,
+ "rows": [
+  {
+   "pose": 0,
+   "commanded_deg": [
+    10.0,
+    88.70477758843052
+   ],
+   "sim_error_deg": [
+    -0.41485018952942176,
+    -0.07729777131170437
+   ],
+   "real_error_deg": [
+    -0.20937097071101438,
+    -0.292555853742587
+   ],
+   "sim_minus_real_deg": [
+    -0.20547921881840914,
+    0.21525808243087852
+   ],
+   "target_sim_tool_mm": 1.7955410951015198,
+   "sim_real_tool_mm": 0.7294135192841238,
+   "target_real_tool_mm": 2.320050681982642
+  },
+  {
+   "pose": 1,
+   "commanded_deg": [
+    82.0,
+    -170.91684986359604
+   ],
+   "sim_error_deg": [
+    0.05938156836586359,
+    0.14084467481983412
+   ],
+   "real_error_deg": [
+    -0.2708944082110199,
+    0.28244073890899496
+   ],
+   "sim_minus_real_deg": [
+    0.33027597657688545,
+    -0.14159606408918535
+   ],
+   "target_sim_tool_mm": 0.7315400960819273,
+   "sim_real_tool_mm": 1.2247509870094164,
+   "target_real_tool_mm": 1.8738882970084374
+  },
+  {
+   "pose": 2,
+   "commanded_deg": [
+    100.0,
+    123.46438429540757
+   ],
+   "sim_error_deg": [
+    0.2056212097647566,
+    -0.19161511538532053
+   ],
+   "real_error_deg": [
+    0.06803381444523934,
+    0.26338919709289255
+   ],
+   "sim_minus_real_deg": [
+    0.13758739531951392,
+    -0.4550043124782235
+   ],
+   "target_sim_tool_mm": 3.576729745862614,
+   "sim_real_tool_mm": 4.639433970345099,
+   "target_real_tool_mm": 1.133642078110066
+  },
+  {
+   "pose": 3,
+   "commanded_deg": [
+    106.0,
+    -122.42025668135966
+   ],
+   "sim_error_deg": [
+    -0.5307524150168292,
+    0.18597800855618893
+   ],
+   "real_error_deg": [
+    -0.4745076894610065,
+    0.9441727519851085
+   ],
+   "sim_minus_real_deg": [
+    -0.05624472555582827,
+    -0.7581947434289162
+   ],
+   "target_sim_tool_mm": 0.9177496385746273,
+   "sim_real_tool_mm": 2.765701611643686,
+   "target_real_tool_mm": 3.096675854315706
+  },
+  {
+   "pose": 4,
+   "commanded_deg": [
+    10.0,
+    63.065698064252125
+   ],
+   "sim_error_deg": [
+    -0.47631553102235946,
+    -0.05095921912158978
+   ],
+   "real_error_deg": [
+    -1.1487020253985083,
+    -0.17471656393917465
+   ],
+   "sim_minus_real_deg": [
+    0.6723864943761484,
+    0.12375734481758371
+   ],
+   "target_sim_tool_mm": 2.268188726183523,
+   "sim_real_tool_mm": 3.3778752260226197,
+   "target_real_tool_mm": 5.64425421164263
+  },
+  {
+   "pose": 5,
+   "commanded_deg": [
+    106.0,
+    134.72866211261461
+   ],
+   "sim_error_deg": [
+    0.08033330920001645,
+    -0.1787172825441727
+   ],
+   "real_error_deg": [
+    -1.1281942128985085,
+    -0.12991694042667865
+   ],
+   "sim_minus_real_deg": [
+    1.208527522098521,
+    -0.04880034211748807
+   ],
+   "target_sim_tool_mm": 2.1767565473552763,
+   "sim_real_tool_mm": 13.49410778834162,
+   "target_real_tool_mm": 11.356651787175299
+  },
+  {
+   "pose": 6,
+   "commanded_deg": [
+    64.0,
+    158.93776241023247
+   ],
+   "sim_error_deg": [
+    0.32804466807116583,
+    -0.1147668928409428
+   ],
+   "real_error_deg": [
+    0.8595987558514903,
+    0.556002293205498
+   ],
+   "sim_minus_real_deg": [
+    -0.5315540877803215,
+    -0.6707691860464422
+   ],
+   "target_sim_tool_mm": 1.0928444364991747,
+   "sim_real_tool_mm": 3.9199040291640266,
+   "target_real_tool_mm": 3.2410314022244617
+  },
+  {
+   "pose": 7,
+   "commanded_deg": [
+    106.0,
+    -130.62908664161452
+   ],
+   "sim_error_deg": [
+    0.31756752760522267,
+    0.16793205841272438
+   ],
+   "real_error_deg": [
+    0.014383912101484446,
+    1.0780515403649809
+   ],
+   "sim_minus_real_deg": [
+    0.30318361550374107,
+    -0.9101194819522789
+   ],
+   "target_sim_tool_mm": 1.0598230255396877,
+   "sim_real_tool_mm": 3.531708032669908,
+   "target_real_tool_mm": 4.301773554804175
+  },
+  {
+   "pose": 8,
+   "commanded_deg": [
+    16.0,
+    95.26839328895869
+   ],
+   "sim_error_deg": [
+    -0.4386295001151508,
+    -0.05882906326430841
+   ],
+   "real_error_deg": [
+    -0.051534056648512946,
+    -0.17648405427077604
+   ],
+   "sim_minus_real_deg": [
+    -0.38709544346663627,
+    0.11765499100647503
+   ],
+   "target_sim_tool_mm": 1.6140461630986616,
+   "sim_real_tool_mm": 0.7075564689250254,
+   "target_real_tool_mm": 1.1686799040632831
+  },
+  {
+   "pose": 9,
+   "commanded_deg": [
+    106.0,
+    139.20956581005362
+   ],
+   "sim_error_deg": [
+    0.46935076503138307,
+    -0.0827976613508374
+   ],
+   "real_error_deg": [
+    -0.4360555410235057,
+    -0.10642610661566203
+   ],
+   "sim_minus_real_deg": [
+    0.9054063060548856,
+    0.02362844526481922
+   ],
+   "target_sim_tool_mm": 5.230099225169576,
+   "sim_real_tool_mm": 8.832767151105255,
+   "target_real_tool_mm": 3.6167702600528533
+  },
+  {
+   "pose": 10,
+   "commanded_deg": [
+    22.0,
+    70.52979424874562
+   ],
+   "sim_error_deg": [
+    -0.4137831078786737,
+    -0.14177556728323654
+   ],
+   "real_error_deg": [
+    0.07334387303899298,
+    0.018657954692347378
+   ],
+   "sim_minus_real_deg": [
+    -0.4871269809176688,
+    -0.1604335219755768
+   ],
+   "target_sim_tool_mm": 2.0717828632925532,
+   "sim_real_tool_mm": 2.419222656549296,
+   "target_real_tool_mm": 0.34789950057592106
+  },
+  {
+   "pose": 11,
+   "commanded_deg": [
+    100.0,
+    -135.63204817747763
+   ],
+   "sim_error_deg": [
+    0.36236621066510266,
+    0.1519193485549225
+   ],
+   "real_error_deg": [
+    0.09275305272648718,
+    0.3571361231030652
+   ],
+   "sim_minus_real_deg": [
+    0.26961315793860763,
+    -0.20521677454811993
+   ],
+   "target_sim_tool_mm": 0.9316129408072137,
+   "sim_real_tool_mm": 0.9305931326018513,
+   "target_real_tool_mm": 1.5093985921781787
+  },
+  {
+   "pose": 12,
+   "commanded_deg": [
+    100.0,
+    128.15349590794315
+   ],
+   "sim_error_deg": [
+    0.351654370756742,
+    -0.12604485574902335
+   ],
+   "real_error_deg": [
+    0.13120520116398804,
+    -0.27838354825518774
+   ],
+   "sim_minus_real_deg": [
+    0.2204491695927544,
+    0.15233869250616294
+   ],
+   "target_sim_tool_mm": 4.227327020298792,
+   "sim_real_tool_mm": 1.2992006777872027,
+   "target_real_tool_mm": 3.043560571970397
+  },
+  {
+   "pose": 13,
+   "commanded_deg": [
+    70.0,
+    168.51015281326605
+   ],
+   "sim_error_deg": [
+    0.39455443344685015,
+    0.14177078464173845
+   ],
+   "real_error_deg": [
+    0.8636270761639929,
+    -0.21084611764059968
+   ],
+   "sim_minus_real_deg": [
+    -0.4690726427171512,
+    0.35261690228233533
+   ],
+   "target_sim_tool_mm": 0.8563044855903816,
+   "sim_real_tool_mm": 2.633414648505961,
+   "target_real_tool_mm": 2.498958573308092
+  },
+  {
+   "pose": 14,
+   "commanded_deg": [
+    22.0,
+    102.129826947898
+   ],
+   "sim_error_deg": [
+    -0.4486664904852861,
+    -0.054979002527716626
+   ],
+   "real_error_deg": [
+    0.11728918553898487,
+    0.14164771647741076
+   ],
+   "sim_minus_real_deg": [
+    -0.5659556760242737,
+    -0.19662671900512407
+   ],
+   "target_sim_tool_mm": 1.4573139949711487,
+   "sim_real_tool_mm": 2.5235853894401132,
+   "target_real_tool_mm": 1.1078525538840445
+  },
+  {
+   "pose": 15,
+   "commanded_deg": [
+    106.0,
+    -138.18526341065487
+   ],
+   "sim_error_deg": [
+    0.2737196270050531,
+    0.1783548679920685
+   ],
+   "real_error_deg": [
+    -0.08449304102350687,
+    0.22968729378032468
+   ],
+   "sim_minus_real_deg": [
+    0.3582126680285569,
+    -0.05133242578827435
+   ],
+   "target_sim_tool_mm": 1.04882004037835,
+   "sim_real_tool_mm": 0.8978206142758963,
+   "target_real_tool_mm": 0.9943973336781018
+  }
+ ]
+}
