@@ -426,7 +426,7 @@ def recovery_sequence(rest: Mapping[str, float], target: Mapping[str, float], of
 
 
 def run_recovery(plant: RealWristPlant, offset: Mapping[str, float], *, target: Mapping[str, float] | None = None, contact_map=None,
-                 comp=None, label: str = "home button") -> dict:
+                 comp=None, label: str = "home button", is_trip: Callable[[BaseException], bool] = lambda error: False) -> dict:
     """The home button on ``plant``: read where the wrist is (board + ``offset``), pick the order, run the sequence through
     ``run_phase_real`` (runaway stop on), then let every drive go (the bus's ``release`` when it has one, else STOP). Returns its record."""
     from .real_plant import SequenceStopped, run_phase_real  # noqa: PLC0415
@@ -436,6 +436,11 @@ def run_recovery(plant: RealWristPlant, offset: Mapping[str, float], *, target: 
 
         contact_map = SelfContactMap.get()
     target = dict(target or {j: math.radians(v) for j, v in READY_DEG.items()})
+    if getattr(plant.bus, "braked", False):
+        # WHY refused (the five-bar's rule, fivebar_plant.take_over): a lost bus or a board fault braked the wrist - nothing takes over a
+        # brake; a human looks first. The bus plant's close lifts the brake once the drives are still.
+        return {"label": label, "result": "refused", "why": "the bus plant braked the wrist (a lost bus or a board fault)",
+                "release": {"released": False, "why": "braked by the bus plant: its close releases it once still"}}
     if getattr(plant.bus, "holding", False):
         plant.bus.take_over()
     reading = plant.bus.read()
@@ -452,7 +457,7 @@ def run_recovery(plant: RealWristPlant, offset: Mapping[str, float], *, target: 
     plant.frame = {j: 0.0 for j in JOINTS}  # the sequence is written in the board frame
     peaks: dict = {}
     try:
-        phase = run_phase_real(plant, sequence, guard=None, dt=plant.dt, peaks=peaks)
+        phase = run_phase_real(plant, sequence, guard=None, dt=plant.dt, peaks=peaks, is_trip=is_trip)
         record.update(result=phase.status if phase.status != "done" else "at target", message=phase.message)
     except SequenceStopped as stop:
         record.update(result=f"stopped ({stop.kind})", message=str(stop))
@@ -461,9 +466,14 @@ def run_recovery(plant: RealWristPlant, offset: Mapping[str, float], *, target: 
     record["end_deg"] = {ROLE[j]: round(math.degrees(float(end.position_rad[i]) + float(offset[j])), 3) for i, j in enumerate(JOINTS)}
     record["end_off_target_deg"] = {ROLE[j]: round(math.degrees(float(end.position_rad[i]) + float(offset[j]) - target[j]), 3)
                                     for i, j in enumerate(JOINTS)}
-    if getattr(plant.bus, "holding", False):
+    if getattr(plant.bus, "holding", False) and not getattr(plant.bus, "braked", False):
         plant.bus.take_over()
     release = getattr(plant.bus, "release", None)
+    if getattr(plant.bus, "braked", False):
+        # a lost bus or a board fault braked the wrist: nothing takes over and nothing is sent (the bus plant's close decides when
+        # the brake may be lifted); recorded as such
+        record["release"] = {"released": False, "why": "braked by the bus plant: its close releases it once still"}
+        return record
     if callable(release):
         record["release"] = release()
     else:
@@ -505,7 +515,8 @@ def prepare_wrist(name: str) -> dict:
                                                                         if c.joint == j) for j in JOINTS}}
 
 
-def run_episode_on(plant: RealWristPlant, prepared: dict, *, start=None, runaway_rad_s: float | None = None) -> tuple[dict, Any, Any]:
+def run_episode_on(plant: RealWristPlant, prepared: dict, *, start=None, runaway_rad_s: float | None = None,
+                   is_trip: Callable[[BaseException], bool] = lambda error: False) -> tuple[dict, Any, Any]:
     """One homing episode on ``plant`` (reset at ``start``): the sequence with the live guard and the runaway stop, then ``observe``.
     Returns (record, phase, result)."""
     from .procedures import HomingRefused  # noqa: PLC0415
@@ -521,7 +532,7 @@ def run_episode_on(plant: RealWristPlant, prepared: dict, *, start=None, runaway
     phase, result, incident = None, None, None
     try:
         phase = run_phase_real(plant, sequence, guard=guard, dt=plant.dt, limit_s=MAX_EPISODE_S,
-                               runaway_rad_s=RUNAWAY_RAD_S if runaway_rad_s is None else runaway_rad_s, peaks=peaks)
+                               runaway_rad_s=RUNAWAY_RAD_S if runaway_rad_s is None else runaway_rad_s, peaks=peaks, is_trip=is_trip)
         record["status"], record["message"] = phase.status, phase.message
         if phase.status == "done":
             try:
