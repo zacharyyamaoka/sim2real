@@ -67,6 +67,9 @@ ROWS = (
     ("recover_first(fed)+tview_v2+gff", RECOVERY),
     ("single_touch_c1seek+gff", REAL_LANE),
     ("recover_first(fed)+single_touch_c1seek+gff", RECOVERY),
+    # the baseline the c1seek row is judged against for the limp crank: pass 6's single_touch+gff in the same form, re-run here because
+    # pass 6 recorded no limp speeds (its gates are pass 6's and unchanged)
+    ("single_touch+gff", REAL_LANE),
 )
 FAMILY_WHY = {RECOVERY: "pass 4's 16 recovery starts (bench.named_rests + bench.sobol_starts[:8]), placed then settled unpowered",
               REAL_LANE: "pass 6's real-lane family (gff_rung.real_lane_starts): the homed map's home + offsets, released"}
