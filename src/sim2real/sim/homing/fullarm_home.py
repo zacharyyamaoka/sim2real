@@ -178,13 +178,19 @@ def in_region_b(w2_deg: float, w3_deg: float, claw_deg: float) -> bool:
 # ---------------------------------------------------------------------------------------------------------------------- the truths
 
 CLAW_CAD_KG = 0.2454 + 0.0655 + 0.0018  # the export's L Gripper Plate v1.2 + Crab Claw Gripper v2.1 + the GIM43 circle marker (fusion360_data)
-CLAW_BRACKET_KG = {"nominal": 0.371, "high": 0.50}  # the brief's (docs/pick_tracking/claw_payload.py CASES: CAD x 1.2249; + a bracket and slack)
-TRUTHS = ("cad", "claw_nominal", "claw_high", "end+22%")
+CLAW_BRACKET_KG = {"nominal": 0.371, "high": 0.50, "light": 0.25}  # the brief's (docs/pick_tracking/claw_payload.py CASES: CAD x 1.2249; + a bracket and slack); light = held out
+# WHY two LIGHTER truths held out (2026-11-13, the skeptic: the comp was picked on the same truths it was scored on): v2_cad was chosen on
+# cad / claw_high / end+22% (the sweeps 'comp' and 'final'); a comp that feeds a heavier arm than the truth over-feeds J2 and C1, so the
+# unseen cases are the LIGHTER ones - the end group x0.85 and a 0.25 kg claw (below the CAD's 0.3127 kg). Only the ``heldout`` sweep runs them.
+END_GROUP_LIGHT_SCALE = 0.85
+TRUTHS = ("cad", "claw_nominal", "claw_high", "end+22%", "end-15%", "claw_light")
 TRUTH_WHY = {
     "cad": "bam_fb_v2's masses as exported (end group 1.389 kg, the wrist + claw 0.924 kg beyond W1)",
     "claw_nominal": f"the claw assembly at 0.371 kg (CAD {CLAW_CAD_KG:.3f} kg): +{0.371 - CLAW_CAD_KG:.3f} kg on the gripper body",
     "claw_high": f"the claw assembly at 0.50 kg: +{0.50 - CLAW_CAD_KG:.3f} kg on the gripper body",
     "end+22%": "every end body (UR forearm, wrist, claw) x1.2249 at its own CoM: the plate rig's mass-ID CAD -> real ratio",
+    "end-15%": f"HELD OUT: every end body x{END_GROUP_LIGHT_SCALE} at its own CoM (lighter than the CAD; never seen when the comp was picked)",
+    "claw_light": f"HELD OUT: the claw assembly at 0.25 kg (CAD {CLAW_CAD_KG:.3f} kg): {0.25 - CLAW_CAD_KG:+.3f} kg on the gripper body",
 }
 
 
@@ -201,13 +207,13 @@ def apply_truth(rig, truth: str) -> dict:
 
     model = rig.model
     before = float(sum(model.body_mass[model.body(b).id] for b in END_BODIES))
-    if truth in ("claw_nominal", "claw_high"):
+    if truth in ("claw_nominal", "claw_high", "claw_light"):
         added = CLAW_BRACKET_KG[truth.removeprefix("claw_")] - CLAW_CAD_KG
         gripper = model.body(GRIPPER_BODY).id
         _scale_body(model, GRIPPER_BODY, (float(model.body_mass[gripper]) + added) / float(model.body_mass[gripper]))
-    elif truth == "end+22%":
+    elif truth in ("end+22%", "end-15%"):
         for body in END_BODIES:
-            _scale_body(model, body, END_GROUP_MASS_SCALE)
+            _scale_body(model, body, END_GROUP_MASS_SCALE if truth == "end+22%" else END_GROUP_LIGHT_SCALE)
     elif truth != "cad":
         raise ValueError(f"truth must be one of {TRUTHS}, not {truth!r}")
     mujoco.mj_setConst(model, mujoco.MjData(model))
@@ -903,6 +909,11 @@ def sweep_configs(sweep: str, *, starts=None, wrist: str = "hold") -> list[Episo
         poses = {"rest": None, **HELD_WRIST_POSES}
         out += [EpisodeConfig(start=replace(start, name=f"{start.name} · wrist {pose_name}", wrist_deg=pose), comp="v2_cad", truth="cad",
                               wrist="limp", wrist_friction="breakaway") for pose_name, pose in poses.items() for start in starts[::3]]
+    elif sweep == "heldout":
+        # what ships (v2_cad + the braked wrist) on the two LIGHTER truths the comp was not picked on, and today's plate comp beside it
+        for truth in ("end-15%", "claw_light"):
+            for comp in ("v2_cad", "plate"):
+                out += [EpisodeConfig(start=start, comp=comp, truth=truth, wrist="brake") for start in starts]
     elif sweep == "baseline":
         for truth in BASELINE_TRUTHS:
             out += [EpisodeConfig(start=start, comp="plate", truth=truth, wrist="limp") for start in starts]
@@ -915,7 +926,7 @@ def sweep_configs(sweep: str, *, starts=None, wrist: str = "hold") -> list[Episo
         for comp in COMP_NAMES:
             out += [EpisodeConfig(start=start, comp=comp, truth="cad", wrist=wrist) for start in rested]
     else:
-        raise ValueError(f"sweep must be wrist, comp or rest, not {sweep!r}")
+        raise ValueError(f"sweep must be wrist, comp, rest, j1, release, final, heldout or baseline, not {sweep!r}")
     return out
 
 
@@ -1039,7 +1050,7 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--sweep", choices=("wrist", "comp", "rest", "static", "baseline", "j1", "release", "final"), default="comp")
+    parser.add_argument("--sweep", choices=("wrist", "comp", "rest", "static", "baseline", "j1", "release", "final", "heldout"), default="comp")
     parser.add_argument("--wrist", choices=WRIST_MODES, default="hold", help="comp / rest sweeps: the wrist's mode")
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--limit", type=int, default=None, help="only the first N episodes (a pilot)")

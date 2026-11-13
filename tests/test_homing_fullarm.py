@@ -64,6 +64,22 @@ def test_a_truth_moves_only_the_end_group():
 
 
 @needs_twin
+def test_the_held_out_lighter_truths_move_only_the_end_group_or_only_the_claw_down():
+    """The comp was picked on cad / claw_high / end+22%; these two are lighter than the CAD, never seen when it was picked."""
+    cad, light = fh.build_rig("cad"), fh.build_rig("end-15%")
+    for body in range(cad.model.nbody):
+        name = cad.model.body(body).name
+        ratio = light.model.body_mass[body] / cad.model.body_mass[body] if cad.model.body_mass[body] else 1.0
+        assert math.isclose(ratio, fh.END_GROUP_LIGHT_SCALE if name in fh.END_BODIES else 1.0, rel_tol=1e-9), name
+    assert fh.END_GROUP_LIGHT_SCALE == 0.85 and "end-15%" in fh.TRUTHS and "claw_light" in fh.TRUTHS
+    claw = fh.build_rig("claw_light")
+    gripper = fh.GRIPPER_BODY
+    added = claw.model.body_mass[claw.model.body(gripper).id] - cad.model.body_mass[cad.model.body(gripper).id]
+    assert math.isclose(added, 0.25 - fh.CLAW_CAD_KG, rel_tol=1e-9) and added < 0.0
+    assert {row.truth for row in fh.sweep_configs("heldout")} == {"end-15%", "claw_light"}
+
+
+@needs_twin
 def test_a_start_past_the_cads_own_stop_is_refused():
     with pytest.raises(ValueError, match="outside the CAD's stops"):
         fh.place(fh.build_rig("cad"), fh.FullStart("L1 through its lower hardstop", -15.0, 60.0))
