@@ -296,13 +296,19 @@ def _job(job: dict) -> dict:
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
     from .fullarm_procedures import FullArmHome  # noqa: F401,PLC0415
 
-    plant = FullArmHomingPlant(job["kind"], job.get("truth", "cad"))
+    belt = job.get("belt_top_m")
+    plant = FullArmHomingPlant(job["kind"], job.get("truth", "cad"), belt_top_m=belt, settle_s=3.0 if job.get("hanging") else 0.5)
     table = None
     if job.get("table"):
         table = table_from_json(job["table"])
     prior = arm_prior(table, phase_error_deg=job.get("phase_error_deg", 0.0))
     procedure = make_procedure(job["procedure"])
-    start = ArmStart(**job["start"])
+    if job.get("hanging"):
+        from .fullarm_plant import hanging_start  # noqa: PLC0415
+
+        start = hanging_start(plant, job["start"]["name"])
+    else:
+        start = ArmStart(**job["start"])
     began = time.time()
     try:
         report = run_episode(procedure, plant, start, prior, trace_every=job.get("trace_every", 0))
@@ -356,7 +362,8 @@ def hidden_truth(kind: str) -> dict:
     return hidden_backlash(kind)
 
 
-SCORED = (JOINTS[1], JOINTS[2], W1, W2, W3, CLAW)  # J2, C1, the wrist and the claw; J1 is held, never homed (real form)
+SCORED = (JOINTS[1], JOINTS[2], W1, W2, W3, CLAW)
+SCORED_FIVEBAR = (JOINTS[1], JOINTS[2])  # J2, C1, the wrist and the claw; J1 is held, never homed (real form)
 
 
 def summarize(reports: list[dict], scored=SCORED) -> dict:
@@ -405,6 +412,18 @@ def sweep_jobs(sweep: str, *, n_wrist: int = 12) -> list[dict]:
         for order in ("zach_v1", "park_first"):
             for start in family_starts:
                 add({"order": order}, "B0", start)
+    elif sweep == "fivebar":
+        # the five-bar alone (wrist braked), the ease-off on and off (PEP 0047 "The motor-driven five-bar home"): every start family plus
+        # the rack's hanging-on-the-belt rest
+        family_starts = starts("real") + starts("wrist", n_wrist) + starts("adversarial")
+        for ease in (True, False):
+            spec = {"fivebar_only": True, "wrist_during_fivebar": "brake", "ease_c1_first": ease,
+                    "name": f"fivebar_home[single_touch+gff, J2 first seek 0.05, ease C1 {'on' if ease else 'off'}]"}
+            for start in family_starts:
+                add(spec, "B0", start)
+            hang = ArmStart("hanging on the belt", *HOME_CRAIG_DEG, family="hanging")
+            for kind in ("B0", "B1", "B2"):
+                add(spec, kind, hang, hanging=True, belt_top_m=0.0, tag=kind)
     elif sweep == "wrist_policy":
         for policy in ("hold", "brake"):
             for start in starts("real") + starts("wrist", 4):
@@ -505,7 +524,7 @@ def main(argv=None) -> int:
     else:
         jobs = sweep_jobs(args.sweep, n_wrist=args.n_wrist)
         reports = run_jobs(jobs, args.workers)
-        results = {"reports": reports, "summary": summarize(reports)}
+        results = {"reports": reports, "summary": summarize(reports, SCORED_FIVEBAR if args.sweep == "fivebar" else SCORED)}
     results.update({"schema": "sim2real.fullarm_check/1", "sweep": args.sweep, "seconds": round(time.time() - began, 1),
                     "sim2real_sha": code_sha(Path(__file__)), "bam_ws_sha": code_sha(BAM_WS_SRC), "bundle": "bam_fb_v2 @ cad-exporter 09374d7"})
     write_results(args.out, results, default=str)

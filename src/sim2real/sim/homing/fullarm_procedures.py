@@ -285,6 +285,11 @@ class FullArmHome:
     # the five-bar alone, the wrist and claw HELD where they are (at their homed zeros: the Sim to Real Agent's contract, 2026-11-13 16:00 -
     # the wrist is cold-homed first, by wrist_home_v1, and the five-bar's runner homes J2 / C1 with it held)
     fivebar_only: bool = False
+    # WHY the two five-bar rewrites (sim 2026-11-13 evening, PEP 0047 "The motor-driven five-bar home"): from the rack's hanging-on-the-belt
+    # rest J2's first seek at 0.1 rev/s sticks and lurches past the 86 deg/s stop - at 0.05 it does not; and leaving BOTH upper stops with
+    # J2 first kicks J2 to 142-146 deg/s in one tick - C1 eased 3 deg off its stop first (J2 held) walks home on every start tried
+    j2_first_seek_rev_s: float | None = 0.05
+    ease_c1_first: bool = True
     wrist_during_fivebar: str = "brake"
     # WHY the five-bar ignores the stored table by default (sim 2026-11-13, the backlash ladder): press_reverse+gff's five-bar rows are
     # wrong on bam_fb_v2 (J2 compliance read 1.28 deg/N.m vs 0.0013 true) and pushed J2's zero 12.7 deg off; un-tabled, single_touch+gff
@@ -333,10 +338,36 @@ class FullArmHome:
                 others = {j: JointCommand.limp(j) for j in (*WRIST, CLAW)}
             else:
                 raise ValueError(f"wrist_during_fivebar must be hold or brake, not {self.wrist_during_fivebar!r}")
-            return widen(self.fivebar.plan(prior, []), others)
+            return widen(self._rewrite_fivebar(self.fivebar.plan(prior, [])), others)
         if len(so_far) == 1 and not self.fivebar_only:
             return self._phase1(prior)
         return None
+
+    def _rewrite_fivebar(self, sequence: JointCommandSequence) -> JointCommandSequence:
+        """The five-bar's real-form sequence with this arm's two changes (``j2_first_seek_rev_s``, ``ease_c1_first``); nothing else moves."""
+        from dataclasses import replace as _replace  # noqa: PLC0415
+
+        from .procedures import SEEK_DISTANCE  # noqa: PLC0415
+
+        steps = list(sequence.steps)
+        if self.j2_first_seek_rev_s is not None:
+            speed = self.j2_first_seek_rev_s * TAU
+            for i, step in enumerate(steps):
+                if step.name.startswith("J2 seeks"):
+                    steps[i] = _replace(step, commands=tuple(
+                        _replace(c, speed=speed) if c.joint == J2 and c.mode == "move_by" and abs(float(c.distance)) >= 0.99 * SEEK_DISTANCE
+                        else c for c in step.commands))
+        if self.ease_c1_first:
+            first_walk = next((i for i, step in enumerate(steps) if step.name.startswith("J2 + C1 home")), None)
+            if first_walk is not None and first_walk > 0:
+                before = steps[first_walk - 1]
+                c1 = next(c for c in before.commands if c.joint == C1)
+                eased = [c for c in before.commands if c.joint != C1] + [
+                    JointCommand.move_by(C1, -math.radians(3.0), speed=0.02 * TAU, max_effort=float(c1.max_effort or 7.0),
+                                         feedforward_effort=c1.feedforward_effort)]
+                steps.insert(first_walk, JointCommandStep(name="C1 eases off its stop (J2 held)", commands=tuple(eased),
+                                                          done_when=(Elapsed(duration=2.0),), timeout=5.0))
+        return _replace(sequence, steps=tuple(steps))
 
     def _phase1(self, prior: ArmPrior, fivebar_holds: dict | None = None) -> JointCommandSequence:
         fivebar_holds = fivebar_holds or fivebar_home_hold(prior, self.comp, self.ff_scale)
