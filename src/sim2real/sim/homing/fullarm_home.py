@@ -215,6 +215,29 @@ def apply_truth(rig, truth: str) -> dict:
 
 
 _RIGS: dict = {}
+V11_SHA = "8957130"  # bam_fb_test_rig.bundle.REAL_BUNDLE_SHA: the plate rig the home button ran on, the baseline twin
+BASELINE_TRUTHS = ("plate", "plate+22%")
+
+
+def build_baseline_rig(truth: str = "plate"):
+    """The plate rig's v11 twin (bam_fb_test_rig ``bench_rig``, no hidden backlash), ``plate+22%`` = its end group x1.2249 (the mass ID's
+    reading of the real plate arm, mujoco_plant.END_GROUP_MASS_SCALE): the home button's baseline on the starts the full arm runs."""
+    key = ("v11", truth)
+    if key not in _RIGS:
+        bam_ws_path()
+        from bam_fb_test_rig.bundle import bundle_dir, load_bundle  # noqa: PLC0415
+        from bam_fb_test_rig.rig import bench_rig  # noqa: PLC0415
+
+        from .mujoco_plant import scale_body_mass  # noqa: PLC0415
+
+        rig = bench_rig(load_bundle(bundle_dir(V11_SHA)), backlash=None)
+        if truth == "plate+22%":
+            scale_body_mass(rig, "l2", END_GROUP_MASS_SCALE)
+        elif truth != "plate":
+            raise ValueError(f"baseline truth must be one of {BASELINE_TRUTHS}, not {truth!r}")
+        rig.truth = {"truth": truth}
+        _RIGS[key] = rig
+    return _RIGS[key]
 
 
 def build_rig(truth: str = "cad", *, wrist_friction: str = "sliding", scene: str = "scene.xml"):
@@ -352,9 +375,12 @@ class FullArmPlant:
         self._previous = self._motors()
         self.velocity = np.zeros(2)
         self.log: list[list[float]] = []
-        self.wrist_adr = {role: rig.qpos_adr(role) for role in WRISTS}
-        self.wrist_dof = {role: rig.dof_adr(role) for role in WRISTS}
-        self.claw_adr = int(rig.model.jnt_qposadr[rig.model.joint(CLAW_JOINT).id])
+        roles = {joint.role for joint in rig.bundle.joints}
+        # WHY optional: the same plant runs the plate rig's v11 twin (no wrist, no claw) as the baseline (``baseline`` sweep)
+        self.wrist_adr = {role: rig.qpos_adr(role) for role in WRISTS if role in roles}
+        self.wrist_dof = {role: rig.dof_adr(role) for role in WRISTS if role in roles}
+        names = {rig.model.joint(j).name for j in range(rig.model.njnt)}
+        self.claw_adr = int(rig.model.jnt_qposadr[rig.model.joint(CLAW_JOINT).id]) if CLAW_JOINT in names else None
         self._record()
 
     # -- physics hooks
@@ -417,25 +443,33 @@ class FullArmPlant:
         self.sim.stop("J1")
         self.braked.pop("J1", None)
 
-    def release_wrist(self, order=WRISTS, *, still_rad_s: float = 0.02, still_s: float = 0.5, timeout_s: float = 6.0) -> list[dict]:
-        """Let the held wrist go, one joint at a time in ``order`` (mode 0), each once the one before it has been still ``still_s``.
-        Returns, per joint, how far and how fast it swung after its release (deg, deg/s)."""
+    def release_wrist(self, order=WRISTS, *, via: str = "brake", still_rad_s: float = 0.02, still_s: float = 0.5,
+                      timeout_s: float = 10.0) -> list[dict]:
+        """Let the wrist go, one joint at a time in ``order``, each once the one before it has been still ``still_s``: ``via="brake"``
+        brakes the joint (mode 15: the wrist sags to its gravity rest at the drag's pace) and stops it (mode 0) once still; ``via="stop"``
+        stops it at once. The five-bar keeps whatever it was last sent (its hold at home). Returns, per joint, how far and how fast the
+        wrist moved after that joint's release (deg, deg/s)."""
         out = []
-        for role in order:
+        for role in (r for r in order if r in self.wrist_dof):
             if role in self.sim.states:
                 self.sim.stop(role)
-            self.braked.pop(role, None)
+            if via == "brake":
+                self.braked[role] = WRIST_BRAKE_NM_S
+            else:
+                self.braked.pop(role, None)
             start = len(self.log)
             began, since = self.time, None
             while self.time - began < timeout_s:
                 self.step()
-                moving = max(abs(float(self.sim.data.qvel[self.wrist_dof[w]])) for w in WRISTS)
+                moving = max(abs(float(self.sim.data.qvel[dof])) for dof in self.wrist_dof.values())
                 since = (since or self.time) if moving < still_rad_s else None
                 if since is not None and self.time - since >= still_s:
                     break
+            self.braked.pop(role, None)  # mode 0 once still
             rows = np.asarray(self.log[start:], dtype=float)
-            out.append({"joint": role, "seconds": round(self.time - began, 2),
-                        "swing_deg": np.round(rows[:, 7:10].max(axis=0) - rows[:, 7:10].min(axis=0), 2).tolist() if len(rows) else None})
+            out.append({"joint": role, "via": via, "seconds": round(self.time - began, 2),
+                        "swing_deg": np.round(rows[:, 7:10].max(axis=0) - rows[:, 7:10].min(axis=0), 2).tolist() if len(rows) else None,
+                        "peak_deg_s": np.round(np.max(np.abs(rows[:, 12:15]), axis=0), 1).tolist() if len(rows) else None})
         return out
 
     # -- the log: t, j2, c1 (Craig, motor), v_j2, v_c1, tau_j2, tau_c1, w1, w2, w3 (deg), claw (deg), j1 (deg), wrist speeds (deg/s),
@@ -446,10 +480,10 @@ class FullArmPlant:
         self.log.append([self.time, math.degrees(q[0] + self.offset["J2"]), math.degrees(q[1] + self.offset["C1"]),
                          math.degrees(self.velocity[0]), math.degrees(self.velocity[1]),
                          self.signs["J2"] * self.sim.states["J2"].torque_nm, self.signs["C1"] * self.sim.states["C1"].torque_nm,
-                         *(math.degrees(float(data.qpos[self.wrist_adr[w]])) for w in WRISTS),
-                         math.degrees(float(data.qpos[self.claw_adr])),
+                         *(math.degrees(float(data.qpos[self.wrist_adr[w]])) if w in self.wrist_adr else 0.0 for w in WRISTS),
+                         math.degrees(float(data.qpos[self.claw_adr])) if self.claw_adr is not None else 0.0,
                          math.degrees(self.sim.joint_rad("J1")),
-                         *(math.degrees(float(data.qvel[self.wrist_dof[w]])) for w in WRISTS),
+                         *(math.degrees(float(data.qvel[self.wrist_dof[w]])) if w in self.wrist_dof else 0.0 for w in WRISTS),
                          self.signs["J1"] * self.sim.states["J1"].torque_nm,
                          *((self.sim.states[w].torque_nm if w in self.sim.states else 0.0) for w in WRISTS)])
 
@@ -477,6 +511,7 @@ class FullStart:
     wrist_deg: tuple[float, float, float] | None = None
     rest: bool = False
     family: str = "grid"
+    j1_deg: float = 0.0  # the plane's tilt the press finds (J1 held there throughout, as hold_j1 holds it)
 
 
 REAL_STARTS = (FullStart("real fold rest (camera look j2 62.0 / j3 +19.6, crank -174.25)", 62.0, -174.25, -1, family="real"),
@@ -525,8 +560,11 @@ def place(rig, start: FullStart):
     q, residual = craig.closed_pose(pose.j2, pose.j3, pose.c1)
     if residual > 1e-6:
         raise ValueError(f"{start.name}: the twin's loop does not close there (residual {residual * 1e3:.3f} mm)")
+    roles = {joint.role for joint in rig.bundle.joints}
     for role, value in zip(WRISTS, start.wrist_deg or (0.0, 0.0, 0.0), strict=True):
-        q[rig.qpos_adr(role)] = math.radians(value)
+        if role in roles:
+            q[rig.qpos_adr(role)] = math.radians(value)
+    q[rig.qpos_adr("J1")] = math.radians(start.j1_deg)
     data = mujoco.MjData(rig.model)
     data.qpos[:] = q
     mujoco.mj_forward(rig.model, data)
@@ -544,7 +582,11 @@ def settle_wrist(rig, q, *, max_seconds: float = 20.0, still_rad_s: float = 0.01
     data = mujoco.MjData(model)
     data.qpos[:] = q
     data.qvel[:] = 0.0
-    loose = {rig.dof_adr(r) for r in WRISTS} | {int(model.jnt_dofadr[model.joint(CLAW_JOINT).id])}
+    roles = {joint.role for joint in rig.bundle.joints}
+    names = {model.joint(j).name for j in range(model.njnt)}
+    loose = {rig.dof_adr(r) for r in WRISTS if r in roles} | ({int(model.jnt_dofadr[model.joint(CLAW_JOINT).id])} if CLAW_JOINT in names else set())
+    if not loose:
+        return np.array(q, dtype=float)
     held_q = [i for j in range(model.njnt) if int(model.jnt_dofadr[j]) not in loose for i in [int(model.jnt_qposadr[j])]]
     held_v = [int(model.jnt_dofadr[j]) for j in range(model.njnt) if int(model.jnt_dofadr[j]) not in loose]
     fixed = np.asarray(q, dtype=float)[held_q]
@@ -561,10 +603,11 @@ def settle_wrist(rig, q, *, max_seconds: float = 20.0, still_rad_s: float = 0.01
     if data.warning[mujoco.mjtWarning.mjWARN_BADQACC].number:
         raise ValueError("the wrist's settle went unstable")
     out = np.array(q, dtype=float)
-    for adr in (rig.qpos_adr(r) for r in WRISTS):
+    for adr in (rig.qpos_adr(r) for r in WRISTS if r in roles):
         out[adr] = data.qpos[adr]
-    claw = int(model.jnt_qposadr[model.joint(CLAW_JOINT).id])
-    out[claw] = data.qpos[claw]
+    if CLAW_JOINT in names:
+        claw = int(model.jnt_qposadr[model.joint(CLAW_JOINT).id])
+        out[claw] = data.qpos[claw]
     return out
 
 
@@ -644,6 +687,7 @@ class EpisodeConfig:
     wrist: str = "limp"
     wrist_friction: str = "sliding"
     hold: WristHold = field(default_factory=WristHold)
+    release: str = "brake"  # a held wrist's release: "brake" (mode 15 until still, then 0) or "stop" (mode 0 at once)
     trace: bool = False
 
 
@@ -670,9 +714,10 @@ def run_episode(config: EpisodeConfig) -> dict:
     started = time.monotonic()
     start = config.start
     out: dict = {"start": start.name, "family": start.family, "rest": start.rest, "comp": config.comp, "truth": config.truth,
-                 "wrist": config.wrist, "wrist_friction": config.wrist_friction}
+                 "wrist": config.wrist, "wrist_friction": config.wrist_friction, "release": config.release if config.wrist == "hold" else None,
+                 "j1_start_tilt_deg": start.j1_deg}
     try:
-        rig = build_rig(config.truth, wrist_friction=config.wrist_friction)
+        rig = build_baseline_rig(config.truth) if config.truth in BASELINE_TRUTHS else build_rig(config.truth, wrist_friction=config.wrist_friction)
         q, depth = place(rig, start)
         out["placed_penetration_mm"] = round(depth * 1e3, 3)
         if start.wrist_deg is None:
@@ -736,6 +781,12 @@ def run_episode(config: EpisodeConfig) -> dict:
     done_s = plant.time
     sequence_rows = len(plant.log)
     out["comp_error_end_nm"] = comp_error(rig, plant.sim.data.qpos, model, plant.read().position_rad)
+    # the wrist's release first, the five-bar still holding home (WHY first, 2026-11-13: released after the five-bar, the wrist's swing
+    # knocked the limp arm 6-9 deg off home); a held wrist via its brake, a braked wrist stopped, one joint at a time
+    released = []
+    if config.wrist in ("hold", "brake"):
+        released = plant.release_wrist(via=config.release if config.wrist == "hold" else "stop")
+        powered.extend([[True, True]] * (len(plant.log) - len(powered) - 1))
     # the release at home (tview_run._release): brake all three until still (<= 10 s), then stop
     plant.brake_j1()
     plant.send(["brake", "brake"])
@@ -749,8 +800,7 @@ def run_episode(config: EpisodeConfig) -> dict:
             break
     plant.stop_j1()
     plant.send([None, None])
-    fivebar_rows = len(plant.log)
-    released = plant.release_wrist() if config.wrist == "hold" else []
+    fivebar_rows = sequence_rows
     for _ in range(int(round(2.0 / CONTROL_DT))):  # everything let go: where it comes to rest
         powered.append([False, False])
         plant.send([None, None])
@@ -803,6 +853,9 @@ def run_episode(config: EpisodeConfig) -> dict:
 
 # A non-hanging wrist for the hold's starts (deg, W1 / W2 / W3): a wrist the home finds where a task left it, held there. Each keeps
 # |W2| <= 95 (the CAD's clear condition) and stays out of both self-contact regions.
+# The plane's tilt a press may find (deg): the full arm's release leaves J1 at +11.5 on this twin (J1's 0.74 N.m Coulomb against the arm's
+# 2.1 N.m off its axis at home), and its unpowered rest band reaches ~+21.
+J1_TILTS_DEG = (12.0, 20.0)
 HELD_WRIST_POSES = {"pick ready (0, 90, 0)": (0.0, 90.0, 0.0), "W1 +90 (90, 0, 0)": (90.0, 0.0, 0.0), "W1 -100 W2 +60": (-100.0, 60.0, 30.0)}
 
 
@@ -821,9 +874,23 @@ def sweep_configs(sweep: str, *, starts=None, wrist: str = "hold") -> list[Episo
             out += [EpisodeConfig(start=replace(start, name=f"{start.name} · wrist {pose_name}", wrist_deg=pose), comp="v2_cad",
                                   truth="cad", wrist=mode) for start in starts[::3] for mode in ("hold", "limp")]
     elif sweep == "comp":
-        for truth in TRUTHS:
+        for truth in ("cad", "claw_high", "end+22%"):  # claw nominal sits between the CAD and the high claw (the static map has all four)
             for comp in COMP_NAMES:
                 out += [EpisodeConfig(start=start, comp=comp, truth=truth, wrist=wrist) for start in starts]
+    elif sweep == "j1":
+        for tilt in J1_TILTS_DEG:
+            out += [EpisodeConfig(start=replace(start, name=f"{start.name} · J1 {tilt:+.0f}", j1_deg=tilt), comp="v2_cad", truth=truth,
+                                  wrist=wrist) for start in starts[::2] for truth in ("cad", "end+22%")]
+    elif sweep == "release":
+        # the wrist's treatments from the gravity rest and from the task poses a press may find, CAD truth
+        poses = {"rest": None, **HELD_WRIST_POSES}
+        for pose_name, pose in poses.items():
+            for mode, release in (("hold", "brake"), ("hold", "stop"), ("brake", "stop"), ("limp", "stop")):
+                out += [EpisodeConfig(start=replace(start, name=f"{start.name} · wrist {pose_name}", wrist_deg=pose), comp="v2_cad",
+                                      truth="cad", wrist=mode, release=release) for start in starts[::3]]
+    elif sweep == "baseline":
+        for truth in BASELINE_TRUTHS:
+            out += [EpisodeConfig(start=start, comp="plate", truth=truth, wrist="limp") for start in starts]
     elif sweep == "rest":
         rested = [replace(start, name=f"{start.name} · rested", rest=True, family=f"{start.family} rest") for start in starts
                   if start.family != "real"]
@@ -914,7 +981,9 @@ def summarize(results: list[dict]) -> dict:
 
     cells: dict = defaultdict(list)
     for row in results:
-        cells[(row.get("comp"), row.get("truth"), row.get("wrist"), "rest" if row.get("rest") else "held")].append(row)
+        kind = ("rest" if row.get("rest") else "held") + (f" J1 {row['j1_start_tilt_deg']:+.0f}" if row.get("j1_start_tilt_deg") else "")
+        wrist = row.get("wrist") if not row.get("release") else f"{row.get('wrist')} (release via {row['release']})"
+        cells[(row.get("comp"), row.get("truth"), wrist, kind)].append(row)
     out = []
     for (comp, truth, wrist, kind), rows in sorted(cells.items(), key=lambda item: tuple(map(str, item[0]))):
         placed = [r for r in rows if r.get("status") in ("done", "raised")]
@@ -951,7 +1020,7 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--sweep", choices=("wrist", "comp", "rest", "static"), default="comp")
+    parser.add_argument("--sweep", choices=("wrist", "comp", "rest", "static", "baseline", "j1", "release"), default="comp")
     parser.add_argument("--wrist", choices=WRIST_MODES, default="hold", help="comp / rest sweeps: the wrist's mode")
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--limit", type=int, default=None, help="only the first N episodes (a pilot)")
