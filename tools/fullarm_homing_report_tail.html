@@ -33,14 +33,13 @@ power-cycled since latest.json was written. The marker is RAM gains read back as
 <li>Fix in cad2robot: map pairs across 4 joints.</li>
 <li>Or tighten the witness to ~0.6° once real wind-up is measured.</li>
 </ul></li>
-<li><b>The motor-driven five-bar home stays sim-only.</b> Run from the rack's real power-up rest (hanging, claw on the belt), in a twin that now has the belt:
+<li><b>Five-bar home from the rack's real rest (hanging, claw on the belt), in a twin with the belt:</b>
 <ul>
-<li>J2's first seek sticks on the belt and lurches past the 86°/s stop (88–97°/s). A prop doesn't help, and a 0.05 rev/s first seek fixes it.</li>
-<li>The walk home off the upper stops trips J2 (103–234°/s) at its first waypoint on every start tried. The comp matches the twin's gravity there
-within 0.05 N·m, so the cause is the loop leaving its toggle; not yet diagnosed.</li>
-<li>Held at kp 75, W1 whips to about 188°/s during that walk.</li>
-</ul>
-Today's rack home is the hand stall zero (Sim to Real / Sprint Agent).</li>
+<li>J2's first seek at 0.1 rev/s sticks on the belt and lurches past the 86°/s stop. The default is now 0.05 rev/s, which does not.</li>
+<li>The kick leaving the upper stops (J2 142–324°/s) is the twin's stiff 2 ms stop/loop contacts. At 10 ms every start homes, belt included, J2 ≤ 57°/s.
+Sim to Real runs the rack's leave staged and watched against that prediction.</li>
+<li>Held at kp 75, W1 whips to about 188°/s during the walk, so the wrist stays braked while the five-bar moves.</li>
+</ul></li>
 <li><b>The five-bar's <code>press_reverse+gff</code> inside identify_backlash</b> gets J2 wrong on this twin. It reads J2's compliance as 1.28°/N·m
 (true 0.0013), and used by <code>home()</code> that pushes J2 12.7° off. The wrist part of identify is right. This is a five-bar procedure issue.</li>
 <li><b>The replay needs the rack run's five-bar pose and the remounted claw</b> before the rest-at-"0" can be compared.</li>
