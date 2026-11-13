@@ -13,6 +13,8 @@ port cannot drift.</li>
 <h3>Decided for you (each one undoable)</h3>
 <ul>
 <li><b>Wrist and claw braked during the five-bar phase.</b> Undo: <code>FullArmHome(wrist_during_fivebar="hold")</code>.</li>
+<li><b><code>home()</code> ignores the five-bar's rows of a stored table.</b> The five-bar keeps its proven no-table zero (≤ 0.05°). Undo:
+<code>FullArmHome(fivebar_table=True)</code>.</li>
 <li><b>Default comp <code>v2_cad</code>, not the plate.</b> Undo: <code>comp="plate"</code>.</li>
 <li><b>Witness tolerance 2°.</b> It refuses every forearm stall seen (≥ 3.6°) and passes every true stop (≤ 0.5° on B2).</li>
 <li><b>Wrist gaps and stiffness are assumptions</b> (W1 15′, W2 18′, W3 12′; 0.05 N·m/′). No GIM4305-10 measurement exists.</li>
@@ -27,8 +29,8 @@ port cannot drift.</li>
 </ul></li>
 <li><b>J2 runs away on single_touch+gff's walk home on this arm</b> in 2 of 19 episodes (89–121°/s) on the v2_cad comp. This is passed
 to the Sim to Real Agent.</li>
-<li><b>The five-bar's <code>press_reverse+gff</code> inside identify_backlash</b> mis-zeros J2 (1.9°) and reads no J2 gap on this twin.
-The wrist part of identify is fine. This is a five-bar procedure issue.</li>
+<li><b>The five-bar's <code>press_reverse+gff</code> inside identify_backlash</b> gets J2 wrong on this twin. It reads J2's compliance as 1.28°/N·m
+(true 0.0013), and used by <code>home()</code> that pushes J2 12.7° off. The wrist part of identify is right. This is a five-bar procedure issue.</li>
 <li><b>The replay needs the rack run's five-bar pose and the remounted claw</b> before the rest-at-"0" can be compared.</li>
 </ul>
 <h3>Needs Zach</h3>

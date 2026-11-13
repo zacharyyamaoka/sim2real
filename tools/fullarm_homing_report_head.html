@@ -36,6 +36,10 @@ It reports:
   <li>self-contact.</li>
   </ul>
 The same harness replays a rack run for homing sim-to-real.</li>
+<li><b>Live backlash works for the wrist.</b> <code>identify_backlash</code> (both stops of each wrist joint, two press levels, fit B2) recovers the hidden
+wrist gaps within 0.04′ (B2) / 1′ (B1). <code>home()</code> reading that table zeros the wrist within 0.002° instead of 0.46–0.50° (100 % vs 0 % of starts
+inside the 0.1° gate on B1 and B2). The five-bar's own identify (<code>press_reverse+gff</code>) is wrong on this twin (J2 12.7° off when used), so
+<code>home()</code> ignores the five-bar's stored rows for now.</li>
 <li><b>The wrist must be braked, not held, while the five-bar homes.</b> Held on its kp-15 boards, L2 flings it and it springs back past
 the sequence controller's 3 rad/s guard. With backlash hidden, that aborted most episodes and identify_backlash on both models, and the held claw
 whipped at about 300°/s. A board that no host commands times out into this brake anyway.</li>
