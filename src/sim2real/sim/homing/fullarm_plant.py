@@ -445,15 +445,17 @@ class FullArmHomingPlant:
         model = self.rig.model
         model.geom_pos[model.geom(BELT).id][2] = self.belt_top_m - BELT_HALF_M[2]  # the model is cached per process: set every reset
         belt = model.geom(BELT).id
-        if not hasattr(self, "_belt_sol0"):
-            self._belt_sol0 = (model.geom_solref[belt].copy(), model.geom_solimp[belt].copy())
-        model.geom_solref[belt], model.geom_solimp[belt] = self._belt_sol0
+        if not hasattr(self.rig, "_belt_sol0"):
+            self.rig._belt_sol0 = (model.geom_solref[belt].copy(), model.geom_solimp[belt].copy())
+        model.geom_solref[belt], model.geom_solimp[belt] = self.rig._belt_sol0
         if self.belt_solref is not None:
             model.geom_solref[belt] = self.belt_solref
             model.geom_solimp[belt] = BELT_STIFF_SOLIMP
-        if not hasattr(self, "_pair_solref0"):
-            self._pair_solref0 = model.pair_solref.copy()
-        model.pair_solref[:] = self._pair_solref0
+        # WHY the originals on the rig, not the plant (2026-11-13): the model is cached per process and shared by every plant on the same
+        # rig, so a second plant would have kept the first plant's edited contacts as "the bundle's" and never put them back
+        if not hasattr(self.rig, "_pair_solref0"):
+            self.rig._pair_solref0 = model.pair_solref.copy()
+        model.pair_solref[:] = self.rig._pair_solref0
         if self.contact_timeconst_s is not None:
             model.pair_solref[:, 0] = self.contact_timeconst_s
         q = self.place(start)

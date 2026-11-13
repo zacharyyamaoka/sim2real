@@ -206,3 +206,18 @@ def test_on_the_default_soft_belt_the_limp_arm_creeps_and_never_settles():
     plant.reset(ArmStart("READY TD4", *ruler.FIVEBAR_LEVELS["READY"], (1.17, 90.0, 0.0), 30.0))
     assert plant.start_belt
     assert plant.settle_waited_s >= 9.9
+
+
+@needs_twin
+def test_two_plants_on_one_cached_rig_each_get_their_own_contacts_back():
+    """The model is shared per process: a plant that stiffens the belt or the stop pairs must not leave them stiff for the next plant."""
+    from sim2real.sim.homing.fullarm_plant import BELT, BELT_STIFF_SOLREF, ArmStart, FullArmHomingPlant
+
+    start = ArmStart("READY TD4", *ruler.FIVEBAR_LEVELS["READY"], (1.17, 90.0, 0.0), 30.0)
+    stiff = FullArmHomingPlant("B0", belt_top_m=0.0, belt_solref=BELT_STIFF_SOLREF, contact_timeconst_s=0.01)
+    stiff.reset(start)
+    soft = FullArmHomingPlant("B0", belt_top_m=0.0)
+    soft.reset(start)
+    model = soft.rig.model
+    assert tuple(model.geom_solref[model.geom(BELT).id]) != BELT_STIFF_SOLREF
+    assert float(model.pair_solref[0, 0]) != 0.01
