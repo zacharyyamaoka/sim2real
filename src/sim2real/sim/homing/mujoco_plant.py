@@ -164,8 +164,10 @@ class RigCache:
     _rigs: dict = {}
 
     @classmethod
-    def get(cls, kind: str, end_mass_scale: float = 1.0):
+    def get(cls, kind: str, end_mass_scale: float = 1.0, *, end_payload_kg: float | None = None):
         key = kind if end_mass_scale == 1.0 else (kind, float(end_mass_scale))
+        if end_payload_kg is not None:  # WHY its own key: a claw-on twin must never be handed to a plate-on caller from the cache
+            key = (kind, float(end_mass_scale), "end_payload_kg", float(end_payload_kg))
         if key not in cls._rigs:
             bam_ws_path()
             from bam_fb_test_rig.backlash import HIDDEN_ARCMIN, hidden_specs  # noqa: PLC0415
@@ -181,6 +183,8 @@ class RigCache:
                 rig = bench_rig(bundle, backlash=None)
             else:
                 rig = bench_rig(bundle, backlash=hidden_specs(), backlash_method=method)
+            if end_payload_kg is not None:  # first the claw for the plate, then the end group's scale (END_PAYLOAD_WHY)
+                swap_end_payload(rig, end_payload_kg)
             if end_mass_scale != 1.0:
                 scale_body_mass(rig, END_GROUP_BODY, end_mass_scale)
             resolve_mesh_mode(rig)
@@ -200,6 +204,96 @@ def scale_body_mass(rig, body: str, scale: float) -> dict:
     model.body_inertia[index] = model.body_inertia[index] * scale
     mujoco.mj_setConst(model, mujoco.MjData(model))
     return {"body": body, "mass_kg": before, "scaled_kg": float(model.body_mass[index]), "scale": float(scale)}
+
+
+# END_PAYLOAD_WHY (2026-11-13, the crab claw on the five-bar): Zach mounts the crab claw in place of the 2.5 lb test plate. The twin's end
+# group "l2" carries the plate and its mount, both centred on J4's axis (their geoms' centres in the l2 frame: x 0, z = L2's 0.2997 m, y
+# along the axis); their masses are the Fusion export's own (the bundle's fusion360_data.json occurrences, ``END_PAYLOAD_PARTS``). The
+# claw hangs on the unpowered J4, so for J2 / C1 it is a point mass on that axis at every pose (bam_ws docs/pick_tracking/claw_payload.py);
+# it goes where the plate's centre was, with a 60 mm x 13 mm disc's own inertia about J4's axis (the hanging claw's own spin, ~1.7e-4
+# kg.m^2 at 0.37 kg, not the plate's 2.8e-3). The plate's collision shells stay (the stops are not the plate's: J2 = L1's hardstop vs the
+# shoulder plate, C1 = C1 vs L1's spacer, hardstops.json). Applied BEFORE the end-group scale, so "claw +22 %" scales the claw-on group.
+END_PAYLOAD_PARTS = {"plate": ("2.5 lbs Weight:1", "2.5_lbs_Weight_1__0"),
+                     "mount": ("Weight To Servo Mount v2:1", "Weight_To_Servo_Mount_v2_1__")}
+PLATE_DISC_M = (0.140, 0.013)  # the plate's diameter and thickness (bam_robot_descriptions DiscPayloadParams, Zach's)
+CLAW_DISC_M = (0.060, 0.013)
+
+
+def _disc_inertia(mass: float, size: tuple[float, float], axis: int) -> np.ndarray:
+    """A uniform disc's inertia about its centre, its axis along body axis ``axis`` (the l2 frame's y = J4's axis)."""
+    radius, thickness = size[0] / 2.0, size[1]
+    inertia = np.full(3, mass * (3.0 * radius**2 + thickness**2) / 12.0)
+    inertia[axis] = mass * radius**2 / 2.0
+    return np.diag(inertia)
+
+
+def end_payload_parts(rig) -> dict:
+    """``{"plate" | "mount": {"mass_kg", "com_l2_m"}}``: each part's Fusion mass and its centre in the end group's frame (its geoms' mean
+    centre: MuJoCo puts a mesh geom at the mesh's centroid)."""
+    import json as _json  # noqa: PLC0415
+
+    model = rig.model
+    body = model.body(END_GROUP_BODY).id
+    occurrences = {o.get("name"): o for o in _json.loads((Path(rig.bundle.root) / "fusion360_data.json").read_text())["occurrences"]}
+    names = [model.geom(g).name or "" for g in range(model.ngeom)]
+    meshes = {g: (model.mesh(model.geom_dataid[g]).name if model.geom_dataid[g] >= 0 else "") for g in range(model.ngeom)}
+    out = {}
+    for part, (occurrence, mesh_prefix) in END_PAYLOAD_PARTS.items():
+        geoms = [g for g in range(model.ngeom) if model.geom_bodyid[g] == body and not names[g].startswith("stop_")
+                 and (meshes[g].startswith(mesh_prefix) or names[g].startswith(mesh_prefix))]
+        if not geoms or occurrence not in occurrences:
+            raise ValueError(f"the bundle has no {part} ({occurrence!r} / {mesh_prefix!r}) on {END_GROUP_BODY}")
+        out[part] = {"mass_kg": float(occurrences[occurrence]["mass_kg"]),
+                     "com_l2_m": np.mean([model.geom_pos[g] for g in geoms], axis=0).tolist()}
+    return out
+
+
+def swap_end_payload(rig, payload_kg: float) -> dict:
+    """The end group with the plate and its mount out and a ``payload_kg`` point on J4's axis at the plate's centre (END_PAYLOAD_WHY):
+    mass, centre and the full inertia tensor recomposed about the new centre and re-diagonalised, then ``mj_setConst``."""
+    import mujoco  # noqa: PLC0415
+
+    if not payload_kg > 0.0:
+        raise ValueError(f"the end payload must be a positive mass, not {payload_kg!r} kg")
+    model = rig.model
+    body = model.body(END_GROUP_BODY).id
+    parts = end_payload_parts(rig)
+    axis = 1  # J4's axis is the l2 frame's y (the plate geom's thin direction)
+
+    def about_origin(mass, com, inertia_com):
+        com = np.asarray(com, dtype=float)
+        return inertia_com + mass * (com @ com * np.eye(3) - np.outer(com, com))
+
+    mass, com = float(model.body_mass[body]), np.asarray(model.body_ipos[body], dtype=float)
+    rotation = np.zeros(9)
+    mujoco.mju_quat2Mat(rotation, model.body_iquat[body])
+    rotation = rotation.reshape(3, 3)
+    total = about_origin(mass, com, rotation @ np.diag(model.body_inertia[body]) @ rotation.T)
+    moment = mass * com
+    plate, mount = parts["plate"], parts["mount"]
+    for part, own in ((plate, _disc_inertia(plate["mass_kg"], PLATE_DISC_M, axis)), (mount, np.zeros((3, 3)))):
+        total = total - about_origin(part["mass_kg"], part["com_l2_m"], own)
+        moment = moment - part["mass_kg"] * np.asarray(part["com_l2_m"])
+        mass -= part["mass_kg"]
+    centre = np.asarray(plate["com_l2_m"], dtype=float)
+    total = total + about_origin(payload_kg, centre, _disc_inertia(payload_kg, CLAW_DISC_M, axis))
+    moment = moment + payload_kg * centre
+    mass += payload_kg
+    new_com = moment / mass
+    inertia_com = total - mass * (new_com @ new_com * np.eye(3) - np.outer(new_com, new_com))
+    values, vectors = np.linalg.eigh(0.5 * (inertia_com + inertia_com.T))
+    if np.linalg.det(vectors) < 0.0:
+        vectors[:, 0] = -vectors[:, 0]
+    quat = np.zeros(4)
+    mujoco.mju_mat2Quat(quat, vectors.reshape(-1))
+    before = float(model.body_mass[body])
+    model.body_mass[body] = mass
+    model.body_ipos[body] = new_com
+    model.body_inertia[body] = values
+    model.body_iquat[body] = quat
+    mujoco.mj_setConst(model, mujoco.MjData(model))
+    return {"body": END_GROUP_BODY, "mass_kg": before, "swapped_kg": mass, "payload_kg": float(payload_kg),
+            "removed": {k: v["mass_kg"] for k, v in parts.items()}}
 
 
 # WHY 0.3 (2026-11-12, homing MuJoCo rung pass 4): gear_backlash's dead zone is an explicit spring ("dt must resolve the mesh mode",
@@ -240,7 +334,7 @@ class MujocoRigPlant:
     joint_names = DRIVES
 
     def __init__(self, kind: str, *, cogging: bool = True, settle_s: float = SETTLE_S, log_every: int = 1, boards: Mapping | None = None,
-                 end_mass_scale: float = 1.0, runaway_rad_s: float | None = None):
+                 end_mass_scale: float = 1.0, runaway_rad_s: float | None = None, end_payload_kg: float | None = None):
         if kind not in BACKLASH_METHOD:
             raise ValueError(f"backlash kind must be B0, B1 or B2, not {kind!r}")
         bam_ws_path()
@@ -252,7 +346,9 @@ class MujocoRigPlant:
         # WHY off unless asked (pass 6): the pass 3-5 results were run without it and stand as run; the pass-6 rung passes RUNAWAY_RAD_S
         self.runaway_rad_s = None if runaway_rad_s is None else float(runaway_rad_s)
         self.peak_powered_rad_s: dict[str, float] = {}
-        self.rig = RigCache.get(kind, self.end_mass_scale)
+        # WHY None by default (2026-11-13): every earlier pass ran the plate; a claw-on twin is asked for by its mass (END_PAYLOAD_WHY)
+        self.end_payload_kg = None if end_payload_kg is None else float(end_payload_kg)
+        self.rig = RigCache.get(kind, self.end_mass_scale, end_payload_kg=self.end_payload_kg)
         self.signs = board_signs(self.rig.bundle, self.rig)
         self.board = RACK_BOARD
         # WHY the real record by default (2026-11-12, the home button's ground truth): the boards the real arm ran on, cited above
@@ -539,5 +635,5 @@ def twin_contacts(starts: Mapping, *, kind: str = "B0", push_nm: tuple[float, fl
     return out
 
 
-__all__ = ["BACKLASH_METHOD", "END_GROUP_BODY", "END_GROUP_MASS_SCALE", "MESH_MODE_OMEGA_DT", "RUNAWAY_RAD_S", "MujocoRigPlant",
-           "RigCache", "available", "bam_ws_path", "cogging_terms", "resolve_mesh_mode", "scale_body_mass", "twin_contacts"]
+__all__ = ["BACKLASH_METHOD", "END_GROUP_BODY", "END_GROUP_MASS_SCALE", "END_PAYLOAD_PARTS", "MESH_MODE_OMEGA_DT", "RUNAWAY_RAD_S", "MujocoRigPlant",
+           "RigCache", "available", "bam_ws_path", "cogging_terms", "resolve_mesh_mode", "scale_body_mass", "end_payload_parts", "swap_end_payload", "twin_contacts"]
