@@ -143,6 +143,7 @@
  "sim2real_sha": "8db26c3",
  "robot_models_sha": "17869ad",
  "bam_ws_sha": "d7d9f1b05",
+ "provenance_note": "Stamps not re-written (2026-11-13): sim2real_sha 8db26c3 and bam_ws_sha d7d9f1b05 are the HEADs the writer read, not the code that scored. The scorer (real_bench.score, RealRigPlant, the runner's seam) ran uncommitted and landed in sim2real 256c538; the runner (fivebar_homed --stage homing) landed in bam_ws d6ed3bed9. real_bench.git_sha read HEAD with no dirty check; since sim2real.provenance (pass 6) every homing writer stamps -dirty and score refuses a dirty scorer.",
  "gate_deg": 0.1,
  "zero_vs_kinematic_deg": 0.1,
  "reliability_target_pct": 100.0,

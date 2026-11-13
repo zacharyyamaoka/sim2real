@@ -334,7 +334,6 @@ def _job(args):
 def main(argv=None) -> int:
     """Replay every real home run on B0 / B1 / B2 and write the comparison JSON the homing report reads."""
     import argparse  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
     import time  # noqa: PLC0415
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -354,11 +353,9 @@ def main(argv=None) -> int:
         replays = [_job(job) for job in jobs]
 
     def sha(path: Path) -> str:
-        try:
-            return subprocess.run(["git", "-C", str(path), "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
-                                  check=True).stdout.strip()
-        except (OSError, subprocess.CalledProcessError):
-            return "unknown"
+        from sim2real.provenance import code_sha  # noqa: PLC0415 - WHY: a bare rev-parse stamped a dirty tree as a clean commit
+
+        return code_sha(path)
 
     from .mujoco_plant import REAL_BOARD_RECORD  # noqa: PLC0415
 

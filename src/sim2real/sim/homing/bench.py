@@ -20,7 +20,6 @@ import argparse
 import json
 import math
 import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -253,13 +252,11 @@ _GEOMETRY: dict = {}
 
 
 def git_sha(path: Path) -> str:
-    try:
-        sha = subprocess.run(["git", "-C", str(path), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout
-        dirty = subprocess.run(["git", "-C", str(path), "status", "--porcelain", "--untracked-files=no"], capture_output=True,
-                               text=True, check=True).stdout.strip()
-        return sha.strip() + ("-dirty" if dirty else "")
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
+    """sim2real.provenance.code_sha: the commit ``path`` is at, ``-dirty`` with uncommitted tracked changes (one helper for every writer)."""
+
+    from sim2real.provenance import code_sha  # noqa: PLC0415
+
+    return code_sha(path)
 
 
 def trace_of(geometry, model, name, start, prior) -> dict:
