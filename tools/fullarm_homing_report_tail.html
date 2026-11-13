@@ -12,6 +12,9 @@ port cannot drift.</li>
 </ul>
 <h3>Decided for you (each one undoable)</h3>
 <ul>
+<li><b><code>park_first</code> is the default, gripper-on-forearm touch included.</b> It makes a detected touch of up to 1 N·m, never used as a stop,
+when |W2| &gt; ~105° at power-on (10 of 19 starts on the twin). Undo: <code>FullArmHome(order="zach_v1")</code>, with the start confirmed by ArUco
+(|W2| ≤ 95°).</li>
 <li><b>Wrist and claw braked during the five-bar phase.</b> Undo: <code>FullArmHome(wrist_during_fivebar="hold")</code>.</li>
 <li><b><code>home()</code> ignores the five-bar's rows of a stored table.</b> The five-bar keeps its proven no-table zero (≤ 0.05°). Undo:
 <code>FullArmHome(fivebar_table=True)</code>.</li>
@@ -34,14 +37,7 @@ to the Sim to Real Agent.</li>
 <li><b>The replay needs the rack run's five-bar pose and the remounted claw</b> before the rest-at-"0" can be compared.</li>
 </ul>
 <h3>Needs Zach</h3>
-<ul>
-<li><b>Is a detected ≤ 1 N·m gripper-on-forearm touch acceptable during homing?</b> park_first touches when |W2| &gt; ~105° at
-power-on, in 10 of 19 starts on the twin. Every touch is detected, and none is ever used as a stop.
-<ul>
-<li>Recommendation: yes, with the witness.</li>
-<li>The no-touch alternative is zach_v1 with the start confirmed by ArUco (|W2| ≤ 95°).</li>
-</ul></li>
-</ul>
+<p>Nothing.</p>
 <h3>Deliberately not done</h3>
 <ul>
 <li><b>No hardware motion and no real homing run.</b> Real runs go through the Sim to Real Agent.</li>
