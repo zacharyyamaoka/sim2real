@@ -127,5 +127,6 @@ def test_the_rescore_bounds_a_cad_clipped_gap_and_decides_only_what_the_bound_de
     assert out["cad_clipped_unscored"]["B1"][ROW] == {"J2": 16}
     for model in ("B0", "B1", "B2"):
         card = out["scorecards_vs_twin"][model][ROW]
-        assert card["backlash_gate_pass"] is True and card["backlash_error_deg"] < 1.0 / 60.0
+        assert card["backlash_gate_pass"] is True and card["backlash_error_deg"] < 1.0 / 60.0  # the scored drives (J1, C1)
+        assert card["backlash_gate_pass_all_drives"] is None  # J2 undecided by the row: no pass by omission
         assert out["stored_scorecards_vs_twin"][model][ROW]["backlash_gate_pass"] is False  # the stored file is read, never rewritten

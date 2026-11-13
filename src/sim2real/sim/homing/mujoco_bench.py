@@ -408,7 +408,13 @@ def rescore_backlash_vs_twin(results: dict, rows: tuple = (RECOVER_PREFIX_NAME +
             clipped.setdefault(model, {})[name] = lost
             bounds.setdefault(model, {})[name] = bound
             environment = f"{RUNG} · {model}"
-            cards.setdefault(model, {})[name] = scorecard([expand(r, name, environment) for r in new_rows], gate_deg=results["gate_deg"])
+            card = scorecard([expand(r, name, environment) for r in new_rows], gate_deg=results["gate_deg"])
+            # WHY a second verdict: scorecard's backlash_gate_pass judges the SCORED drives only; a CAD-clipped drive the bound cannot
+            # decide leaves the all-drive verdict open (None), never a pass by omission
+            decided = [b["decided_by_bound"] for b in bound.values()]
+            card["backlash_gate_pass_all_drives"] = (False if card["backlash_gate_pass"] is False or False in decided else
+                                                     None if (card["backlash_gate_pass"] is None or None in decided) else True)
+            cards.setdefault(model, {})[name] = card
             stored.setdefault(model, {})[name] = {k: results["scorecards_vs_twin"][model][name].get(k)
                                                   for k in ("backlash_error_deg", "backlash_error_max_deg", "backlash_gate_pass")}
     return {"span_shift_deg": shift, "episodes_vs_twin": out_rows, "scorecards_vs_twin": cards, "stored_scorecards_vs_twin": stored,
@@ -564,7 +570,7 @@ def main(argv=None) -> int:
             for name, card in by_name.items():
                 was = rescored["stored_scorecards_vs_twin"][model][name]
                 print(f"{model} {name:36s} gap err p95 {was['backlash_error_deg']} -> {card['backlash_error_deg']}  gate "
-                      f"{was['backlash_gate_pass']} -> {card['backlash_gate_pass']}  observable {card['backlash_observable_pct']:.1f} %  "
+                      f"{was['backlash_gate_pass']} -> {card['backlash_gate_pass']} (all drives {card['backlash_gate_pass_all_drives']})  observable {card['backlash_observable_pct']:.1f} %  "
                       f"CAD-clipped {rescored['cad_clipped_unscored'][model][name]}")
         return 0
     if args.merge:
