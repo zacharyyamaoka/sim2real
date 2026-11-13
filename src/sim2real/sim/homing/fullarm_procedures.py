@@ -419,7 +419,9 @@ class FullArmHome:
                                          JointBacklash(j, BacklashModel("B0"), source="no stored table")) for j in (*WRIST, CLAW)))
             arm = fit(evidence, prior.stops, table=table, rung="mujoco")
             table = BacklashTable(tuple(JointBacklash(e.joint, e.model, False, False, "stored table (identify_backlash)") for e in table.entries))
-        five_zeros, five_table, five_evidence = ((), (), ()) if five is None else (five.zeros, five.backlash.entries, five.evidence)
+        five_zeros, five_table, five_evidence = ((), (), ()) if five is None else (
+            # WHY filtered: single_touch's observe echoes the WHOLE stored table, wrist rows included (a full-arm table on a home())
+            five.zeros, tuple(e for e in five.backlash.entries if e.joint in FIVEBAR), five.evidence)
         zeros = tuple(five_zeros) + tuple(arm.zeros)
         backlash = BacklashTable(tuple(five_table) + tuple(e for e in table.entries if e.joint not in FIVEBAR))
         return HomingResult(zeros, backlash, prior.stops, tuple(five_evidence) + tuple(evidence), "mujoco")

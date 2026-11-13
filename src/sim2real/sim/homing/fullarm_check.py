@@ -441,7 +441,8 @@ def real_v1_rows(path: Path = REAL_V1_JSON) -> dict:
         if not rows:
             continue
         t0 = rows[0]["t"]
-        out[joint] = {"t": [r["t"] - t0 for r in rows], "q": [r["q"] for r in rows], "tau": [r.get("tau", math.nan) for r in rows],
+        zero = float(entry.get("zero_board_rad", 0.0))  # the board reading the run assigned joint 0: q_joint = q_board - zero
+        out[joint] = {"t": [r["t"] - t0 for r in rows], "q": [r["q"] - zero for r in rows], "tau": [r.get("tau", math.nan) for r in rows],
                       "phase": [r.get("phase", "") for r in rows], "seek": entry.get("seek"), "config": entry.get("config")}
     return out
 
@@ -472,7 +473,12 @@ def replay_vs_real(path: Path = REAL_V1_JSON) -> dict:
                      "real_stall_nm": round(float(seek["torque_nm"]), 3),
                      "sim_stall_nm": round(max(abs(sim_rows["effort_nm"][k][index]) for k in seek_ticks), 3) if seek_ticks else None,
                      "real_settle_deg": round(float(real["joints"][joint]["at_zero_deg"]), 2) if "at_zero_deg" in real["joints"][joint] else None, "sim_settle_deg": None if sim_settle is None else round(sim_settle, 2)}
-    return {"start": asdict(start), "report": asdict(report), "per_joint": per}
+    summary = asdict(report)
+    trace = summary.pop("trace")
+    trace.pop("qpos", None)  # the poses are for a video; the page plots the joint angles
+    real_rows = real_v1_rows(path)
+    return {"start": asdict(start), "report": summary, "per_joint": per, "sim_trace": trace,
+            "real_rows": {ROLE[j]: {k: v for k, v in rows.items() if k in ("t", "q", "tau", "phase")} for j, rows in real_rows.items()}}
 
 
 # ---------------------------------------------------------------------------------------------------------------- CLI
