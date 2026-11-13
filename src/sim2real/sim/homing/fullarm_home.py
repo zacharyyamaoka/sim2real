@@ -906,6 +906,9 @@ def sweep_configs(sweep: str, *, starts=None, wrist: str = "hold") -> list[Episo
     elif sweep == "baseline":
         for truth in BASELINE_TRUTHS:
             out += [EpisodeConfig(start=start, comp="plate", truth=truth, wrist="limp") for start in starts]
+        # the plate rig from the same any-rest starts (settled unpowered first): is a rest the home cannot take the full arm's doing?
+        rested = [replace(start, name=f"{start.name} · rested", rest=True) for start in starts if start.family != "real"]
+        out += [EpisodeConfig(start=start, comp="plate", truth="plate", wrist="limp") for start in rested]
     elif sweep == "rest":
         rested = [replace(start, name=f"{start.name} · rested", rest=True, family=f"{start.family} rest") for start in starts
                   if start.family != "real"]
