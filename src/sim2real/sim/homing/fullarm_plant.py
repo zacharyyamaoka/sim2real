@@ -317,7 +317,7 @@ class FullArmHomingPlant:
                  runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
                  limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None,
                  contact_timeconst_s: float | None = None, settle_all: bool = False, belt_solref: tuple[float, float] | None = None,
-                 rotor_phase_deg: Mapping[str, float] | None = None):
+                 rotor_phase_deg: Mapping[str, float] | None = None, contact_timeconst_scope: str = "all", log_qpos: bool = True):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -340,6 +340,15 @@ class FullArmHomingPlant:
         # WHY a knob (sim 2026-11-13 evening): with the exporter's 2 ms stop / loop pairs the five-bar kicks J2 to 142-324 deg/s leaving its
         # upper stops on some starts; at 10 ms it does not. None keeps the bundle's (every run before then).
         self.contact_timeconst_s = contact_timeconst_s
+        # WHY a scope (the homing routine, 2026-11-13): the 10 ms that removes the five-bar's kick, applied to EVERY pair, also softens the
+        # wrist's and the claw's stops - at 1 N.m a wrist stall then reads 0.06 deg past its stop (2 ms: 0.003) on B0. "fivebar" softens
+        # only the pairs between five-bar bodies (its stops and its loop); "all" (the default) is every run before.
+        if contact_timeconst_scope not in ("all", "fivebar"):
+            raise ValueError(f"contact_timeconst_scope must be all or fivebar, not {contact_timeconst_scope!r}")
+        self.contact_timeconst_scope = contact_timeconst_scope
+        # WHY a switch (the homing routine's grid, 2026-11-13, a loaded machine): the whole pose every tick is only for a video; a sweep
+        # without one keeps its workers ~1 GB lighter over a 100 s episode and its deep copies small
+        self.log_qpos = bool(log_qpos)
         # WHY settle_all (the homing routine's start grid, 2026-11-13): a start is where the arm was when the power went; the WHOLE arm then
         # falls (onto the belt, its stops or itself) before power-on - the five-bar's drives are unpowered too - so power-on waits until every
         # joint is still, not only the wrist. False: the wrist's stillness only (every sweep before then).
@@ -457,7 +466,14 @@ class FullArmHomingPlant:
             self.rig._pair_solref0 = model.pair_solref.copy()
         model.pair_solref[:] = self.rig._pair_solref0
         if self.contact_timeconst_s is not None:
-            model.pair_solref[:, 0] = self.contact_timeconst_s
+            if self.contact_timeconst_scope == "all":
+                model.pair_solref[:, 0] = self.contact_timeconst_s
+            else:
+                fivebar = {model.body(b).id for b in FIVEBAR_BODIES}
+                for k in range(model.npair):
+                    bodies = {int(model.geom_bodyid[model.pair_geom1[k]]), int(model.geom_bodyid[model.pair_geom2[k]])}
+                    if bodies <= fivebar | {0}:
+                        model.pair_solref[k, 0] = self.contact_timeconst_s
         q = self.place(start)
         boards = real_boards()
         wrist_board = BoardConfig(kp=self.wrist_gains[0], ki=0.0, kd=self.wrist_gains[1], ilimit=0.0, max_torque_nm=WRIST_MAX_NM)
@@ -656,7 +672,8 @@ class FullArmHomingPlant:
         log["position"].append([self.raw(j) + self.frame[j] for j in JOINTS])
         log["effort"].append([self._torque(j) for j in JOINTS])
         log["setpoint"].append([math.nan if not targets or targets.get(j) is None else targets[j] for j in JOINTS])
-        log["qpos"].append(self.sim.data.qpos.copy())  # the whole pose, for a video of the run (fullarm_check.trace_of)
+        if self.log_qpos:
+            log["qpos"].append(self.sim.data.qpos.copy())  # the whole pose, for a video of the run (fullarm_check.trace_of)
         tick = len(log["t"]) - 1
         every = self.contacts() if tick % self.check_every == 0 else []
         log["self_contact"].append([c for c in every if not c.startswith(BELT + "/")])

@@ -26,16 +26,24 @@ WIDTH, HEIGHT = 2 * PANEL, PANEL  # the whole arm | a close-up that follows the 
 FPS = 30
 
 
-def visual_model():
-    """The bam_fb_v2 twin with every visual mesh (the bundle's full scene), on the rack mount, no backlash, plus a floor and light."""
+_VISUAL: dict = {}
+
+
+def visual_model(belt: bool = False):
+    """The bam_fb_v2 twin with every visual mesh (the bundle's full scene), on the rack mount, no backlash, plus a floor and light; with
+    ``belt`` the rack's belt drawn under it (bam_fb_test_rig CONVEYOR - the homing routine's videos, where the arm starts on it)."""
     import mujoco  # noqa: PLC0415
 
     from .mujoco_plant import bam_ws_path  # noqa: PLC0415
 
     bam_ws_path()
-    from bam_fb_test_rig.model import STIFF, build_model  # noqa: PLC0415
+    from bam_fb_test_rig.model import CONVEYOR, STIFF, build_model  # noqa: PLC0415
 
-    rig = build_model(fh.load_v2_bundle(strip=False), STIFF, mount=fh.v2_mount(), conveyor=None, backlash=None)
+    if belt in _VISUAL:
+        rig = _VISUAL[belt]
+        return rig, mujoco.MjData(rig.model)
+    rig = build_model(fh.load_v2_bundle(strip=False), STIFF, mount=fh.v2_mount(), conveyor=CONVEYOR if belt else None, backlash=None)
+    _VISUAL[belt] = rig
     model = rig.model
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, PANEL)
     model.vis.global_.offheight = max(model.vis.global_.offheight, PANEL)
@@ -56,10 +64,10 @@ def pose_mapper(plant_model, view_model):
 
 
 def render_frames(plant_model, trace: dict, *, every: int = 1, azimuth: float = 110.0, elevation: float = -12.0, distance: float = 1.7,
-                  lookat=(0.08, 0.0, 0.42), captions: bool = True) -> list[np.ndarray]:
+                  lookat=(0.08, 0.0, 0.42), captions: bool = True, belt: bool = False) -> list[np.ndarray]:
     import mujoco  # noqa: PLC0415
 
-    rig, data = visual_model()
+    rig, data = visual_model(belt)
     model = rig.model
     pairs = pose_mapper(plant_model, model)
     wide = mujoco.MjvCamera()
@@ -86,8 +94,9 @@ def render_frames(plant_model, trace: dict, *, every: int = 1, azimuth: float = 
             right = renderer.render().copy()
             image = np.hstack([left, right])
             if captions:
+                touching = list(trace["self_contact"][k]) + list((trace.get("belt") or [[]] * len(trace["t"]))[k])
                 image = caption(image, f"t {trace['t'][k]:5.1f} s   {trace['step'][k][:70]}",
-                                "SELF-CONTACT " + ", ".join(trace["self_contact"][k]) if trace["self_contact"][k] else "")
+                                "CONTACT " + ", ".join(touching) if touching else "")
             frames.append(image)
     return frames
 

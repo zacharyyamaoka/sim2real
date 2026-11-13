@@ -21,8 +21,13 @@ inaccurate      finished on the right stops, but a scored zero sits in (``GATE_D
 homed           finished, every scored zero within ``GATE_DEG`` of the truth
 ==============  =============================================================================================================
 
-A homed episode is also **clean** when nothing touched the belt after lift-off (the first tick after power-on with nothing on it): a
-routine that presses the belt again has hit something it cannot see. **Coverage counts homed AND clean.**
+A homed episode is also **clean** when nothing touched the belt after lift-off: a routine that presses the belt again has hit something it
+cannot see. **Coverage counts homed AND clean.**
+
+*Amendment 1 (2026-11-13, after one smoke episode on one cell and before any grid run; no target moved):* lift-off was "the first tick
+after power-on with nothing on the belt". Leaving a belt rest, the claw drags along the belt for seconds while J2's first seek lifts the
+arm, with gaps of a few ticks, and that rule counted 196 ticks of the drag as re-contacts. Lift-off is now the first tick from which the
+belt stays clear ``fullarm_check.BELT_LIFTOFF_CLEAR_S`` (2 s); the drag before it is reported (``belt_drag_s``), never a fault.
 
 **Aggregates and targets** (per routine x environment; ``TARGETS``, what "good" means):
 

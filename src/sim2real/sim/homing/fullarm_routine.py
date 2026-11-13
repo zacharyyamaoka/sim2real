@@ -81,6 +81,8 @@ RECIPE_SEEK_DEG_S = math.degrees(0.1 * TAU)  # 36 deg/s: the recipe's max_vel 0.
 MULTI_LOCATE_DEG_S = 60.0  # 0.7 x the wrist's 86 deg/s speed ceiling (the ruler's 0.8 margin, with room for the stall's overshoot)
 MULTI_RETOUCH_DEG_S = 9.0  # a quarter of the recipe
 MULTI_BACKOFF_DEG = 4.0
+FAST_MOVE_DEG_S = 60.0  # the fast rows' moves (to 0, to TD4, across, parking back): as fast as their seeks
+PARK_UNLOAD_DEG = 5.0  # the fast park-back's slow first part: the forearm / stop contact unloads (PARK_BACK_SPEED's WHY), then full speed
 CONSISTENCY_TOL_DEG = 0.25
 LOCATE_TOL_DEG = 1.5
 SPAN_TOL_DEG = 1.0
@@ -146,6 +148,7 @@ class FullArmRoutine(FullArmHome):
     touch: str = "single"
     touches: int = 2
     seek_speed_deg_s: float = RECIPE_SEEK_DEG_S
+    move_speed_deg_s: float = RECIPE_SEEK_DEG_S
     slow_speed_deg_s: float = MULTI_RETOUCH_DEG_S
     backoff_deg: float = MULTI_BACKOFF_DEG
     consistency_tol_deg: float = CONSISTENCY_TOL_DEG
@@ -177,6 +180,14 @@ class FullArmRoutine(FullArmHome):
     def _seek_speed(self) -> float:
         return math.radians(self.seek_speed_deg_s)
 
+    @property
+    def _move_speed(self) -> float:
+        return math.radians(self.move_speed_deg_s)
+
+    @property
+    def _fast(self) -> bool:
+        return self.move_speed_deg_s > RECIPE_SEEK_DEG_S + 1e-9
+
     # -- plan ------------------------------------------------------------------------------------------------------------------------
 
     def plan(self, prior: ArmPrior, so_far: Sequence[Phase]):
@@ -207,20 +218,32 @@ class FullArmRoutine(FullArmHome):
                 steps.append(full_step(f"{role} park touch", [self._seek_cmd(joint, PARK_SEEK_SIDE, self._seek_speed)],
                                        [_stall(joint, WRIST_CAP_NM, self._kp)], holds=holds))
                 recaptured = [_recapture(j) for j in WRIST if j != joint]
-                steps.append(full_step(f"{role} parks back 135 deg", [_by(joint, -PARK_SEEK_SIDE * PARK_BACK_RAD, WRIST_HOLD_CAP_NM,
-                                                                        PARK_BACK_SPEED), *recaptured],
-                                       _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
+                if self._fast:
+                    # WHY two parts: the slow start is what unloads the contact (PARK_BACK_SPEED's WHY); the other 130 deg need not crawl
+                    unload = math.radians(PARK_UNLOAD_DEG)
+                    steps.append(full_step(f"{role} unloads its park", [_by(joint, -PARK_SEEK_SIDE * unload, WRIST_HOLD_CAP_NM, PARK_BACK_SPEED),
+                                                                       *recaptured], _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
+                    steps.append(full_step(f"{role} parks back 135 deg", [_by(joint, -PARK_SEEK_SIDE * (PARK_BACK_RAD - unload),
+                                                                            WRIST_HOLD_CAP_NM, self._move_speed)],
+                                           _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
+                else:
+                    steps.append(full_step(f"{role} parks back 135 deg", [_by(joint, -PARK_SEEK_SIDE * PARK_BACK_RAD, WRIST_HOLD_CAP_NM,
+                                                                            PARK_BACK_SPEED), *recaptured],
+                                           _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
                 holds = {**holds, joint: _hold(joint)}
                 continue
             steps += self._wrist_touch(prior, joint, side[joint], holds)
-            steps.append(full_step(f"{role} to 0", [_to(joint, 0.0, WRIST_HOLD_CAP_NM)], _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
+            steps.append(full_step(f"{role} to 0", [_to(joint, 0.0, WRIST_HOLD_CAP_NM, self._move_speed)], _reached(joint, WRIST_HOLD_CAP_NM),
+                                   holds=holds))
             holds = {**holds, joint: _to(joint, 0.0, WRIST_HOLD_CAP_NM)}
         if self.end == "td4":
             # the routine ends where the full arm waits: READY with the claw plumb (W2 +90 first: |W2| <= 95 is the CAD's proof)
             w1, w2, w3 = (math.radians(v) for v in READY_TD4_WRIST_DEG)
-            steps.append(full_step("W2 to TD4", [_to(W2, w2, WRIST_HOLD_CAP_NM)], _reached(W2, WRIST_HOLD_CAP_NM), holds=holds))
+            steps.append(full_step("W2 to TD4", [_to(W2, w2, WRIST_HOLD_CAP_NM, self._move_speed)], _reached(W2, WRIST_HOLD_CAP_NM),
+                                   holds=holds))
             holds = {**holds, W2: _to(W2, w2, WRIST_HOLD_CAP_NM)}
-            steps.append(full_step("W1 to TD4", [_to(W1, w1, WRIST_HOLD_CAP_NM)], _reached(W1, WRIST_HOLD_CAP_NM), holds=holds))
+            steps.append(full_step("W1 to TD4", [_to(W1, w1, WRIST_HOLD_CAP_NM, self._move_speed)], _reached(W1, WRIST_HOLD_CAP_NM),
+                                   holds=holds))
             if abs(w3) > 0.0:
                 steps.append(full_step("W3 to TD4", [_to(W3, w3, WRIST_HOLD_CAP_NM)], _reached(W3, WRIST_HOLD_CAP_NM),
                                        holds={**holds, W1: _to(W1, w1, WRIST_HOLD_CAP_NM)}))
@@ -243,7 +266,7 @@ class FullArmRoutine(FullArmHome):
                                holds=holds)]
             self.evidence_plan.append((f"{role} locates", joint, side, "locate"))
             for k in range(1, self.touches):
-                steps.append(full_step(f"{role} backs off {k}", [_by(joint, -side * back, WRIST_HOLD_CAP_NM, WRIST_MOVE_SPEED)],
+                steps.append(full_step(f"{role} backs off {k}", [_by(joint, -side * back, WRIST_HOLD_CAP_NM, self._move_speed)],
                                        _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
                 last = k == self.touches - 1
                 # WHY the seek's own long travel at the slow speed: a re-touch that runs out of setpoint before its stall builds is a
@@ -258,7 +281,7 @@ class FullArmRoutine(FullArmHome):
         steps = []
         for tag, s in (("near", side), ("far", -side)):
             if tag == "far":
-                steps.append(full_step(f"{role} walks across", [_to(joint, far + side * ease, WRIST_HOLD_CAP_NM)],
+                steps.append(full_step(f"{role} walks across", [_to(joint, far + side * ease, WRIST_HOLD_CAP_NM, self._move_speed)],
                                        _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
             steps += [full_step(f"{role} {tag} seek", [self._seek_cmd(joint, s, self._seek_speed, 0.5 * WRIST_CAP_NM)],
                                 [_stall(joint, 0.5 * WRIST_CAP_NM, self._kp)], holds=holds),
@@ -370,10 +393,14 @@ ROWS = {
     # PEP 0047 as landed: park_first + witness, the wrist homed at the five-bar's home (the gravity bowl) - through the belt with the claw on
     "PEP 0047 (wrist at the five-bar's home)": {"class": "FullArmHome", "order": "park_first"},
     "park_first+witness @ READY": {"order": "park_first", "touch": "single"},
-    # speed alone: the same touch at 60 deg/s - what a fast seek costs without a slow re-touch
-    "fast single @ READY": {"order": "park_first", "touch": "single", "seek_speed_deg_s": MULTI_LOCATE_DEG_S},
-    "multi x2 (3D-printer) @ READY": {"order": "park_first", "touch": "multi", "touches": 2, "seek_speed_deg_s": MULTI_LOCATE_DEG_S},
-    "multi x3 (3D-printer) @ READY": {"order": "park_first", "touch": "multi", "touches": 3, "seek_speed_deg_s": MULTI_LOCATE_DEG_S},
+    # speed alone: every wrist seek and move at 60 deg/s, one touch - what going fast costs without a slow re-touch
+    "fast single @ READY": {"order": "park_first", "touch": "single", "seek_speed_deg_s": MULTI_LOCATE_DEG_S,
+                            "move_speed_deg_s": FAST_MOVE_DEG_S},
+    # Zach's 3D-printer homing: the fast row's locate, back off, slow re-touch(es); the zero is the slow touches'
+    "multi x2 (3D-printer) @ READY": {"order": "park_first", "touch": "multi", "touches": 2, "seek_speed_deg_s": MULTI_LOCATE_DEG_S,
+                                      "move_speed_deg_s": FAST_MOVE_DEG_S},
+    "multi x3 (3D-printer) @ READY": {"order": "park_first", "touch": "multi", "touches": 3, "seek_speed_deg_s": MULTI_LOCATE_DEG_S,
+                                      "move_speed_deg_s": FAST_MOVE_DEG_S},
     "press_reverse (backlash every home) @ READY": {"order": "park_first", "touch": "press_reverse"},
     # option B: one touch, the wrist's gaps and compliance from a stored identify_backlash table (``needs_table``)
     "park_first+witness+table @ READY": {"order": "park_first", "touch": "single", "needs_table": True},

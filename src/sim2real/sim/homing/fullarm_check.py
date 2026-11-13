@@ -62,6 +62,10 @@ from .mujoco_plant import BAM_WS_SRC
 from .procedures import HomingRefused
 
 GATE_DEG = 0.1  # the MuJoCo rung's zero gate (gff_rung.GATE_DEG, wrist.GATE_DEG), frozen
+# WHY 2 s (the homing routine's ruler, amendment 1, 2026-11-13 - after one smoke episode, before any grid run): leaving a belt rest, the claw
+# drags along the belt while J2's first seek lifts the arm, with gaps of a few ticks; "the first tick with nothing on the belt" called 196
+# ticks of that drag re-contacts. Lift-off is the first tick from which the belt stays clear this long; contacts before it are the drag.
+BELT_LIFTOFF_CLEAR_S = 2.0
 MAX_EPISODE_S = 400.0
 SPEED_CEILING_RAD_S = {J1: 1.5, **{j: 1.5 for j in FIVEBAR}, **{j: WRIST_SPEED_CEILING_RAD_S for j in WRIST}, CLAW: 1.5}
 HOME_CRAIG_DEG = (91.01, -126.438)  # gff_rung.HOME_CRAIG_DEG: the homed map's home
@@ -153,6 +157,7 @@ class EpisodeReport:
     belt_first_s: float | None = None
     belt_last_s: float | None = None
     belt_liftoff_s: float | None = None
+    belt_drag_s: float = 0.0  # power-on to lift-off with something on the belt (the claw dragged off its rest)
     belt_after_liftoff_ticks: int = 0
     belt_bodies: list = field(default_factory=list)
     settle_waited_s: float | None = None
@@ -170,15 +175,23 @@ class EpisodeReport:
 
 
 def run_episode(procedure, plant: FullArmHomingPlant, start: ArmStart, prior, *, environment: str = "", rules=None,
-                trace_every: int = 0, limit_s: float = MAX_EPISODE_S) -> EpisodeReport:
+                trace_every: int = 0, limit_s: float = MAX_EPISODE_S, resume_phases: list | None = None) -> EpisodeReport:
     """One episode of ``procedure`` from ``start`` on ``plant`` (module docstring). ``trace_every`` > 0 keeps every n-th tick's qpos and
-    joint log for a video / a trace plot."""
+    joint log for a video / a trace plot. ``resume_phases``: ``plant`` is a copy of one that already ran these phases of this procedure
+    (``routine_check``'s shared five-bar phase) - no reset; planning carries on after them."""
     from .plant import PlantTrip  # noqa: PLC0415,F401 - run_phase scores a trip as a phase status
 
     rules = cad_rules() if rules is None else rules
-    plant.reset(start)
-    phases, outcome = [], "done"
-    while (sequence := procedure.plan(prior, phases)) is not None:
+    if resume_phases is None:
+        plant.reset(start)
+        phases = []
+    else:
+        phases = list(resume_phases)
+    outcome = "done"
+    for phase in phases:
+        if phase.status != "done":
+            outcome = f"{phase.status}: {phase.message}"
+    while outcome == "done" and (sequence := procedure.plan(prior, phases)) is not None:
         phase = run_phase(plant, sequence, limit_s=limit_s)
         phases.append(phase)
         if phase.status != "done":
@@ -215,7 +228,7 @@ def run_episode(procedure, plant: FullArmHomingPlant, start: ArmStart, prior, *,
     t = log["t"]
     belt = log.get("belt_contact") or [[] for _ in t]
     on_belt = [k for k, pairs in enumerate(belt) if pairs]
-    liftoff = next((k for k, pairs in enumerate(belt) if not pairs), None)
+    liftoff = belt_liftoff(belt, t)
     after = [k for k in on_belt if liftoff is not None and k > liftoff]
     report = EpisodeReport(
         procedure=procedure.name, environment=environment or f"mujoco/{plant.kind}/{plant.truth_name}", start=start.name,
@@ -236,11 +249,27 @@ def run_episode(procedure, plant: FullArmHomingPlant, start: ArmStart, prior, *,
         belt_start_bodies=sorted(c.split("/", 1)[1] for c in truth.get("start_belt") or []), belt_contact_ticks=len(on_belt),
         belt_first_s=t[on_belt[0]] if on_belt else None, belt_last_s=t[on_belt[-1]] if on_belt else None,
         belt_liftoff_s=t[liftoff] if liftoff is not None else None, belt_after_liftoff_ticks=len(after),
+        belt_drag_s=round(t[max(k for k in on_belt if liftoff is None or k < liftoff)] - t[0], 2)
+        if any(liftoff is None or k < liftoff for k in on_belt) else 0.0,
         belt_bodies=sorted({c.split("/", 1)[1] for k in on_belt for c in belt[k]}),
         settle_waited_s=truth.get("settle_waited_s"))
     if trace_every:
         report.trace = trace_of(plant, phases, every=trace_every)
     return report
+
+
+def belt_liftoff(belt: list, t: list) -> int | None:
+    """The first tick from which nothing touches the belt for ``BELT_LIFTOFF_CLEAR_S`` (or to the end of the log), or None if never."""
+    clear_from = None
+    for k, pairs in enumerate(belt):
+        if pairs:
+            clear_from = None
+            continue
+        if clear_from is None:
+            clear_from = k
+        if t[k] - t[clear_from] >= BELT_LIFTOFF_CLEAR_S:
+            return clear_from
+    return clear_from
 
 
 def trace_of(plant: FullArmHomingPlant, phases, every: int = 3) -> dict:
@@ -253,7 +282,7 @@ def trace_of(plant: FullArmHomingPlant, phases, every: int = 3) -> dict:
             steps.append((offset + k, phase.sequence.steps[min(index, len(phase.sequence.steps) - 1)].name))
     step_at = dict(steps)
     keep = range(0, len(log["t"]), every)
-    return {"t": [log["t"][k] for k in keep], "qpos": [log["qpos"][k] for k in keep] if "qpos" in log else None,
+    return {"t": [log["t"][k] for k in keep], "qpos": [log["qpos"][k] for k in keep] if log.get("qpos") else None,
             "link_deg": [[round(math.degrees(v), 3) for v in log["link"][k]] for k in keep],
             "effort_nm": [[round(v, 4) for v in log["effort"][k]] for k in keep],
             "self_contact": [log["self_contact"][k] for k in keep], "step": [step_at.get(k, "") for k in keep], "joints": list(JOINTS),

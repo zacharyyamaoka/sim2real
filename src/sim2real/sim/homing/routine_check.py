@@ -1,0 +1,418 @@
+"""Run the full-arm homing routines (``fullarm_routine.ROWS``) over the ruler's start grid and environments (``routine_ruler``) - sim only.
+
+    systemd-run --user --scope -q -p MemoryMax=24G -p OOMPolicy=continue -- env -u VIRTUAL_ENV OPENBLAS_NUM_THREADS=1 /home/bam/sim2real/.venv/bin/python -m sim2real.sim.homing.routine_check --plan all --out /home/bam/sim2real/src/sim2real/data/homing_routine_2026-11-13.json --cache /home/bam/.cache/sim2real/homing_routine_2026-11-13.jsonl --workers 10
+
+What runs (``plan_jobs``):
+
+* ``GRID_ROWS`` on every grid cell, nominal environment;
+* ``SUBSET_ROWS`` on the subset cells, nominal (the rows whose answer a quarter of the grid settles);
+* ``PERTURBED_ROWS`` on the subset cells in every other environment (``+table`` only where a table can differ: B1, B2).
+
+**One five-bar phase per (cell, environment).** Every READY row starts with the same phase 0 (single_touch_ready+gff, the wrist and
+claw braked), so it is run once and each row carries on from a deep copy of the plant (``fullarm_check.run_episode(resume_phases=...)``).
+Each row still plans its own phase 0 first, and a row whose plan differs from the shared one runs from scratch. ``test_homing_routine``
+holds a branched episode equal to a full one, number for number.
+
+**The plant** (``PLANT``): the belt as a contact (main's ``belt_top_m=0``) and stiff (``belt_solref``), the whole arm settled before
+power-on (``settle_all``), and the five-bar's stop / loop pairs at 10 ms (``contact_timeconst_s`` with ``contact_timeconst_scope
+"fivebar"``) - PEP 0047's evening finding: at the bundle's 2 ms the twin kicks J2 off its upper stops, which the real arm did not; the wrist
+and claw stops keep the bundle's 2 ms.
+
+**Every row is planned once, in its own process** (``preplan``): a row's two sequences do not depend on the start or the environment (the
+five-bar's seeks and its walk to READY are open-loop from the CAD stops; phase 1 holds READY on the comp's gravity there), and planning them
+builds the gravity comp's bench model - ~1.5 GB, which the machine's memory guard kills a worker for. Workers run the planned sequences
+through ``Preplanned`` and never build the comp.
+
+**The stored table** (option B's row): ``identify_backlash`` once per environment - press_reverse on ``CALIBRATION_START`` - and its wrist
+and claw rows handed to the row's prior (calibrated once on this arm, as the rack would).
+
+Every angle shown is in degrees.
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import math
+import os
+import time
+from dataclasses import asdict
+from pathlib import Path
+
+from . import routine_ruler as ruler
+
+GRID_ROWS = ("zach_v1 @ READY", "park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
+             "park_first+witness+table @ READY")
+SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)", "fast single @ READY", "multi x3 (3D-printer) @ READY")
+PERTURBED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
+                  "park_first+witness+table @ READY")
+TABLE_ENVIRONMENTS = ("B1", "B2")  # where a stored table can differ from B0's (B0: every gap 0)
+CALIBRATION_START = {"name": "calibration: power lost at READY, claw plumb", "j2_deg": ruler.FIVEBAR_LEVELS["READY"][0],
+                     "c1_deg": ruler.FIVEBAR_LEVELS["READY"][1], "wrist_deg": (1.167, 90.0, 0.0), "claw_deg": 30.0, "knee": -1,
+                     "j1_deg": 0.0, "family": "calibration"}
+CACHE_FIELDS = ("key", "row", "environment", "cell_index")
+
+
+def plant_kwargs(environment: str) -> dict:
+    from .fullarm_plant import BELT_STIFF_SOLREF  # noqa: PLC0415
+
+    env = ruler.ENVIRONMENTS[environment]
+    out = {"kind": env["kind"], "truth": env["truth"], "belt_top_m": 0.0, "settle_all": True, "belt_solref": BELT_STIFF_SOLREF,
+           "contact_timeconst_s": 0.01, "contact_timeconst_scope": "fivebar", "log_qpos": False}
+    if "wrist_friction" in env:
+        out["wrist_friction"] = env["wrist_friction"]
+    if "rotor_phase_deg" in env:
+        out["rotor_phase_deg"] = dict(env["rotor_phase_deg"])
+    return out
+
+
+def prior_for(environment: str, table=None):
+    from .fullarm_plant import arm_prior  # noqa: PLC0415
+
+    env = ruler.ENVIRONMENTS[environment]
+    return arm_prior(table, phase_error_deg=env.get("phase_error_deg", 0.0), rotor_phase_deg=env.get("rotor_phase_deg"))
+
+
+def needs_table(row: str) -> bool:
+    from .fullarm_routine import ROWS  # noqa: PLC0415
+
+    return bool(ROWS[row].get("needs_table"))
+
+
+def episode_key(row: str, environment: str, cell_name: str) -> str:
+    return f"{row} | {environment} | {cell_name}"
+
+
+# ---------------------------------------------------------------------------------------------------------------- planned once
+
+PLANS: dict = {}  # row -> {"sequences": [phase 0, phase 1], "evidence_plan": [...], "notes": {...}} (``preplan``; set before the pool forks)
+
+
+def preplan(rows) -> dict:
+    """Each row's sequences, planned once on the nominal prior (module docstring). Run it in a process of its own (``preplan_file``)."""
+    from .fullarm_routine import make_row  # noqa: PLC0415
+
+    prior = prior_for(ruler.NOMINAL)
+    out = {}
+    for row in rows:
+        procedure = make_row(row)
+        first = procedure.plan(prior, [])
+        second = procedure.plan(prior, [None])  # WHY a placeholder: FullArmHome plans phase 1 from len(so_far) alone
+        out[row] = {"sequences": [first, second], "evidence_plan": list(getattr(procedure, "evidence_plan", [])),
+                    "notes": copy.deepcopy(dict(procedure.notes))}
+    return out
+
+
+def preplan_file(rows, path: Path) -> dict:
+    """``preplan`` in a fresh interpreter, pickled to ``path`` and loaded back: this process never holds the comp's model."""
+    import pickle  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    path = Path(path)
+    code = ("import pickle, sys; from sim2real.sim.homing.routine_check import preplan; "
+            f"pickle.dump(preplan({list(rows)!r}), open({str(path)!r}, 'wb'))")
+    subprocess.run([sys.executable, "-c", code], check=True, env={**os.environ, "OPENBLAS_NUM_THREADS": "1"})
+    return pickle.loads(path.read_bytes())
+
+
+class Preplanned:
+    """A row's procedure that runs its planned sequences (``PLANS``) and observes as itself. Fresh per episode."""
+
+    def __init__(self, procedure, plan: dict):
+        self.procedure = procedure
+        self.sequences = list(plan["sequences"])
+        if hasattr(procedure, "evidence_plan"):
+            procedure.evidence_plan = list(plan["evidence_plan"])
+        procedure.notes.update(copy.deepcopy(plan["notes"]))
+
+    @property
+    def name(self) -> str:
+        return self.procedure.name
+
+    @property
+    def notes(self) -> dict:
+        return self.procedure.notes
+
+    @property
+    def references(self) -> list:
+        return self.procedure.references
+
+    @property
+    def wrist_pose(self):
+        return getattr(self.procedure, "wrist_pose", None)
+
+    def plan(self, prior, so_far):
+        k = len(so_far)
+        return self.sequences[k] if k < len(self.sequences) else None
+
+    def observe(self, prior, phases):
+        return self.procedure.observe(prior, phases)
+
+
+def procedure_for(row: str):
+    from .fullarm_routine import make_row  # noqa: PLC0415
+
+    return Preplanned(make_row(row), PLANS[row]) if row in PLANS else make_row(row)
+
+
+# ---------------------------------------------------------------------------------------------------------------- the plan
+
+
+def plan_jobs(plan: str = "all") -> list[dict]:
+    """One job per (cell, environment): the rows to run there. ``plan``: all, nominal (the grid and the subset rows), perturbed, smoke."""
+    cells = ruler.grid_cells()
+    subset = {c["name"] for c in ruler.subset_cells()}
+    jobs = []
+    for index, cell in enumerate(cells):
+        if plan in ("all", "nominal", "smoke"):
+            rows = list(GRID_ROWS) + (list(SUBSET_ROWS) if cell["name"] in subset else [])
+            jobs.append({"cell_index": index, "cell": cell, "environment": ruler.NOMINAL, "rows": rows})
+        if plan in ("all", "perturbed") and cell["name"] in subset:
+            for environment in ruler.ENVIRONMENTS:
+                if environment == ruler.NOMINAL:
+                    continue
+                rows = [r for r in PERTURBED_ROWS if not needs_table(r) or environment in TABLE_ENVIRONMENTS]
+                jobs.append({"cell_index": index, "cell": cell, "environment": environment, "rows": rows})
+    if plan == "smoke":
+        jobs = [j for j in jobs if j["cell_index"] in (22,)]
+    # WHY this order (a loaded machine, 2026-11-13): READY's 6 x 6 wrist map first (the answer to the order and the touch), then the
+    # perturbed subset (backlash, friction, mass, calibration), then the other three five-bar poses - a run stopped early still answers
+    first = next(iter(ruler.FIVEBAR_LEVELS))
+    jobs.sort(key=lambda j: (0 if (j["environment"] == ruler.NOMINAL and j["cell"]["family"] == first) else
+                             1 if j["environment"] != ruler.NOMINAL else 2, j["cell_index"]))
+    return jobs
+
+
+# ---------------------------------------------------------------------------------------------------------------- one job
+
+
+def _signature(sequence) -> list:
+    """What a phase-0 plan commands, step by step (names, joints, modes, targets, caps): two plans with one signature are one phase."""
+    out = []
+    for step in sequence.steps:
+        out.append((step.name, tuple((c.joint, c.mode, None if c.position is None else round(float(c.position), 9),
+                                      None if getattr(c, "distance", None) is None else round(float(c.distance), 9),
+                                      None if c.speed is None else round(float(c.speed), 9),
+                                      None if c.max_effort is None else round(float(c.max_effort), 9),
+                                      None if c.feedforward_effort is None else round(float(c.feedforward_effort), 9))
+                                     for c in step.commands)))
+    return out
+
+
+def _report_row(report, row: str, job: dict, wall_s: float, branched: bool, keep_trace: bool = False) -> dict:
+    out = asdict(report)
+    trace = out.pop("trace", None)
+    if keep_trace:
+        out["trace"] = trace
+    out.update({"procedure": row, "row": row, "environment": job["environment"], "cell_index": job["cell_index"],
+                "cell": job["cell"].get("cell"), "wall_s": round(wall_s, 1), "branched": branched,
+                "key": episode_key(row, job["environment"], job["cell"]["name"])})
+    out["outcome_class"] = ruler.outcome_class(out)
+    out["covered"] = ruler.covered(out)
+    return out
+
+
+def run_job(job: dict, *, tables: dict | None = None, branch: bool = True, trace_every: int = 0, plant_overrides: dict | None = None,
+            keep_trace: bool = False) -> list[dict]:
+    """Every row of ``job`` from its cell in its environment (module docstring). ``trace_every`` / ``keep_trace``: keep each row's trace
+    (routine_media's videos and replays; ``plant_overrides={"log_qpos": True}`` for the poses)."""
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    from .fullarm_check import run_episode, table_from_json  # noqa: PLC0415
+    from .fullarm_plant import ArmStart, FullArmHomingPlant, StartRefused  # noqa: PLC0415
+    from .fullarm_routine import FullArmRoutine  # noqa: PLC0415
+    from .bench import run_phase  # noqa: PLC0415
+
+    environment, cell = job["environment"], job["cell"]
+    start = ArmStart(**{k: v for k, v in cell.items() if k != "cell"})
+    plant = FullArmHomingPlant(**{**plant_kwargs(environment), **(plant_overrides or {})})
+    table_rows = (tables or {}).get(environment)
+    try:
+        plant.place(start)
+    except StartRefused as error:
+        return [{"refused_start": str(error), "procedure": row, "row": row, "environment": environment, "cell_index": job["cell_index"],
+                 "cell": cell.get("cell"), "start": cell["name"], "family": cell["family"], "outcome_class": "infeasible", "covered": False,
+                 "key": episode_key(row, environment, cell["name"])} for row in job["rows"]]
+    out = []
+    shared = None  # (plant after phase 0, [phase 0], its signature)
+    for row in job["rows"]:
+        procedure = procedure_for(row)
+        prior = prior_for(environment, table_from_json(table_rows) if needs_table(row) and table_rows else None)
+        began = time.time()
+        branched = False
+        inner = getattr(procedure, "procedure", procedure)
+        if branch and isinstance(inner, FullArmRoutine) and inner.wrist_pose == "ready":
+            first = procedure.plan(prior, [])
+            signature = _signature(first)
+            if shared is None:
+                plant.reset(start)
+                phase0 = run_phase(plant, first, limit_s=400.0)
+                shared = (copy.deepcopy(plant, memo={id(plant.rig): plant.rig}), phase0, signature, time.time() - began)
+            if shared[2] == signature:
+                copied = copy.deepcopy(shared[0], memo={id(shared[0].rig): shared[0].rig})
+                phase0 = copy.deepcopy(shared[1])
+                report = run_episode(procedure, copied, start, prior, environment=environment, trace_every=trace_every,
+                                     resume_phases=[phase0])
+                branched = True
+                wall = time.time() - began + shared[3]  # the shared phase's own wall time, counted for every row it served
+                out.append(_report_row(report, row, job, wall, branched, keep_trace))
+                if needs_table(row):
+                    out[-1]["table_used"] = bool(table_rows)
+                continue
+        procedure = procedure_for(row)
+        report = run_episode(procedure, plant, start, prior, environment=environment, trace_every=trace_every)
+        out.append(_report_row(report, row, job, time.time() - began, branched, keep_trace))
+        if needs_table(row):
+            out[-1]["table_used"] = bool(table_rows)
+    return out
+
+
+def calibrate(environment: str) -> dict:
+    """identify_backlash once in ``environment``: press_reverse from CALIBRATION_START; its wrist and claw rows (JSON) and what it found."""
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    from .bench import run_phase  # noqa: PLC0415
+    from .fullarm_check import table_to_json  # noqa: PLC0415
+    from .fullarm_plant import ArmStart, FullArmHomingPlant, hidden_backlash, ROLE, WRIST, CLAW  # noqa: PLC0415
+    from .procedures import HomingRefused  # noqa: PLC0415
+
+    plant = FullArmHomingPlant(**plant_kwargs(environment))
+    procedure = procedure_for("press_reverse (backlash every home) @ READY")
+    prior = prior_for(environment)
+    plant.reset(ArmStart(**CALIBRATION_START))
+    phases = []
+    while (sequence := procedure.plan(prior, phases)) is not None:
+        phase = run_phase(plant, sequence, limit_s=400.0)
+        phases.append(phase)
+        if phase.status != "done":
+            return {"environment": environment, "table": None, "outcome": f"{phase.status}: {phase.message}"}
+    try:
+        result = procedure.observe(prior, phases)
+    except HomingRefused as error:
+        return {"environment": environment, "table": None, "outcome": f"refused: {error}"}
+    truth = hidden_backlash(plant.kind)
+    rows = [r for r in table_to_json(result.backlash) if r["joint"] in (*WRIST, CLAW)]
+    return {"environment": environment, "table": rows, "outcome": "done", "time_s": plant.time,
+            "gap_error_arcmin": {ROLE[r["joint"]]: round((r["gap_rad"] - truth[r["joint"]].gap_rad) * 60.0 * 180.0 / math.pi, 3)
+                                 for r in rows if r["gap_observable"]}}
+
+
+# ---------------------------------------------------------------------------------------------------------------- the pool, the cache
+
+
+def load_cache(path: Path | None) -> list[dict]:
+    if path is None or not Path(path).is_file():
+        return []
+    out = []
+    for line in Path(path).read_text().splitlines():
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:  # a line torn by a killed worker: that episode simply runs again
+            continue
+    return out
+
+
+def pending(jobs: list[dict], done: list[dict]) -> list[dict]:
+    have = {r["key"] for r in done}
+    out = []
+    for job in jobs:
+        missing = [row for row in job["rows"] if episode_key(row, job["environment"], job["cell"]["name"]) not in have]
+        if missing:
+            out.append({**job, "rows": missing if len(missing) < len(job["rows"]) else job["rows"]})
+    return out
+
+
+def _worker(payload):
+    job, tables = payload
+    try:
+        return run_job(job, tables=tables)
+    except Exception as error:  # noqa: BLE001 - one broken episode must not take the sweep down; it is reported, not hidden
+        import traceback  # noqa: PLC0415
+
+        return [{"procedure": row, "row": row, "environment": job["environment"], "cell_index": job["cell_index"], "cell": job["cell"].get("cell"),
+                 "start": job["cell"]["name"], "error": f"{type(error).__name__}: {error}", "traceback": traceback.format_exc()[-2000:],
+                 "key": episode_key(row, job["environment"], job["cell"]["name"]) + " | error"} for row in job["rows"]]
+
+
+def run(jobs: list[dict], *, workers: int, cache: Path | None, tables: dict) -> list[dict]:
+    import multiprocessing  # noqa: PLC0415
+
+    done = load_cache(cache)
+    todo = pending(jobs, done)
+    print(f"{len(jobs)} jobs, {len(todo)} to run, {len(done)} episodes cached", flush=True)
+    began, finished = time.time(), 0
+    if cache is not None:
+        Path(cache).parent.mkdir(parents=True, exist_ok=True)
+    payloads = [(job, tables) for job in todo]
+    # WHY maxtasksperchild (claw_rung's WHY): a worker's RSS grows over tens of episodes; a fresh one every few jobs costs nothing
+    with multiprocessing.get_context("fork").Pool(workers, maxtasksperchild=4) as pool:
+        for rows in pool.imap_unordered(_worker, payloads, chunksize=1):
+            finished += 1
+            if cache is not None:
+                with Path(cache).open("a") as handle:
+                    for row in rows:
+                        handle.write(json.dumps(row, default=str) + "\n")
+            done.extend(rows)
+            mins = (time.time() - began) / 60.0
+            print(f"[{finished}/{len(todo)} jobs, {mins:.1f} min] {rows[0].get('start', '')[:48]} {rows[0]['environment']}: "
+                  + ", ".join(f"{r['row'][:18]}={r.get('outcome_class', 'error')}" for r in rows), flush=True)
+    keys = {episode_key(row, j["environment"], j["cell"]["name"]) for j in jobs for row in j["rows"]}
+    return [r for r in done if r.get("key") in keys or (r.get("key", "").endswith(" | error") and r["key"][:-8] in keys)]
+
+
+def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
+    from sim2real.provenance import code_sha  # noqa: PLC0415
+
+    from .mujoco_plant import BAM_WS_SRC  # noqa: PLC0415
+
+    clean = [r for r in reports if "error" not in r]
+    return {"schema": "sim2real.homing_routine/1", "ruler": "sim2real.sim.homing.routine_ruler (frozen 2026-11-13, amendment 1)",
+            "grid_rows": list(GRID_ROWS), "subset_rows": list(SUBSET_ROWS), "perturbed_rows": list(PERTURBED_ROWS),
+            "environments": {k: v["why"] for k, v in ruler.ENVIRONMENTS.items()}, "targets": {k: list(v) for k, v in ruler.TARGETS.items()},
+            "plant": {k: (list(v) if isinstance(v, tuple) else v) for k, v in plant_kwargs(ruler.NOMINAL).items()},
+            "calibrations": calibrations, "cards": ruler.score(clean), "errors": [r for r in reports if "error" in r],
+            "episodes": clean, "sim2real_sha": code_sha(Path(__file__)), "bam_ws_sha": code_sha(BAM_WS_SRC),
+            "bundle": "bam_fb_v2 @ cad-exporter 09374d7"}
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--plan", default="all", choices=("all", "nominal", "perturbed", "smoke"))
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--cache", type=Path)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--tables", type=Path, help="calibrations JSON to reuse (else identify_backlash runs once per table environment)")
+    parser.add_argument("--plans", type=Path, default=Path.home() / ".cache" / "sim2real" / "homing_routine_plans.pkl")
+    args = parser.parse_args(argv)
+    from sim2real.provenance import write_results  # noqa: PLC0415
+
+    began = time.time()
+    jobs = plan_jobs(args.plan)
+    rows = sorted({row for job in jobs for row in job["rows"]} | {"press_reverse (backlash every home) @ READY"})
+    args.plans.parent.mkdir(parents=True, exist_ok=True)
+    PLANS.update(preplan_file(rows, args.plans))
+    print(f"planned {len(PLANS)} rows once ({args.plans})", flush=True)
+    environments = sorted({j["environment"] for j in jobs if any(needs_table(r) for r in j["rows"])})
+    if args.tables and args.tables.is_file():
+        calibrations = json.loads(args.tables.read_text())
+    else:
+        import multiprocessing  # noqa: PLC0415
+
+        with multiprocessing.get_context("fork").Pool(max(1, min(args.workers, len(environments)))) as pool:
+            calibrations = dict(zip(environments, pool.map(calibrate, environments), strict=True))
+        if args.tables:
+            args.tables.write_text(json.dumps(calibrations, indent=1, default=str))
+    print("calibrations", json.dumps({k: (v["outcome"], v.get("gap_error_arcmin")) for k, v in calibrations.items()}), flush=True)
+    tables = {k: v["table"] for k, v in calibrations.items() if v.get("table")}
+    reports = run(jobs, workers=args.workers, cache=args.cache, tables=tables)
+    out = results(reports, tables, calibrations)
+    out["seconds"] = round(time.time() - began, 1)
+    write_results(args.out, out, default=str)
+    for name, card in sorted(out["cards"].items()):
+        print(f"{name[:70]:70s} cov {card['coverage_pct']} sw {card['silent_wrong']} p95 {card['zero_error_p95_deg']} "
+              f"t50 {card['time_to_home_median_s']} pass {card['verdict']['pass']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
