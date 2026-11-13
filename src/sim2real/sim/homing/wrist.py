@@ -541,6 +541,10 @@ def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[di
             "events": [(e.index, e.name, e.outcome, round(e.finished, 2)) for e in phase.events][-4:]}
     if stalled_on_self:
         note["stalled_on_self_contact"] = stalled_on_self
+    first = next((k for k, pair in enumerate(plant.log["self_contact"]) if pair), None)
+    if first is not None:  # any link-on-link contact in the episode (an aborted run's stall is not a reference, so look at the whole log)
+        note["first_self_contact"] = {"t_s": round(plant.log["t"][first], 2), "pair": plant.log["self_contact"][first],
+                                      "link_deg": {rig.can[j]: round(math.degrees(v), 2) for j, v in zip(rig.joints, plant.log["link"][first], strict=True)}}
     if not finished:
         note["self_contact_at_end"] = plant.log["self_contact"][-1]
         note["ended_at_deg"] = {rig.can[j]: round(math.degrees(v), 3) for j, v in truth["link_rad"].items()}
