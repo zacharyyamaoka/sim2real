@@ -784,8 +784,8 @@ def run_episode(config: EpisodeConfig) -> dict:
     # the wrist's release first, the five-bar still holding home (WHY first, 2026-11-13: released after the five-bar, the wrist's swing
     # knocked the limp arm 6-9 deg off home); a held wrist via its brake, a braked wrist stopped, one joint at a time
     released = []
-    if config.wrist in ("hold", "brake"):
-        released = plant.release_wrist(via=config.release if config.wrist == "hold" else "stop")
+    if config.wrist == "hold":
+        released = plant.release_wrist(via=config.release)
         powered.extend([[True, True]] * (len(plant.log) - len(powered) - 1))
     # the release at home (tview_run._release): brake all three until still (<= 10 s), then stop
     plant.brake_j1()
@@ -800,6 +800,9 @@ def run_episode(config: EpisodeConfig) -> dict:
             break
     plant.stop_j1()
     plant.send([None, None])
+    if config.wrist == "brake":
+        # the real order (bam_rack_twin fivebar_home --wrist brake): wrist_brake.release once fivebar_homed has released the arm at home
+        released = plant.release_wrist(via="stop")
     fivebar_rows = sequence_rows
     for _ in range(int(round(2.0 / CONTROL_DT))):  # everything let go: where it comes to rest
         powered.append([False, False])
