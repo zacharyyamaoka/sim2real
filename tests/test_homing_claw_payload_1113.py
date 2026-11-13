@@ -23,7 +23,7 @@ if not (DEFAULT_ROOT / "hardstops.json").is_file():
 
 PLATE_KG = 1.146671837566224  # cad-exporter 8957130 fusion360_data.json "2.5 lbs Weight:1"
 MOUNT_KG = 0.055438010499180734  # "Weight To Servo Mount v2:1"
-CLAW_KG = 0.3712862  # bam_ws claw_payload.CASES["nominal"]: the crab claw's CAD 0.3033 kg x 1.2249
+CLAW_KG = (0.273365 + 0.029933) * 2.0628530325950996 / 1.6841719999999998  # bam_ws claw_payload.CASES["nominal"]: CAD x 1.2249
 
 
 def _plant():
@@ -69,7 +69,12 @@ def test_swapping_in_the_plates_own_mass_leaves_the_gravity_load_where_it_was():
     index = cad.body(mujoco_plant.END_GROUP_BODY).id
     assert same.body_mass[index] == pytest.approx(cad.body_mass[index], abs=1e-9)
     in_plane = [0, 2]  # the l2 frame's x and z span the arm's plane (y is J4's axis, out of it)
-    assert np.allclose(_first_moment(same, index)[in_plane], _first_moment(cad, index)[in_plane], atol=1e-9)
+    # WHY not exactly equal (first run of this test, before landing): the mount's mesh centres sit 0.05 mm off the plate's centre in the
+    # plane (z 0.29965 vs 0.2997), so moving its 55 g onto the plate's centre moves the load by exactly that, 2.6e-6 kg.m (2.5e-5 N.m)
+    parts = mujoco_plant.end_payload_parts(mujoco_plant.RigCache.get("B0"))
+    offset = MOUNT_KG * (np.asarray(parts["plate"]["com_l2_m"]) - np.asarray(parts["mount"]["com_l2_m"]))
+    assert np.allclose(_first_moment(same, index)[in_plane], (_first_moment(cad, index) + offset)[in_plane], atol=1e-9)
+    assert np.all(np.abs(offset[in_plane]) < 1e-5)
 
 
 def test_the_claw_composes_with_the_end_group_scale_swap_first():
