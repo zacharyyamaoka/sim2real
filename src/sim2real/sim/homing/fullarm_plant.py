@@ -72,6 +72,10 @@ CAN = {J1: 11, J2: 12, C1: 13, W1: 14, W2: 15, W3: 16, CLAW: 17}
 # at kp 15 the real wrist rested -8.6 / +5.3 / +14.4 deg off "0" under gravity, which the twin must reproduce (fullarm_check)
 WRIST_KP_NM_PER_REV = 15.0
 WRIST_KD_NM_PER_REV_S = 0.15
+AS_FOUND_1024 = (WRIST_KP_NM_PER_REV, WRIST_KD_NM_PER_REV_S)  # what wrist_home_v1 read at 10:24 (the replay's gains)
+# WHY the default moved to 75 / 0.75 (the Sim to Real Agent, 2026-11-13 ~11:30): the rack's wrist and claw boards now run kp 75 / kd 0.75
+# in RAM (re-homed 11:24, /archive/datasets/bam_rig/full_arm/homed/latest.json); the 10:24 replay keeps the gains that run had
+WRIST_GAINS_NOW = (75.0, 0.75)
 WRIST_MAX_NM = fh.WRIST_MAX_NM  # 2 A x 0.5087 N.m/A
 WRIST_KT_NM_PER_A = 0.5087
 FIVEBAR_KT_NM_PER_A = 0.64  # 60ASM400 + 10:1 at the output (fullarm_home.FIVEBAR_BRAKE_NM_S's WHY)
@@ -275,7 +279,7 @@ class FullArmHomingPlant:
 
     def __init__(self, kind: str = "B0", truth: str = "cad", *, cogging: bool = True, settle_s: float = 0.5,
                  runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
-                 limp_brakes: bool = True):
+                 limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -291,6 +295,7 @@ class FullArmHomingPlant:
         # (phases shorted: a viscous drag, fullarm_home.WRIST_BRAKE_NM_S) - what the wrist does while a five-bar runner that never talks to
         # it homes the shoulder; on the bus a "limp" wrist step is sent as moteus `d brake` (PEP 0047). False: `d stop` (mode 0, free).
         self.limp_brakes = bool(limp_brakes)
+        self.wrist_gains = (float(wrist_gains[0]), float(wrist_gains[1]))  # kp N.m/rev, kd N.m/(rev/s)
         model = self.rig.model
         self.claw_qadr = int(model.jnt_qposadr[model.joint(CLAW).id])
         self.claw_dof = int(model.jnt_dofadr[model.joint(CLAW).id])
@@ -370,7 +375,7 @@ class FullArmHomingPlant:
 
         q = self.place(start)
         boards = real_boards()
-        wrist_board = BoardConfig(kp=WRIST_KP_NM_PER_REV, ki=0.0, kd=WRIST_KD_NM_PER_REV_S, ilimit=0.0, max_torque_nm=WRIST_MAX_NM)
+        wrist_board = BoardConfig(kp=self.wrist_gains[0], ki=0.0, kd=self.wrist_gains[1], ilimit=0.0, max_torque_nm=WRIST_MAX_NM)
         drives = [Drive(r, self.signs[r], boards[r]) for r in ("J1", "J2", "C1")] + [Drive(r, 1.0, wrist_board) for r in ("W1", "W2", "W3")]
         sim = RigSim(self.rig, tuple(drives), log_hz=1e-6)
         if self.rig.backlash is not None:

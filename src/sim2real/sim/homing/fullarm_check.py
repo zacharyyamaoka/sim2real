@@ -452,10 +452,12 @@ def replay_vs_real(path: Path = REAL_V1_JSON) -> dict:
     seek travel, the stall torque and the settle error at "0" (real: -8.6 / +5.3 / +14.4 deg at kp 15)."""
     from .fullarm_procedures import FullArmHome  # noqa: PLC0415
 
+    from .fullarm_plant import AS_FOUND_1024  # noqa: PLC0415
+
     start = real_v1_start(path)
-    plant = FullArmHomingPlant("B0")
+    plant = FullArmHomingPlant("B0", wrist_gains=AS_FOUND_1024)  # the gains that run had
     prior = arm_prior()
-    procedure = FullArmHome(order="zach_v1", wrist_only=True)
+    procedure = FullArmHome(order="zach_v1", wrist_only=True, wrist_kp_nm_per_rev=AS_FOUND_1024[0])
     report = run_episode(procedure, plant, start, prior, trace_every=2)
     real = json.loads(path.read_text())
     sim_rows = report.trace

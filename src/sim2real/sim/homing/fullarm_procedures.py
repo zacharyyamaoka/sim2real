@@ -68,6 +68,8 @@ WRIST_SEEK_DISTANCE = math.radians(350.0)  # wrist_home_v1.TRAVEL_DEG: from an u
 WRIST_CAP_NM = 1.0  # the recipe's max_torque 1.0
 WRIST_HOLD_CAP_NM = 1.0
 WRIST_MOVE_SPEED = 0.1 * TAU
+# The softest wrist gain the rack has run (kp 15, 10:24): the default stall lead and reach tolerance are sized for it unless a procedure is
+# told its boards' kp (FullArmHome.wrist_kp_nm_per_rev: the rack's 75 since 11:24)
 WRIST_KP_NM_PER_RAD = WRIST_KP_NM_PER_REV / TAU
 CLAW_SEEK_SPEED = math.radians(30.0)  # wrist_home_v1.CLAW_SPEED_DEG_S
 CLAW_SEEK_DISTANCE = math.radians(100.0)  # past the claw's whole 77 deg travel
@@ -91,17 +93,31 @@ def _hold(joint: str, feedforward: float = 0.0) -> JointCommand:
     return JointCommand.hold(joint, max_effort=cap, feedforward_effort=feedforward)
 
 
-def _seek(joint: str, side: int, cap: float) -> JointCommand:
+WRIST_SPAN_RAD = math.radians(2 * 169.851)  # stop to stop (bam_fb_v2 stops.json)
+
+
+def stall_lead(joint: str, cap: float, kp_nm_per_rad: float = WRIST_KP_NM_PER_RAD) -> float:
+    """The setpoint lead a stall needs: past the PD's sag under its cap (wrist._stall, sag_proof's rule) - a stall must mean the board is
+    pressing at its cap, not climbing friction and gravity on the way. ``kp_nm_per_rad`` is the board's (the claw's own for the claw)."""
+    return 0.06 + cap / (CLAW_KP_NM_PER_RAD if joint == CLAW else kp_nm_per_rad)
+
+
+def wrist_seek_distance(kp_nm_per_rad: float = WRIST_KP_NM_PER_RAD) -> float:
+    """How far a wrist seek's setpoint travels: the recipe's 350 deg, or more when a stop-to-stop seek plus the stall's lead needs it.
+    WHY (sim 2026-11-13, kp 75): from a start near the far stop the recipe's 350 deg leaves ~10 deg past the stop; a lead sized for a
+    softer board than that never builds, the board presses its stop at the cap and the step times out (wrist_home_v1's own detector
+    needs no lead, so 350 is enough for it)."""
+    return max(WRIST_SEEK_DISTANCE, WRIST_SPAN_RAD + stall_lead(W1, WRIST_CAP_NM, kp_nm_per_rad) + math.radians(5.0))
+
+
+def _seek(joint: str, side: int, cap: float, kp_nm_per_rad: float = WRIST_KP_NM_PER_RAD) -> JointCommand:
     if joint == CLAW:
         return JointCommand.move_by(joint, side * CLAW_SEEK_DISTANCE, speed=CLAW_SEEK_SPEED, max_effort=cap)
-    return JointCommand.move_by(joint, side * WRIST_SEEK_DISTANCE, speed=WRIST_SEEK_SPEED, max_effort=cap)
+    return JointCommand.move_by(joint, side * wrist_seek_distance(kp_nm_per_rad), speed=WRIST_SEEK_SPEED, max_effort=cap)
 
 
-def _stall(joint: str, cap: float) -> Stall:
-    # WHY the lead past the PD's sag under its cap (wrist._stall, sag_proof's rule): at kp 15 N.m/rev a 1 N.m push needs 0.42 rad of
-    # lead - a stall must mean the board is pressing at its cap, not climbing friction and gravity on the way
-    kp = CLAW_KP_NM_PER_RAD if joint == CLAW else WRIST_KP_NM_PER_RAD
-    return Stall(joint=joint, lead=0.06 + cap / kp)
+def _stall(joint: str, cap: float, kp_nm_per_rad: float = WRIST_KP_NM_PER_RAD) -> Stall:
+    return Stall(joint=joint, lead=stall_lead(joint, cap, kp_nm_per_rad))
 
 
 def _reached(joint: str, cap: float) -> list:
@@ -272,12 +288,17 @@ class FullArmHome:
     # zeros J2 / C1 within 0.05 deg on B1 / B2. The wrist rows are right (zero 0.46-0.50 -> <= 0.002 deg). True once the five-bar's own
     # identify works on this arm.
     fivebar_table: bool = False
+    wrist_kp_nm_per_rev: float = 75.0  # the boards' kp the stall lead is sized for (fullarm_plant.WRIST_GAINS_NOW)
     fivebar_name: str | None = None
     comp: str = DEFAULT_COMP
     ff_scale: float = 1.0
     name: str = ""
     references: list = field(default_factory=list)
     notes: dict = field(default_factory=dict)
+
+    @property
+    def _kp(self) -> float:
+        return self.wrist_kp_nm_per_rev / TAU
 
     def __post_init__(self):
         if self.order not in WRIST_ORDERS:
@@ -337,7 +358,7 @@ class FullArmHome:
         for joint, defines in plan:
             role = ROLE[joint]
             if not defines:
-                steps.append(full_step(f"{role} park touch", [_seek(joint, PARK_SEEK_SIDE, WRIST_CAP_NM)], [_stall(joint, WRIST_CAP_NM)],
+                steps.append(full_step(f"{role} park touch", [_seek(joint, PARK_SEEK_SIDE, WRIST_CAP_NM, self._kp)], [_stall(joint, WRIST_CAP_NM, self._kp)],
                                        holds=holds))
                 # WHY the others re-captured where they are, and a slow retreat (sim 2026-11-13, start W1 -60 / W2 160): a park touch on the
                 # forearm pushes W2 off its hold (kp 15: 1 N.m is 24 deg of sag); backing W1 off at once released W2's wound-up PD and
@@ -358,7 +379,7 @@ class FullArmHome:
         role = ROLE[joint]
         near = prior.stops.q_rad(joint, side)
         if not self.identify:
-            return [full_step(f"{role} seeks", [_seek(joint, side, WRIST_CAP_NM)], [_stall(joint, WRIST_CAP_NM)], holds=holds,
+            return [full_step(f"{role} seeks", [_seek(joint, side, WRIST_CAP_NM, self._kp)], [_stall(joint, WRIST_CAP_NM, self._kp)], holds=holds,
                               define={joint: near})]
         far = prior.stops.q_rad(joint, -side)
         ease = math.radians(3.0)
@@ -367,9 +388,10 @@ class FullArmHome:
             if tag == "far":
                 steps.append(full_step(f"{role} walks across", [_to(joint, far + side * ease, WRIST_HOLD_CAP_NM)],
                                        _reached(joint, WRIST_HOLD_CAP_NM), holds=holds))
-            steps += [full_step(f"{role} {tag} seek", [_seek(joint, s, 0.5 * WRIST_CAP_NM)], [_stall(joint, 0.5 * WRIST_CAP_NM)], holds=holds),
-                      full_step(f"{role} {tag} press half", [_seek(joint, s, 0.5 * WRIST_CAP_NM)], [Elapsed(duration=PRESS_S)], holds=holds),
-                      full_step(f"{role} {tag} press full", [_seek(joint, s, WRIST_CAP_NM)], [Elapsed(duration=PRESS_S)], holds=holds,
+            steps += [full_step(f"{role} {tag} seek", [_seek(joint, s, 0.5 * WRIST_CAP_NM, self._kp)], [_stall(joint, 0.5 * WRIST_CAP_NM, self._kp)],
+                                holds=holds),
+                      full_step(f"{role} {tag} press half", [_seek(joint, s, 0.5 * WRIST_CAP_NM, self._kp)], [Elapsed(duration=PRESS_S)], holds=holds),
+                      full_step(f"{role} {tag} press full", [_seek(joint, s, WRIST_CAP_NM, self._kp)], [Elapsed(duration=PRESS_S)], holds=holds,
                                 define={joint: near} if tag == "near" else None)]
         return steps
 

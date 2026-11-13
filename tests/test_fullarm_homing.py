@@ -88,6 +88,8 @@ def test_zach_v1_matches_the_rack_recipe():
         assert seek["speed_deg_s"] == pytest.approx(math.degrees(fp.WRIST_SEEK_SPEED))
         assert seek["cap_nm"] == pytest.approx(fp.WRIST_CAP_NM)
         assert seek["travel_deg"] == pytest.approx(math.degrees(fp.WRIST_SEEK_DISTANCE))
+        # our seek travels AT LEAST the recipe's (more where robot_msgs' lead-based stall needs it: wrist_seek_distance's WHY)
+        assert math.degrees(fp.wrist_seek_distance(75.0 / (2 * math.pi))) >= seek["travel_deg"]
 
 
 # ---------------------------------------------------------------------------------------------------------------- episodes
