@@ -94,8 +94,9 @@ def channels(seed: int, *, qd_offset: float = 0.0, ff_offset: float = 0.0, noise
     """One repeat of a 0.5 Hz sine tape as a multi-channel command: q (rad), qd (rad/s) and a Coulomb-like feed-forward (N.m), response noisy."""
     w = 2 * math.pi * 0.5
     q = 0.5 * np.sin(w * T)
-    qd = 0.5 * w * np.cos(w * T) + qd_offset
-    ff = 0.07 * np.tanh(qd / 0.05) + ff_offset
+    planned = 0.5 * w * np.cos(w * T)
+    qd = planned + qd_offset
+    ff = 0.07 * np.tanh(planned / 0.05) + ff_offset   # from the plan's velocity, so each offset moves one channel only
     response = q + np.random.default_rng(seed).normal(0.0, noise, T.size)
     command = {"q": q, "qd": qd, "ff": ff}
     return (T, command, response, TICKS) if tick else (T, command, response)
