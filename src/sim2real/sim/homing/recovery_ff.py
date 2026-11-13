@@ -59,6 +59,10 @@ recovery homes all 16 there. Two causes, both in what the plan claims to know, n
   (J1 settles at its stops, -90 / +90 deg, from lower_corner and on_seek_stops). There the gravity the feed assumes is ~0, and at ff +25 %
   the procedure's own "J2 + C1 home" trips after the recovery (J2 88-89 deg/s, both starts).
 
+The pass-7 run (``data/homing_fivebar_mujoco_pass7_2026-11-13.json``, B0, the 16 recovery starts) confirms it and adds a third:
+with the real mass at ff nominal the stop starts themselves trip at 86-88 deg/s in the recovery's define step ("C1 + until the hub
+meets L1's plate") - 31.2 % reliable; CAD 87.5 %, ff -25 % 93.8 %, ff +25 % 81.2 %. Not ready.
+
 On the real arm the any-start path is the home button (bam_rack_twin ``fivebar_home -f``): it reads the pose from the boards and feeds
 every waypoint with the gravity at that pose, so neither cause applies; recover_first stays the lost-zero fallback.
 """

@@ -14,6 +14,12 @@ the step still ends on J2's ``Stall`` only (its evidence is unchanged: the J2 st
 pushing)" continues C1's seek to its stall, its define and everything after are single_touch's. And :func:`keep_c1_powered`: a crank
 powered in one step is not let go in the next (behind the recovery its last step holds the crank; the procedure's "J1 holds" would drop it
 for 0.3 s) - the same rule ``real_plant.keep_j2_powered`` applies to J2.
+
+Result (pass 7 run, ``data/homing_fivebar_mujoco_pass7_2026-11-13.json``): READY by every frozen gate (B0 / B1 / B2 x the real mass at
+ff 0.75 / 1 / 1.25 + CAD, 100 %, zero p95 vs twin <= 0.047 deg, no trip), and the limp swing is gone (C1 limp 74-79 deg/s -> 0) - but
+the crank's swing moves into the next step: "C1 seeks (J2 pushing)" runs C1 at 79-80 deg/s POWERED on every start with the real mass
+(single_touch+gff peaks at 56 powered), 93 % of the 86 deg/s runaway, where the twin read the real arm's limp swing 12 % slow (77.5 vs
+87.7 deg/s). So single_touch+gff stays the default home(); this row is not made default.
 """
 
 from __future__ import annotations
