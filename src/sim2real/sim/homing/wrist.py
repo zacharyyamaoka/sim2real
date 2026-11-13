@@ -1,7 +1,7 @@
 """The homing bench's wrist rung: the UR wrist test rig (CAN 14, 15, 16) in MuJoCo, single_touch and press_reverse as robot_msgs
 JointCommandSequences, scored by robot_models' five metrics against CAD and against the twin's own stop contacts.
 
-    systemd-run --user --scope -q -p MemoryMax=8G -p OOMPolicy=continue -- env -u VIRTUAL_ENV OPENBLAS_NUM_THREADS=1 MUJOCO_GL=egl uv run --project /home/bam/sim2real --extra homing --extra sim python -m sim2real.sim.homing.wrist --out /home/bam/sim2real/src/sim2real/data/homing_wrist_mujoco_2026-11-12.json --workers 3
+    systemd-run --user --scope -q -p MemoryMax=8G -p OOMPolicy=continue -- env -u VIRTUAL_ENV OPENBLAS_NUM_THREADS=1 MUJOCO_GL=egl uv run --project /home/bam/sim2real --extra homing --extra sim python -m sim2real.sim.homing.wrist --out /home/bam/sim2real/src/sim2real/data/homing_wrist_mujoco_pass5_2026-11-12.json --workers 3
 
 The plant is bam_ur_wrist's own twin of record, reused, not rewritten (``homing_tview_sim.make_plant``'s recipe): ``KarnoppPlant`` (stick-
 slip at the physics rate) on it5's friction and armature (``homing_tview_sim.IT5``), the 583ee39 pending masses, the stops as REAL contacts
@@ -18,6 +18,12 @@ order are the wrist's):
   stop, move home (0); the zero is the stall minus the CAD stop, corrected by the stored table (none here: the plant has no gear model).
 * ``press_reverse``: per joint, two levels (half, full cap) on the homing side, define, walk to 3 deg short of the other stop, two levels
   there, home; ``fit`` identifies the gap from the stop span against CAD and zeroes in one run.
+* ``single_touch_park`` (pass 5): single_touch with CAN 15 parked by a first touch before CAN 14 homes, and CAN 15's defining touch
+  made last with CAN 14 at home - so no defining touch can meet the self-contact set (``WristSingleTouchPark`` says why it is safe).
+
+Every procedure's result passes one detector before it may define a frame (``link_stall_faults``, pass 5): once every joint is zeroed,
+each stall it relied on becomes a claimed pose, and a claimed pose with two links touching on the rig's own CAD (``SelfContactMap``)
+means the joint pressed a link, not its stop - the episode is refused, never scored as a zero.
 
 What this rung does NOT have (and says so in its results): hidden backlash. bam_ur_wrist's plant is a 3-dof model (``WristModel`` refuses
 any other nq) whose Karnopp friction, drive torques and sensing are indexed by those three dofs; gear_backlash's double joints would make it
@@ -51,6 +57,7 @@ from robot_msgs.std import Header
 
 from .bench import compact, expand, git_sha, run_phase
 from .mujoco_plant import BAM_WS_SRC, bam_ws_path
+from .procedures import HomingRefused
 
 TAU = 2.0 * math.pi
 WRIST_PATHS = ("dev/bam_ur_wrist", "core/bam_robot_descriptions/src")
@@ -164,6 +171,74 @@ def at_rest(start: WristStart) -> bool:
     plant.reset(start)
     mujoco.mj_forward(plant.plant.model, plant.plant.data)
     return int(plant.plant.data.ncon) == 0
+
+
+class SelfContactMap:
+    """The rig's own CAD asked which links touch at a pose: the bundle's MJCF plus bam_ur_wrist.self_contact's link-link pairs, the stops
+    as joint limits (no teeth), nominal masses - a prior a procedure may read (like the StopMap), never the plant's hidden truth.
+
+    Its shape on this rig (2026-11-12, measured over the whole joint space at 2 deg and on |CAN 14| >= 100 at 0.5 deg, CAN 16 at -169,
+    -90, -8, 0, 8, 90, 169 deg): every touching pose has |CAN 14| >= 106 deg AND |CAN 15| >= 107 deg - the tip's ArUco holder
+    (hard_stop_3) reaching the base's marker plate when the wrist is turned far round on both joints."""
+
+    _cache: dict = {}
+
+    def __init__(self):
+        wrist_path()
+        from bam_ur_wrist.model import WristModel  # noqa: PLC0415
+
+        rig = WristRig.get()
+        self.wrist = WristModel(rig.bundle, self_contact=True)
+        names = list(rig.bundle.names)
+        self.order = [names.index(j) for j in rig.joints]  # rig.joints (CAN 14, 15, 16) -> the bundle's joint order
+        self.joints = rig.joints
+
+    @classmethod
+    def get(cls) -> SelfContactMap:
+        if "map" not in cls._cache:
+            cls._cache["map"] = cls()
+        return cls._cache["map"]
+
+    def pairs(self, q_rad: dict) -> str:
+        """The body pairs touching at ``q_rad`` (joint name -> rad), "" when none."""
+        import mujoco  # noqa: PLC0415
+
+        model, data = self.wrist.model, self.wrist.data
+        q = np.zeros(3)
+        for joint, index in zip(self.joints, self.order, strict=True):
+            q[index] = q_rad[joint]
+        data.qpos[self.wrist.qpos_adr] = q
+        mujoco.mj_forward(model, data)
+        found = {"|".join(sorted((model.body(model.geom_bodyid[c.geom1]).name, model.body(model.geom_bodyid[c.geom2]).name)))
+                 for c in (data.contact[i] for i in range(data.ncon))}
+        return ",".join(sorted(found))
+
+
+def link_stall_faults(stalls, result, contact_map: SelfContactMap | None = None) -> list[str]:
+    """The detector: a stall a result relies on is refused when the pose that result claims for that instant is one the links cannot be
+    in. ``stalls`` is ``[(joint, side, Reading)]`` (readings in the power-up frame, step_ends); the claimed pose is every joint's reading
+    there in the result's frame - the stalled joint ON its StopMap side, the others where their own zeros put them.
+
+    WHY the claimed pose and not the stall's reading against the StopMap (2026-11-12): a stall's reading is in the power-up frame, and
+    on this rig that frame carries no absolute position at all - bam_ur_wrist.plant.latch_offset puts every power-up reading within
+    +-half a rotor turn (18 deg) of 0 whatever the joint's angle (sobol-03: CAN 14 at 139.7 deg reads 6.7). Nothing about one stall
+    alone says which obstacle it met. What does: once every joint is zeroed, the stall's instant becomes a pose, and if that pose puts
+    the ArUco holder inside the base plate the joint was not at its stop - it was pressing the holder on the plate short of it
+    (pass 4: CAN 15 19-63 deg short, silently taken as the stop by single_touch on sobol-01, 03, 12)."""
+    contact_map = contact_map or SelfContactMap.get()
+    rig = WristRig.get()
+    faults = []
+    for joint, side, reading in stalls:
+        zeros = {j: result.zero(j) for j in rig.joints}
+        if any(z is None for z in zeros.values()):
+            continue
+        pose = {j: reading.raw[j] + zeros[j].offset_rad for j in rig.joints}
+        pair = contact_map.pairs(pose)
+        if pair:
+            where = ", ".join(f"CAN {rig.can[j]} {math.degrees(v):.1f}" for j, v in pose.items())
+            faults.append(f"CAN {rig.can[joint]}'s {'upper' if side > 0 else 'lower'}-stop stall claims a pose with {pair} touching "
+                          f"({where} deg): it pressed a link, not its stop")
+    return faults
 
 
 # ---------------------------------------------------------------------------------------------------------------- the plant
@@ -394,10 +469,21 @@ class WristProcedure:
     name: str = ""
     references: list = field(default_factory=list)
     notes: dict = field(default_factory=dict)
+    stalls: list = field(default_factory=list)
 
     def _evidence(self, reading, joint, side) -> StallEvidence:
         self.references.append((0, reading.tick, joint, side))
+        self.stalls.append((joint, side, reading))
         return StallEvidence(joint, side, abs(reading.effort[joint]), reading.raw[joint])
+
+    def _checked(self, result: HomingResult) -> HomingResult:
+        """Every procedure's result passes the detector (link_stall_faults) before it may define a frame: a stall on a link is reported
+        as a refusal, never returned as a zero."""
+        faults = link_stall_faults(self.stalls, result)
+        if faults:
+            self.notes["stalled_on_a_link"] = faults
+            raise HomingRefused("; ".join(faults))
+        return result
 
 
 @dataclass
@@ -422,20 +508,20 @@ class WristSingleTouch(WristProcedure):
         return _sequence(joints, "wrist single touch (tip first)", steps)
 
     def observe(self, prior, phases) -> HomingResult:
-        self.references = []
+        self.references, self.stalls = [], []
         rig = WristRig.get()
         ends = step_ends(phases[0], rig.joints)
         evidence = [self._evidence(ends[f"CAN {rig.can[j]} seeks"], j, rig.side[j]) for j in rig.joints]
         stored = prior.table or BacklashTable(tuple(JointBacklash(j, BacklashModel("B0"), source="no stored table") for j in rig.joints))
         result = fit(evidence, prior.stops, table=stored)
-        return HomingResult(result.zeros, stored, prior.stops, tuple(evidence), "mujoco")
+        return self._checked(HomingResult(result.zeros, stored, prior.stops, tuple(evidence), "mujoco"))
 
     def observe_vs_twin(self, prior, twin, phases) -> HomingResult:
-        references, notes = list(self.references), dict(self.notes)
+        references, notes, stalls = list(self.references), dict(self.notes), list(self.stalls)
         try:
             return self.observe(twin, phases)
         finally:
-            self.references, self.notes = references, notes
+            self.references, self.notes, self.stalls = references, notes, stalls
 
 
 @dataclass
@@ -470,7 +556,7 @@ class WristPressReverse(WristProcedure):
         return _sequence(joints, "wrist press-reverse (tip first)", steps)
 
     def observe(self, prior, phases) -> HomingResult:
-        self.references = []
+        self.references, self.stalls = [], []
         rig = WristRig.get()
         ends = step_ends(phases[0], rig.joints)
         evidence = []
@@ -479,12 +565,72 @@ class WristPressReverse(WristProcedure):
             for tag, s in (("near", side), ("far", -side)):
                 evidence.append(self._evidence(ends[f"CAN {can} {tag} press half"], joint, s))
                 evidence.append(self._evidence(ends[f"CAN {can} {tag} press full"], joint, s))
-        return fit(evidence, prior.stops, identify="B2", rung="mujoco")
+        return self._checked(fit(evidence, prior.stops, identify="B2", rung="mujoco"))
 
     observe_vs_twin = WristSingleTouch.observe_vs_twin
 
 
-PROCEDURES = {"single_touch": WristSingleTouch, "press_reverse": WristPressReverse}
+PARK_HOLD_SAG_DEG = math.degrees(HOLD_CAP_NM / KP_NM_PER_RAD)  # how far a held joint can be pushed off its setpoint under its cap: 4.8 deg
+
+
+@dataclass
+class WristSingleTouchPark(WristSingleTouch):
+    """single_touch with CAN 15 parked before CAN 14 homes, and CAN 15's defining touch made last, with CAN 14 at home.
+
+    Per joint as single_touch (seek the homing side at 0.1 rev/s under 1 N.m, define the CAD stop, move home), in the order
+    CAN 16, CAN 15 (park: a touch that defines nothing the result keeps), CAN 14, CAN 15 (the touch that defines its zero).
+
+    WHY this variant and not the two the brief offered (2026-11-12):
+
+    * "turn CAN 14 out of the self-contact band by its latched reading" cannot be built: a power-up reading is within 18 deg of 0
+      whatever the joint's angle (bam_ur_wrist.plant.latch_offset; sobol-03's CAN 14 at 139.7 deg reads 6.7), so it does not say
+      where CAN 14 is, to 36 deg or to any bound.
+    * "seek CAN 15 toward its other stop inside the band" does not help: with |CAN 14| >= 144 deg the holder meets the plate on BOTH
+      sides of CAN 15's travel (CAN 14 at 150: blocked below -110 and above 162), so neither stop is reachable from there.
+
+    What does work uses only relative motion and the map's shape (SelfContactMap: every touching pose has |CAN 14| >= 106 AND
+    |CAN 15| >= 107 deg, any CAN 16):
+
+    1. CAN 15's park seek stalls either on its true stop (-169.3) or on the holder at the top edge of a band (at most -106.7 deg,
+       pass 4's worst); "home" from that stall is +169.85 deg of relative travel, so CAN 15 parks in [0.6, 63.2] deg, +-4.8 of held sag:
+       inside |CAN 15| < 107, where no CAN 14 angle touches.
+    2. So CAN 14's seek and home sweep its whole travel without a self-contact, and its zero comes from its own stop tooth.
+    3. CAN 15's defining touch then runs with CAN 14 at home (|CAN 14| <= ~6 deg with sag), inside |CAN 14| < 106, where no CAN 15
+       angle touches: the stall it defines is its stop tooth.
+
+    It never defines a frame on a link. It does not complete from every rest: from a pocket where CAN 15's park path itself crosses a
+    band (0.19 % of the collision-free joint space, all at |CAN 14| 119-128 deg: below a band, or between two at 119-120) the park move
+    is not reached and the step times out - an abort, reported, as single_touch's own home move does there."""
+
+    name: str = "single_touch_park"
+
+    def plan(self, prior, so_far):
+        if so_far:
+            return None
+        rig = WristRig.get()
+        joints = rig.joints
+        steps = []
+        for can, tag in ((16, ""), (15, " park"), (14, ""), (15, "")):
+            joint = joints[CAN_IDS.index(can)]
+            side = rig.side[joint]
+            others = [_hold(o) for o in joints if o != joint]
+            steps.append(_step(joints, f"CAN {can}{tag} holds still", [_hold(j) for j in joints], [Elapsed(duration=0.3)], timeout=1.0))
+            steps.append(_step(joints, f"CAN {can}{tag} seeks", others + [_seek(joint, side, SEEK_CAP_NM)], [_stall(joint, SEEK_CAP_NM)],
+                               define={joint: prior.stops.q_rad(joint, side)}))
+            steps.append(_step(joints, f"CAN {can}{tag} home", others + [_to(joint, rig.home[joint])], _reached(joint)))
+        return _sequence(joints, "wrist single touch, CAN 15 parked (16, 15 park, 14, 15)", steps)
+
+    def observe(self, prior, phases) -> HomingResult:
+        rig = WristRig.get()
+        ends = step_ends(phases[0], rig.joints)
+        can15 = rig.joints[CAN_IDS.index(15)]
+        park, final = ends["CAN 15 park seeks"], ends["CAN 15 seeks"]
+        # frame-free (both readings in the power-up frame): how far short of the stop the park touch stalled - a diagnostic, not evidence
+        self.notes["park_touch_short_deg"] = round(math.degrees(rig.side[can15] * (final.raw[can15] - park.raw[can15])), 3)
+        return super().observe(prior, phases)
+
+
+PROCEDURES = {"single_touch": WristSingleTouch, "press_reverse": WristPressReverse, "single_touch_park": WristSingleTouchPark}
 
 
 # ---------------------------------------------------------------------------------------------------------------- the bench
@@ -512,19 +658,30 @@ def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[di
     phase = run_phase(plant, procedure.plan(prior, []))
     outcome = "done" if phase.status == "done" else f"{phase.status}: {phase.message}"
     finished = outcome == "done"
-    result = procedure.observe(prior, [phase]) if finished else None
+    result = None
+    if finished:
+        try:
+            result = procedure.observe(prior, [phase])
+        except HomingRefused as error:  # the detector (link_stall_faults) refused it: an outcome, not a crash
+            outcome, finished = f"refused: {error}", False
     truth = plant.truth()
-    stalls, stalled_on_self = [], {}
-    for _, tick, joint, side in procedure.references if finished else []:
+    stalls, stalled_on_self, refused_vs_twin = [], {}, None
+    refused = outcome.startswith("refused")
+    for _, tick, joint, side in procedure.references if finished or refused else []:
         row = phase.log["plant_offset"] + tick
         link = plant.log["link"][row][rig.joints.index(joint)]
-        stalls.append(StallCheck(joint, side, math.degrees(link), math.degrees(prior.stops.q_rad(joint, side))))
+        if finished:
+            stalls.append(StallCheck(joint, side, math.degrees(link), math.degrees(prior.stops.q_rad(joint, side))))
         if plant.log["self_contact"][row]:  # the stall was a link hitting a link, not the drive's stop (truth, for the report)
             stalled_on_self[rig.can[joint]] = plant.log["self_contact"][row]
     joints, twin = [], {}
     twin_result = None
     if result is not None and contacts is not None:
-        twin_result = procedure.observe_vs_twin(prior, prior_for(rig, twin_stops(rig, contacts)), [phase])
+        try:
+            twin_result = procedure.observe_vs_twin(prior, prior_for(rig, twin_stops(rig, contacts)), [phase])
+        except HomingRefused as error:  # refused against the twin's stops but not CAD's: recorded, never silently scored
+            twin_result = None
+            refused_vs_twin = str(error)
     for joint in rig.joints:
         error = gap = None
         if result is not None and result.zero(joint) is not None:
@@ -541,6 +698,11 @@ def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[di
             "events": [(e.index, e.name, e.outcome, round(e.finished, 2)) for e in phase.events][-4:]}
     if stalled_on_self:
         note["stalled_on_self_contact"] = stalled_on_self
+    if refused_vs_twin:
+        note["refused_vs_twin"] = refused_vs_twin
+    for key in ("stalled_on_a_link", "park_touch_short_deg"):  # what the procedure itself reported (the detector, the park touch)
+        if key in procedure.notes:
+            note[key] = procedure.notes[key]
     first = next((k for k, pair in enumerate(plant.log["self_contact"]) if pair), None)
     if first is not None:  # any link-on-link contact in the episode (an aborted run's stall is not a reference, so look at the whole log)
         note["first_self_contact"] = {"t_s": round(plant.log["t"][first], 2), "pair": plant.log["self_contact"][first],
@@ -585,7 +747,10 @@ def run_bench(*, procedures=tuple(PROCEDURES), n_sobol: int = 15, workers: int =
         episodes.setdefault(name, []).append(compact(record))
         twin = {role[j]: v for j, v in (note.get("zero_error_vs_twin_deg") or {}).items()}
         joints = [dict(j, zero_error_deg=(twin.get(role[j["joint"]]) if j["zero_error_deg"] is not None else None)) for j in record["joints"]]
-        twin_rows.setdefault(name, []).append(compact(dict(record, joints=joints)))
+        twin_record = dict(record, joints=joints)
+        if note.get("refused_vs_twin"):  # the detector refused it against the twin's stops: a failure there, never a missing number
+            twin_record.update(finished=False, outcome=f"refused: {note['refused_vs_twin']}", time_s=None, stalls=[])
+        twin_rows.setdefault(name, []).append(compact(twin_record))
         notes.setdefault(name, {})[start] = note
         wall.setdefault(name, []).append(round(seconds, 1))
     cards = {"B0": {n: scorecard([expand(r, n, f"{RUNG} · B0") for r in rows], gate_deg=GATE_DEG) for n, rows in episodes.items()}}
@@ -642,4 +807,5 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["PROCEDURES", "WristPlant", "WristPressReverse", "WristRig", "WristSingleTouch", "run_bench", "starts", "twin_contacts"]
+__all__ = ["PROCEDURES", "SelfContactMap", "WristPlant", "WristPressReverse", "WristRig", "WristSingleTouch", "WristSingleTouchPark",
+           "link_stall_faults", "run_bench", "starts", "twin_contacts"]
