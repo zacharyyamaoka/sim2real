@@ -35,7 +35,10 @@ ROW = "recover_first+press_reverse+gff"
 
 # pass 4's B1 bowl episode, as stored: J1's CAD-referenced gap is the hidden 3.5' plus the 0.1232 deg span error
 B1_RECORD = {
-    "procedure": ROW, "environment": "mujoco · B1", "start": "bowl", "finished": True, "outcome": "done", "time_s": 165.67, "stalls": [],
+    "procedure": ROW, "environment": "mujoco · B1", "start": "bowl", "finished": True, "outcome": "done", "time_s": 165.67,
+    "stalls": [{"joint": j, "side": side, "link_deg": link, "cad_deg": cad} for j, side, link, cad in (  # as stored (reliable() reads them)
+        (J2, 1, 124.7145007, 125.0000249), (C1, 1, 197.7718331, 197.7734571), (J2, -1, -90.0298335, -90.0273687),
+        (C1, -1, -112.6879083, -112.6914018), (J1, 1, 90.0370685, 89.9754587), (J1, -1, -90.0370685, -89.9754587))],
     "joints": [{"joint": J1, "zero_error_deg": 0.0, "gap_identified_deg": 0.1816138, "gap_truth_deg": 3.5 / 60.0},
                {"joint": J2, "zero_error_deg": 0.1437404, "gap_identified_deg": 0.0, "gap_truth_deg": 2.5 / 60.0},
                {"joint": C1, "zero_error_deg": -0.0004017, "gap_identified_deg": 0.0604857, "gap_truth_deg": 4.0 / 60.0}],
@@ -51,11 +54,11 @@ def test_the_vs_twin_row_scores_the_gap_against_the_twin_too():
     gaps = {j["joint"]: j["gap_identified_deg"] for j in row["joints"]}
     assert gaps == {J1: 0.0584031, J2: 0.0410212, C1: 0.0636859}
     card = scorecard([expand(compact(row), ROW, "mujoco · B1")], gate_deg=0.1)
-    assert card["backlash_error_deg"] == pytest.approx(abs(0.0636859 - 4.0 / 60.0))
+    assert card["backlash_error_deg"] == pytest.approx(abs(0.0636859 - 4.0 / 60.0), abs=1e-6)  # compact keeps 7 digits
     assert card["backlash_gate_pass"] is True
     # the CAD row is untouched: its gap is still CAD's, and still fails the same (unchanged) gate
     cad = scorecard([expand(compact(B1_RECORD), ROW, "mujoco · B1")], gate_deg=0.1)
-    assert cad["backlash_gate_pass"] is False and cad["backlash_error_deg"] == pytest.approx(0.1816138 - 3.5 / 60.0)
+    assert cad["backlash_gate_pass"] is False and cad["backlash_error_deg"] == pytest.approx(0.1816138 - 3.5 / 60.0, abs=1e-6)
 
 
 def test_a_vs_twin_row_never_borrows_the_cad_gap():
@@ -108,3 +111,21 @@ def test_the_hidden_truth_the_twin_gaps_are_judged_against_is_a_full_gap_in_degr
             truth = {j[0]: j[3] for j in row[5]}
             assert truth == pytest.approx({j: truth_scale * HIDDEN_GAP_ARCMIN[j] / 60.0 for j in DRIVES}, abs=1e-7)
     assert backlash_gate_deg(3.5 / 60.0) == pytest.approx(1.0 / 60.0) and backlash_gate_deg(0.0) == pytest.approx(1.0 / 60.0)
+
+
+def test_the_rescore_bounds_a_cad_clipped_gap_and_decides_only_what_the_bound_decides():
+    """A CAD-clipped gap's twin value lies in [0, max(0, shift)]: B0's C1 (truth 0, shift 0.0032 deg) passes the gate for every value
+    there; J2 (shift 0.283 deg, truth 2.5') can pass or fail inside it, so only physics decides - never a guess."""
+    from sim2real.sim.homing.mujoco_bench import rescore_backlash_vs_twin  # noqa: PLC0415
+
+    if not PASS4.is_file():
+        pytest.skip(f"no pass-4 results: {PASS4}")
+    results = json.loads(PASS4.read_text())
+    out = rescore_backlash_vs_twin(results)
+    assert out["cad_clipped_bounds"]["B0"][ROW]["C1"]["decided_by_bound"] is True
+    assert out["cad_clipped_bounds"]["B1"][ROW]["J2"]["decided_by_bound"] is None
+    assert out["cad_clipped_unscored"]["B1"][ROW] == {"J2": 16}
+    for model in ("B0", "B1", "B2"):
+        card = out["scorecards_vs_twin"][model][ROW]
+        assert card["backlash_gate_pass"] is True and card["backlash_error_deg"] < 1.0 / 60.0
+        assert out["stored_scorecards_vs_twin"][model][ROW]["backlash_gate_pass"] is False  # the stored file is read, never rewritten
