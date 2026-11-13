@@ -113,6 +113,8 @@ def records(results: dict) -> list[dict]:
                       "evaluation": evaluation, "evaluation_state": "latest", "starts": len(results["starts"]),
                       "start": f"all {len(results['starts'])} (per-start rows in the starts table)",
                       "start_names": [s["name"] for s in results["starts"]]}
+            if results.get("pass") is not None:  # WHY (pass 6): a pass's rows sit beside the earlier passes' on one leaderboard, labelled
+                config.update({"pass": results["pass"], "form": results.get("form")})
             numbers = _numbers(card)
             numbers.update(_numbers(twin_card(results, model, procedure), "vs_twin."))
             verdict = (results.get("verdicts") or {}).get(model, {}).get(procedure)

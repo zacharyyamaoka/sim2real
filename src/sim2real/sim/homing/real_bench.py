@@ -73,7 +73,11 @@ RELIABILITY_TARGET_PCT = 100.0
 ROWS = ("tview_v2", "single_touch", "two_level_touch+gff", "single_touch+gff", "tview_v2+gff")
 # the MuJoCo rung's row each real row is compared with (the same procedure; MuJoCo ran every row behind recover_first)
 MUJOCO_ROW = {"tview_v2": "recover_first+tview_v2", "single_touch": "recover_first+single_touch",
-              "two_level_touch+gff": "recover_first+two_level_touch+gff"}
+              "two_level_touch+gff": "recover_first+two_level_touch+gff",
+              # pass 6 ran these in this very form (gff_rung): the real arm is its end group +22 % with the comp as identified (score
+              # them with --mujoco-json data/homing_fivebar_mujoco_pass6_2026-11-13.json)
+              "single_touch+gff": "single_touch+gff · real form · end group +22 % · ff nominal",
+              "tview_v2+gff": "tview_v2+gff · real form · end group +22 % · ff nominal"}
 RECOVER_ROWS = ("recover_first+tview_v2", "recover_first+single_touch", "recover_first+two_level_touch+gff")
 NOT_RUN = {
     "two_level_touch+gff": (

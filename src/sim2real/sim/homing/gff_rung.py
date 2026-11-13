@@ -24,7 +24,8 @@ What is run, and why each choice:
 * **The masses.** ``cad`` (the bundle's) and ``end+22%``: the twin's end-group body scaled x1.2249 (``mujoco_plant.END_GROUP_MASS_SCALE``,
   the home button's mass-ID, massid_real_093852) - the real arm.
 * **The feed-forward's own error.** The comp is the home button's identified model; a +gff row runs it at x0.75, x1.0 and x1.25 (the comp
-  25 % light, right, 25 % heavy) on both masses, so a feed-forward that only works when its model is right is not called ready.
+  25 % light, right, 25 % heavy) on the heavier arm (``CAD_FF_SCALES``: nominal only on CAD masses), so a feed-forward that only works
+  when its model is right is not called ready.
 * **The boards and the runaway check.** The real record (J2 kp 144 / kd 8, C1 kp 200 / kd 4 N.m per output rev, ilimit_scale 0, no
   velocity target: ``mujoco_plant.REAL_BOARD_RECORD``) and the real runner's runaway stop on every powered J2 / C1 plain position command:
   over 1.5 rad/s (86 deg/s) the episode ends, tripped (``MujocoRigPlant(runaway_rad_s=...)``), as ``run_phase_real`` ends a real one.
@@ -84,11 +85,17 @@ def config_name(row: str, mass: str, ff: float | None) -> str:
     return " · ".join(parts)
 
 
-def configs(rows=ROWS, masses=tuple(MASSES), ff_scales=FF_SCALES) -> list[tuple[str, str, float | None]]:
+# WHY the comp's +-25 % only on the heavier arm: that is the real arm, and the readiness question; on CAD masses the comp (identified on the
+# real arm) is already 16 % heavy at the upper stops (6.6 vs the twin's 5.7 N.m), and each extra case costs ~16 episode-minutes of B1
+CAD_FF_SCALES = (1.0,)
+
+
+def configs(rows=ROWS, masses=tuple(MASSES), ff_scales=FF_SCALES, cad_ff_scales=CAD_FF_SCALES) -> list[tuple[str, str, float | None]]:
     out = []
     for row in rows:
         for mass in masses:
-            for ff in (ff_scales if row.endswith("+gff") else (None,)):
+            scales = cad_ff_scales if mass == "cad" else ff_scales
+            for ff in (scales if row.endswith("+gff") else (None,)):
                 out.append((row, mass, ff))
     return out
 
@@ -273,13 +280,23 @@ def run_bench(*, rows=ROWS, models=MODELS, masses=tuple(MASSES), ff_scales=FF_SC
             for start in starts]
     # WHY the slow model first: B1's dead zone runs at a quarter of the timestep, so its jobs set the wall time; started first they finish
     jobs.sort(key=lambda job: job[1] != "B1")
+    outputs = []
+
+    def progress(output):
+        outputs.append(output)
+        row, model, mass, ff, start, record, _, seconds = output
+        print(f"[{len(outputs)}/{len(jobs)}] {model} {config_name(row, mass, ff)} {start}: {record['outcome'][:90]} ({seconds:.0f} s)",
+              flush=True)
+
     if workers > 1:
         import multiprocessing  # noqa: PLC0415
 
         with multiprocessing.get_context("fork").Pool(workers) as pool:
-            outputs = pool.map(_job, jobs, chunksize=1)
+            for output in pool.imap_unordered(_job, jobs, chunksize=1):
+                progress(output)
     else:
-        outputs = [_job(job) for job in jobs]
+        for job in jobs:
+            progress(_job(job))
     episodes, episodes_vs_twin, notes, wall = {}, {}, {}, {}
     order = {s.name: k for k, s in enumerate(starts)}
     for row, model, mass, ff, start, record, note, seconds in sorted(outputs, key=lambda o: order[o[4]]):
