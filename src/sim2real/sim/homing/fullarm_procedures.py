@@ -267,6 +267,11 @@ class FullArmHome:
     identify: bool = False
     wrist_only: bool = False
     wrist_during_fivebar: str = "brake"
+    # WHY the five-bar ignores the stored table by default (sim 2026-11-13, the backlash ladder): press_reverse+gff's five-bar rows are
+    # wrong on bam_fb_v2 (J2 compliance read 1.28 deg/N.m vs 0.0013 true) and pushed J2's zero 12.7 deg off; un-tabled, single_touch+gff
+    # zeros J2 / C1 within 0.05 deg on B1 / B2. The wrist rows are right (zero 0.46-0.50 -> <= 0.002 deg). True once the five-bar's own
+    # identify works on this arm.
+    fivebar_table: bool = False
     fivebar_name: str | None = None
     comp: str = DEFAULT_COMP
     ff_scale: float = 1.0
@@ -379,7 +384,13 @@ class FullArmHome:
         if self.wrist_only:
             five, wrist_phase = None, 0
         else:
-            five = self.fivebar.observe(prior, [project(phases[0], FIVEBAR)])
+            five_prior = prior
+            if not self.fivebar_table and prior.table is not None:
+                from dataclasses import replace as _replace  # noqa: PLC0415
+
+                kept = tuple(e for e in prior.table.entries if e.joint not in FIVEBAR)
+                five_prior = _replace(prior, table=BacklashTable(kept) if kept else None)
+            five = self.fivebar.observe(five_prior, [project(phases[0], FIVEBAR)])
             self.references = [r for r in self.fivebar.references]
             wrist_phase = 1
         ends = step_readings(phases[wrist_phase])

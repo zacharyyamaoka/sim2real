@@ -102,9 +102,26 @@ th{color:var(--muted);font-weight:600}.scroll{overflow-x:auto}.good{color:var(--
 """
 
 
+def rescored(results: dict | None) -> dict | None:
+    """A run scored before the crank fix (C1's stall read on the CAD's turn, sim2real 1fd3a52): its stalls re-wrapped, its summary recomputed
+    with fullarm_check's own scorer. Nothing else changes."""
+    if results is None:
+        return None
+    import sys  # noqa: PLC0415
+
+    sys.path.insert(0, str(DATA.parents[1]))
+    from sim2real.sim.homing.fullarm_check import summarize, wrap_deg  # noqa: PLC0415
+
+    for report in results["reports"]:
+        for stall in report.get("stalls", []):
+            stall["link_deg"] = stall["cad_deg"] + wrap_deg(stall["link_deg"] - stall["cad_deg"])
+    results["summary"] = summarize(results["reports"])
+    return results
+
+
 def build(out: Path) -> Path:
     orders = load("fullarm_check_orders_2026-11-13.json")
-    held = load("fullarm_check_orders_held_2026-11-13.json")
+    held = rescored(load("fullarm_check_orders_held_2026-11-13.json"))
     backlash = load("fullarm_check_backlash_2026-11-13.json")
     backlash_held = load("fullarm_check_backlash_held_2026-11-13.json")
     replay = load("fullarm_check_replay_2026-11-13.json")

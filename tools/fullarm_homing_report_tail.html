@@ -1,0 +1,49 @@
+<h2>6 · Decisions</h2>
+<h3>Done and proved (sim)</h3>
+<ul>
+<li><b>The harness, the 7-joint plant and both procedures.</b> <code>tests/test_fullarm_homing.py</code> has 9 tests, all green.
+<ul>
+<li>The park-distance and self-contact gates were mutation-tested red on a scratch copy.</li>
+<li>One test pins <code>zach_v1</code> to <code>wrist_home_v1.plan_v1()</code> (same joints, sides, stops, speed, cap and travel), so the
+port cannot drift.</li>
+</ul></li>
+<li><b>The trap is real on the twin:</b> zach_v1 assigns a forearm stall as W1's stop (test
+<code>test_zach_v1_assigns_a_forearm_stall…</code>), and park_first homes from the same start.</li>
+</ul>
+<h3>Decided for you (each one undoable)</h3>
+<ul>
+<li><b>Wrist and claw braked during the five-bar phase.</b> Undo: <code>FullArmHome(wrist_during_fivebar="hold")</code>.</li>
+<li><b>Default comp <code>v2_cad</code>, not the plate.</b> Undo: <code>comp="plate"</code>.</li>
+<li><b>Witness tolerance 2°.</b> It refuses every forearm stall seen (≥ 3.6°) and passes every true stop (≤ 0.5° on B2).</li>
+<li><b>Wrist gaps and stiffness are assumptions</b> (W1 15′, W2 18′, W3 12′; 0.05 N·m/′). No GIM4305-10 measurement exists.</li>
+<li><b>Wrist boards at the rack's read config</b> (kp 15 / kd 0.15), not bam_ur_wrist's RAM 75.</li>
+</ul>
+<h3>Left</h3>
+<ul>
+<li><b>The claw-finger/forearm pair</b> (l2/moving_finger) is unmapped by the bundle's guard. It cost park_first 0.75° on W2 from one start.
+<ul>
+<li>Fix in cad2robot: map pairs across 4 joints.</li>
+<li>Or tighten the witness to ~0.6° once real wind-up is measured.</li>
+</ul></li>
+<li><b>J2 runs away on single_touch+gff's walk home on this arm</b> in 2 of 19 episodes (89–121°/s) on the v2_cad comp. This is passed
+to the Sim to Real Agent.</li>
+<li><b>The five-bar's <code>press_reverse+gff</code> inside identify_backlash</b> mis-zeros J2 (1.9°) and reads no J2 gap on this twin.
+The wrist part of identify is fine. This is a five-bar procedure issue.</li>
+<li><b>The replay needs the rack run's five-bar pose and the remounted claw</b> before the rest-at-"0" can be compared.</li>
+</ul>
+<h3>Needs Zach</h3>
+<ul>
+<li><b>Is a detected ≤ 1 N·m gripper-on-forearm touch acceptable during homing?</b> park_first touches when |W2| &gt; ~105° at
+power-on, in 10 of 19 starts on the twin. Every touch is detected, and none is ever used as a stop.
+<ul>
+<li>Recommendation: yes, with the witness.</li>
+<li>The no-touch alternative is zach_v1 with the start confirmed by ArUco (|W2| ≤ 95°).</li>
+</ul></li>
+</ul>
+<h3>Deliberately not done</h3>
+<ul>
+<li><b>No hardware motion and no real homing run.</b> Real runs go through the Sim to Real Agent.</li>
+<li><b>J1 is not homed</b>, as in the real form: its stops are unconfirmed on the rack.</li>
+<li><b>No kinematic (coal) rung for the wrist yet.</b> The MuJoCo rung is the one that shows the forearm stall.</li>
+<li><b>No audit was run.</b></li>
+</ul>

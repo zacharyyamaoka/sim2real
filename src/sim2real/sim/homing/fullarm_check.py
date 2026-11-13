@@ -498,6 +498,8 @@ def main(argv=None) -> int:
         results = {"replay": replay_vs_real()}
     elif args.sweep == "backlash":
         results = backlash_ladder(workers=args.workers)
+    elif args.sweep == "backlash_rerun":
+        results = rerun_with_tables(json.loads(args.out.read_text()), workers=args.workers)
     else:
         jobs = sweep_jobs(args.sweep, n_wrist=args.n_wrist)
         reports = run_jobs(jobs, args.workers)
@@ -507,6 +509,23 @@ def main(argv=None) -> int:
     write_results(args.out, results, default=str)
     print(json.dumps(results.get("summary", {k: v for k, v in results.items() if k != "reports"}), indent=1, default=str)[:6000])
     return 0
+
+
+def rerun_with_tables(previous: dict, *, workers: int = 6) -> dict:
+    """``previous`` (a backlash_ladder result) with its with-table home() rows run again on the current code (the tables it identified,
+    unchanged); every other row kept as run."""
+    kept = [r for r in previous["reports"] if "identified table" not in r.get("procedure", "")]
+    jobs = []
+    for r in previous["reports"]:
+        if "identified table" in r.get("procedure", ""):
+            kind = r["environment"].split("/")[1]
+            start = next(s for s in starts("real") + starts("wrist", 2) if s.name == r["start"])
+            jobs.append({"key": f"home with table {kind} {start.name}", "kind": kind, "start": asdict(start),
+                         "table": previous["identified"][kind]["table"],
+                         "procedure": {"order": "park_first", "name": "home[park_first+witness] + identified table"}})
+    reports = kept + run_jobs(jobs, workers)
+    return {"identified": previous["identified"], "reports": reports, "summary": summarize(reports),
+            "rerun": "the with-table rows re-run with the five-bar ignoring the stored table (FullArmHome.fivebar_table False)"}
 
 
 def backlash_ladder(*, workers: int = 6, n_starts: int = 6) -> dict:

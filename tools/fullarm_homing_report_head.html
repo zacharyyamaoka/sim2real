@@ -1,0 +1,52 @@
+<h1>Full-arm homing — bam_fb_v2 (five-bar + UR wrist + crab claw)</h1>
+<p class="small">2026-11-13 · sim only (MuJoCo twin of cad2robot <code>bam_fb_v2</code> @ cad-exporter 09374d7) · sim2real <code>claude/fullarm-homing-proper</code> · PEP 0047 (bam_ws) · no hardware motion</p>
+
+<div class="verdict">
+<p><b>The proper full-arm home is <code>home[park_first+witness]</code>.</b> It runs in two phases:</p>
+<ul>
+<li><b>Phase 0, the five-bar:</b> its proven <code>single_touch+gff</code>, with the wrist and claw <i>braked</i>.</li>
+<li><b>Phase 1, claw then wrist:</b> claw closed, then the wrist one joint at a time behind a parking touch. Every defining stall
+must pass a rotor-phase witness.</li>
+</ul>
+<p>On 19 starts (the rack's own start, 12 random wrist poses, 6 adversarial) it never assigns a forearm stall as a stop.</p>
+<p>Zach's V1 wrist order (<code>wrist_home_v1</code>) does, on <b>5 of 19 starts: W1's zero comes out 55–68° wrong with no error
+raised.</b> The witness reads 3.6–16.6° off on every one of those stalls, so it would refuse them.</p>
+<p><b>Still open:</b></p>
+<ul>
+<li><b>One residual 0.75° W2 error.</b> The claw finger touches the forearm (a pair the CAD guard does not map).</li>
+<li><b>Two five-bar runaways.</b> J2 runs away on its walk home on this arm's comp in 2 of 19 episodes. That is the Sim to Real
+Agent's comp question, not the wrist.</li>
+</ul>
+</div>
+
+<h2>What is true now</h2>
+<ul>
+<li><b>Harness.</b> <code>fullarm_check</code> runs any PEP 0002 homing procedure (robot_msgs <code>JointCommandSequence</code>s) on the full
+twin. Every tick it checks two things:
+  <ul>
+  <li>the CAD guard (<code>bam_cad_descriptions.self_collision.check_pose</code>);</li>
+  <li>contact in the twin: the bundle's per-component primitives now collide, so a sweep into the forearm <i>stalls</i> there.</li>
+  </ul>
+It reports:
+  <ul>
+  <li>time to home and reliability over many starts;</li>
+  <li>zero error against a hidden truth (each board boots mod one rotor turn);</li>
+  <li>backlash identified against a hidden gap;</li>
+  <li>peak speeds and torques against caps;</li>
+  <li>self-contact.</li>
+  </ul>
+The same harness replays a rack run for homing sim-to-real.</li>
+<li><b>The wrist must be braked, not held, while the five-bar homes.</b> Held on its kp-15 boards, L2 flings it and it springs back past
+the sequence controller's 3 rad/s guard. With backlash hidden, that aborted most episodes and identify_backlash on both models, and the held claw
+whipped at about 300°/s. A board that no host commands times out into this brake anyway.</li>
+<li><b>Today's plate comp is wrong for this arm.</b> With it, J2 runs away (up to 290°/s) on single_touch+gff's walk home. The
+nominal and bam_fb_v2 comps both home, so the full arm runs <code>v2_cad</code>, which is Sim to Real's <code>fivebar_home --comp
+bam_fb_v2</code>.</li>
+<li><b>Sim vs rack, from the rack's own wrist_home_v1 run (10:24):</b>
+  <ul>
+  <li>W2 and W3 seek travel match within 1° (282.3 vs 283.1, 144.15 vs 144.14).</li>
+  <li>W1 does not (162 vs 267). The twin's W1 sags to its gravity rest before power-on; the real W1 stayed at −97°.</li>
+  <li>The rest at "0" does not match: twin 4.0 / −0.8 / 1.0° vs rack −8.6 / +5.3 / +14.4°.</li>
+  <li>Both gaps point at the five-bar's pose during that run, which is not logged, and the claw, which was mounted backwards.</li>
+  </ul></li>
+</ul>
