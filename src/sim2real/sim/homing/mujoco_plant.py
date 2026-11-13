@@ -173,8 +173,9 @@ class RigCache:
 # gear_backlash.wrap), and its own bound (omega dt < 2, ArmRig.explicit_spring_dt_limit_s) is the linear spring's, not the impacting
 # one's. At the twin's 0.25 ms C1's mesh mode (13 N.m/arcmin on 0.0020 kg.m^2) has omega dt = 1.19: under the bound, yet every flank
 # impact gained energy - 814 N.m of mesh torque and the 3 rad/s speed guard tripped in recover_first+tview_v2 from the bowl, 5800 N.m and
-# 70 rad/s pressing both stops for 8 s. Measured on that episode: dt/2 completes but lands 0.03 deg off; dt/4 (omega dt 0.30) and dt/8
-# agree (peak 138.5 vs 138.8 N.m, zero errors within 0.003 deg). The passive joint (B2) is MuJoCo's own implicit limit and needs none.
+# 70 rad/s pressing both stops for 8 s. Measured on that episode (data/homing_fivebar_b1_timestep_2026-11-12.json, tools/
+# homing_b1_timestep.py): dt/2 completes, its zeros within 0.001 deg of dt/8's but its peak mesh torque 116 N.m; dt/4 (omega dt 0.30) and
+# dt/8 agree on both (138.5 vs 138.8 N.m, zeros within 0.0002 deg). The passive joint (B2) is MuJoCo's own implicit limit and needs none.
 MESH_MODE_OMEGA_DT = 0.3
 
 

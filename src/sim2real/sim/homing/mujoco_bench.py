@@ -197,6 +197,51 @@ def trace_of(geometry: FivebarGeometry, model: str, name: str, start, every: int
             "recovery_landing": episode.notes.get("recovery_landing"), "start_settled": plant.start_settled}
 
 
+def record_npz(name: str, model: str, start_name: str, out: Path, *, every: int = 2) -> dict:
+    """One episode saved in bam_fb_test_rig.render.render_run's .npz shape (qpos, joint / board angles, torques, stop forces, the step
+    as its phase, every ``every`` control ticks), so the rig's own renderer draws the run the bench scored. B0 only: the backlash
+    models change the qpos layout the renderer's rig is built with."""
+    import numpy as np  # noqa: PLC0415
+
+    if model != "B0":
+        raise ValueError("record_npz renders the B0 twin (the renderer's rig has no backlash joints)")
+    geometry = FivebarGeometry()
+    prior = prior_for(geometry)
+    start = next(s for s in named_rests(geometry, prior) + sobol_starts(geometry) if s.name == start_name)
+    plant = MujocoRigPlant(model)
+    keys = [stop.stop.key for stop in plant.rig.stops]
+    frames: dict[str, list] = {k: [] for k in ("t", "qpos", "joint_rad", "board_rad", "torque_nm", "stop_force_n", "step")}
+    tick = plant.tick
+    count = {"n": 0}
+
+    def recording(command, dt, defines=None):
+        state = tick(command, dt, defines)
+        count["n"] += 1
+        if count["n"] % every == 0:
+            forces = plant.rig.stop_contacts(plant.sim.data)
+            frames["t"].append(plant.time)
+            frames["qpos"].append(plant.sim.data.qpos.copy())
+            frames["joint_rad"].append([plant.sim.link_rad(r) for r in ("J1", "J2", "C1")])
+            frames["board_rad"].append(list(state.position))
+            frames["torque_nm"].append(list(state.effort))
+            frames["stop_force_n"].append([float(forces.get(k, 0.0)) for k in keys])
+        return state
+
+    plant.tick = recording
+    procedure = make(name)
+    episode = run_episode(name, plant, start, prior, f"{RUNG} · {model}", procedure=procedure)
+    phase = episode.phases[0]
+    names = [s.name for s in phase.sequence.steps]
+    ends = [e.finished for e in phase.events]
+    labels = [names[min(sum(1 for f in ends if f < t), len(names) - 1)] for t in frames["t"]]
+    np.savez_compressed(out, t=np.array(frames["t"]), qpos=np.array(frames["qpos"]), roles=np.array(["J1", "J2", "C1"]),
+                        joint_rad=np.array(frames["joint_rad"]), board_rad=np.array(frames["board_rad"]),
+                        torque_nm=np.array(frames["torque_nm"]), stop_keys=np.array(keys), stop_force_n=np.array(frames["stop_force_n"]),
+                        phase=np.array(labels))
+    return {"out": str(out), "outcome": episode.record.outcome, "frames": len(frames["t"]),
+            "zero_error_deg": {ROLE[j.joint]: j.zero_error_deg for j in episode.record.joints}}
+
+
 def calibrate(geometry: FivebarGeometry, model: str, start, contacts: dict | None = None):
     """identify_backlash on this plant (the kinematic bench's ``calibrate``): plain press_reverse from ``start``; when that cannot finish
     under gravity (pass 3: the far-corner walk, every model), the same calibration verb on press_reverse's gravity-aware variant behind
@@ -424,7 +469,13 @@ def main(argv=None) -> int:
     parser.add_argument("--no-cogging", action="store_true")
     parser.add_argument("--merge", type=Path, nargs=2, metavar=("MAIN", "EXTRA"), help="merge EXTRA's rows into MAIN, write --out")
     parser.add_argument("--add-traces", type=Path, help="add the page's traces (bowl, B2) to this results JSON and exit")
+    parser.add_argument("--trace", nargs=3, action="append", metavar=("PROCEDURE", "MODEL", "START"),
+                        help="with --add-traces: the traces to add instead of the default three (repeatable)")
+    parser.add_argument("--record", nargs=3, metavar=("PROCEDURE", "START", "NPZ"), help="save one B0 episode for the rig's renderer, exit")
     args = parser.parse_args(argv)
+    if args.record:
+        print(json.dumps(record_npz(args.record[0], "B0", args.record[1], Path(args.record[2]))))
+        return 0
     if args.merge:
         merged = merge(*(json.loads(path.read_text()) for path in args.merge))
         args.out.write_text(json.dumps(merged))
@@ -434,8 +485,9 @@ def main(argv=None) -> int:
         results = json.loads(args.add_traces.read_text())
         geometry = FivebarGeometry()
         rests = {s.name: s for s in named_rests(geometry, prior_for(geometry))}
-        results["traces"] = [trace_of(geometry, "B2", name, rests["bowl"]) for name in
-                             (RECOVER_PREFIX_NAME + "press_reverse", TIMED + "press_reverse", RECOVER_PREFIX_NAME + "tview_v2")]
+        wanted = args.trace or [(name, "B2", "bowl") for name in
+                                (RECOVER_PREFIX_NAME + "press_reverse", TIMED + "press_reverse", RECOVER_PREFIX_NAME + "tview_v2")]
+        results["traces"] = [trace_of(geometry, model, name, rests[start]) for name, model, start in wanted]
         args.out.write_text(json.dumps(results))
         print(f"{args.out}: {len(results['traces'])} traces")
         return 0

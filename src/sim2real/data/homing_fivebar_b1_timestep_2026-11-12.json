@@ -1,0 +1,77 @@
+{
+ "schema": "sim2real_homing_b1_timestep/1",
+ "procedure": "recover_first+tview_v2",
+ "start": "bowl",
+ "model": "B1 (gear_backlash deadzone)",
+ "twin_dt_s": 0.00025,
+ "rows": [
+  {
+   "divisor": 1,
+   "dt_us": 250.0,
+   "omega_dt": 1.1878763957264362,
+   "outcome": "aborted: revolute_7 was driven faster than 3.0 (+3.62, its drive pushing that way) in step '2. J2 + C1 seek together'",
+   "peak_mesh_torque_nm": {
+    "J1": 1.8,
+    "J2": 42.4,
+    "C1": 814.0
+   },
+   "zero_error_deg": {
+    "J1": null,
+    "J2": null,
+    "C1": null
+   },
+   "wall_s": 24.3
+  },
+  {
+   "divisor": 2,
+   "dt_us": 125.0,
+   "omega_dt": 0.5939381978632181,
+   "outcome": "done",
+   "peak_mesh_torque_nm": {
+    "J1": 11.3,
+    "J2": 24.5,
+    "C1": 115.7
+   },
+   "zero_error_deg": {
+    "J1": -0.07906396286419283,
+    "J2": 0.250788985041864,
+    "C1": -0.04068813036889615
+   },
+   "wall_s": 67.4
+  },
+  {
+   "divisor": 4,
+   "dt_us": 62.5,
+   "omega_dt": 0.29696909893160905,
+   "outcome": "done",
+   "peak_mesh_torque_nm": {
+    "J1": 11.1,
+    "J2": 20.3,
+    "C1": 138.5
+   },
+   "zero_error_deg": {
+    "J1": -0.0790464383090456,
+    "J2": 0.25078937484591307,
+    "C1": -0.04009240495753977
+   },
+   "wall_s": 128.0
+  },
+  {
+   "divisor": 8,
+   "dt_us": 31.25,
+   "omega_dt": 0.14848454946580453,
+   "outcome": "done",
+   "peak_mesh_torque_nm": {
+    "J1": 11.1,
+    "J2": 21.4,
+    "C1": 138.8
+   },
+   "zero_error_deg": {
+    "J1": -0.0791166309452526,
+    "J2": 0.25078943721730285,
+    "C1": -0.039995994757766024
+   },
+   "wall_s": 372.0
+  }
+ ]
+}

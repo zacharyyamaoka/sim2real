@@ -27,21 +27,44 @@ from .wandb_log import ENTITY, browser_url, push, retire, run_id
 
 PROJECT = "Homing · five-bar rig"
 LEADERBOARD = "Homing · five-bar rig"
+# one project (and one leaderboard) per rig: a result JSON names its rig ("rig"; a five-bar result predates the key)
+PROJECTS = {"five-bar": PROJECT, "ur-wrist": "Homing · UR wrist rig"}
+SLUG = {"five-bar": "fivebar", "ur-wrist": "urwrist"}
+
+
+def rig_of(results: dict) -> str:
+    return results.get("rig", "five-bar")
 SCORERS = ["inside_gate", "reliable", "time_s", "zero_error_deg"]
 # leaderboard columns per environment: (title, summary key, minimize)
 COLUMNS = (
     ("Reliability (%)", "reliability_pct", False),
     ("Any start (%)", "any_start_pct", False),
     ("True-zero error p95 (°)", "joint_angle_error_deg", True),
+    ("True-zero error vs twin contact p95 (°)", "vs_twin.joint_angle_error_deg", True),
     ("Backlash error p95 (°)", "backlash_error_deg", True),
     ("Time to home, median (s)", "time_to_home_s", True),
 )
 
 
+def twin_card(results: dict, model: str, procedure: str) -> dict:
+    """The scorecard against the twin's own stop contacts (the MuJoCo rung's ``scorecards_vs_twin``, 2026-11-12 pass 4). The kinematic
+    rung's stops ARE CAD's (coal first contact on the meshes hardstops.json names), so there its CAD card is its twin card."""
+    cards = results.get("scorecards_vs_twin")
+    if cards is None:
+        return results["scorecards"][model][procedure]
+    return cards.get(model, {}).get(procedure) or {}
+
+
 def evaluation_digest(results: dict, model: str, procedure: str) -> str:
     payload = {"card": results["scorecards"][model][procedure], "episodes": results["episodes"][model][procedure],
                "bundle": results["hardstops_sha256"], "code": [results["sim2real_sha"], results["robot_models_sha"]]}
+    if results.get("scorecards_vs_twin") is not None:  # WHY only then: a kinematic result's digest stays what it was (no new evaluation)
+        payload["vs_twin"] = twin_card(results, model, procedure)
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:10]
+
+
+def _numbers(card: dict, prefix: str = "") -> dict:
+    return {f"{prefix}{k}": v for k, v in card.items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v is not None}
 
 
 def _episode_rows(results: dict, model: str, procedure: str) -> list[dict]:
@@ -69,15 +92,22 @@ def records(results: dict) -> list[dict]:
     for model, by_procedure in results["scorecards"].items():
         for procedure, card in by_procedure.items():
             evaluation = evaluation_digest(results, model, procedure)
-            result_id = f"homing-fivebar-{results['rung']}-{model}-{procedure}"
+            result_id = f"homing-{SLUG[rig_of(results)]}-{results['rung']}-{model}-{procedure}"
             config = {"rung": results["rung"], "backlash_model": model, "procedure": procedure, "bundle_sha": results["bundle_sha"],
                       "hardstops_sha256": results["hardstops_sha256"], "sim2real_sha": results["sim2real_sha"],
                       "robot_models_sha": results["robot_models_sha"], "gate_deg": results["gate_deg"],
-                      "hidden_gap_arcmin": results["hidden_gap_arcmin"], "rig": "five-bar", "result_id": result_id,
+                      "hidden_gap_arcmin": results["hidden_gap_arcmin"], "rig": rig_of(results), "result_id": result_id,
                       "evaluation": evaluation, "evaluation_state": "latest", "starts": len(results["starts"]),
                       "start": f"all {len(results['starts'])} (per-start rows in the starts table)",
                       "start_names": [s["name"] for s in results["starts"]]}
-            numbers = {k: v for k, v in card.items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v is not None}
+            numbers = _numbers(card)
+            numbers.update(_numbers(twin_card(results, model, procedure), "vs_twin."))
+            verdict = (results.get("verdicts") or {}).get(model, {}).get(procedure)
+            if verdict:
+                config.update({"gate_pass": verdict.get("pass"), "gate_pass_vs_cad": verdict.get("pass_vs_cad", verdict.get("pass")),
+                               "judged_against": "twin contacts" if "pass_vs_cad" in verdict else "CAD"})
+            if results.get("twin_contacts_deg"):
+                config["twin_contacts_deg"] = results["twin_contacts_deg"]
             # the coordinator's ruling (2026-11-12): working-assembly and assembly-mode starts scored apart, each with where it is judged
             for scope, by_model in (results.get("scorecards_by_scope") or {}).items():
                 scoped = by_model.get(model, {}).get(procedure)
@@ -110,6 +140,7 @@ def scored_runs(bbo, results: dict) -> list:
                 episodes.append(bbo.Episode(inputs={"start": row["start"]}, output={"outcome": row["outcome"]}, scores=scores))
             summary = {k: (int(v) if isinstance(v, bool) else v) for k, v in card.items()
                        if v is not None and isinstance(v, (int, float, bool))}
+            summary.update(_numbers(twin_card(results, model, procedure), "vs_twin."))
             out.append(bbo.ScoredRun(
                 black_box=procedure,
                 version={"sim2real_sha": results["sim2real_sha"], "robot_models_sha": results["robot_models_sha"],
@@ -126,25 +157,30 @@ def log(results: dict | list[dict], *, weave: bool = True) -> dict:
     from .rigs import load_bbo  # noqa: PLC0415 -- bbo by file, the house template on bam_ws main
 
     many = list(results) if isinstance(results, list) else [results]
+    rigs = {rig_of(one) for one in many}
+    if len(rigs) != 1:
+        raise ValueError(f"one rig per call (one project, one leaderboard): got {sorted(rigs)}")
+    project = PROJECTS[rigs.pop()]
     batch = [record for one in many for record in records(one)]
-    runs = push(batch, project=PROJECT)
-    retired = sum(retire(record["config"]["result_id"], record["config"]["evaluation"], project=PROJECT) for record in batch)
+    runs = push(batch, project=project)
+    retired = sum(retire(record["config"]["result_id"], record["config"]["evaluation"], project=project) for record in batch)
     board = None
     if weave:
         bbo = load_bbo()
         # WHY both off: never delete anything in Zach's W&B (see the module docstring)
         bbo.delete_unended = lambda client: 0
         bbo.prune_superseded = lambda client, runs, columns=None: 0
-        entity_project = f"{ENTITY}/{PROJECT}"
+        entity_project = f"{ENTITY}/{project}"
         runs_weave = [run for one in many for run in scored_runs(bbo, one)]
         refs = bbo.log_evaluations(entity_project, runs_weave, scorers=SCORERS)
         environments = list(dict.fromkeys(f"{one['rung']} · {model}" for one in many for model in one["models"]))
         metrics = [bbo.Metric(title, key, minimize=minimize) for title, key, minimize in COLUMNS]
-        board = bbo.publish_leaderboard(entity_project, LEADERBOARD,
-                                        "Homing procedures as black boxes on the five-bar (decision report 2026-11-12): five metrics per "
-                                        "rung x hidden backlash model; sort by reliability, then zero error, then time.",
+        board = bbo.publish_leaderboard(entity_project, project,
+                                        f"Homing procedures as black boxes on the {'five-bar' if project == PROJECT else 'UR wrist'} (decision "
+                                        "report 2026-11-12): five metrics per rung x hidden backlash model, zero error vs CAD and vs the twin's "
+                                        "own contacts; sort by reliability, then zero error, then time.",
                                         refs, metrics, environments)
-    return {"project": PROJECT, "runs": len(runs), "new": sum(1 for r in runs if not r["resumed"]), "retired": retired,
+    return {"project": project, "runs": len(runs), "new": sum(1 for r in runs if not r["resumed"]), "retired": retired,
             "urls": {r["name"]: browser_url(r["url"]) for r in runs}, "leaderboard": board}
 
 
