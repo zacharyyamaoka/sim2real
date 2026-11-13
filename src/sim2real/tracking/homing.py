@@ -99,15 +99,19 @@ def _episode_rows(results: dict, model: str, procedure: str) -> list[dict]:
     return rows
 
 
-TAG_MAX = 64  # W&B refuses a longer tag
+TAG_MAX_BYTES = 64  # W&B refuses a longer tag - counted in UTF-8 bytes ('·' is two)
 
 
 def _tag(text: str) -> str:
     """``text`` as a W&B tag: itself when it fits, else its head and an 8-hex digest of the whole (still one tag per procedure); the
     full name stays in the run's name and config (pass 7's 'recover_first(fed)+single_touch_c1seek+gff · ...' names run to 76)."""
-    if len(text) <= TAG_MAX:
+    if len(text.encode("utf-8")) <= TAG_MAX_BYTES:
         return text
-    return text[: TAG_MAX - 10].rstrip() + " ~" + hashlib.sha256(text.encode()).hexdigest()[:8]
+    suffix = " ~" + hashlib.sha256(text.encode()).hexdigest()[:8]
+    head = text
+    while len((head + suffix).encode("utf-8")) > TAG_MAX_BYTES:
+        head = head[:-1]
+    return head.rstrip() + suffix
 
 
 def start_rows_for(results: dict, procedure: str) -> list[dict]:
