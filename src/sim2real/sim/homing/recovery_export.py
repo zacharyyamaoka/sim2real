@@ -22,7 +22,6 @@ import argparse
 import hashlib
 import json
 import math
-import subprocess
 import sys
 from pathlib import Path
 
@@ -30,11 +29,11 @@ import numpy as np
 
 
 def git_sha(path: Path) -> str:
-    try:
-        sha = subprocess.run(["git", "-C", str(path), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout
-        return sha.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
+    """sim2real.provenance.code_sha (WHY: this read HEAD with no dirty check, so an uncommitted tree was stamped as a clean commit)."""
+
+    from sim2real.provenance import code_sha  # noqa: PLC0415
+
+    return code_sha(path)
 
 
 def main(argv=None) -> int:

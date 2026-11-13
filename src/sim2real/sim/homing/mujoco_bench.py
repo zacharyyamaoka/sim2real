@@ -31,7 +31,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from robot_models.homing.metrics import scorecard
+from robot_models.homing.metrics import backlash_gate_deg, scorecard
 from robot_msgs.control import Elapsed, Reached
 
 from .bench import (
@@ -159,10 +159,23 @@ def run_one(name: str, plant: MujocoRigPlant, start, prior, geometry, environmen
         except HomingRefused as error:  # the same evidence: refused vs CAD and vs twin alike, recorded if it ever differs
             episode.notes["zero_error_vs_twin_deg"] = {"refused": str(error)}
         else:
-            true = plant.truth()["true_offset_rad"]
-            episode.notes["zero_error_vs_twin_deg"] = {
-                ROLE[j]: (None if result.zero(j) is None else math.degrees(result.zero(j).offset_rad - true[j])) for j in DRIVES}
+            episode.notes.update(twin_note(result, plant.truth()["true_offset_rad"]))
     return episode
+
+
+def twin_note(result, true_offset_rad: dict) -> dict:
+    """The vs-twin half of an episode's notes, from ``observe_vs_twin``'s result: each joint's zero error and its identified gap (deg;
+    None where the procedure left the joint unzeroed or the gap unobserved - ``run_episode``'s rule for the CAD columns).
+    WHY the gap too (2026-11-13): pass 4 kept only the zero, so ``vs_twin_row`` paired the twin's zero with CAD's gap - the gap is the
+    motor's travel between the two stops minus the stop SPAN, and CAD's J1 span is 0.1232 deg short of the twin's, J2's 0.283 deg long
+    (clipped to 0) - and the twin scorecard failed a backlash gate the twin-referenced gaps pass (twin_gap_deg within 0.2')."""
+    zeros, gaps = {}, {}
+    for joint in DRIVES:
+        zero = result.zero(joint)
+        zeros[ROLE[joint]] = None if zero is None else math.degrees(zero.offset_rad - true_offset_rad[joint])
+        entry = None if (zero is None or result.backlash is None) else result.backlash.get(joint)
+        gaps[ROLE[joint]] = math.degrees(entry.model.gap_rad) if (entry is not None and entry.gap_observable) else None
+    return {"zero_error_vs_twin_deg": zeros, "gap_identified_vs_twin_deg": gaps}
 
 
 def twin_prior(prior, contacts: dict, table=None):
@@ -336,10 +349,76 @@ def verdicts(cards: dict, reference: dict, cards_vs_twin: dict | None = None) ->
 
 
 def vs_twin_row(record: dict, note: dict) -> dict:
-    """``record`` (an EpisodeRecord dict) with each joint's zero error the one against the twin's own contacts (``run_one``)."""
+    """``record`` (an EpisodeRecord dict) with each joint's zero error AND identified gap the ones against the twin's own contacts
+    (``run_one``'s ``twin_note``). A note with no twin gaps (results before 2026-11-13) leaves the gap unscored (None, a page's '-'),
+    never CAD's gap under the twin's name - the pass-4 contradiction (``twin_note``)."""
     twin = (note or {}).get("zero_error_vs_twin_deg") or {}
-    joints = [dict(j, zero_error_deg=(twin.get(ROLE[j["joint"]]) if j["zero_error_deg"] is not None else None)) for j in record["joints"]]
+    twin_gap = (note or {}).get("gap_identified_vs_twin_deg") or {}
+    joints = [dict(j, zero_error_deg=(twin.get(ROLE[j["joint"]]) if j["zero_error_deg"] is not None else None),
+                   gap_identified_deg=(twin_gap.get(ROLE[j["joint"]]) if j["gap_identified_deg"] is not None else None))
+              for j in record["joints"]]
     return dict(record, joints=joints)
+
+
+def span_shift_deg(twin_contacts_deg: dict) -> dict:
+    """Per drive (role): CAD's stop span minus the twin's (deg), from a results JSON's ``twin_contacts_deg``. A gap identified against CAD
+    becomes the one against the twin by adding this (``rescore_gap_vs_twin``)."""
+    return {role: (sides["upper"]["cad"] - sides["lower"]["cad"]) - (sides["upper"]["twin"] - sides["lower"]["twin"])
+            for role, sides in twin_contacts_deg.items()}
+
+
+def rescore_gap_vs_twin(gap_cad_deg: float | None, shift_deg: float) -> float | None:
+    """A CAD-referenced identified gap re-referenced to the twin's contacts with no physics: identify's gap is (upper level - lower
+    level) - span, so it moves by exactly ``shift_deg`` (``span_shift_deg``). A gap CAD clipped at 0 (identify clips a negative gap) lost
+    its value: None, not recoverable from the row."""
+    if gap_cad_deg is None or gap_cad_deg <= 0.0:
+        return None
+    return max(0.0, gap_cad_deg + shift_deg)
+
+
+def rescore_backlash_vs_twin(results: dict, rows: tuple = (RECOVER_PREFIX_NAME + "press_reverse",
+                                                          RECOVER_PREFIX_NAME + "press_reverse" + GFF_SUFFIX)) -> dict:
+    """Pass 4's vs-twin backlash re-scored from its stored rows (no physics): each identified gap moved by the span shift
+    (``rescore_gap_vs_twin``); a CAD-clipped gap is unscored (None) and counted, with the interval it must lie in (its unclipped value
+    was <= 0, so the twin's is in [0, max(0, shift)]) and whether every value there is inside the backlash gate (``decided_by_bound``:
+    True/False when the whole interval agrees, None when only physics can tell). Returns the re-scored rows and their scorecards beside
+    the stored ones; the stored results are not modified."""
+    shift = span_shift_deg(results["twin_contacts_deg"])
+    out_rows, cards, stored, clipped, bounds = {}, {}, {}, {}, {}
+    for model, by_name in results["episodes_vs_twin"].items():
+        for name in rows:
+            if name not in by_name:
+                continue
+            new_rows, lost, bound = [], {}, {}
+            for row in by_name[name]:
+                joints = []
+                for joint, zero, gap, truth in row[5]:
+                    moved = rescore_gap_vs_twin(gap, shift[ROLE[joint]])
+                    if gap is not None and moved is None:
+                        role = ROLE[joint]
+                        lost[role] = lost.get(role, 0) + 1
+                        high = max(0.0, shift[role])
+                        verdicts_here = {abs(v - truth) <= backlash_gate_deg(truth) for v in (0.0, high)} | (
+                            {True} if 0.0 <= truth <= high else set())  # |gap - truth| is largest at an end of the interval
+                        decided = None if len(verdicts_here) > 1 else verdicts_here.pop()
+                        bound.setdefault(role, {"interval_deg": [0.0, high], "truth_deg": truth, "decided_by_bound": decided})
+                    joints.append([joint, zero, None if moved is None else round(moved, 7), truth])
+                new_rows.append([*row[:5], joints])
+            out_rows.setdefault(model, {})[name] = new_rows
+            clipped.setdefault(model, {})[name] = lost
+            bounds.setdefault(model, {})[name] = bound
+            environment = f"{RUNG} · {model}"
+            card = scorecard([expand(r, name, environment) for r in new_rows], gate_deg=results["gate_deg"])
+            # WHY a second verdict: scorecard's backlash_gate_pass judges the SCORED drives only; a CAD-clipped drive the bound cannot
+            # decide leaves the all-drive verdict open (None), never a pass by omission
+            decided = [b["decided_by_bound"] for b in bound.values()]
+            card["backlash_gate_pass_all_drives"] = (False if card["backlash_gate_pass"] is False or False in decided else
+                                                     None if (card["backlash_gate_pass"] is None or None in decided) else True)
+            cards.setdefault(model, {})[name] = card
+            stored.setdefault(model, {})[name] = {k: results["scorecards_vs_twin"][model][name].get(k)
+                                                  for k in ("backlash_error_deg", "backlash_error_max_deg", "backlash_gate_pass")}
+    return {"span_shift_deg": shift, "episodes_vs_twin": out_rows, "scorecards_vs_twin": cards, "stored_scorecards_vs_twin": stored,
+            "cad_clipped_unscored": clipped, "cad_clipped_bounds": bounds}
 
 
 def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers: int = 3, cogging: bool = True,
@@ -471,10 +550,28 @@ def main(argv=None) -> int:
     parser.add_argument("--add-traces", type=Path, help="add the page's traces (bowl, B2) to this results JSON and exit")
     parser.add_argument("--trace", nargs=3, action="append", metavar=("PROCEDURE", "MODEL", "START"),
                         help="with --add-traces: the traces to add instead of the default three (repeatable)")
+    parser.add_argument("--rescore-vs-twin", type=Path, metavar="RESULTS",
+                        help="re-score RESULTS' press_reverse rows' vs-twin backlash from the stored rows (no physics), write --out")
     parser.add_argument("--record", nargs=3, metavar=("PROCEDURE", "START", "NPZ"), help="save one B0 episode for the rig's renderer, exit")
     args = parser.parse_args(argv)
     if args.record:
         print(json.dumps(record_npz(args.record[0], "B0", args.record[1], Path(args.record[2]))))
+        return 0
+    if args.rescore_vs_twin:
+        results = json.loads(args.rescore_vs_twin.read_text())
+        rescored = {"schema": "sim2real_homing_rescore/1", "source": args.rescore_vs_twin.name, "source_sim2real_sha": results.get("sim2real_sha"),
+                    "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]), "physics_rerun": False,
+                    "why": "twin_note: pass 4's vs-twin rows paired the twin's zero with CAD's gap",
+                    "gate_deg": results["gate_deg"], "episode_columns": results["episode_columns"],
+                    "calibration_twin_gap_deg": {m: (c or {}).get("twin_gap_deg") for m, c in results["calibration"].items()},
+                    **rescore_backlash_vs_twin(results)}
+        args.out.write_text(json.dumps(rescored, indent=1))
+        for model, by_name in rescored["scorecards_vs_twin"].items():
+            for name, card in by_name.items():
+                was = rescored["stored_scorecards_vs_twin"][model][name]
+                print(f"{model} {name:36s} gap err p95 {was['backlash_error_deg']} -> {card['backlash_error_deg']}  gate "
+                      f"{was['backlash_gate_pass']} -> {card['backlash_gate_pass']} (all drives {card['backlash_gate_pass_all_drives']})  observable {card['backlash_observable_pct']:.1f} %  "
+                      f"CAD-clipped {rescored['cad_clipped_unscored'][model][name]}")
         return 0
     if args.merge:
         merged = merge(*(json.loads(path.read_text()) for path in args.merge))
@@ -511,5 +608,6 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["RUNG", "TimedRecoverFirst", "base_name", "calibrate", "event_tick", "kinematic_name", "recovery_landing", "run_bench",
-           "twin_prior", "verdicts", "vs_twin_row"]
+__all__ = ["RUNG", "TimedRecoverFirst", "base_name", "calibrate", "event_tick", "kinematic_name", "recovery_landing",
+           "rescore_backlash_vs_twin", "rescore_gap_vs_twin", "run_bench", "span_shift_deg", "twin_note", "twin_prior", "verdicts",
+           "vs_twin_row"]

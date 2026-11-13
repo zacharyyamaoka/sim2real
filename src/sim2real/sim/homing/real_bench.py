@@ -33,8 +33,8 @@ import argparse
 import json
 import math
 import statistics
-import subprocess
 import time
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -108,11 +108,57 @@ LEG_SPAN_DEG = 15.0  # starts and rests within this of home are walked by the bo
 
 
 def git_sha(path: Path) -> str:
-    try:
-        return subprocess.run(["git", "-C", str(path), "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
-                              check=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
+    """sim2real.provenance.code_sha: the commit ``path`` is at, ``-dirty`` with uncommitted tracked changes."""
+
+    from sim2real.provenance import code_sha  # noqa: PLC0415
+
+    return code_sha(path)
+
+
+SIM2REAL_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _robot_models_package() -> Path:
+    """The robot_models this process imports (its homing core scores), not a fixed checkout."""
+
+    import robot_models.homing  # noqa: PLC0415
+
+    return Path(robot_models.homing.__file__).resolve().parent
+
+
+class DirtyProvenance(RuntimeError):
+    """The scorer's code has uncommitted changes: its results would name a commit that is not the code that scored."""
+
+
+def scorer_provenance(*, allow_dirty: bool = False) -> dict:
+    """The stamps of the code that scores (sim2real, robot_models' homing core). WHY refuse (2026-11-13): pass 5's real JSON was scored by
+    an uncommitted real_bench and stamped 8db26c3, the commit before it - commit first, then score. ``allow_dirty`` writes anyway, with
+    the ``-dirty`` stamps and ``provenance_clean`` false."""
+
+    from sim2real.provenance import is_clean  # noqa: PLC0415
+
+    stamps = {"sim2real_sha": git_sha(SIM2REAL_ROOT), "robot_models_sha": git_sha(_robot_models_package())}
+    dirty = {key: value for key, value in stamps.items() if not is_clean(value)}
+    if dirty and not allow_dirty:
+        raise DirtyProvenance("REFUSED: the scorer's code is not committed (" + ", ".join(f"{k} {v}" for k, v in dirty.items())
+                              + "): commit first, then score (or --allow-dirty to write it stamped dirty)")
+    return {**stamps, "provenance_clean": not dirty}
+
+
+def runner_provenance(run_dirs: Sequence[Path]) -> dict:
+    """The bam_ws code that RAN the episodes, from each run's receipt (fivebar_homed.json ``code``, since 2026-11-13): one sha when they
+    agree, else every one; "unrecorded" for runs from before the receipts carried it (never the scorer's own bam_ws checkout)."""
+
+    shas = []
+    for run in run_dirs:
+        try:
+            code = json.loads((Path(run) / "fivebar_homed.json").read_text()).get("code") or {}
+        except (OSError, ValueError):
+            code = {}
+        shas.append((code.get("bam_ws") or {}).get("sha", "unrecorded"))
+    unique = sorted(set(shas))
+    return {"bam_ws_sha": unique[0] if len(unique) == 1 else unique,
+            "bam_ws_sha_source": "the runs' receipts (fivebar_homed.json code.bam_ws)"}
 
 
 # ---------------------------------------------------------------------------------------------------------------- the prior
@@ -568,12 +614,13 @@ def mujoco_reference(mujoco: dict, name: str) -> dict:
 
 
 def score(run_dirs: list[Path], *, mujoco_json: Path = MUJOCO_JSON, out: Path = RESULTS_JSON, video: dict | None = None,
-          notes: Path | None = None) -> dict:
+          notes: Path | None = None, allow_dirty: bool = False) -> dict:
     """The real rung's results JSON: per row reliability, the zero's repeat spread, real vs MuJoCo, time to home; the gates."""
     from robot_models.homing.metrics import EpisodeRecord, JointOutcome, StallCheck, scorecard  # noqa: PLC0415
 
     from .bench import compact  # noqa: PLC0415
 
+    provenance = scorer_provenance(allow_dirty=allow_dirty)  # first: a dirty scorer writes nothing (commit first, then score)
     mujoco = json.loads(Path(mujoco_json).read_text())
     by_row = load_episodes(run_dirs)
     rows_out, cards, episodes, verdicts, table_rows = {}, {}, {}, {}, {}
@@ -665,8 +712,7 @@ def score(run_dirs: list[Path], *, mujoco_json: Path = MUJOCO_JSON, out: Path = 
     results = {
         "schema": "sim2real_homing_bench/1", "rig": "five-bar", "rung": RUNG, "attempts_recover_first": attempts, "models": ["rig"], "environment": ENVIRONMENT,
         "bundle_sha": BUNDLE_SHA, "hardstops_sha256": mujoco.get("hardstops_sha256"),
-        "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]), "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
-        "bam_ws_sha": git_sha(Path("/home/bam/bam_ws")), "gate_deg": GATE_DEG, "zero_vs_kinematic_deg": GATE_DEG,
+        **provenance, **runner_provenance(run_dirs), "gate_deg": GATE_DEG, "zero_vs_kinematic_deg": GATE_DEG,
         "reliability_target_pct": RELIABILITY_TARGET_PCT, "hidden_gap_arcmin": None, "dt_s": DT,
         "procedures": ran, "procedures_planned": list(ROWS), "not_run": NOT_RUN,
         "starts": [{"name": s.name, "offset_deg": list(s.offset_deg), "why": s.why} for s in STARTS],
@@ -707,6 +753,7 @@ def main(argv=None) -> int:
     c.add_argument("--out", type=Path, default=RESULTS_JSON)
     c.add_argument("--video", type=Path, default=None, help="the hero clip's JSON (bam_ws docs/homing/clip_real_episode.py), plus a caption key")
     c.add_argument("--notes", type=Path, default=None, help="a JSON of page prose merged into the results (verdict_html, findings_html)")
+    c.add_argument("--allow-dirty", action="store_true", help="score with uncommitted scorer code (stamped -dirty, provenance_clean false)")
     args = parser.parse_args(argv)
     if args.command == "prior":
         payload = write_prior(args.out)
@@ -716,7 +763,7 @@ def main(argv=None) -> int:
         print(json.dumps({"max_cap_nm": prepared["max_cap_nm"], "steps": prepared["steps"]}, indent=1, default=float))
     else:
         video = None if args.video is None else json.loads(args.video.read_text())
-        results = score(args.runs, out=args.out, video=video, notes=args.notes)
+        results = score(args.runs, out=args.out, video=video, notes=args.notes, allow_dirty=args.allow_dirty)
         print(json.dumps({"verdicts": results["verdicts"]}, indent=1, default=float))
     return 0
 
