@@ -49,8 +49,8 @@ from pathlib import Path
 
 from robot_models.homing.metrics import EpisodeRecord, JointOutcome, scorecard
 
-from sim2real.provenance import write_results
-from .bench import EPISODE_COLUMNS, compact, expand, git_sha, prior_for, run_episode
+from sim2real.provenance import code_sha, write_results
+from .bench import EPISODE_COLUMNS, compact, expand, prior_for, run_episode
 from .geometry import BUNDLE_SHA, C1, DRIVES, EXPORT, J1, J2, ROLE, FivebarGeometry
 from .mujoco_bench import kinematic_reference, twin_prior
 from .mujoco_plant import BAM_WS_SRC, END_GROUP_MASS_SCALE, REAL_BOARD_RECORD, RUNAWAY_RAD_S, MujocoRigPlant, twin_contacts
@@ -329,9 +329,9 @@ def run_bench(*, rows=ROWS, models=MODELS, masses=tuple(MASSES), ff_scales=FF_SC
         "bundle_root": str(geometry.root),
         "hardstops_sha256": geometry.hardstops_sha256,
         "loops_sha256": geometry.loops_sha256,
-        "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]),
-        "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
-        "bam_ws_sha": git_sha(BAM_WS_SRC.parent),
+        "sim2real_sha": code_sha(Path(__file__).resolve().parents[4]),
+        "robot_models_sha": code_sha(Path("/home/bam/robot_models")),
+        "bam_ws_sha": code_sha(BAM_WS_SRC.parent),
         "dt_s": 0.01,
         "gate_deg": GATE_DEG,
         "zero_vs_kinematic_deg": ZERO_VS_KINEMATIC_DEG,

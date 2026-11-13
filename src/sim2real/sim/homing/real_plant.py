@@ -348,7 +348,12 @@ def run_phase_real(plant: RealRigPlant, sequence: JointCommandSequence, *, guard
                    runaway_rad_s: float | None = RUNAWAY_RAD_S, peaks: dict | None = None) -> Phase:
     """``bench.run_phase`` for the real arm: the same controller loop and the same log, with three stops that never send a limp arm
     (module docstring) - each holds the bus where it is (``hold_here`` when the bus has it) and raises :class:`SequenceStopped` carrying
-    the phase so far. ``is_trip(error)`` says which exceptions from the bus are its trips (PlantTrip: already holding or braked)."""
+    the phase so far. ``is_trip(error)`` says which exceptions from the bus are its trips (PlantTrip: already holding or braked).
+
+    The drives it watches are ``plant.drive_joints`` (the five-bar's J2 / C1 when the plant does not say), named by ``plant.role`` (else
+    geometry.ROLE) - so the wrist's RealWristPlant (wrist_real) runs through this same loop, guard and runaway stop."""
+    drive_joints = tuple(getattr(plant, "drive_joints", DRIVE_JOINTS))
+    role = dict(getattr(plant, "role", ROLE))
     controller = JointCommandSequenceController(sequence)
     state = plant.state()
     log = {"t": [], "position": [], "velocity": [], "effort": [], "defines": [], "events": [], "step": [],
@@ -392,16 +397,17 @@ def run_phase_real(plant: RealRigPlant, sequence: JointCommandSequence, *, guard
             raise
         index = {name: i for i, name in enumerate(command.name)}
         step_name = names[min(controller.step_index, len(names) - 1)]
-        for joint in DRIVE_JOINTS:
+        names_now = list(state.name)
+        for joint in drive_joints:
             i = index.get(joint)
             powered = i is not None and command.max_effort is not None and float(command.max_effort[i]) > 0.0 and \
                 math.isfinite(float(command.position[i]))
-            speed = abs(float(state.velocity[DRIVES.index(joint)]))
+            speed = abs(float(state.velocity[names_now.index(joint)]))
             if peaks is not None:
-                key = (step_name, ROLE[joint], "powered" if powered else "limp")
+                key = (step_name, role[joint], "powered" if powered else "limp")
                 peaks[key] = max(peaks.get(key, 0.0), speed)
             if powered and runaway_rad_s is not None and speed > runaway_rad_s:
-                message = (f"runaway: {ROLE[joint]} at {math.degrees(speed):.0f} deg/s powered, over {math.degrees(runaway_rad_s):.0f} deg/s, "
+                message = (f"runaway: {role[joint]} at {math.degrees(speed):.0f} deg/s powered, over {math.degrees(runaway_rad_s):.0f} deg/s, "
                            f"in step {step_name!r}")
                 hold(message)
                 raise SequenceStopped(message, kind="runaway", phase=phase("stopped", message))

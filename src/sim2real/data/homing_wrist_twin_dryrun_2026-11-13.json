@@ -1,0 +1,3382 @@
+{
+ "schema": "sim2real_homing_wrist_dryrun/1",
+ "rig": "ur-wrist",
+ "sim2real_sha": "b595a34",
+ "robot_models_sha": "17869ad",
+ "bam_ws_sha": "2b704ca2b",
+ "procedure": "single_touch_park+gff",
+ "plan": {
+  "steps": 54,
+  "max_cap_nm": {
+   "CAN 14": 1.0,
+   "CAN 15": 1.0,
+   "CAN 16": 1.0
+  },
+  "gravity_ff": null
+ },
+ "episodes": [
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "real_power_up",
+   "start_record": {
+    "name": "real_power_up",
+    "board_rad": [
+     0.04707963267948956,
+     0.02462143944814743,
+     -0.05
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 542,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1456,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2703,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4376,
+     "judged": 3,
+     "map_s": 0.0003,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 45.96
+   },
+   "time_s": 48.56,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     38.34
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     38.64
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     43.77
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     48.56
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": 77.71445149701464,
+    "CAN 15": -40.57885298900881,
+    "CAN 16": 2.323198309315769
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -247.56445149701463
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -129.27014701099117
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -172.17219830931575
+    }
+   ],
+   "finished": true,
+   "wall_s": 75.2,
+   "truth_offset_deg": {
+    "CAN 14": 78.30253574643906,
+    "CAN 15": -40.010704565915766,
+    "CAN 16": 2.8647889756541165
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.588084249424424,
+    "CAN 15": -0.5681484230930399,
+    "CAN 16": -0.5415906663383471
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740087730887684e-05,
+    "CAN 15": 0.014385633787093118,
+    "CAN 16": 0.04550140054708085
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 42.56,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415907
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455014
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.942442410893477e-08,
+    "CAN 15": -1.323093039906631e-06,
+    "CAN 16": 3.366165290952239e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.28
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.279
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.279
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.279
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-00",
+   "start_record": {
+    "name": "sobol-00",
+    "board_rad": [
+     -0.27996774459998375,
+     -0.2231955288648243,
+     0.02806591749519871
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 641,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1736,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2823,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4495,
+     "judged": 3,
+     "map_s": 0.0002,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 46.1
+   },
+   "time_s": 49.75,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     39.53
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     39.83
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     44.96
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     49.75
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": 38.17196776836365,
+    "CAN 15": 38.58064858561636,
+    "CAN 16": 33.701349640981796
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -208.02196776836365
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -208.42964858561635
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -203.55034964098178
+    }
+   ],
+   "finished": true,
+   "wall_s": 75.5,
+   "truth_offset_deg": {
+    "CAN 14": 38.760052017867565,
+    "CAN 15": 39.14879700914025,
+    "CAN 16": 34.24302216991782
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842495039125,
+    "CAN 15": -0.5681484235238969,
+    "CAN 16": -0.541672528936027
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740008242465085e-05,
+    "CAN 15": 0.014385633356236098,
+    "CAN 16": 0.045419537949400866
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 43.76,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5416725
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0454195
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.9503912524784255e-08,
+    "CAN 15": -1.323523896923362e-06,
+    "CAN 16": -2.893602701892206e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.273
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.271
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.271
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.271
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-01",
+   "start_record": {
+    "name": "sobol-01",
+    "board_rad": [
+     -0.1925666411580056,
+     0.14554794888941602,
+     0.03934864259498594
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 390,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1040,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 1622,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 3353,
+     "judged": 3,
+     "map_s": 0.0002,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 37.39,
+    "CAN 15": 43.36,
+    "CAN 16": 45.88
+   },
+   "time_s": 38.33,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     27.58
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     27.88
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     33.54
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     38.33
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": 18.696
+   },
+   "zeros_deg": {
+    "CAN 14": -146.96834758222548,
+    "CAN 15": -124.031211905579,
+    "CAN 16": -57.42822362072279
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -22.88165241777453
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -45.81778809442098
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -112.4207763792772
+    }
+   ],
+   "finished": true,
+   "wall_s": 59.2,
+   "truth_offset_deg": {
+    "CAN 14": -146.38026335835457,
+    "CAN 15": -123.46306348219515,
+    "CAN 16": -56.88658536225557
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842238708935,
+    "CAN 15": -0.5681484233838572,
+    "CAN 16": -0.5416382584672157
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2765641261364966e-05,
+    "CAN 15": 0.014385633496275922,
+    "CAN 16": 0.04545380841821222
+   },
+   "self_contact_ticks": 42,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 32.28,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5416383
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.28e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0454538
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -2.3870893595123732e-08,
+    "CAN 15": -1.323383857165794e-06,
+    "CAN 16": 4.153278432283969e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.277
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.275
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.275
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.275
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-02",
+   "start_record": {
+    "name": "sobol-02",
+    "board_rad": [
+     -0.27688524905012835,
+     -0.25020003763984056,
+     -0.010592549204617718
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 941,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 2399,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 3410,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 5082,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 43.29,
+    "CAN 16": 46.19
+   },
+   "time_s": 55.620000000000005,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     45.4
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     45.7
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     50.83
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     55.62
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": 0.0
+   },
+   "zeros_deg": {
+    "CAN 14": 10.26095577828301,
+    "CAN 15": 170.8338751126184,
+    "CAN 16": 143.88606104707122
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -180.110955778283
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -340.6828751126184
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -313.7350610470712
+    }
+   ],
+   "finished": true,
+   "wall_s": 131.5,
+   "truth_offset_deg": {
+    "CAN 14": 10.849040027707815,
+    "CAN 15": 171.40202353522182,
+    "CAN 16": 144.4275843165815
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842494248041,
+    "CAN 15": -0.5681484226034254,
+    "CAN 16": -0.5415232695102639
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.27400873508114e-05,
+    "CAN 15": 0.014385634276707707,
+    "CAN 16": 0.04556879737516405
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 49.63,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415233
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455688
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.94248041382761e-08,
+    "CAN 15": -1.3226034253355223e-06,
+    "CAN 16": 3.0489736180250304e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.289
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.288
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.288
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.288
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-03",
+   "start_record": {
+    "name": "sobol-03",
+    "board_rad": [
+     0.11762911643250895,
+     -0.10916257596644074,
+     -0.0511165176801085
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 194,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 852,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2259,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4109,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.15,
+    "CAN 15": 44.81,
+    "CAN 16": 46.19
+   },
+   "time_s": 45.89,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     33.92
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     34.22
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     41.1
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     45.89
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": 62.595
+   },
+   "zeros_deg": {
+    "CAN 14": 132.3839995427745,
+    "CAN 15": -62.62458735758373,
+    "CAN 16": -122.61133474498169
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -302.2339995427745
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -107.22441264241625
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -47.23766525501829
+    }
+   ],
+   "finished": true,
+   "wall_s": 164.5,
+   "truth_offset_deg": {
+    "CAN 14": 132.9720837213099,
+    "CAN 15": -62.05643893405795,
+    "CAN 16": -122.0697742179036
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880841785354198,
+    "CAN 15": -0.5681484235257735,
+    "CAN 16": -0.5415605270780893
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2810976735127922e-05,
+    "CAN 15": 0.014385633354359571,
+    "CAN 16": 0.04553153980733854
+   },
+   "self_contact_ticks": 42,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 39.87,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415605
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.28e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455315
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": 2.146458011331731e-08,
+    "CAN 15": -1.3235257735333406e-06,
+    "CAN 16": -2.7078089326337818e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.284
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.283
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.283
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.283
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-04",
+   "start_record": {
+    "name": "sobol-04",
+    "board_rad": [
+     0.27270948621958846,
+     0.1483851084531258,
+     0.23728313693413505
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 463,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1756,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 3074,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4748,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 46.14
+   },
+   "time_s": 52.28,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     42.05
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     42.35
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     47.49
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     52.28
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.001
+   },
+   "zeros_deg": {
+    "CAN 14": 90.66850113634095,
+    "CAN 15": 88.50555421394418,
+    "CAN 16": -42.422781378652346
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -260.51850113634094
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -258.35455421394414
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -127.42621862134763
+    }
+   ],
+   "finished": true,
+   "wall_s": 181.9,
+   "truth_offset_deg": {
+    "CAN 14": 91.2565853856504,
+    "CAN 15": 89.07370263710618,
+    "CAN 16": -41.88118103519082
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842493094534,
+    "CAN 15": -0.5681484231620071,
+    "CAN 16": -0.5416003434615307
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.274020270157831e-05,
+    "CAN 15": 0.014385633718125972,
+    "CAN 16": 0.04549172342389719
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 46.28,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5416003
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0454917
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.930945340930748e-08,
+    "CAN 15": -1.323162007071943e-06,
+    "CAN 16": -4.3461530707666896e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.279
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.278
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.278
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.278
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-05",
+   "start_record": {
+    "name": "sobol-05",
+    "board_rad": [
+     0.29832597480618883,
+     -0.2151527609206846,
+     0.08057837662884815
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 685,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1671,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2486,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4158,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 46.26
+   },
+   "time_s": 46.38,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     36.16
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     36.46
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     41.59
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     46.38
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": -92.22404583750806,
+    "CAN 15": -0.9857190476956825,
+    "CAN 16": 46.54412604078192
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -77.62595416249194
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -168.8632809523043
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -216.3931260407819
+    }
+   ],
+   "finished": true,
+   "wall_s": 160.9,
+   "truth_offset_deg": {
+    "CAN 14": -91.63596158847213,
+    "CAN 15": -0.4175706245005131,
+    "CAN 16": 47.08577095717192
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842490359256,
+    "CAN 15": -0.5681484231951696,
+    "CAN 16": -0.5416449163899935
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740476229280916e-05,
+    "CAN 15": 0.01438563368496357,
+    "CAN 16": 0.045447150495434394
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 40.39,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5416449
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0454472
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.903592565330683e-08,
+    "CAN 15": -1.3231951695447108e-06,
+    "CAN 16": -1.6389993473531206e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.278
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.277
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.277
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.277
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-06",
+   "start_record": {
+    "name": "sobol-06",
+    "board_rad": [
+     -0.17489346064161282,
+     -0.10036496494067126,
+     0.14314778326404864
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 180,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1354,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2132,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 3805,
+     "judged": 3,
+     "map_s": 0.0005,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 45.66
+   },
+   "time_s": 42.85,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     32.63
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     32.93
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     38.06
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     42.85
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": -78.43659306145096,
+    "CAN 15": 59.87770929176171,
+    "CAN 16": -139.10655027708847
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -91.41340693854903
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -229.7267092917617
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -30.742449722911516
+    }
+   ],
+   "finished": true,
+   "wall_s": 148.5,
+   "truth_offset_deg": {
+    "CAN 14": -77.84850881248713,
+    "CAN 15": 60.44585771486163,
+    "CAN 16": -138.56492028012872
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842489638416,
+    "CAN 15": -0.5681484230999226,
+    "CAN 16": -0.5416299969597453
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740548313372216e-05,
+    "CAN 15": 0.014385633780210398,
+    "CAN 16": 0.04546206992568251
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 36.86,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.54163
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0454621
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.8963841647875483e-08,
+    "CAN 15": -1.3230999226232498e-06,
+    "CAN 16": 3.0402546036256695e-09
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.28
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.278
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.278
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.278
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-07",
+   "start_record": {
+    "name": "sobol-07",
+    "board_rad": [
+     0.2356330806361886,
+     -0.0241723761751933,
+     0.14340261779405883
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 839,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1473,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2650,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4322,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 44.46,
+    "CAN 16": 45.7
+   },
+   "time_s": 48.02,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     37.8
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     38.1
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     43.23
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     48.02
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": 41.43861356496832,
+    "CAN 15": -138.70131894931663,
+    "CAN 16": 98.2293339906507
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -211.2886135649683
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -31.147681050683346
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -268.07833399065066
+    }
+   ],
+   "finished": true,
+   "wall_s": 147.8,
+   "truth_offset_deg": {
+    "CAN 14": 42.02669781446457,
+    "CAN 15": -138.13317052647471,
+    "CAN 16": 98.77088349312544
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842494962537,
+    "CAN 15": -0.568148422841916,
+    "CAN 16": -0.5415495024747379
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740015901240758e-05,
+    "CAN 15": 0.014385634038216995,
+    "CAN 16": 0.04554256441068999
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 42.03,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415495
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455426
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.949625376227118e-08,
+    "CAN 15": -1.322841916007178e-06,
+    "CAN 16": -2.4747378590816993e-09
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.285
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.283
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.283
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.283
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-08",
+   "start_record": {
+    "name": "sobol-08",
+    "board_rad": [
+     -0.15525883037359356,
+     0.19941377069562316,
+     0.13394247648475144
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 114,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1522,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2760,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4432,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 46.11
+   },
+   "time_s": 49.120000000000005,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     38.9
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     39.2
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     44.33
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     49.12
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": 86.12270020446229,
+    "CAN 15": 126.94890101620587,
+    "CAN 16": -162.1432112682055
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -255.97270020446229
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -296.79790101620586
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -7.705788731794479
+    }
+   ],
+   "finished": true,
+   "wall_s": 156.0,
+   "truth_offset_deg": {
+    "CAN 14": 86.71078445389867,
+    "CAN 15": 127.51704943925141,
+    "CAN 16": -161.60162909701467
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842494363829,
+    "CAN 15": -0.5681484230455479,
+    "CAN 16": -0.54158217119085
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740075772002081e-05,
+    "CAN 15": 0.014385633834585161,
+    "CAN 16": 0.045509895694577966
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 43.13,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415822
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455099
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.9436382987266825e-08,
+    "CAN 15": -1.3230455478963066e-06,
+    "CAN 16": 2.8809150065534084e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.281
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.279
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.279
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.279
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-09",
+   "start_record": {
+    "name": "sobol-09",
+    "board_rad": [
+     0.2715168269972301,
+     0.25618501423257856,
+     -0.31014263524356256
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 803,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1671,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2393,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4067,
+     "judged": 3,
+     "map_s": 0.0005,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.06,
+    "CAN 15": 41.64,
+    "CAN 16": 46.28
+   },
+   "time_s": 45.47,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     35.24
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     35.54
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     40.68
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     45.47
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.001
+   },
+   "zeros_deg": {
+    "CAN 14": -123.75006695283874,
+    "CAN 15": -70.50719145308864,
+    "CAN 16": 111.13968526763148
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -46.099933047161265
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -99.34180854691134
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -280.98868526763147
+    }
+   ],
+   "finished": true,
+   "wall_s": 155.2,
+   "truth_offset_deg": {
+    "CAN 14": -123.16198270395397,
+    "CAN 15": -69.93904303014278,
+    "CAN 16": 111.68128473311663
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842488847603,
+    "CAN 15": -0.5681484229458567,
+    "CAN 16": -0.5415994654851483
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740627394683816e-05,
+    "CAN 15": 0.014385633934276467,
+    "CAN 16": 0.04549260140027962
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 39.47,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415995
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0454926
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.888476035080913e-08,
+    "CAN 15": -1.3229458566410557e-06,
+    "CAN 16": 3.4514851754430254e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.283
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.282
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.282
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.282
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-10",
+   "start_record": {
+    "name": "sobol-10",
+    "board_rad": [
+     0.1662182254857616,
+     0.0007769967456403293,
+     0.2652045639507995
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 529,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1588,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2458,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4130,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 46.13
+   },
+   "time_s": 46.1,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     35.88
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     36.18
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     41.31
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     46.1
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": -64.97964848424512,
+    "CAN 15": 12.715620468908623,
+    "CAN 16": -20.458327213671954
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -104.87035151575488
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -182.5646204689086
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -149.39067278632803
+    }
+   ],
+   "finished": true,
+   "wall_s": 176.1,
+   "truth_offset_deg": {
+    "CAN 14": -64.39156423509121,
+    "CAN 15": 13.283768892288208,
+    "CAN 16": -19.916654963046312
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842491539116,
+    "CAN 15": -0.568148423379584,
+    "CAN 16": -0.5416722506256416
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740358243424453e-05,
+    "CAN 15": 0.014385633500548996,
+    "CAN 16": 0.04541981625978624
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 40.11,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5416723
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0454198
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.9153911607646705e-08,
+    "CAN 15": -1.3233795840283946e-06,
+    "CAN 16": 4.9374358379594696e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.275
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.273
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.273
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.273
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-11",
+   "start_record": {
+    "name": "sobol-11",
+    "board_rad": [
+     -0.2765093743104652,
+     0.28497930292393336,
+     -0.07363740465741286
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 722,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1474,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2731,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 4404,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 45.62
+   },
+   "time_s": 48.84,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     38.62
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     38.92
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     44.05
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     48.84
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": 99.91094342747027,
+    "CAN 15": -113.89860573042921,
+    "CAN 16": 68.45610390607646
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -269.76094342747024
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -55.95039426957077
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -238.30510390607645
+    }
+   ],
+   "finished": true,
+   "wall_s": 140.2,
+   "truth_offset_deg": {
+    "CAN 14": 100.49902767688036,
+    "CAN 15": -113.33045730739832,
+    "CAN 16": 68.9976838901639
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842494100861,
+    "CAN 15": -0.568148423030892,
+    "CAN 16": -0.541579984087423
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740102068828189e-05,
+    "CAN 15": 0.014385633849241157,
+    "CAN 16": 0.04551208279800484
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 42.84,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.54158
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455121
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.941008613368325e-08,
+    "CAN 15": -1.3230308919531808e-06,
+    "CAN 16": 1.591257692279413e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.281
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.28
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.28
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.28
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-12",
+   "start_record": {
+    "name": "sobol-12",
+    "board_rad": [
+     -0.2846460185911597,
+     0.07850837751774797,
+     -0.09431730061606336
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 992,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 2067,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 3536,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 5361,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 37.36,
+    "CAN 15": 44.76,
+    "CAN 16": 45.98
+   },
+   "time_s": 58.410000000000004,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     46.7
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     47.0
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     53.62
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     58.41
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": 53.524
+   },
+   "zeros_deg": {
+    "CAN 14": 177.69977422634705,
+    "CAN 15": 67.74277060074324,
+    "CAN 16": 167.00929654101552
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -347.54977422634704
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -237.59177060074322
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -336.8582965410155
+    }
+   ],
+   "finished": true,
+   "wall_s": 203.0,
+   "truth_offset_deg": {
+    "CAN 14": 178.28785841166973,
+    "CAN 15": 68.31091902405024,
+    "CAN 16": 167.55087725445628
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.588084185322698,
+    "CAN 15": -0.5681484233069896,
+    "CAN 16": -0.5415807134407599
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2804189456882116e-05,
+    "CAN 15": 0.014385633573143567,
+    "CAN 16": 0.04551135344466801
+   },
+   "self_contact_ticks": 41,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 52.38,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415807
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.28e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455114
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": 1.4677301929388875e-08,
+    "CAN 15": -1.3233069895424165e-06,
+    "CAN 16": -1.3440759838445615e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.284
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.282
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.282
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.282
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-13",
+   "start_record": {
+    "name": "sobol-13",
+    "board_rad": [
+     0.15893358141749603,
+     0.23924329883096052,
+     0.05035963093576479
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 275,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 873,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 1828,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 3500,
+     "judged": 3,
+     "map_s": 0.0004,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 43.28,
+    "CAN 16": 45.86
+   },
+   "time_s": 39.800000000000004,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     29.58
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     29.88
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     35.01
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     39.8
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": -34.425155928866054,
+    "CAN 15": -166.8339584503194,
+    "CAN 16": -99.6109052281677
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -135.42484407113395
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -3.0150415496806096
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -70.2380947718323
+    }
+   ],
+   "finished": true,
+   "wall_s": 170.5,
+   "truth_offset_deg": {
+    "CAN 14": -33.83707167953253,
+    "CAN 15": -166.26581002771854,
+    "CAN 16": -99.06937473267317
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842493335302,
+    "CAN 15": -0.56814842260083,
+    "CAN 16": -0.5415304954945285
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740178624779371e-05,
+    "CAN 15": 0.014385634279303039,
+    "CAN 16": 0.045561571390899475
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 33.81,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.5415305
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.0455616
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.9333530260931013e-08,
+    "CAN 15": -1.3226008299671577e-06,
+    "CAN 16": 4.505471551397022e-09
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.289
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.288
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.288
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.288
+    }
+   }
+  },
+  {
+   "procedure": "single_touch_park+gff",
+   "start": "sobol-15",
+   "start_record": {
+    "name": "sobol-15",
+    "board_rad": [
+     -0.1927709054982066,
+     0.2732895090033496,
+     -0.07961926921491691
+    ],
+    "mode": [
+     0,
+     0,
+     0
+    ]
+   },
+   "status": "done",
+   "message": "finished all 54 steps",
+   "incident": null,
+   "guard_checks": [
+    {
+     "step": "CAN 16 seeks",
+     "defines": {
+      "CAN 16": -169.849
+     },
+     "working": false,
+     "tick": 310,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 park seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": true,
+     "tick": 1246,
+     "pass": true
+    },
+    {
+     "step": "CAN 14 seeks",
+     "defines": {
+      "CAN 14": -169.85
+     },
+     "working": false,
+     "tick": 2272,
+     "pass": true
+    },
+    {
+     "step": "CAN 15 seeks",
+     "defines": {
+      "CAN 15": -169.849
+     },
+     "working": false,
+     "tick": 3944,
+     "judged": 3,
+     "map_s": 0.0003,
+     "pass": true
+    }
+   ],
+   "peak_powered_deg_s": {
+    "CAN 14": 36.11,
+    "CAN 15": 41.64,
+    "CAN 16": 45.99
+   },
+   "time_s": 44.24,
+   "events": [
+    [
+     50,
+     "CAN 14 home",
+     "Reached",
+     34.02
+    ],
+    [
+     51,
+     "CAN 15 holds still",
+     "Elapsed",
+     34.32
+    ],
+    [
+     52,
+     "CAN 15 seeks",
+     "Stall revolute_14",
+     39.45
+    ],
+    [
+     53,
+     "CAN 15 home",
+     "Reached",
+     44.24
+    ]
+   ],
+   "notes": {
+    "park_touch_short_deg": -0.0
+   },
+   "zeros_deg": {
+    "CAN 14": 10.929938805599074,
+    "CAN 15": -47.103081759577385,
+    "CAN 16": -79.42662488108061
+   },
+   "evidence": [
+    {
+     "joint": "CAN 14",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -180.77993880559907
+    },
+    {
+     "joint": "CAN 15",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -122.7459182404226
+    },
+    {
+     "joint": "CAN 16",
+     "side": -1,
+     "torque_nm": 0.9999999999999998,
+     "raw_deg": -90.42237511891938
+    }
+   ],
+   "finished": true,
+   "wall_s": 145.6,
+   "truth_offset_deg": {
+    "CAN 14": 11.518023055046797,
+    "CAN 15": -46.53493333607912,
+    "CAN 16": -78.88494884222746
+   },
+   "zero_error_deg": {
+    "CAN 14": -0.5880842494477232,
+    "CAN 15": -0.5681484234982681,
+    "CAN 16": -0.5416760388531503
+   },
+   "zero_error_vs_twin_deg": {
+    "CAN 14": 1.2740064431734365e-05,
+    "CAN 15": 0.014385633381865008,
+    "CAN 16": 0.04541602803227759
+   },
+   "self_contact_ticks": 0,
+   "mujoco": {
+    "row": "single_touch_park",
+    "finished": true,
+    "outcome": "done",
+    "time_s": 38.25,
+    "zero_error_deg": {
+     "CAN 14": -0.5880842,
+     "CAN 15": -0.5681471,
+     "CAN 16": -0.541676
+    },
+    "zero_error_vs_twin_deg": {
+     "CAN 14": 1.27e-05,
+     "CAN 15": 0.014387,
+     "CAN 16": 0.045416
+    }
+   },
+   "dryrun_minus_mujoco_deg": {
+    "CAN 14": -4.9447723249329556e-08,
+    "CAN 15": -1.3234982680909724e-06,
+    "CAN 16": -3.8853150252649016e-08
+   },
+   "home_button": {
+    "label": "end of episode",
+    "rest_deg": {
+     "CAN 14": 0.158,
+     "CAN 15": 0.197,
+     "CAN 16": 0.273
+    },
+    "target_deg": {
+     "CAN 14": 86.0,
+     "CAN 15": 0.0,
+     "CAN 16": 0.0
+    },
+    "rest_touching": "",
+    "orders_rejected": {},
+    "order": [
+     15,
+     14,
+     16
+    ],
+    "result": "at target",
+    "message": "finished all 24 steps",
+    "peak_powered_deg_s": {
+     "CAN 14": 34.97,
+     "CAN 15": 0.01,
+     "CAN 16": 0.0
+    },
+    "end_deg": {
+     "CAN 14": 85.775,
+     "CAN 15": 0.172,
+     "CAN 16": 0.271
+    },
+    "end_off_target_deg": {
+     "CAN 14": -0.225,
+     "CAN 15": 0.172,
+     "CAN 16": 0.271
+    },
+    "release": {
+     "released": true,
+     "modes": {
+      "14": 0,
+      "15": 0,
+      "16": 0
+     },
+     "why": "the twin: every drive STOPped and read back mode 0"
+    },
+    "released_rest_deg": {
+     "CAN 14": 85.776,
+     "CAN 15": 0.172,
+     "CAN 16": 0.271
+    }
+   }
+  }
+ ],
+ "mujoco_json": "/home/bam/sim2real-worktrees/homing-wrist-real-prep/src/sim2real/data/homing_wrist_mujoco_pass5_2026-11-12.json",
+ "seconds": 2776.266616821289,
+ "provenance_clean": true
+}

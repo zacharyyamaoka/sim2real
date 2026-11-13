@@ -1,0 +1,1361 @@
+{
+ "schema": "sim2real_homing_wrist_recovery/1",
+ "rig": "ur-wrist",
+ "sim2real_sha": "b595a34",
+ "robot_models_sha": "17869ad",
+ "bam_ws_sha": "2b704ca2b",
+ "ready_deg": {
+  "revolute_11": 86.0,
+  "revolute_14": 0.0,
+  "revolute_17": 0.0
+ },
+ "reach_deg": 1.5000000000000002,
+ "rows": [
+  {
+   "label": "from real_power_up",
+   "rest_deg": {
+    "CAN 14": 81.0,
+    "CAN 15": -38.6,
+    "CAN 16": 0.0
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 5 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.09,
+    "CAN 15": 40.06,
+    "CAN 16": 0.0
+   },
+   "end_deg": {
+    "CAN 14": 85.789,
+    "CAN 15": -0.242,
+    "CAN 16": -0.0
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.211,
+    "CAN 15": -0.242,
+    "CAN 16": -0.0
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.79,
+    "CAN 15": -0.242,
+    "CAN 16": -0.0
+   },
+   "start": "real_power_up",
+   "start_deg": {
+    "CAN 14": 81.0,
+    "CAN 15": -38.6,
+    "CAN 16": 0.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 4.1
+  },
+  {
+   "label": "from sobol-00",
+   "rest_deg": {
+    "CAN 14": 22.719,
+    "CAN 15": 26.361,
+    "CAN 16": 35.851
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 20 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.8,
+    "CAN 15": 41.11,
+    "CAN 16": 45.75
+   },
+   "end_deg": {
+    "CAN 14": 85.781,
+    "CAN 15": 0.079,
+    "CAN 16": 0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.219,
+    "CAN 15": 0.079,
+    "CAN 16": 0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.782,
+    "CAN 15": 0.079,
+    "CAN 16": 0.261
+   },
+   "start": "sobol-00",
+   "start_deg": {
+    "CAN 14": 22.72,
+    "CAN 15": 26.36,
+    "CAN 16": 35.85
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 12.2
+  },
+  {
+   "label": "from sobol-01",
+   "rest_deg": {
+    "CAN 14": -157.414,
+    "CAN 15": -115.124,
+    "CAN 16": -54.632
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 65 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.86,
+    "CAN 15": 44.77,
+    "CAN 16": 45.66
+   },
+   "end_deg": {
+    "CAN 14": 85.767,
+    "CAN 15": -0.123,
+    "CAN 16": -0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.233,
+    "CAN 15": -0.123,
+    "CAN 16": -0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.768,
+    "CAN 15": -0.123,
+    "CAN 16": -0.261
+   },
+   "start": "sobol-01",
+   "start_deg": {
+    "CAN 14": -157.41,
+    "CAN 15": -115.12,
+    "CAN 16": -54.63
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 33.4
+  },
+  {
+   "label": "from sobol-02",
+   "rest_deg": {
+    "CAN 14": -5.015,
+    "CAN 15": 157.067,
+    "CAN 16": 143.821
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 27 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.11,
+    "CAN 15": 43.19,
+    "CAN 16": 45.72
+   },
+   "end_deg": {
+    "CAN 14": 85.786,
+    "CAN 15": 0.059,
+    "CAN 16": 0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.214,
+    "CAN 15": 0.059,
+    "CAN 16": 0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.786,
+    "CAN 15": 0.059,
+    "CAN 16": 0.261
+   },
+   "start": "sobol-02",
+   "start_deg": {
+    "CAN 14": -5.02,
+    "CAN 15": 157.07,
+    "CAN 16": 143.82
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 23.6
+  },
+  {
+   "label": "from sobol-03",
+   "rest_deg": {
+    "CAN 14": 139.712,
+    "CAN 15": -68.311,
+    "CAN 16": -124.999
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 18 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.75,
+    "CAN 15": 40.09,
+    "CAN 16": 45.66
+   },
+   "end_deg": {
+    "CAN 14": 86.25,
+    "CAN 15": -0.099,
+    "CAN 16": -0.262
+   },
+   "end_off_target_deg": {
+    "CAN 14": 0.25,
+    "CAN 15": -0.099,
+    "CAN 16": -0.262
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 86.25,
+    "CAN 15": -0.099,
+    "CAN 16": -0.262
+   },
+   "start": "sobol-03",
+   "start_deg": {
+    "CAN 14": 139.71,
+    "CAN 15": -68.31,
+    "CAN 16": -125.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 15.2
+  },
+  {
+   "label": "from sobol-04",
+   "rest_deg": {
+    "CAN 14": 106.882,
+    "CAN 15": 97.576,
+    "CAN 16": -28.286
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 10 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.58,
+    "CAN 15": 39.95,
+    "CAN 16": 45.77
+   },
+   "end_deg": {
+    "CAN 14": 86.25,
+    "CAN 15": 0.274,
+    "CAN 16": -0.262
+   },
+   "end_off_target_deg": {
+    "CAN 14": 0.25,
+    "CAN 15": 0.274,
+    "CAN 16": -0.262
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 86.25,
+    "CAN 15": 0.274,
+    "CAN 16": -0.262
+   },
+   "start": "sobol-04",
+   "start_deg": {
+    "CAN 14": 106.88,
+    "CAN 15": 97.58,
+    "CAN 16": -28.29
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 9.1
+  },
+  {
+   "label": "from sobol-05",
+   "rest_deg": {
+    "CAN 14": -74.543,
+    "CAN 15": -12.745,
+    "CAN 16": 51.703
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 45 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.67,
+    "CAN 15": 40.85,
+    "CAN 16": 45.68
+   },
+   "end_deg": {
+    "CAN 14": 85.783,
+    "CAN 15": -0.316,
+    "CAN 16": 0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.217,
+    "CAN 15": -0.316,
+    "CAN 16": 0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.784,
+    "CAN 15": -0.316,
+    "CAN 16": 0.261
+   },
+   "start": "sobol-05",
+   "start_deg": {
+    "CAN 14": -74.54,
+    "CAN 15": -12.74,
+    "CAN 16": 51.7
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 20.9
+  },
+  {
+   "label": "from sobol-06",
+   "rest_deg": {
+    "CAN 14": -87.869,
+    "CAN 15": 54.695,
+    "CAN 16": -130.363
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 48 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.82,
+    "CAN 15": 39.95,
+    "CAN 16": 45.68
+   },
+   "end_deg": {
+    "CAN 14": 85.771,
+    "CAN 15": 0.174,
+    "CAN 16": -0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.229,
+    "CAN 15": 0.174,
+    "CAN 16": -0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.771,
+    "CAN 15": 0.174,
+    "CAN 16": -0.261
+   },
+   "start": "sobol-06",
+   "start_deg": {
+    "CAN 14": -87.87,
+    "CAN 15": 54.7,
+    "CAN 16": -130.36
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 27.8
+  },
+  {
+   "label": "from sobol-07",
+   "rest_deg": {
+    "CAN 14": 55.527,
+    "CAN 15": -139.518,
+    "CAN 16": 106.987
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 12 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.7,
+    "CAN 15": 39.99,
+    "CAN 16": 45.61
+   },
+   "end_deg": {
+    "CAN 14": 85.788,
+    "CAN 15": -0.311,
+    "CAN 16": 0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.212,
+    "CAN 15": -0.311,
+    "CAN 16": 0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.789,
+    "CAN 15": -0.311,
+    "CAN 16": 0.261
+   },
+   "start": "sobol-07",
+   "start_deg": {
+    "CAN 14": 55.53,
+    "CAN 15": -139.52,
+    "CAN 16": 106.99
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 15.4
+  },
+  {
+   "label": "from sobol-08",
+   "rest_deg": {
+    "CAN 14": 77.815,
+    "CAN 15": 138.943,
+    "CAN 16": -153.927
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 7 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.45,
+    "CAN 15": 40.03,
+    "CAN 16": 45.8
+   },
+   "end_deg": {
+    "CAN 14": 85.787,
+    "CAN 15": 0.196,
+    "CAN 16": -0.262
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.213,
+    "CAN 15": 0.196,
+    "CAN 16": -0.262
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.788,
+    "CAN 15": 0.196,
+    "CAN 16": -0.262
+   },
+   "start": "sobol-08",
+   "start_deg": {
+    "CAN 14": 77.82,
+    "CAN 15": 138.94,
+    "CAN 16": -153.93
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 15.4
+  },
+  {
+   "label": "from sobol-09",
+   "rest_deg": {
+    "CAN 14": -107.605,
+    "CAN 15": -55.261,
+    "CAN 16": 93.911
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 53 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.84,
+    "CAN 15": 39.99,
+    "CAN 16": 45.6
+   },
+   "end_deg": {
+    "CAN 14": 85.787,
+    "CAN 15": -0.23,
+    "CAN 16": 0.259
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.213,
+    "CAN 15": -0.23,
+    "CAN 16": 0.259
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.787,
+    "CAN 15": -0.231,
+    "CAN 16": 0.259
+   },
+   "start": "sobol-09",
+   "start_deg": {
+    "CAN 14": -107.61,
+    "CAN 15": -55.26,
+    "CAN 16": 93.91
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 28.2
+  },
+  {
+   "label": "from sobol-10",
+   "rest_deg": {
+    "CAN 14": -54.868,
+    "CAN 15": 13.328,
+    "CAN 16": -4.722
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 40 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.51,
+    "CAN 15": 40.55,
+    "CAN 16": 45.91
+   },
+   "end_deg": {
+    "CAN 14": 85.775,
+    "CAN 15": 0.089,
+    "CAN 16": -0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.225,
+    "CAN 15": 0.089,
+    "CAN 16": -0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.775,
+    "CAN 15": 0.089,
+    "CAN 16": -0.261
+   },
+   "start": "sobol-10",
+   "start_deg": {
+    "CAN 14": -54.87,
+    "CAN 15": 13.33,
+    "CAN 16": -4.72
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 16.8
+  },
+  {
+   "label": "from sobol-11",
+   "rest_deg": {
+    "CAN 14": 84.656,
+    "CAN 15": -97.002,
+    "CAN 16": 64.779
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 5 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 26.79,
+    "CAN 15": 39.98,
+    "CAN 16": 45.64
+   },
+   "end_deg": {
+    "CAN 14": 85.813,
+    "CAN 15": -0.237,
+    "CAN 16": 0.258
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.187,
+    "CAN 15": -0.237,
+    "CAN 16": 0.258
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.813,
+    "CAN 15": -0.237,
+    "CAN 16": 0.258
+   },
+   "start": "sobol-11",
+   "start_deg": {
+    "CAN 14": 84.66,
+    "CAN 15": -97.0,
+    "CAN 16": 64.78
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 8.8
+  },
+  {
+   "label": "from sobol-12",
+   "rest_deg": {
+    "CAN 14": 161.979,
+    "CAN 15": 72.809,
+    "CAN 16": 162.147
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 23 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.01,
+    "CAN 15": 40.11,
+    "CAN 16": 45.82
+   },
+   "end_deg": {
+    "CAN 14": 86.267,
+    "CAN 15": 0.383,
+    "CAN 16": 0.261
+   },
+   "end_off_target_deg": {
+    "CAN 14": 0.267,
+    "CAN 15": 0.383,
+    "CAN 16": 0.261
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 86.267,
+    "CAN 15": 0.383,
+    "CAN 16": 0.261
+   },
+   "start": "sobol-12",
+   "start_deg": {
+    "CAN 14": 161.98,
+    "CAN 15": 72.81,
+    "CAN 16": 162.15
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 19.8
+  },
+  {
+   "label": "from sobol-13",
+   "rest_deg": {
+    "CAN 14": -24.731,
+    "CAN 15": -152.558,
+    "CAN 16": -96.184
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 32 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.28,
+    "CAN 15": 41.19,
+    "CAN 16": 45.6
+   },
+   "end_deg": {
+    "CAN 14": 85.766,
+    "CAN 15": -0.39,
+    "CAN 16": -0.262
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.234,
+    "CAN 15": -0.39,
+    "CAN 16": -0.262
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.766,
+    "CAN 15": -0.39,
+    "CAN 16": -0.262
+   },
+   "start": "sobol-13",
+   "start_deg": {
+    "CAN 14": -24.73,
+    "CAN 15": -152.56,
+    "CAN 16": -96.18
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 33.9
+  },
+  {
+   "label": "from sobol-15",
+   "rest_deg": {
+    "CAN 14": 0.473,
+    "CAN 15": -30.877,
+    "CAN 16": -83.447
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 26 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.99,
+    "CAN 15": 43.3,
+    "CAN 16": 45.6
+   },
+   "end_deg": {
+    "CAN 14": 85.767,
+    "CAN 15": -0.393,
+    "CAN 16": -0.26
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.233,
+    "CAN 15": -0.393,
+    "CAN 16": -0.26
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.767,
+    "CAN 15": -0.393,
+    "CAN 16": -0.26
+   },
+   "start": "sobol-15",
+   "start_deg": {
+    "CAN 14": 0.47,
+    "CAN 15": -30.88,
+    "CAN 16": -83.45
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 24.5
+  },
+  {
+   "label": "from band +125/-106.2",
+   "rest_deg": {
+    "CAN 14": 125.0,
+    "CAN 15": -106.2,
+    "CAN 16": 0.0
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 13 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.64,
+    "CAN 15": 40.16,
+    "CAN 16": 0.0
+   },
+   "end_deg": {
+    "CAN 14": 86.257,
+    "CAN 15": -0.122,
+    "CAN 16": 0.001
+   },
+   "end_off_target_deg": {
+    "CAN 14": 0.257,
+    "CAN 15": -0.122,
+    "CAN 16": 0.001
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 86.257,
+    "CAN 15": -0.122,
+    "CAN 16": 0.001
+   },
+   "start": "band +125/-106.2",
+   "start_deg": {
+    "CAN 14": 125.0,
+    "CAN 15": -106.2,
+    "CAN 16": 0.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 19.4
+  },
+  {
+   "label": "from band +150/-109.5",
+   "rest_deg": {
+    "CAN 14": 150.0,
+    "CAN 15": -109.45,
+    "CAN 16": 0.0
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 19 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.87,
+    "CAN 15": 40.35,
+    "CAN 16": 0.0
+   },
+   "end_deg": {
+    "CAN 14": 86.258,
+    "CAN 15": -0.075,
+    "CAN 16": 0.002
+   },
+   "end_off_target_deg": {
+    "CAN 14": 0.258,
+    "CAN 15": -0.075,
+    "CAN 16": 0.002
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 86.259,
+    "CAN 15": -0.075,
+    "CAN 16": 0.002
+   },
+   "start": "band +150/-109.5",
+   "start_deg": {
+    "CAN 14": 150.0,
+    "CAN 15": -109.45,
+    "CAN 16": 0.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 34.9
+  },
+  {
+   "label": "from band +150/+160.4",
+   "rest_deg": {
+    "CAN 14": 150.0,
+    "CAN 15": 160.45,
+    "CAN 16": 0.0
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 19 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 34.87,
+    "CAN 15": 41.2,
+    "CAN 16": 0.0
+   },
+   "end_deg": {
+    "CAN 14": 86.26,
+    "CAN 15": 0.371,
+    "CAN 16": 0.001
+   },
+   "end_off_target_deg": {
+    "CAN 14": 0.26,
+    "CAN 15": 0.371,
+    "CAN 16": 0.001
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 86.26,
+    "CAN 15": 0.371,
+    "CAN 16": 0.001
+   },
+   "start": "band +150/+160.4",
+   "start_deg": {
+    "CAN 14": 150.0,
+    "CAN 15": 160.45,
+    "CAN 16": 0.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 39.3
+  },
+  {
+   "label": "from band -125/+106.5",
+   "rest_deg": {
+    "CAN 14": -125.0,
+    "CAN 15": 106.45,
+    "CAN 16": 0.0
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 56 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.84,
+    "CAN 15": 39.97,
+    "CAN 16": 0.0
+   },
+   "end_deg": {
+    "CAN 14": 85.775,
+    "CAN 15": 0.263,
+    "CAN 16": -0.003
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.225,
+    "CAN 15": 0.263,
+    "CAN 16": -0.003
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.775,
+    "CAN 15": 0.263,
+    "CAN 16": -0.003
+   },
+   "start": "band -125/+106.5",
+   "start_deg": {
+    "CAN 14": -125.0,
+    "CAN 15": 106.45,
+    "CAN 16": 0.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 59.9
+  },
+  {
+   "label": "from band -150/-160.4",
+   "rest_deg": {
+    "CAN 14": -150.0,
+    "CAN 15": -160.45,
+    "CAN 16": 0.0
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 62 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.84,
+    "CAN 15": 43.53,
+    "CAN 16": 0.0
+   },
+   "end_deg": {
+    "CAN 14": 85.774,
+    "CAN 15": -0.138,
+    "CAN 16": -0.003
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.226,
+    "CAN 15": -0.138,
+    "CAN 16": -0.003
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.774,
+    "CAN 15": -0.138,
+    "CAN 16": -0.003
+   },
+   "start": "band -150/-160.4",
+   "start_deg": {
+    "CAN 14": -150.0,
+    "CAN 15": -160.45,
+    "CAN 16": 0.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 78.6
+  },
+  {
+   "label": "from band -150/+109.7",
+   "rest_deg": {
+    "CAN 14": -150.0,
+    "CAN 15": 109.7,
+    "CAN 16": 0.0
+   },
+   "target_deg": {
+    "CAN 14": 86.0,
+    "CAN 15": 0.0,
+    "CAN 16": 0.0
+   },
+   "rest_touching": "",
+   "orders_rejected": {},
+   "order": [
+    15,
+    14,
+    16
+   ],
+   "result": "at target",
+   "message": "finished all 62 steps",
+   "peak_powered_deg_s": {
+    "CAN 14": 35.84,
+    "CAN 15": 40.06,
+    "CAN 16": 0.0
+   },
+   "end_deg": {
+    "CAN 14": 85.775,
+    "CAN 15": 0.312,
+    "CAN 16": -0.002
+   },
+   "end_off_target_deg": {
+    "CAN 14": -0.225,
+    "CAN 15": 0.312,
+    "CAN 16": -0.002
+   },
+   "release": {
+    "released": true,
+    "modes": {
+     "14": 0,
+     "15": 0,
+     "16": 0
+    },
+    "why": "the twin: every drive STOPped and read back mode 0"
+   },
+   "released_rest_deg": {
+    "CAN 14": 85.775,
+    "CAN 15": 0.312,
+    "CAN 16": -0.002
+   },
+   "start": "band -150/+109.7",
+   "start_deg": {
+    "CAN 14": -150.0,
+    "CAN 15": 109.7,
+    "CAN 16": 0.0
+   },
+   "self_contact_ticks": 0,
+   "self_contact_after_first_s": 0,
+   "pass": true,
+   "wall_s": 65.5
+  }
+ ],
+ "passed": 22,
+ "total": 22,
+ "seconds": 750.9731335639954,
+ "provenance_clean": true
+}
