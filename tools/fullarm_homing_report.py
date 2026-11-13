@@ -122,6 +122,7 @@ def rescored(results: dict | None) -> dict | None:
 def build(out: Path) -> Path:
     orders = load("fullarm_check_orders_2026-11-13.json")
     held = rescored(load("fullarm_check_orders_held_2026-11-13.json"))
+    kp15 = load("fullarm_check_orders_kp15_2026-11-13.json")
     backlash = load("fullarm_check_backlash_2026-11-13.json")
     backlash_held = load("fullarm_check_backlash_held_2026-11-13.json")
     replay = load("fullarm_check_replay_2026-11-13.json")
@@ -141,8 +142,12 @@ def build(out: Path) -> Path:
     parts.append("<h2>3 · Criteria: every procedure, every start family</h2>")
     if orders:
         rows = card_rows(orders["summary"])
-        parts.append(table(rows, title=f"Wrist braked during the five-bar (the proper form) — sim2real {orders['sim2real_sha']}, "
-                                       f"{orders['seconds'] / 60:.0f} min"))
+        parts.append(table(rows, title=f"The proper form: wrist braked during the five-bar, wrist boards at the rack's kp 75 / kd 0.75 — "
+                                       f"sim2real {orders['sim2real_sha']}, {orders['seconds'] / 60:.0f} min"))
+        parts.append(outcomes(rows))
+    if kp15:
+        rows = card_rows(kp15["summary"])
+        parts.append(table(rows, title=f"The same at the 10:24 gains (kp 15 / kd 0.15) — sim2real {kp15['sim2real_sha']}"))
         parts.append(outcomes(rows))
     if held:
         rows = card_rows(held["summary"])
