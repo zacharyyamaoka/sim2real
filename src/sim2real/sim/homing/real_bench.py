@@ -71,22 +71,32 @@ RELIABILITY_TARGET_PCT = 100.0
 # WHY the two +gff rows (pass 6, 2026-11-13): pass 5's 16 real episodes all tripped 0.1-0.2 s after the zero, when the first un-fed hold
 # let J2 fall past the runaway ceiling; single_touch+gff / tview_v2+gff feed every hold and move once the plan knows the pose (gravity_ff),
 # proven on the MuJoCo rung in this exact form (gff_rung: the real form, the end group +22 %, the comp +-25 %, the runaway check on)
-ROWS = ("tview_v2", "single_touch", "two_level_touch+gff", "single_touch+gff", "tview_v2+gff")
+ROWS = ("tview_v2", "single_touch", "two_level_touch+gff", "single_touch+gff", "tview_v2+gff",
+        # pass 7 (2026-11-13): the recovery fed (recovery_ff) in front of the two real-passing rows, and the crank seeking beside J2
+        # (c1_seek); each proven on the MuJoCo rung in this form first (pass7_rung) - NOT_RUN names any that is not
+        "recover_first(fed)+single_touch+gff", "recover_first(fed)+tview_v2+gff", "single_touch_c1seek+gff",
+        "recover_first(fed)+single_touch_c1seek+gff")
 # the MuJoCo rung's row each real row is compared with (the same procedure; MuJoCo ran every row behind recover_first)
 MUJOCO_ROW = {"tview_v2": "recover_first+tview_v2", "single_touch": "recover_first+single_touch",
               "two_level_touch+gff": "recover_first+two_level_touch+gff",
               # pass 6 ran these in this very form (gff_rung): the real arm is its end group +22 % with the comp as identified (score
               # them with --mujoco-json data/homing_fivebar_mujoco_pass6_2026-11-13.json)
               "single_touch+gff": "single_touch+gff · real form · end group +22 % · ff nominal",
-              "tview_v2+gff": "tview_v2+gff · real form · end group +22 % · ff nominal"}
+              "tview_v2+gff": "tview_v2+gff · real form · end group +22 % · ff nominal",
+              # pass 7 ran these in this very form (pass7_rung; score them with --mujoco-json
+              # data/homing_fivebar_mujoco_pass7_2026-11-13.json)
+              **{row: f"{row} · real form · end group +22 % · ff nominal" for row in (
+                  "recover_first(fed)+single_touch+gff", "recover_first(fed)+tview_v2+gff", "single_touch_c1seek+gff",
+                  "recover_first(fed)+single_touch_c1seek+gff")}}
 RECOVER_ROWS = ("recover_first+tview_v2", "recover_first+single_touch", "recover_first+two_level_touch+gff")
 NOT_RUN = {
     "two_level_touch+gff": (
         "not runnable on the real arm in either form. Behind recover_first (the MuJoCo row) the blind recovery's re-hold after its first J2 "
         "seek ran away on the real arm at 91-93 deg/s powered, every start (run real_two_level_touch_gff_*, the plant's controlled stop "
-        "and the home button each time). Bare (the home button as the recovery), its first seek carries the gravity feed-forward planned "
-        "for the upper stop (J2 6.6 N.m) from the hanging rest, where gravity is ~0: on the MuJoCo rung that lunges J2 to 3.4 rad/s and "
-        "the sequence's own speed guard aborts it (B0 and B2, home start) - not sent to the arm."),
+        "and the home button each time); that prefix was un-fed. Bare (the home button as the recovery) it has never been proven in the "
+        "form the arm runs: pass 5's lunge (its first seek fed for the upper stop from the hanging rest, J2 3.4 rad/s on MuJoCo) is gone "
+        "since pass 6, whose rule leaves a seek from an unknown pose un-fed, but neither the pass-6 nor the pass-7 MuJoCo rung ran it "
+        "(gff_rung / pass7_rung: the end group +22 %, the comp +-25 %, the runaway check) - run it there first."),
     "press_reverse+gff": (
         "not run on the real arm: its second side walks J2 to -85 deg (Craig 5) and seeks J2's lower stop (CAD -90.03 = Craig ~0), "
         "below the unidentified contact the real arm meets at Craig j2 12.6 / 16.5 deg (fivebar-real-night F08, two stalls on one map; "
@@ -215,16 +225,28 @@ class RealRow:
         from .procedures import PROCEDURES  # noqa: PLC0415
         from .recover import RECOVER_PREFIX_NAME, RecoverFirst  # noqa: PLC0415
 
-        self.recover = name.startswith(RECOVER_PREFIX_NAME)
-        bare = name.removeprefix(RECOVER_PREFIX_NAME)
+        from .c1_seek import VARIANTS  # noqa: PLC0415
+        from .recovery_ff import FED_RECOVER_PREFIX  # noqa: PLC0415
+
+        # WHY recover_first(fed) (pass 7): the same recovery, every powered hold and move fed (recovery_ff); WHY a new name and not a
+        # change to recover_first+: the un-fed rows stand as run (pass 4's MuJoCo, pass 5's real attempts)
+        self.fed_recovery = name.startswith(FED_RECOVER_PREFIX)
+        self.recover = self.fed_recovery or name.startswith(RECOVER_PREFIX_NAME)
+        bare = name.removeprefix(FED_RECOVER_PREFIX).removeprefix(RECOVER_PREFIX_NAME)
         gff = bare.endswith(GFF_SUFFIX)
-        inner = J1Held(PROCEDURES[bare.removesuffix(GFF_SUFFIX)]())
+        base = bare.removesuffix(GFF_SUFFIX)
+        self.c1seek = base in VARIANTS
+        inner = J1Held((VARIANTS.get(base) or PROCEDURES[base])())
+        self.ff_scale = ff_scale
         if gff:
             inner = GravityFF(inner=inner, ff_scale=ff_scale)  # ff_scale: the comp's assumed error (the MuJoCo rung only; the arm runs 1)
+        self.inner = inner
         # WHY a row without recover_first (the real rung, 2026-11-13): on the real arm the recovery is the home button, which sets every
         # start; the blind recovery's own re-hold after its first J2 seek ran away on the real arm (91 deg/s powered, every start of the
         # first real run). The bare row keeps sag_proof - the MuJoCo rung's completion under gravity - over the procedure's own steps.
         self.procedure = RecoverFirst(inner=inner, sag_proof=True) if self.recover else inner
+        if self.fed_recovery:
+            self.procedure.name = FED_RECOVER_PREFIX + inner.name
         if self.procedure.name != name:
             raise ValueError(f"built {self.procedure.name!r} for {name!r}")
         self.name = name
@@ -256,6 +278,20 @@ class RealRow:
             sequence = sag_proof(sequence)
         sequence, self.rewritten = keep_j2_powered(hold_j1(sequence))
         self.procedure.notes["j2_kept_powered_in"] = list(self.rewritten)
+        if self.c1seek or self.fed_recovery:
+            # WHY behind the fed recovery too (recovery_ff's docstring): a crank let go from its stop swings at 183 deg/s and drags J2 past
+            # the ceiling; the crank is never let go once powered
+            from .c1_seek import keep_c1_powered  # noqa: PLC0415
+
+            sequence, kept = keep_c1_powered(sequence)
+            self.procedure.notes["c1_kept_powered_in"] = kept
+        if self.fed_recovery:
+            # the LAST rewrite: after sag_proof's re-holds and the two keeps, so every step the arm is told is fed (recovery_ff)
+            from .gravity_ff import COMP, default_comp, procedure_frame  # noqa: PLC0415
+            from .recovery_ff import fill_feed  # noqa: PLC0415
+
+            sequence, note = fill_feed(sequence, prior, default_comp(COMP, self.ff_scale), frame=procedure_frame(self.inner, prior))
+            self.procedure.notes["recovery_ff"] = note
         return sequence
 
     def observe(self, prior, phases):
@@ -754,6 +790,8 @@ def main(argv=None) -> int:
     c.add_argument("--video", type=Path, default=None, help="the hero clip's JSON (bam_ws docs/homing/clip_real_episode.py), plus a caption key")
     c.add_argument("--notes", type=Path, default=None, help="a JSON of page prose merged into the results (verdict_html, findings_html)")
     c.add_argument("--allow-dirty", action="store_true", help="score with uncommitted scorer code (stamped -dirty, provenance_clean false)")
+    c.add_argument("--mujoco-json", type=Path, default=MUJOCO_JSON,
+                   help="the MuJoCo rung each row is compared with (e.g. data/homing_fivebar_mujoco_pass7_2026-11-13.json)")
     args = parser.parse_args(argv)
     if args.command == "prior":
         payload = write_prior(args.out)
@@ -763,7 +801,7 @@ def main(argv=None) -> int:
         print(json.dumps({"max_cap_nm": prepared["max_cap_nm"], "steps": prepared["steps"]}, indent=1, default=float))
     else:
         video = None if args.video is None else json.loads(args.video.read_text())
-        results = score(args.runs, out=args.out, video=video, notes=args.notes, allow_dirty=args.allow_dirty)
+        results = score(args.runs, mujoco_json=args.mujoco_json, out=args.out, video=video, notes=args.notes, allow_dirty=args.allow_dirty)
         print(json.dumps({"verdicts": results["verdicts"]}, indent=1, default=float))
     return 0
 

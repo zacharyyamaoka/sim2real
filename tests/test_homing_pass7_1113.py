@@ -119,18 +119,58 @@ def test_the_procedures_first_holds_after_the_recovery_are_fed_too(prior, comp):
 
 
 def test_the_fed_recovery_changes_no_cap_no_seek_no_condition_and_no_define(prior, comp):
+    """Only feed-forwards change - and, where keep_c1_powered says so (its note), a limp crank becomes a hold (recovery_ff's docstring:
+    a crank let go from its stop swung at 183 deg/s and dragged J2 past the ceiling on the smoke run, bowl / other, B0)."""
     from sim2real.sim.homing.recovery_ff import seek_side
 
-    _, fed = _plan(FED, prior)
+    row, fed = _plan(FED, prior)
     _, unfed = _plan(UNFED, prior)
+    kept = set(row.notes["c1_kept_powered_in"])
+    assert kept, "the crank is kept powered somewhere behind the recovery"
     assert [s.name for s in fed.steps] == [s.name for s in unfed.steps]
     for a, b in zip(fed.steps, unfed.steps, strict=True):
         assert a.done_when == b.done_when and a.define_position == b.define_position and a.timeout == b.timeout
         for ca, cb in zip(a.commands, b.commands, strict=True):
+            if a.name in kept and ca.joint == C1:
+                assert cb.mode == "limp" and ca.mode == "hold", (a.name, ca, cb)
+                continue
             assert (ca.joint, ca.mode, ca.max_effort, ca.position, ca.distance, ca.speed) == (
                 cb.joint, cb.mode, cb.max_effort, cb.position, cb.distance, cb.speed)
-            if seek_side(cb, b, prior) is not None or abs(float(cb.feedforward_effort or 0.0)) > 1e-12:
-                assert ca.feedforward_effort == cb.feedforward_effort, (a.name, ca)
+            if abs(float(cb.feedforward_effort or 0.0)) > 1e-12:
+                assert ca.feedforward_effort == cb.feedforward_effort, (a.name, ca)  # what gravity_ff fed stays as it fed it
+
+
+def test_a_seek_after_a_fed_hold_starts_with_the_holds_gravity(prior, comp):
+    """The second smoke run: 'recover: J2 + onto its stop' dropped the re-hold's 7.0 N.m at once and J2 fell at 87-88 deg/s."""
+    _, sequence = _plan(FED, prior)
+    rehold = next(s for s in sequence.steps if s.name.startswith("re-hold") and s.name.endswith("recover: J2 + onto its stop, crank limp"))
+    seek = _step(sequence, "recover: J2 + onto its stop, crank limp")
+    assert _cmd(rehold, J2).feedforward_effort > 6.0
+    assert _cmd(seek, J2).feedforward_effort == pytest.approx(_cmd(rehold, J2).feedforward_effort, rel=1e-9)
+
+
+def test_the_fed_recovery_never_lets_a_powered_crank_go_and_keeps_its_first_limp_crank(prior, comp):
+    _, sequence = _plan(FED, prior)
+    previous = None
+    for step in sequence.steps:
+        if previous is not None and _cmd(previous, C1).mode != "limp":
+            assert _cmd(step, C1).mode != "limp", step.name
+        previous = step
+    assert _cmd(_step(sequence, "recover: J2 + until it stalls, crank limp"), C1).mode == "limp"
+
+
+def test_a_c1_seek_ends_on_its_frame_stop_whatever_j2_is(prior, comp):
+    """C1's CAD stops are frame stops (FivebarGeometry.stop(C1, +-1, q6) is 197.77 / -112.69 at every J2), and the twin's recovery C1 seek
+    with J2 held at 78 deg stalled on its upper stop at 197.772 (pass 4)."""
+    from sim2real.sim.homing.geometry import FivebarGeometry
+    from sim2real.sim.homing.recovery_ff import end_pose
+
+    geometry = FivebarGeometry()
+    assert {round(math.degrees(geometry.stop(C1, +1, math.radians(q6))), 2) for q6 in (0, 60, 110, 125)} == {197.77}
+    _, sequence = _plan(FED, prior)
+    step = _step(sequence, "recover: C1 + until it stalls, J2 holds")
+    end = end_pose(step, {J1: None, J2: math.radians(110.0), C1: math.radians(147.0)}, prior, comp, defined=set())
+    assert end[C1] == pytest.approx(prior.stops.q_rad(C1, +1))
 
 
 def test_before_the_first_j2_stall_nothing_is_fed(prior, comp):
@@ -139,6 +179,16 @@ def test_before_the_first_j2_stall_nothing_is_fed(prior, comp):
         if step.name == "recover: J2 + until it stalls, crank limp":
             break
         assert all(abs(float(c.feedforward_effort or 0.0)) < 1e-12 for c in step.commands), step.name
+
+
+def test_the_recovery_is_fed_in_cad_even_in_front_of_tview(prior, comp):
+    """Smoke run 3: tview's crank frame (C1 41.08 deg off CAD) was applied to the recovery's CAD define and J2 ran away at ff +25 %."""
+    _, single = _plan(FED, prior)
+    _, tview = _plan("recover_first(fed)+tview_v2+gff", prior)
+    for name in ("recover: J2 5 deg off its stop, crank holds", "recover: C1 + until the hub meets L1's plate, J2 pressed on its stop: define both positions"):
+        a, b = _step(single, name), _step(tview, name)
+        for joint in (J2, C1):
+            assert _cmd(a, joint).feedforward_effort == pytest.approx(_cmd(b, joint).feedforward_effort, rel=1e-9), (name, joint)
 
 
 def test_the_fed_rows_are_real_rows():
