@@ -21,11 +21,14 @@ when |W2| &gt; ~105° at power-on (10 of 19 starts on the twin). Undo: <code>Ful
 <li><b>Default comp <code>v2_cad</code>, not the plate.</b> Undo: <code>comp="plate"</code>.</li>
 <li><b>Witness tolerance 2°.</b> It refuses every forearm stall seen (≥ 3.6°) and passes every true stop (≤ 0.5° on B2).</li>
 <li><b>Wrist gaps and stiffness are assumptions</b> (W1 15′, W2 18′, W3 12′; 0.05 N·m/′). No GIM4305-10 measurement exists.</li>
-<li><b>Wrist boards at the rack's read config</b> (kp 15 / kd 0.15), not bam_ur_wrist's RAM 75.</li>
+<li><b>Wrist boards at the rack's current RAM gains</b> (kp 75 / kd 0.75 since 11:24). The 10:24 replay keeps that run's kp 15 / kd 0.15.
+The stall lead is sized for the boards' kp, and the seek covers stop-to-stop plus that lead.</li>
+<li><b>Warm vs cold park</b> (agreed with the Sim to Real Agent): the rack's <code>--park-from-homed</code> is used only while no board has
+power-cycled since latest.json was written. The marker is RAM gains read back as their flash values. Otherwise the cold park_first runs.</li>
 </ul>
 <h3>Left</h3>
 <ul>
-<li><b>The claw-finger/forearm pair</b> (l2/moving_finger) is unmapped by the bundle's guard. It cost park_first 0.75° on W2 from one start.
+<li><b>The claw-finger/forearm pair</b> (l2/moving_finger) is unmapped by the bundle's guard. From one start it makes W2 stall 3.3° short; the witness refuses it (at kp 15 it was 0.75° off and passed).
 <ul>
 <li>Fix in cad2robot: map pairs across 4 joints.</li>
 <li>Or tighten the witness to ~0.6° once real wind-up is measured.</li>

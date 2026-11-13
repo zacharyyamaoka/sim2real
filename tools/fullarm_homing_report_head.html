@@ -8,12 +8,19 @@
 <li><b>Phase 1, claw then wrist:</b> claw closed, then the wrist one joint at a time behind a parking touch. Every defining stall
 must pass a rotor-phase witness.</li>
 </ul>
-<p>On 19 starts (the rack's own start, 12 random wrist poses, 6 adversarial) it never assigns a forearm stall as a stop.</p>
+<p>On 19 starts (the rack's own start, 12 random wrist poses, 6 adversarial), at the rack's current wrist gains (kp 75):</p>
+<ul>
+<li>16 home with every zero within 0.003°;</li>
+<li>0 silently wrong;</li>
+<li>1 refused by the witness;</li>
+<li>2 tripped by the five-bar's J2 walk home.</li>
+</ul>
 <p>Zach's V1 wrist order (<code>wrist_home_v1</code>) does, on <b>5 of 19 starts: W1's zero comes out 55–68° wrong with no error
 raised.</b> The witness reads 3.6–16.6° off on every one of those stalls, so it would refuse them.</p>
 <p><b>Still open:</b></p>
 <ul>
-<li><b>One residual 0.75° W2 error.</b> The claw finger touches the forearm (a pair the CAD guard does not map).</li>
+<li><b>One refusal.</b> From one start W2 stalls 3.3° short of its stop on the claw finger (a pair the CAD guard does not map). The witness refuses it
+rather than assigning it. At the 10:24 gains the same start finished 0.75° off, inside the witness's 2°.</li>
 <li><b>Two five-bar runaways.</b> J2 runs away on its walk home on this arm's comp in 2 of 19 episodes. That is the Sim to Real
 Agent's comp question, not the wrist.</li>
 </ul>
