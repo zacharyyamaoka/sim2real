@@ -57,7 +57,9 @@ from robot_msgs.std import Header
 from sim2real.provenance import write_results
 from .bench import compact, expand, git_sha, run_phase
 from .mujoco_plant import BAM_WS_SRC, bam_ws_path
+from .plant import PlantTrip
 from .procedures import HomingRefused
+from .real_plant import RUNAWAY_RAD_S
 
 TAU = 2.0 * math.pi
 WRIST_PATHS = ("dev/bam_ur_wrist", "core/bam_robot_descriptions/src")
@@ -246,9 +248,13 @@ def link_stall_faults(stalls, result, contact_map: SelfContactMap | None = None)
 
 class WristPlant:
     """bam_ur_wrist's KarnoppPlant behind the homing seam (reset / tick / state / truth, and the log the bench reads). Positions are the
-    board's output reading plus the frame the sequence defined; ``truth`` reads the joints and the stop teeth, never seen by a procedure."""
+    board's output reading plus the frame the sequence defined; ``truth`` reads the joints and the stop teeth, never seen by a procedure.
 
-    def __init__(self, kind: str = "B0", *, gravity: bool = True):
+    ``runaway_rad_s`` (pass 7): the real runner's runaway stop (real_plant.RUNAWAY_RAD_S, 86 deg/s) on every POWERED drive, raised as the
+    homing seam's ``PlantTrip`` (bench.run_phase scores it "tripped"), as the five-bar's MuJoCo plant does since pass 6 - so a sequence
+    that would trip on the arm trips here first. ``peak_powered_rad_s`` keeps each drive's fastest powered tick."""
+
+    def __init__(self, kind: str = "B0", *, gravity: bool = True, runaway_rad_s: float | None = None):
         if kind != "B0":
             raise ValueError("the wrist twin has no gear model: B0 only (module docstring)")
         self.kind = kind
@@ -260,6 +266,8 @@ class WristPlant:
         self.frame: dict = {}
         self.time = 0.0
         self.log: dict = {}
+        self.runaway_rad_s = None if runaway_rad_s is None else float(runaway_rad_s)
+        self.peak_powered_rad_s: dict = {}
 
     def _build(self, start: WristStart):
         wrist_path()
@@ -285,6 +293,7 @@ class WristPlant:
         self.time = 0.0
         self.start = start
         self.log = {"t": [], "link": [], "position": [], "effort": [], "touching": [], "setpoint": [], "self_contact": []}
+        self.peak_powered_rad_s = {j: 0.0 for j in self.joint_names}
         self._stop_geoms = {g for pair in self.plant.wrist.stop_pairs.values() for side in pair for g in side}
         self._record(None)
         return self.state()
@@ -319,7 +328,20 @@ class WristPlant:
         self.reading = self.plant.step()
         self.time += dt
         self._record(targets)
+        self._check_runaway(targets)
         return self.state()
+
+    def _check_runaway(self, targets) -> None:
+        velocity = np.asarray(self.reading.velocity_rad_s, dtype=float)
+        for i, joint in enumerate(self.joint_names):
+            if targets.get(joint) is None:
+                continue
+            speed = abs(float(velocity[i]))
+            self.peak_powered_rad_s[joint] = max(self.peak_powered_rad_s[joint], speed)
+            if self.runaway_rad_s is not None and speed > self.runaway_rad_s:
+                can = self.rig.can[joint]
+                raise PlantTrip(f"runaway: CAN {can} at {math.degrees(speed):.0f} deg/s powered, over {math.degrees(self.runaway_rad_s):.0f} "
+                                f"deg/s at t {self.time:.2f} s", kind="runaway", joint=joint, speed_rad_s=speed, time_s=self.time)
 
     def state(self) -> JointState:
         raw = self._raw()
@@ -649,11 +671,21 @@ def twin_stops(rig: WristRig, contacts: dict) -> StopMap:
                          for s in rig.cad.sides), source="twin contacts")
 
 
-def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[dict, dict]:
+def make(name: str):
+    """A wrist row by name: ``<procedure>`` or ``<procedure>+gff`` (wrist_gff: CAN 14's gravity feed-forward)."""
+    from .wrist_gff import wrist_procedure  # noqa: PLC0415
+
+    return wrist_procedure(name, PROCEDURES)
+
+
+ROWS = tuple(PROCEDURES) + ("single_touch_park+gff",)
+
+
+def run_episode(name: str, start: WristStart, contacts: dict | None, *, runaway_rad_s: float | None = None) -> tuple[dict, dict]:
     rig = WristRig.get()
-    plant = WristPlant()
+    plant = WristPlant(runaway_rad_s=runaway_rad_s)
     prior = prior_for(rig)
-    procedure = PROCEDURES[name]()
+    procedure = make(name)
     plant.reset(start)
     phase = run_phase(plant, procedure.plan(prior, []))
     outcome = "done" if phase.status == "done" else f"{phase.status}: {phase.message}"
@@ -694,13 +726,14 @@ def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[di
         joints.append(JointOutcome(joint, error, gap, 0.0))
     record = EpisodeRecord(name, f"{RUNG} · B0", start.name, finished, outcome, plant.time if finished else None, tuple(stalls), tuple(joints))
     note = {"zero_error_vs_twin_deg": twin, "latched_turns": truth["latched_turns"],
+            "peak_powered_deg_s": {rig.can[j]: round(math.degrees(v), 2) for j, v in plant.peak_powered_rad_s.items()},
             "start_deg": {rig.can[j]: math.degrees(v) for j, v in start.q_rad.items()},
             "events": [(e.index, e.name, e.outcome, round(e.finished, 2)) for e in phase.events][-4:]}
     if stalled_on_self:
         note["stalled_on_self_contact"] = stalled_on_self
     if refused_vs_twin:
         note["refused_vs_twin"] = refused_vs_twin
-    for key in ("stalled_on_a_link", "park_touch_short_deg"):  # what the procedure itself reported (the detector, the park touch)
+    for key in ("stalled_on_a_link", "park_touch_short_deg", "gravity_ff"):  # what the procedure itself reported (the detector, the park touch)
         if key in procedure.notes:
             note[key] = procedure.notes[key]
     first = next((k for k, pair in enumerate(plant.log["self_contact"]) if pair), None)
@@ -714,10 +747,10 @@ def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[di
 
 
 def _job(args):
-    name, start, contacts = args
+    name, start, contacts, runaway = args
     t0 = time.time()
     try:
-        record, note = run_episode(name, start, contacts)
+        record, note = run_episode(name, start, contacts, runaway_rad_s=runaway)
     except Exception as error:  # a crash is an outcome, recorded
         rig = WristRig.get()
         record = EpisodeRecord(name, f"{RUNG} · B0", start.name, False, f"crashed: {type(error).__name__}: {error}", None, (),
@@ -726,14 +759,14 @@ def _job(args):
     return name, start.name, record, note, time.time() - t0
 
 
-def run_bench(*, procedures=tuple(PROCEDURES), n_sobol: int = 15, workers: int = 3) -> dict:
+def run_bench(*, procedures=tuple(PROCEDURES), n_sobol: int = 15, workers: int = 3, runaway_rad_s: float | None = RUNAWAY_RAD_S) -> dict:
     import hashlib  # noqa: PLC0415
 
     t0 = time.time()
     rig = WristRig.get()
     contacts = twin_contacts()
     all_starts = starts(rig, n_sobol)
-    jobs = [(name, start, contacts) for name in procedures for start in all_starts]
+    jobs = [(name, start, contacts, runaway_rad_s) for name in procedures for start in all_starts]
     if workers > 1:
         import multiprocessing  # noqa: PLC0415
 
@@ -768,6 +801,7 @@ def run_bench(*, procedures=tuple(PROCEDURES), n_sobol: int = 15, workers: int =
         "hardstops_sha256": hashlib.sha256((rig.root / "hardstops.json").read_bytes()).hexdigest(),
         "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]), "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
         "bam_ws_sha": git_sha(BAM_WS_SRC.parent), "dt_s": CONTROL_DT, "gate_deg": GATE_DEG, "hidden_gap_arcmin": {j: 0.0 for j in rig.joints},
+        "runaway_rad_s": runaway_rad_s, "runaway_deg_s": None if runaway_rad_s is None else math.degrees(runaway_rad_s),
         "plant": {"class": "bam_ur_wrist.plant.KarnoppPlant", "friction_armature": "homing_tview_sim.IT5 (it5)", "masses": "mass_prior.pending_masses",
                   "stops": "contact_stops: hardstops.json teeth as contacts", "gravity": "model.REAL_GRAVITY_BASE_M_S2 (the rig on its side)",
                   "backlash": "none: the 3-dof wrist model has no gear model (module docstring); B1 / B2 not run"},
@@ -791,9 +825,11 @@ def main(argv=None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--sobol", type=int, default=15)
-    parser.add_argument("--procedures", nargs="*", default=list(PROCEDURES))
+    parser.add_argument("--procedures", nargs="*", default=list(PROCEDURES), help=f"rows: {ROWS}")
+    parser.add_argument("--no-runaway", action="store_true", help="drop the 86 deg/s runaway stop (pass 5's form)")
     args = parser.parse_args(argv)
-    results = run_bench(procedures=tuple(args.procedures), n_sobol=args.sobol, workers=min(args.workers, 3))
+    results = run_bench(procedures=tuple(args.procedures), n_sobol=args.sobol, workers=min(args.workers, 3),
+                        runaway_rad_s=None if args.no_runaway else RUNAWAY_RAD_S)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     write_results(args.out, results)
     for name, v in results["verdicts"]["B0"].items():
@@ -807,5 +843,5 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["PROCEDURES", "SelfContactMap", "WristPlant", "WristPressReverse", "WristRig", "WristSingleTouch", "WristSingleTouchPark",
+__all__ = ["PROCEDURES", "ROWS", "SelfContactMap", "make", "WristPlant", "WristPressReverse", "WristRig", "WristSingleTouch", "WristSingleTouchPark",
            "link_stall_faults", "run_bench", "starts", "twin_contacts"]
