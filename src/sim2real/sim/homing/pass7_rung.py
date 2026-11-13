@@ -1,6 +1,8 @@
 """The homing bench's MuJoCo rung, pass 7: the blind recovery fed so "any start" holds, and the crank powered through J2's seek.
 
-    systemd-run --user --scope -q -p MemoryMax=24G -p OOMPolicy=continue -- env -u VIRTUAL_ENV OPENBLAS_NUM_THREADS=1 MUJOCO_GL=egl SIM2REAL_BAM_WS_SRC=<a clean bam_ws checkout>/src PYTHONPATH=/home/bam/sim2real/src /home/bam/sim2real/.venv/bin/python -m sim2real.sim.homing.pass7_rung --out /home/bam/sim2real/src/sim2real/data/homing_fivebar_mujoco_pass7_2026-11-13.json --workers 8
+    systemd-run --user --scope -q -p MemoryMax=24G -p OOMPolicy=continue -- env -u VIRTUAL_ENV OPENBLAS_NUM_THREADS=1 MUJOCO_GL=egl SIM2REAL_BAM_WS_SRC=<a clean bam_ws checkout>/src PYTHONPATH=/home/bam/sim2real/src /home/bam/sim2real/.venv/bin/python -m sim2real.sim.homing.pass7_rung --out /home/bam/sim2real/src/sim2real/data/homing_fivebar_mujoco_pass7_2026-11-13.json --workers 8 --row-models 'recover_first(fed)+single_touch+gff=B0' 'recover_first(fed)+tview_v2+gff=B0' 'recover_first(fed)+single_touch_c1seek+gff=B0'
+
+The fed recovery rows run on B0 only (``plan_jobs``): they were falsified there before the run (recovery_ff's status paragraph).
 
 Two questions, each in the form the real arm runs (``real_bench.RealRow``: sag_proof, J1 held, J2 kept powered, ``+gff``), on the pass-6
 plant (B0 / B1 / B2, the real board record, the runaway check at 86 deg/s on every powered J2 / C1 command):
@@ -184,7 +186,32 @@ def limp_summary(notes: dict) -> dict:
     return out
 
 
-def run_bench(*, rows=ROWS, models=MODELS, masses=tuple(MASSES), ff_scales=FF_SCALES, workers: int = 4, limit_starts: int | None = None) -> dict:
+def plan_jobs(rows, models, masses, ff_scales, families: dict, contacts, *, row_models: dict | None = None) -> list[tuple]:
+    """Every (row, model, mass, ff, start, contacts) episode: each row on ``row_models[row]`` where it names its own models, else on
+    ``models``; B1 first (a quarter timestep sets the wall time).
+
+    WHY a row may name its own models (2026-11-13): the fed recovery rows were falsified on B0 before this run (recovery_ff's status
+    paragraph); on B1 they would only re-measure a FAIL at ~5x the cost. ``readiness`` counts a model a row did not run as missing."""
+    row_models = row_models or {}
+    jobs = [(row, model, mass, ff, start, contacts) for row, family in rows for (_, mass, ff) in configs((row,), masses, ff_scales)
+            for model in row_models.get(row, models) for start in families[family]]
+    jobs.sort(key=lambda job: job[1] != "B1")
+    return jobs
+
+
+def parse_row_models(items) -> dict:
+    """``["<row>=B0,B2", ...]`` -> ``{row: ("B0", "B2")}`` (``--row-models``)."""
+    out = {}
+    for item in items or ():
+        if "=" not in item:
+            raise ValueError(f"--row-models takes <row>=<model>[,<model>], got {item!r}")
+        row, models = item.rsplit("=", 1)
+        out[row] = tuple(m for m in models.split(",") if m)
+    return out
+
+
+def run_bench(*, rows=ROWS, models=MODELS, masses=tuple(MASSES), ff_scales=FF_SCALES, workers: int = 4, limit_starts: int | None = None,
+              row_models: dict | None = None) -> dict:
     t0 = time.time()
     geometry = FivebarGeometry()
     prior = prior_for(geometry)
@@ -193,9 +220,7 @@ def run_bench(*, rows=ROWS, models=MODELS, masses=tuple(MASSES), ff_scales=FF_SC
     rest = {s.name: s for s in named_rests(geometry, prior)}
     contacts = twin_contacts({+1: rest["on_seek_stops"], -1: rest["lower_corner"]})
     families = {family: starts_for(family, geometry, prior)[:limit_starts] for family in {f for _, f in rows}}
-    jobs = [(row, model, mass, ff, start, contacts) for row, family in rows for (_, mass, ff) in configs((row,), masses, ff_scales)
-            for model in models for start in families[family]]
-    jobs.sort(key=lambda job: job[1] != "B1")  # B1 (a quarter timestep) sets the wall time: first
+    jobs = plan_jobs(rows, models, masses, ff_scales, families, contacts, row_models=row_models)
     outputs = []
 
     def progress(output):
@@ -266,6 +291,7 @@ def run_bench(*, rows=ROWS, models=MODELS, masses=tuple(MASSES), ff_scales=FF_SC
         "comp": "gravity_ff.COMP (the home button's identified comp, bam_ws 2ec4dd02a)",
         "board": {"per_drive": REAL_BOARD_RECORD, "ilimit_scale": 0.0, "record": "mujoco_plant.REAL_BOARD_RECORD"},
         "models": list(models),
+        "row_models": {r: list((row_models or {}).get(r, models)) for r, _ in rows},
         "rows": [{"row": r, "starts": f, "why": FAMILY_WHY[f]} for r, f in rows],
         "procedures": [config_name(*c) for r in row_names for c in configs((r,), masses, ff_scales)],
         "starts": start_rows,
@@ -297,10 +323,11 @@ def main(argv=None) -> int:
     parser.add_argument("--masses", nargs="*", default=list(MASSES))
     parser.add_argument("--ff", nargs="*", type=float, default=list(FF_SCALES))
     parser.add_argument("--limit-starts", type=int, default=None, help="a smoke run: the first N starts of each family")
+    parser.add_argument("--row-models", nargs="*", default=None, help="<row>=<model>[,<model>]: that row on those models only (plan_jobs)")
     args = parser.parse_args(argv)
     rows = ROWS if args.rows is None else tuple((r, f) for r, f in ROWS if r in args.rows)
     results = run_bench(rows=rows, models=tuple(args.models), masses=tuple(args.masses), ff_scales=tuple(args.ff), workers=args.workers,
-                        limit_starts=args.limit_starts)
+                        limit_starts=args.limit_starts, row_models=parse_row_models(args.row_models))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     write_results(args.out, results, default=float)
     for model, by_name in results["verdicts"].items():

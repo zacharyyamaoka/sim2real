@@ -43,6 +43,24 @@ recovery's first steps from the hanging rest keep their limp crank (it has never
 
 Steps before the first J2 stall stay un-fed: the arm hangs where it fell, a pose no plan knows, and at a hanging rest the gravity on each
 drive is ~0 by definition (a rest is an equilibrium).
+
+**Status - falsified for "any start" (pass 7 smoke sweep, 2026-11-13, sim2real d308187, B0, CAD mass, ff nominal, 16 recovery starts):**
+14 / 16 home; lower_corner and sobol-04 trip (J2 91 deg/s in "J2 + onto its stop", C1 93 deg/s in "C1 + until it stalls"). The un-fed
+recovery homes all 16 there. Two causes, both in what the plan claims to know, neither fixable by feeding alone:
+
+* **The first J2 stall is not always J2's stop.** From a crank-below start (C1 -80 .. -113 deg) the limp crank's first J2 seek stalls on
+  a loop contact at J2 -10.75 / C1 -79.77 deg (both starts, to 0.01 deg), 135 deg short of the stop the plan assumes (124.71). The gravity
+  on J2 there is -0.14 N.m, not the 4.14 fed; every later feed is for the stop's track (4.5-7.0 N.m too much on J2). Tried and rejected on
+  the twin (B0, 5 starts x end+22 % at ff 0.75 / 1 / 1.25 + CAD): half the stop track's feed until the define (the minimax of "on the
+  stop" vs "near the hanging rest", where gravity is ~0) - passes CAD and ff 0.75, sobol-04 still trips in its C1 seek at ff 1 / 1.25;
+  converging both drives onto their stops before feeding (C1 up with J2 creeping, J2 up with C1 held, C1 onto its stop) - the stop
+  starts then trip in "J2 up, C1 held" (86-90 deg/s, bowl and flipped_crank, every mass).
+* **J1's tilt is unknown to the plan.** The comp scales J2 / C1 gravity by cos(J1) and the recovery holds J1 wherever it fell, unread
+  (J1 settles at its stops, -90 / +90 deg, from lower_corner and on_seek_stops). There the gravity the feed assumes is ~0, and at ff +25 %
+  the procedure's own "J2 + C1 home" trips after the recovery (J2 88-89 deg/s, both starts).
+
+On the real arm the any-start path is the home button (bam_rack_twin ``fivebar_home -f``): it reads the pose from the boards and feeds
+every waypoint with the gravity at that pose, so neither cause applies; recover_first stays the lost-zero fallback.
 """
 
 from __future__ import annotations
