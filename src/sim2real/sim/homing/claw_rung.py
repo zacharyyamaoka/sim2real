@@ -124,6 +124,41 @@ def _job(args):
     return comp_label, mass, ff, model, start.name, record, notes, time.time() - t0
 
 
+# WHY a cache (tests/test_homing_claw_rung_cache_1113.py): fleet-throttle's memory guard SIGTERMed a pool worker in the first run; the Pool
+# replaced it but lost its task, and imap_unordered waited forever at 283 of 288 with no results file. Each episode lands here as it
+# finishes, so a rerun with the same --cache only runs what is missing.
+CACHE_KEYS = ("comp", "mass", "ff", "model", "start", "record", "notes", "seconds")
+
+
+def append_cache(path: Path, output: tuple) -> None:
+    with Path(path).open("a") as handle:
+        handle.write(json.dumps(dict(zip(CACHE_KEYS, output, strict=True)), default=str) + "\n")
+
+
+def load_cache(path: Path) -> list[tuple]:
+    path = Path(path)
+    if not path.is_file():
+        return []
+    outputs = []
+    for line in path.read_text().splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:  # a line torn by a killed process: that episode simply runs again
+            continue
+        outputs.append(tuple(row[key] for key in CACHE_KEYS))
+    return outputs
+
+
+def _key(comp: str, mass: str, ff: float, model: str, start: str) -> tuple:
+    return comp, mass, round(float(ff), 6), model, start
+
+
+def pending(jobs: list, done: list[tuple]) -> list:
+    """The jobs whose (comp, mass, ff, model, start) the cache does not hold."""
+    have = {_key(*output[:5]) for output in done}
+    return [job for job in jobs if _key(job[0], job[2], job[3], job[4], job[5].name) not in have]
+
+
 def readiness(verdicts: dict) -> dict:
     """Per comp: READY when every (model, case) its form names passes (module docstring)."""
     out = {}
@@ -134,7 +169,7 @@ def readiness(verdicts: dict) -> dict:
     return out
 
 
-def run_bench(comp_path: Path, *, n_starts: int = N_STARTS, workers: int = 6) -> dict:
+def run_bench(comp_path: Path, *, n_starts: int = N_STARTS, workers: int = 6, cache: Path | None = None) -> dict:
     t0 = time.time()
     comps = {"plate comp": COMP, "claw comp": str(comp_path)}
     payload = json.loads(Path(comp_path).read_text())
@@ -149,17 +184,24 @@ def run_bench(comp_path: Path, *, n_starts: int = N_STARTS, workers: int = 6) ->
     contacts = twin_contacts({+1: rest["on_seek_stops"], -1: rest["lower_corner"]})
     jobs = [(c, comps[c], m, f, model, start, contacts) for (c, m, f) in configs() for model in MODELS for start in starts]
     jobs.sort(key=lambda job: job[4] != "B1")  # gff_rung's WHY: B1's dead zone sets the wall time
-    outputs = []
+    total = len(jobs)
+    outputs = load_cache(cache) if cache is not None else []
+    outputs = [o for o in outputs if _key(*o[:5]) in {_key(j[0], j[2], j[3], j[4], j[5].name) for j in jobs}]
+    jobs = pending(jobs, outputs)
+    print(f"{len(outputs)} episodes from the cache, {len(jobs)} to run", flush=True)
 
     def progress(output):
         outputs.append(output)
+        if cache is not None:
+            append_cache(cache, output)
         c, m, f, model, start, record, _, seconds = output
-        print(f"[{len(outputs)}/{len(jobs)}] {model} {config_name(c, m, f)} {start}: {record['outcome'][:90]} ({seconds:.0f} s)", flush=True)
+        print(f"[{len(outputs)}/{total}] {model} {config_name(c, m, f)} {start}: {record['outcome'][:90]} ({seconds:.0f} s)", flush=True)
 
     if workers > 1:
         import multiprocessing  # noqa: PLC0415
 
-        with multiprocessing.get_context("fork").Pool(workers) as pool:
+        # WHY maxtasksperchild: a worker's RSS grew to ~2.8 GB over ~40 episodes in the first run (load 60, swap full)
+        with multiprocessing.get_context("fork").Pool(workers, maxtasksperchild=12) as pool:
             for output in pool.imap_unordered(_job, jobs, chunksize=1):
                 progress(output)
     else:
@@ -237,8 +279,9 @@ def main(argv=None) -> int:
     parser.add_argument("--comp", type=Path, default=CLAW_COMP)
     parser.add_argument("--starts", type=int, default=N_STARTS)
     parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--cache", type=Path, default=None, help="episodes JSONL: appended as they land, a rerun resumes from it")
     arguments = parser.parse_args(argv)
-    results = run_bench(arguments.comp, n_starts=arguments.starts, workers=arguments.workers)
+    results = run_bench(arguments.comp, n_starts=arguments.starts, workers=arguments.workers, cache=arguments.cache)
     written = write_results(arguments.out, results, indent=1, default=str, newline=True)
     for comp, ready in results["readiness"].items():
         print(f"{comp}: {'READY' if ready['ready'] else 'NOT READY'}  failed: {ready['failed'] or 'none'}")
