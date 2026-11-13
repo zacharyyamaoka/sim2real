@@ -99,6 +99,19 @@ def _episode_rows(results: dict, model: str, procedure: str) -> list[dict]:
     return rows
 
 
+def start_rows_for(results: dict, procedure: str) -> list[dict]:
+    """The starts ``procedure`` ran from: ``results["starts"]`` when it is one list; when it comes in families (pass7_rung, 2026-11-13:
+    {family: [start, ...]}, each row on its own family) the family ``results["rows"]`` names for the procedure's row."""
+    starts = results["starts"]
+    if isinstance(starts, list):
+        return starts
+    row = procedure.split(" · ")[0]
+    family = {r["row"]: r["starts"] for r in results.get("rows") or ()}.get(row)
+    if family in starts:
+        return starts[family]
+    return [s for rows in starts.values() for s in rows]
+
+
 def records(results: dict) -> list[dict]:
     """The W&B runs (wandb_log.push's record shape), one per (rung, model, procedure)."""
     out = []
@@ -110,9 +123,9 @@ def records(results: dict) -> list[dict]:
                       "hardstops_sha256": results["hardstops_sha256"], "sim2real_sha": results["sim2real_sha"],
                       "robot_models_sha": results["robot_models_sha"], "gate_deg": results["gate_deg"],
                       "hidden_gap_arcmin": results["hidden_gap_arcmin"], "rig": rig_of(results), "result_id": result_id,
-                      "evaluation": evaluation, "evaluation_state": "latest", "starts": len(results["starts"]),
-                      "start": f"all {len(results['starts'])} (per-start rows in the starts table)",
-                      "start_names": [s["name"] for s in results["starts"]]}
+                      "evaluation": evaluation, "evaluation_state": "latest", "starts": len(start_rows_for(results, procedure)),
+                      "start": f"all {len(start_rows_for(results, procedure))} (per-start rows in the starts table)",
+                      "start_names": [s["name"] for s in start_rows_for(results, procedure)]}
             if results.get("pass") is not None:  # WHY (pass 6): a pass's rows sit beside the earlier passes' on one leaderboard, labelled
                 config.update({"pass": results["pass"], "form": results.get("form")})
             numbers = _numbers(card)
