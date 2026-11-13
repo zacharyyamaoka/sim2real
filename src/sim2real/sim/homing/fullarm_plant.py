@@ -79,6 +79,7 @@ FIVEBAR_KT_NM_PER_A = 0.64  # 60ASM400 + 10:1 at the output (fullarm_home.FIVEBA
 CLAW_KP_NM_PER_RAD = 6.0
 CLAW_KD_NM_S = 0.05
 CLAW_MAX_NM = 0.5
+CLAW_BRAKE_NM_S = 0.02  # the claw board's shorted-phase drag (MG4005-10: assumption, Kt_out^2 / R ~ 1^2 / 50 at the output)
 CLAW_KT_NM_PER_A = 0.1  # display only: current = torque / Kt (an MG4005-10's ~0.1 N.m/A at the output: assumption)
 KT_NM_PER_A = {J1: FIVEBAR_KT_NM_PER_A, J2: FIVEBAR_KT_NM_PER_A, C1: FIVEBAR_KT_NM_PER_A, W1: WRIST_KT_NM_PER_A,
                W2: WRIST_KT_NM_PER_A, W3: WRIST_KT_NM_PER_A, CLAW: CLAW_KT_NM_PER_A}
@@ -273,7 +274,8 @@ class FullArmHomingPlant:
     joint_names = JOINTS
 
     def __init__(self, kind: str = "B0", truth: str = "cad", *, cogging: bool = True, settle_s: float = 0.5,
-                 runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1):
+                 runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
+                 limp_brakes: bool = True):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -285,6 +287,10 @@ class FullArmHomingPlant:
         self.settle_s = float(settle_s)
         self.runaway_rad_s = None if runaway_rad_s is None else float(runaway_rad_s)
         self.check_every = int(check_every)
+        # WHY a limp wrist / claw is BRAKED by default: a board the host is not commanding times out into its record's timeout mode 15
+        # (phases shorted: a viscous drag, fullarm_home.WRIST_BRAKE_NM_S) - what the wrist does while a five-bar runner that never talks to
+        # it homes the shoulder; on the bus a "limp" wrist step is sent as moteus `d brake` (PEP 0047). False: `d stop` (mode 0, free).
+        self.limp_brakes = bool(limp_brakes)
         model = self.rig.model
         self.claw_qadr = int(model.jnt_qposadr[model.joint(CLAW).id])
         self.claw_dof = int(model.jnt_dofadr[model.joint(CLAW).id])
@@ -446,7 +452,7 @@ class FullArmHomingPlant:
             q = float(data.qpos[self.rig.qpos_adr(role)])
             data.qfrc_applied[self.rig.dof_adr(role)] -= sign * float(ripple.torque_nm(sign * q + offset))
         for role, drag in self._brake.items():
-            dof = self.rig.dof_adr(role)
+            dof = self.claw_dof if role == "CLAW" else self.rig.dof_adr(role)
             data.qfrc_applied[dof] -= drag * float(data.qvel[dof])
         # the claw's board: a PD on its target (ramped at the command's speed), capped
         command = self.claw_command
@@ -489,6 +495,12 @@ class FullArmHomingPlant:
             powered = i is not None and cap[i] > 0.0 and math.isfinite(position)
             target = position - self.frame[joint] + self.hidden[joint] if powered else None  # the true motor angle (URDF)
             targets[joint] = target
+            if joint in WRIST or joint == CLAW:
+                role = ROLE[joint]
+                if not powered and self.limp_brakes:
+                    self._brake[role] = CLAW_BRAKE_NM_S if joint == CLAW else fh.WRIST_BRAKE_NM_S
+                else:
+                    self._brake.pop(role, None)
             if joint == CLAW:
                 if not powered:
                     self.claw_command, self._claw_ramp = None, None

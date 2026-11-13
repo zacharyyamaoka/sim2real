@@ -188,7 +188,9 @@ def run_episode(procedure, plant: FullArmHomingPlant, start: ArmStart, prior, *,
     for phase_index, tick, joint, side in (procedure.references if finished else []):
         k = phases[phase_index].log["plant_offset"] + tick
         link = log["link"][k][JOINTS.index(joint)]
-        stalls.append({"joint": joint, "side": side, "link_deg": math.degrees(link), "cad_deg": math.degrees(prior.stops.q_rad(joint, side))})
+        cad = math.degrees(prior.stops.q_rad(joint, side))
+        # WHY wrapped onto the CAD's turn: C1 is a crank - its link reads -162.23 deg at the stop the CAD calls 197.77
+        stalls.append({"joint": joint, "side": side, "link_deg": cad + wrap_deg(math.degrees(link) - cad), "cad_deg": cad})
     zero, gap = {}, {}
     for joint in JOINTS:
         zero[ROLE[joint]] = None
@@ -403,6 +405,10 @@ def sweep_jobs(sweep: str, *, n_wrist: int = 12) -> list[dict]:
         for order in ("zach_v1", "park_first"):
             for start in family_starts:
                 add({"order": order}, "B0", start)
+    elif sweep == "wrist_policy":
+        for policy in ("hold", "brake"):
+            for start in starts("real") + starts("wrist", 4):
+                add({"order": "park_first", "wrist_during_fivebar": policy}, "B1", start)
     elif sweep == "comps":
         for comp in ("plate", "nominal", "v2_cad"):
             for start in starts("real"):

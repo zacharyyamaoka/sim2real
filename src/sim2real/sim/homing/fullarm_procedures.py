@@ -266,6 +266,7 @@ class FullArmHome:
     witness: bool | None = None
     identify: bool = False
     wrist_only: bool = False
+    wrist_during_fivebar: str = "brake"
     fivebar_name: str | None = None
     comp: str = DEFAULT_COMP
     ff_scale: float = 1.0
@@ -293,8 +294,16 @@ class FullArmHome:
             # five-bar is not homed, so its holds are "where it is" with no feed-forward (no pose is known to feed)
             return None if so_far else self._phase1(prior, fivebar_holds={j: _hold(j) for j in FIVEBAR})
         if not so_far:
-            wrist_holds = {j: _hold(j) for j in (*WRIST, CLAW)}
-            return widen(self.fivebar.plan(prior, []), wrist_holds)
+            # WHY braked by default (sim 2026-11-13, the backlash ladder): HELD on its kp 15 boards the wrist is flung by L2 and springs
+            # back past the controller's 3 rad/s guard (aborted 9 of 18 episodes on B1 / B2 and identify_backlash on both), the held claw
+            # whips at ~300 deg/s; fullarm_home's sweep found the brake the gentlest of limp / hold / brake. A limp step here is `d brake`.
+            if self.wrist_during_fivebar == "hold":
+                others = {j: _hold(j) for j in (*WRIST, CLAW)}
+            elif self.wrist_during_fivebar == "brake":
+                others = {j: JointCommand.limp(j) for j in (*WRIST, CLAW)}
+            else:
+                raise ValueError(f"wrist_during_fivebar must be hold or brake, not {self.wrist_during_fivebar!r}")
+            return widen(self.fivebar.plan(prior, []), others)
         if len(so_far) == 1:
             return self._phase1(prior)
         return None
