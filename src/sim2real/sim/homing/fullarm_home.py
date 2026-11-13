@@ -891,6 +891,18 @@ def sweep_configs(sweep: str, *, starts=None, wrist: str = "hold") -> list[Episo
             for mode, release in (("hold", "brake"), ("hold", "stop"), ("brake", "stop"), ("limp", "stop")):
                 out += [EpisodeConfig(start=replace(start, name=f"{start.name} · wrist {pose_name}", wrist_deg=pose), comp="v2_cad",
                                       truth="cad", wrist=mode, release=release) for start in starts[::3]]
+    elif sweep == "final":
+        # what ships (bam_rack_twin fivebar_home --comp bam_fb_v2 --wrist brake): every start on every truth, the wrist braked and let go
+        # after the five-bar in the real order; the same from any-rest starts (settled unpowered first) against today's plate comp; and the
+        # limp wrist at the real wrist's breakaway friction (the sliding level is the floppier case the wrist sweep ran)
+        for truth in ("cad", "claw_high", "end+22%"):
+            out += [EpisodeConfig(start=start, comp="v2_cad", truth=truth, wrist="brake") for start in starts]
+        rested = [replace(start, name=f"{start.name} · rested", rest=True) for start in starts if start.family != "real"]
+        for comp in ("v2_cad", "plate"):
+            out += [EpisodeConfig(start=start, comp=comp, truth="cad", wrist="brake") for start in rested]
+        poses = {"rest": None, **HELD_WRIST_POSES}
+        out += [EpisodeConfig(start=replace(start, name=f"{start.name} · wrist {pose_name}", wrist_deg=pose), comp="v2_cad", truth="cad",
+                              wrist="limp", wrist_friction="breakaway") for pose_name, pose in poses.items() for start in starts[::3]]
     elif sweep == "baseline":
         for truth in BASELINE_TRUTHS:
             out += [EpisodeConfig(start=start, comp="plate", truth=truth, wrist="limp") for start in starts]
@@ -986,6 +998,7 @@ def summarize(results: list[dict]) -> dict:
     for row in results:
         kind = ("rest" if row.get("rest") else "held") + (f" J1 {row['j1_start_tilt_deg']:+.0f}" if row.get("j1_start_tilt_deg") else "")
         wrist = row.get("wrist") if not row.get("release") else f"{row.get('wrist')} (release via {row['release']})"
+        wrist += "" if row.get("wrist_friction", "sliding") == "sliding" else f" ({row['wrist_friction']} friction)"
         cells[(row.get("comp"), row.get("truth"), wrist, kind)].append(row)
     out = []
     for (comp, truth, wrist, kind), rows in sorted(cells.items(), key=lambda item: tuple(map(str, item[0]))):
@@ -1023,7 +1036,7 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--sweep", choices=("wrist", "comp", "rest", "static", "baseline", "j1", "release"), default="comp")
+    parser.add_argument("--sweep", choices=("wrist", "comp", "rest", "static", "baseline", "j1", "release", "final"), default="comp")
     parser.add_argument("--wrist", choices=WRIST_MODES, default="hold", help="comp / rest sweeps: the wrist's mode")
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--limit", type=int, default=None, help="only the first N episodes (a pilot)")
