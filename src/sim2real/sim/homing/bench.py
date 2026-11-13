@@ -32,7 +32,7 @@ from robot_models.homing.protocols import Phase, Prior
 from robot_msgs.control import JointCommandSequenceController
 
 from .geometry import BUNDLE_SHA, C1, DRIVES, EXPORT, J1, J2, MIRROR, ROLE, FivebarGeometry
-from .plant import HIDDEN_GAP_ARCMIN, KinematicStopPlant, Start, hidden_backlash
+from .plant import HIDDEN_GAP_ARCMIN, KinematicStopPlant, PlantTrip, Start, hidden_backlash
 from .procedures import PROCEDURES, HomingRefused, PressReverse, home_cad, identify_backlash
 from .recover import RECOVER_PREFIX_NAME as RECOVER
 from .recover import recover_first
@@ -149,7 +149,13 @@ def run_phase(plant: KinematicStopPlant, sequence, *, dt: float = DT, limit_s: f
         log["defines"].append(dict(defines))
         log["events"].append(len(controller.events))
         log["step"].append(controller.step_index)
-        state = plant.tick(command, dt, defines)
+        try:
+            state = plant.tick(command, dt, defines)
+        except PlantTrip as trip:
+            # WHY a phase status and not a crash (2026-11-13, homing pass 6): a plant's controlled stop (the MuJoCo runaway check) ends the
+            # episode as the real plant's trips do (real_plant.run_phase_real) - an outcome, scored as not finished
+            step = sequence.steps[min(controller.step_index, len(sequence.steps) - 1)].name
+            return Phase(sequence, "tripped", f"{trip} in step {step!r}", tuple(controller.events), log)
     status, message = controller.status, controller.message
     if status == "running":
         status, message = "aborted", f"bench limit {limit_s} s"

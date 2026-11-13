@@ -67,7 +67,10 @@ ENVIRONMENT = "real · rig"
 DT = 0.01
 GATE_DEG = 0.1  # frozen: the MuJoCo rung's GATE_DEG and ZERO_VS_KINEMATIC_DEG
 RELIABILITY_TARGET_PCT = 100.0
-ROWS = ("tview_v2", "single_touch", "two_level_touch+gff")
+# WHY the two +gff rows (pass 6, 2026-11-13): pass 5's 16 real episodes all tripped 0.1-0.2 s after the zero, when the first un-fed hold
+# let J2 fall past the runaway ceiling; single_touch+gff / tview_v2+gff feed every hold and move once the plan knows the pose (gravity_ff),
+# proven on the MuJoCo rung in this exact form (gff_rung: the real form, the end group +22 %, the comp +-25 %, the runaway check on)
+ROWS = ("tview_v2", "single_touch", "two_level_touch+gff", "single_touch+gff", "tview_v2+gff")
 # the MuJoCo rung's row each real row is compared with (the same procedure; MuJoCo ran every row behind recover_first)
 MUJOCO_ROW = {"tview_v2": "recover_first+tview_v2", "single_touch": "recover_first+single_touch",
               "two_level_touch+gff": "recover_first+two_level_touch+gff"}
@@ -156,7 +159,7 @@ class RealRow:
     rewrites of the planned sequence - ``hold_j1`` (J1 held everywhere, the recovery's own J1 hold included) and ``keep_j2_powered`` (J2
     never let go under load; real_plant says why). ``observe`` is the procedure's own, J1 dropped."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, *, ff_scale: float = 1.0):
         from .gravity_ff import GFF_SUFFIX, GravityFF  # noqa: PLC0415
         from .procedures import PROCEDURES  # noqa: PLC0415
         from .recover import RECOVER_PREFIX_NAME, RecoverFirst  # noqa: PLC0415
@@ -166,7 +169,7 @@ class RealRow:
         gff = bare.endswith(GFF_SUFFIX)
         inner = J1Held(PROCEDURES[bare.removesuffix(GFF_SUFFIX)]())
         if gff:
-            inner = GravityFF(inner=inner)
+            inner = GravityFF(inner=inner, ff_scale=ff_scale)  # ff_scale: the comp's assumed error (the MuJoCo rung only; the arm runs 1)
         # WHY a row without recover_first (the real rung, 2026-11-13): on the real arm the recovery is the home button, which sets every
         # start; the blind recovery's own re-hold after its first J2 seek ran away on the real arm (91 deg/s powered, every start of the
         # first real run). The bare row keeps sag_proof - the MuJoCo rung's completion under gravity - over the procedure's own steps.

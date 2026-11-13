@@ -49,6 +49,7 @@ from robot_msgs.control import JointCommand, JointCommandSequence, JointCommandS
 
 from .geometry import C1, J1, J2
 from .mujoco_plant import REAL_BOARD_RECORD
+from .procedures import PIN_SPEED
 
 KP_NM_PER_RAD = {joint: REAL_BOARD_RECORD[role]["kp"] / (2.0 * math.pi) for joint, role in ((J1, "J1"), (J2, "J2"), (C1, "C1"))}
 STILL_SPEED_RAD_S = 0.02  # the home button's still_speed (bam_fivebar_recovery.home.HomeTuning)
@@ -98,9 +99,15 @@ def needs_rehold(previous: JointCommandStep, step: JointCommandStep) -> list[str
     return out
 
 
+def pressing(before: JointCommand | None, now: JointCommand) -> bool:
+    """A joint seeking in the previous step (a move_by) that seeks the same way in this one: it is pressing a stop through the boundary."""
+    return (before is not None and before.mode == "move_by" and now.mode == "move_by"
+            and math.copysign(1.0, float(before.distance)) == math.copysign(1.0, float(now.distance)))
+
+
 def rehold_step(previous: JointCommandStep, step: JointCommandStep, joints: list[str]) -> JointCommandStep:
     """The seeking joints re-hold (a hold after a hold keeps its setpoint; otherwise it anchors where the joint is), ``step``'s limp joints
-    stay limp, every other joint holds; done when the re-held and the limp joints are all still (the home button's settle). Each hold's
+    stay limp, a joint pressing its stop through the boundary stays pinned on it (:func:`pressing`), every other joint holds; done when the re-held and the limp joints are all still (the home button's settle). Each hold's
     cap is the joint's cap in ``previous`` when it was powered there, else its cap in ``step``."""
     powered = {command.joint: command for command in previous.commands if command.mode != "limp"}
     commands, watched = [], list(joints)
@@ -111,7 +118,15 @@ def rehold_step(previous: JointCommandStep, step: JointCommandStep, joints: list
         # was carrying would let it sag gravity / kp (J2: 6.6 N.m on 22.9 N.m/rad = 17 deg) before its seek. After a limp the joint
         # rests wherever it fell, a pose no plan names, so it gets none. 0 on every original row (and in the blind recovery).
         feedforward = float(before.feedforward_effort or 0.0) if before is not None else 0.0
-        if command.joint in joints:
+        if command.joint not in joints and pressing(before, command):
+            # WHY pinned, not held (2026-11-13, pass 6): a joint pressing its stop in ``previous`` that presses on in ``step`` (single_touch's
+            # J2 while C1 re-holds before its seek) was let go here - a hold anchors where the joint is, so J2 fell off its stop under L1
+            # (11 deg at 62 deg/s, end group +22 %, B0) and lunged back at 71 deg/s when its seek resumed. Pinned as tview_run's ``held``
+            # handoff pins a stalled drive (procedures._pin): setpoint cap / kp into the stop at once, its press kept at the cap.
+            side = 1.0 if float(before.distance) > 0 else -1.0
+            commands.append(JointCommand.move_by(command.joint, side * float(cap) / KP_NM_PER_RAD[command.joint], speed=PIN_SPEED,
+                                                 max_effort=float(cap), feedforward_effort=feedforward))
+        elif command.joint in joints:
             commands.append(JointCommand.hold(command.joint, max_effort=float(cap), feedforward_effort=feedforward))
         elif command.mode == "limp":
             commands.append(command)
@@ -147,5 +162,5 @@ def sag_proof(sequence: JointCommandSequence) -> JointCommandSequence:
     return replace(sequence, steps=tuple(steps))
 
 
-__all__ = ["KP_NM_PER_RAD", "REHOLD_PREFIX", "rehold_step", "sag_aware_stall", "sag_proof", "sag_rad", "still_at_target",
+__all__ = ["KP_NM_PER_RAD", "REHOLD_PREFIX", "pressing", "rehold_step", "sag_aware_stall", "sag_proof", "sag_rad", "still_at_target",
            "with_still_at_target"]

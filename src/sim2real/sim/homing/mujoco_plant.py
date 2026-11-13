@@ -49,7 +49,8 @@ from robot_msgs.sensor import JointState
 from robot_msgs.std import Header
 
 from .geometry import C1, DRIVES, EXPORT, J1, J2, MIRROR
-from .plant import HIDDEN_GAP_ARCMIN, Start, hidden_backlash
+from .plant import HIDDEN_GAP_ARCMIN, PlantTrip, Start, hidden_backlash
+from .real_plant import DRIVE_JOINTS, RUNAWAY_RAD_S
 
 BAM_WS_SRC = Path(os.environ.get("SIM2REAL_BAM_WS_SRC", "/home/bam/bam_ws/src"))
 BAM_WS_PATHS = (
@@ -82,6 +83,21 @@ def real_boards() -> dict:
 BACKLASH_METHOD = {"B0": None, "B1": "deadzone", "B2": "passive_joint"}
 SETTLE_S = 2.0
 CONTROL_DT = 0.01
+
+# The real arm's end group is heavier than CAD (2026-11-13, homing pass 6). The home button's comp since bam_ws 2ec4dd02a, mass-ID run
+# massid_real_093852 (bam_rack_twin records/fivebar-bench/gravity_params_massid_real_093852.json, group "l2" = l2_link + elbow_link +
+# wrist_1_servo + payload + l2_aruco_board): identified 2.0629 kg against CAD's 1.6842 kg, x1.2249; the run before it (massid_real_092506)
+# gave 2.0537 kg, x1.2194 - "the end group weighs 22 % over CAD" (bam_rack_twin tview_run). The twin carries that whole group as one
+# body, "l2" (1.6595 kg). WHY scale mass and inertia at the body's own COM: it is the conservative reading - the identified first moment
+# of the group is only 2.8 % over CAD's (its COM sits 45 mm further in), so the gravity torque grows 2.8-22.5 % depending on which of the
+# fit's numbers is believed; x1.2249 on the mass at a fixed COM is the upper end, the case a feed-forward must survive.
+END_GROUP_BODY = "l2"
+END_GROUP_MASS_SCALE = 2.0628530325950996 / 1.6841719999999998
+# The real rung's runaway ceiling, one number for both rungs (real_plant.RUNAWAY_RAD_S: the bus plant's fivebar_plant.PlantLimits.
+# runaway_ceiling_rad_s, 1.5 rad/s = 86 deg/s), applied to every POWERED J2 / C1 command as run_phase_real applies it to the homing
+# sequences' plain position commands. WHY only J2 / C1: the real runner watches the bus's two drives (real_plant.DRIVE_JOINTS); J1 is held
+# on the real rung and not watched there either.
+RUNAWAY_JOINTS = DRIVE_JOINTS
 
 
 def bam_ws_path(src: Path = BAM_WS_SRC) -> None:
@@ -148,8 +164,9 @@ class RigCache:
     _rigs: dict = {}
 
     @classmethod
-    def get(cls, kind: str):
-        if kind not in cls._rigs:
+    def get(cls, kind: str, end_mass_scale: float = 1.0):
+        key = kind if end_mass_scale == 1.0 else (kind, float(end_mass_scale))
+        if key not in cls._rigs:
             bam_ws_path()
             from bam_fb_test_rig.backlash import HIDDEN_ARCMIN, hidden_specs  # noqa: PLC0415
             from bam_fb_test_rig.bundle import load_bundle  # noqa: PLC0415
@@ -164,9 +181,25 @@ class RigCache:
                 rig = bench_rig(bundle, backlash=None)
             else:
                 rig = bench_rig(bundle, backlash=hidden_specs(), backlash_method=method)
+            if end_mass_scale != 1.0:
+                scale_body_mass(rig, END_GROUP_BODY, end_mass_scale)
             resolve_mesh_mode(rig)
-            cls._rigs[kind] = rig
-        return cls._rigs[kind]
+            cls._rigs[key] = rig
+        return cls._rigs[key]
+
+
+def scale_body_mass(rig, body: str, scale: float) -> dict:
+    """Scale one body's mass and rotational inertia by ``scale`` at its own COM (``END_GROUP_MASS_SCALE``'s WHY), then recompute MuJoCo's
+    mass-derived constants (``mj_setConst``). Returns the before / after masses (kg)."""
+    import mujoco  # noqa: PLC0415
+
+    model = rig.model
+    index = model.body(body).id
+    before = float(model.body_mass[index])
+    model.body_mass[index] = before * scale
+    model.body_inertia[index] = model.body_inertia[index] * scale
+    mujoco.mj_setConst(model, mujoco.MjData(model))
+    return {"body": body, "mass_kg": before, "scaled_kg": float(model.body_mass[index]), "scale": float(scale)}
 
 
 # WHY 0.3 (2026-11-12, homing MuJoCo rung pass 4): gear_backlash's dead zone is an explicit spring ("dt must resolve the mesh mode",
@@ -206,7 +239,8 @@ class MujocoRigPlant:
 
     joint_names = DRIVES
 
-    def __init__(self, kind: str, *, cogging: bool = True, settle_s: float = SETTLE_S, log_every: int = 1, boards: Mapping | None = None):
+    def __init__(self, kind: str, *, cogging: bool = True, settle_s: float = SETTLE_S, log_every: int = 1, boards: Mapping | None = None,
+                 end_mass_scale: float = 1.0, runaway_rad_s: float | None = None):
         if kind not in BACKLASH_METHOD:
             raise ValueError(f"backlash kind must be B0, B1 or B2, not {kind!r}")
         bam_ws_path()
@@ -214,7 +248,11 @@ class MujocoRigPlant:
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
         self.kind = kind
-        self.rig = RigCache.get(kind)
+        self.end_mass_scale = float(end_mass_scale)
+        # WHY off unless asked (pass 6): the pass 3-5 results were run without it and stand as run; the pass-6 rung passes RUNAWAY_RAD_S
+        self.runaway_rad_s = None if runaway_rad_s is None else float(runaway_rad_s)
+        self.peak_powered_rad_s: dict[str, float] = {}
+        self.rig = RigCache.get(kind, self.end_mass_scale)
         self.signs = board_signs(self.rig.bundle, self.rig)
         self.board = RACK_BOARD
         # WHY the real record by default (2026-11-12, the home button's ground truth): the boards the real arm ran on, cited above
@@ -352,6 +390,7 @@ class MujocoRigPlant:
                               "settled_assembly": self.assembly(sim.data.qpos)}
         self.log = {"t": [], "link": [], "motor": [], "position": [], "effort": [], "touching": [], "setpoint": []}
         self._velocity = {j: 0.0 for j in DRIVES}
+        self.peak_powered_rad_s = {ROLE_OF[j]: 0.0 for j in RUNAWAY_JOINTS}
         self._record(None)
         return self.state()
 
@@ -399,7 +438,22 @@ class MujocoRigPlant:
         for joint in DRIVES:
             self._velocity[joint] = (self._motor(joint) - before[joint]) / dt
         self._record(targets)
+        self._check_runaway(targets)
         return self.state()
+
+    def _check_runaway(self, targets: Mapping[str, float | None]) -> None:
+        """The real rung's runaway stop (``RUNAWAY_RAD_S``'s WHY): a POWERED J2 / C1 faster than the ceiling ends the episode
+        (:class:`PlantTrip`), as ``real_plant.run_phase_real`` holds the bus and stops the sequence. The board velocity it watches is the
+        drive's own (the motor side), measured over the control tick as the plant reports it."""
+        for joint in RUNAWAY_JOINTS:
+            if targets.get(joint) is None:
+                continue
+            speed = abs(self._velocity[joint])
+            role = ROLE_OF[joint]
+            self.peak_powered_rad_s[role] = max(self.peak_powered_rad_s.get(role, 0.0), speed)
+            if self.runaway_rad_s is not None and speed > self.runaway_rad_s:
+                raise PlantTrip(f"runaway: {role} at {math.degrees(speed):.0f} deg/s powered, over {math.degrees(self.runaway_rad_s):.0f} "
+                                f"deg/s at t {self.time:.2f} s", kind="runaway", joint=role, speed_rad_s=speed, time_s=self.time)
 
     def state(self) -> JointState:
         return JointState(
@@ -485,5 +539,5 @@ def twin_contacts(starts: Mapping, *, kind: str = "B0", push_nm: tuple[float, fl
     return out
 
 
-__all__ = ["BACKLASH_METHOD", "MESH_MODE_OMEGA_DT", "MujocoRigPlant", "RigCache", "available", "bam_ws_path", "cogging_terms",
-           "resolve_mesh_mode", "twin_contacts"]
+__all__ = ["BACKLASH_METHOD", "END_GROUP_BODY", "END_GROUP_MASS_SCALE", "MESH_MODE_OMEGA_DT", "RUNAWAY_RAD_S", "MujocoRigPlant",
+           "RigCache", "available", "bam_ws_path", "cogging_terms", "resolve_mesh_mode", "scale_body_mass", "twin_contacts"]

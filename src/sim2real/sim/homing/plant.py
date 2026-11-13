@@ -45,6 +45,19 @@ HIDDEN_GAP_ARCMIN = {"revolute_3": 3.5, "revolute_6": 2.5, "revolute_7": 4.0}
 CATCH_UP_RAD_S = 2.0  # under the sequences' 3 rad/s speed guard (see tick)
 
 
+class PlantTrip(RuntimeError):
+    """A plant's own controlled stop (e.g. the MuJoCo rung's runaway check, ``mujoco_plant.MujocoRigPlant``): the episode ends there, as
+    the real plant's trips end a real episode (``real_plant.run_phase_real``). ``kind`` names the trip, ``joint`` the drive, ``speed_rad_s``
+    what tripped it."""
+
+    def __init__(self, message: str, *, kind: str, joint: str | None = None, speed_rad_s: float | None = None, time_s: float | None = None):
+        super().__init__(message)
+        self.kind = kind
+        self.joint = joint
+        self.speed_rad_s = speed_rad_s
+        self.time_s = time_s
+
+
 def hidden_backlash(kind: str, gap_arcmin: Mapping[str, float] = HIDDEN_GAP_ARCMIN, *,
                     mesh_nm_per_arcmin: float = MESH_NM_PER_ARCMIN) -> dict:
     """The hidden truth per drive for ``kind`` B0 / B1 / B2 (robot_models ``BacklashModel``)."""
@@ -275,4 +288,4 @@ class KinematicStopPlant:
         self.log["setpoint"].append([math.nan if not targets or targets.get(j) is None else targets[j] for j in DRIVES])
 
 
-__all__ = ["BOARD_KP_NM_PER_RAD", "HIDDEN_GAP_ARCMIN", "MESH_NM_PER_ARCMIN", "KinematicStopPlant", "Start", "hidden_backlash"]
+__all__ = ["BOARD_KP_NM_PER_RAD", "HIDDEN_GAP_ARCMIN", "MESH_NM_PER_ARCMIN", "KinematicStopPlant", "PlantTrip", "Start", "hidden_backlash"]
