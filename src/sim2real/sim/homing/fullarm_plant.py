@@ -112,7 +112,14 @@ BACKLASH_METHOD = {"B0": None, "B1": "deadzone", "B2": "passive_joint"}
 ARM_BODIES = ("base_link", "shoulder", "l1", "l2", "c1", "c2", "hard_stop", "hard_stop_2", "hard_stop_3", "moving_finger")
 FIVEBAR_BODIES = ("base_link", "shoulder", "l1", "l2", "c1", "c2")
 SELF_CONTACT_BIT = 2
-SCENE_NAME = "sim2real_fullarm_contact"
+SCENE_NAME = "sim2real_fullarm_contact_belt2"
+# The belt (bam_fb_test_rig.model.Conveyor: top face at world z = 0, base_link 615 mm above it), here as a CONTACT for the arm's primitives:
+# on the rack the claw rests on it when the arm hangs (the Sim to Real Agent, 2026-11-13 15:50), so a home must be judged with it there
+BELT_CENTRE_M = (0.35, 0.04)
+BELT_HALF_M = (0.225, 0.80, 0.25)  # WHY 0.5 m deep: a thin slab raised for the prop let the arm pass under it
+BELT = "belt"
+START_PENETRATION_M = 0.005  # a start may rest on the belt (contact), never sit 5 mm into it
+BELT_AWAY_M = -10.0  # the belt's top when a plant is built without one
 
 
 def contact_scene(scene: str = "scene.xml") -> Path:
@@ -137,6 +144,9 @@ def contact_scene(scene: str = "scene.xml") -> Path:
         for mesh in list(spec.meshes):
             if mesh.name not in used:
                 spec.delete(mesh)
+        spec.worldbody.add_geom(name=BELT, type=mujoco.mjtGeom.mjGEOM_BOX, size=BELT_HALF_M,
+                                pos=(BELT_CENTRE_M[0], BELT_CENTRE_M[1], -BELT_HALF_M[2]), contype=SELF_CONTACT_BIT,
+                                conaffinity=SELF_CONTACT_BIT, group=3, rgba=(0.16, 0.17, 0.18, 1.0))
         for a, b in itertools.combinations(FIVEBAR_BODIES, 2):
             exclude = spec.add_exclude()
             exclude.bodyname1, exclude.bodyname2 = a, b
@@ -265,6 +275,25 @@ class ArmStart:
     gap_fraction: Mapping[str, float] = field(default_factory=dict)
 
 
+def hanging_start(plant: "FullArmHomingPlant", name: str = "hanging on the belt", *, wrist_deg=(0.0, 0.0, 0.0), claw_deg: float = 5.0,
+                  family: str = "hanging") -> ArmStart:
+    """The rack's power-up rest (the Sim to Real Agent, 15:50): the five-bar hanging straight down, the claw resting on the belt (or the
+    prop, ``plant.belt_top_m``). Found as the closest five-bar pose to the homed map's home whose arm clears the belt (Craig J2 stepped
+    0.5 deg at a time, both ways), which ``reset`` then lets fall onto it unpowered."""
+    home = (91.01, -126.438)
+    model = plant.rig.model
+    model.geom_pos[model.geom(BELT).id][2] = plant.belt_top_m - BELT_HALF_M[2]
+    for step in range(0, 241):
+        for sign in (+1, -1):
+            start = ArmStart(name, home[0] + sign * 0.5 * step, home[1], tuple(wrist_deg), claw_deg, family=family)
+            try:
+                plant.place(start)
+            except StartRefused:
+                continue
+            return start
+    raise StartRefused(f"{name}: no five-bar pose within 120 deg of home clears the belt")
+
+
 class StartRefused(ValueError):
     """A start the twin cannot hold (the loop does not close, a joint past its stop, or the arm already in self-contact)."""
 
@@ -279,7 +308,7 @@ class FullArmHomingPlant:
 
     def __init__(self, kind: str = "B0", truth: str = "cad", *, cogging: bool = True, settle_s: float = 0.5,
                  runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
-                 limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW):
+                 limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -296,6 +325,9 @@ class FullArmHomingPlant:
         # it homes the shoulder; on the bus a "limp" wrist step is sent as moteus `d brake` (PEP 0047). False: `d stop` (mode 0, free).
         self.limp_brakes = bool(limp_brakes)
         self.wrist_gains = (float(wrist_gains[0]), float(wrist_gains[1]))  # kp N.m/rev, kd N.m/(rev/s)
+        # the belt's top face (world z, m): 0 is the rack's belt; +0.10 stands in for the claw propped 10 cm off it (a prop under it the
+        # whole run - Zach's prop, 2026-11-13). None (the default): no belt within reach - every sweep before 2026-11-13 16:00 ran so
+        self.belt_top_m = BELT_AWAY_M if belt_top_m is None else float(belt_top_m)
         model = self.rig.model
         self.claw_qadr = int(model.jnt_qposadr[model.joint(CLAW).id])
         self.claw_dof = int(model.jnt_dofadr[model.joint(CLAW).id])
@@ -353,19 +385,33 @@ class FullArmHomingPlant:
         touching = self.self_contacts(data)
         if touching:
             raise StartRefused(f"{start.name}: the arm would start in self-contact ({', '.join(touching)})")
+        into = [c for c in self.contacts(data, deeper_than_m=START_PENETRATION_M) if c.startswith(BELT + "/")]
+        if into:
+            raise StartRefused(f"{start.name}: the arm would start more than {START_PENETRATION_M * 1e3:.0f} mm into the belt ({', '.join(into)})")
         return q
 
-    def self_contacts(self, data=None) -> list[str]:
-        """Every self-contact (two arm bodies' primitives) in ``data``, as 'body/body' (sorted, unique)."""
+    def contacts(self, data=None, *, deeper_than_m: float = 0.0) -> list[str]:
+        """Every contact between two arm bodies' primitives, or an arm body and the belt, in ``data``: 'body/body' or 'belt/body'
+        (sorted, unique), counting only those deeper than ``deeper_than_m``."""
         data = self.sim.data if data is None else data
         model = self.rig.model
         out = set()
         for i in range(data.ncon):
             contact = data.contact[i]
-            if self._is_self[contact.geom1] and self._is_self[contact.geom2] and contact.dist < 0.0:
-                a, b = sorted((model.body(model.geom_bodyid[contact.geom1]).name, model.body(model.geom_bodyid[contact.geom2]).name))
-                out.add(f"{a}/{b}")
+            if self._is_self[contact.geom1] and self._is_self[contact.geom2] and contact.dist < -deeper_than_m:
+                names = []
+                for geom in (contact.geom1, contact.geom2):
+                    body = model.body(model.geom_bodyid[geom]).name
+                    names.append(BELT if body == "world" else body)
+                out.add("/".join(sorted(names, key=lambda n: (n != BELT, n))))
         return sorted(out)
+
+    def self_contacts(self, data=None) -> list[str]:
+        """Arm-on-arm contacts only (the belt's are ``belt_contacts``)."""
+        return [c for c in self.contacts(data) if not c.startswith(BELT + "/")]
+
+    def belt_contacts(self, data=None) -> list[str]:
+        return [c for c in self.contacts(data) if c.startswith(BELT + "/")]
 
     def reset(self, start: ArmStart) -> JointState:
         import mujoco  # noqa: PLC0415
@@ -373,6 +419,8 @@ class FullArmHomingPlant:
         bam_ws_path()
         from bam_fb_test_rig.sim import BoardConfig, Drive, RigSim  # noqa: PLC0415
 
+        model = self.rig.model
+        model.geom_pos[model.geom(BELT).id][2] = self.belt_top_m - BELT_HALF_M[2]  # the model is cached per process: set every reset
         q = self.place(start)
         boards = real_boards()
         wrist_board = BoardConfig(kp=self.wrist_gains[0], ki=0.0, kd=self.wrist_gains[1], ilimit=0.0, max_torque_nm=WRIST_MAX_NM)
@@ -402,7 +450,6 @@ class FullArmHomingPlant:
         # its static friction is not a power-on rest; it sags (to its stop, or to where friction holds) before any board is powered - a
         # start must be a pose the real arm can be found in (the first powered tick of a sagging wrist read 110 deg/s, a false runaway).
         self._brake = {r: fh.WRIST_BRAKE_NM_S for r in ("W1", "W2", "W3")}
-        model = self.rig.model
         wrist_dofs = [self.rig.dof_adr(r) for r in ("W1", "W2", "W3")] + [self.claw_dof]
         sliding = model.dof_frictionloss[wrist_dofs].copy()
         model.dof_frictionloss[[self.rig.dof_adr(r) for r in ("W1", "W2", "W3")]] = [fh.WRIST_BREAKAWAY_NM[r] for r in ("W1", "W2", "W3")]
@@ -436,7 +483,8 @@ class FullArmHomingPlant:
         self._velocity = {j: 0.0 for j in JOINTS}
         self.peak_powered_rad_s = {j: 0.0 for j in JOINTS}
         self.peak_torque_nm = {j: 0.0 for j in JOINTS}
-        self.log = {"t": [], "link": [], "motor": [], "position": [], "effort": [], "setpoint": [], "self_contact": [], "qpos": []}
+        self.log = {"t": [], "link": [], "motor": [], "position": [], "effort": [], "setpoint": [], "self_contact": [], "belt_contact": [],
+                    "qpos": []}
         self._record(None)
         return self.state()
 
@@ -569,9 +617,11 @@ class FullArmHomingPlant:
         log["setpoint"].append([math.nan if not targets or targets.get(j) is None else targets[j] for j in JOINTS])
         log["qpos"].append(self.sim.data.qpos.copy())  # the whole pose, for a video of the run (fullarm_check.trace_of)
         tick = len(log["t"]) - 1
-        log["self_contact"].append(self.self_contacts() if tick % self.check_every == 0 else [])
+        every = self.contacts() if tick % self.check_every == 0 else []
+        log["self_contact"].append([c for c in every if not c.startswith(BELT + "/")])
+        log["belt_contact"].append([c for c in every if c.startswith(BELT + "/")])
 
 
 __all__ = ["ARM_BODIES", "CAN", "CLAW", "C1", "FIVEBAR", "J1", "J2", "JOINTS", "ROLE", "ROTOR_PHASE_DEG", "TURN_RAD", "W1", "W2", "W3",
            "WRIST", "ArmPrior", "ArmStart", "FullArmHomingPlant", "StartRefused", "arm_prior", "build_rig", "cad_stops", "contact_scene",
-           "hidden_backlash", "wrap_turn"]
+           "hanging_start", "hidden_backlash", "wrap_turn"]

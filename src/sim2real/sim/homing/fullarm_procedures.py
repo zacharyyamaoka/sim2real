@@ -282,6 +282,9 @@ class FullArmHome:
     witness: bool | None = None
     identify: bool = False
     wrist_only: bool = False
+    # the five-bar alone, the wrist and claw HELD where they are (at their homed zeros: the Sim to Real Agent's contract, 2026-11-13 16:00 -
+    # the wrist is cold-homed first, by wrist_home_v1, and the five-bar's runner homes J2 / C1 with it held)
+    fivebar_only: bool = False
     wrist_during_fivebar: str = "brake"
     # WHY the five-bar ignores the stored table by default (sim 2026-11-13, the backlash ladder): press_reverse+gff's five-bar rows are
     # wrong on bam_fb_v2 (J2 compliance read 1.28 deg/N.m vs 0.0013 true) and pushed J2's zero 12.7 deg off; un-tabled, single_touch+gff
@@ -309,7 +312,8 @@ class FullArmHome:
             self.fivebar_name = "press_reverse+gff" if self.identify else "single_touch+gff"
         self.fivebar = fivebar_procedure(self.fivebar_name, comp=self.comp, ff_scale=self.ff_scale)
         if not self.name:
-            self.name = (("identify_backlash" if self.identify else "home") + f"[{self.order}{'+witness' if self.witness else ''}]"
+            self.name = ("fivebar_home[single_touch+gff, wrist " + self.wrist_during_fivebar + "]") if self.fivebar_only else (
+                ("identify_backlash" if self.identify else "home") + f"[{self.order}{'+witness' if self.witness else ''}]"
                          + (" wrist only" if self.wrist_only else ""))
 
     # -- plan ------------------------------------------------------------------------------------------------------------------------
@@ -330,7 +334,7 @@ class FullArmHome:
             else:
                 raise ValueError(f"wrist_during_fivebar must be hold or brake, not {self.wrist_during_fivebar!r}")
             return widen(self.fivebar.plan(prior, []), others)
-        if len(so_far) == 1:
+        if len(so_far) == 1 and not self.fivebar_only:
             return self._phase1(prior)
         return None
 
@@ -415,6 +419,9 @@ class FullArmHome:
             five = self.fivebar.observe(five_prior, [project(phases[0], FIVEBAR)])
             self.references = [r for r in self.fivebar.references]
             wrist_phase = 1
+            if self.fivebar_only:
+                return HomingResult(tuple(five.zeros), BacklashTable(tuple(e for e in five.backlash.entries if e.joint in FIVEBAR)),
+                                    prior.stops, tuple(five.evidence), "mujoco")
         ends = step_readings(phases[wrist_phase])
         side = {j: int(prior.seek_side[j]) for j in (*WRIST, CLAW)}
         evidence = [self._evidence(wrist_phase, ends["claw closes"], CLAW, side[CLAW])]

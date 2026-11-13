@@ -155,3 +155,18 @@ def test_the_replay_matches_the_racks_w2_and_w3_seek_travel():
     for role in ("W2", "W3"):
         row = out["per_joint"][role]
         assert row["sim_travel_deg"] == pytest.approx(row["real_travel_deg"], abs=2.0)
+
+
+@needs_twin
+def test_resting_on_the_belt_j2s_first_seek_lurches_past_the_runaway_stop():
+    """The rack's power-up rest (2026-11-13 15:50: hanging, the claw on the belt): J2's first seek at 0.1 rev/s sticks on the belt, then
+    slips past the 86 deg/s runaway stop - the reason the motor-driven five-bar home stays sim-only (PEP 0047). Remove when it is fixed."""
+    from sim2real.sim.homing.fullarm_check import run_episode
+    from sim2real.sim.homing.fullarm_plant import FullArmHomingPlant, arm_prior, hanging_start
+    from sim2real.sim.homing.fullarm_procedures import FullArmHome
+
+    plant = FullArmHomingPlant("B0", settle_s=3.0, belt_top_m=0.0)
+    start = hanging_start(plant)
+    report = run_episode(FullArmHome(fivebar_only=True, wrist_during_fivebar="hold"), plant, start, arm_prior())
+    assert report.outcome.startswith("tripped: runaway: J2") and "J2 seeks" in report.outcome
+    assert any(plant.log["belt_contact"])
