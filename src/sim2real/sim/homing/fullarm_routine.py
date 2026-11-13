@@ -32,6 +32,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 from robot_models.homing.fit import fit
 from robot_models.homing.protocols import Phase
@@ -407,6 +408,32 @@ ROWS = {
 }
 
 
+# ------------------------------------------------------------------------------------------------------------------------ on the rack
+
+
+def rotor_phase_from_homed(path) -> dict:
+    """Each wrist / claw board's sub-turn phase (deg) from a bam-homed/1 file (the rack's full_arm/homed/latest.json): the witness's
+    calibration. A board boots reading ``wrap(q + phase)`` and the file's ``zero_board_rad`` is its reading at joint 0, so the phase is
+    that reading wrapped to one rotor turn - valid across power cycles while the gear train and the encoder calibration stay as they were.
+
+    Take it only from a home you trust (camera-checked): a zero assigned on an obstacle calibrates the witness to that obstacle."""
+    import json  # noqa: PLC0415
+
+    from .fullarm_plant import TURN_RAD, wrap_turn  # noqa: PLC0415
+
+    document = json.loads(Path(path).read_text())
+    if document.get("schema") != "bam-homed/1":
+        raise ValueError(f"{path} is not a bam-homed/1 file")
+    out = {}
+    for joint, entry in document["joints"].items():
+        if joint not in TURN_RAD or not entry.get("homed"):
+            continue
+        if int(entry.get("sign", 1)) != 1:
+            raise ValueError(f"{joint}: sign {entry.get('sign')} - the phase is derived for sign +1 boards only")
+        out[joint] = math.degrees(wrap_turn(float(entry["zero_board_rad"]), TURN_RAD[joint]))
+    return out
+
+
 def make_row(name: str, **overrides):
     """The procedure for row ``name`` (``ROWS``), ``overrides`` replacing its spec (tuning)."""
     spec = {**ROWS[name], **overrides}
@@ -418,4 +445,4 @@ def make_row(name: str, **overrides):
 
 
 __all__ = ["CRAIG_OFFSET_DEG", "READY_CRAIG_DEG", "READY_TD4_WRIST_DEG", "ROWS", "FullArmRoutine", "SingleTouchReady", "craig_to_cad",
-           "fivebar_hold_at", "make_row", "ready_cad"]
+           "fivebar_hold_at", "make_row", "ready_cad", "rotor_phase_from_homed"]

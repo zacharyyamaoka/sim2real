@@ -221,3 +221,207 @@ def test_two_plants_on_one_cached_rig_each_get_their_own_contacts_back():
     model = soft.rig.model
     assert tuple(model.geom_solref[model.geom(BELT).id]) != BELT_STIFF_SOLREF
     assert float(model.pair_solref[0, 0]) != 0.01
+
+
+# ---------------------------------------------------------------------------------------------------------------- the routine's plan
+
+import os  # noqa: E402
+
+RECOMMENDED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
+                    "zach_v1 @ READY")
+slow = pytest.mark.skipif(not os.environ.get("SIM2REAL_SLOW"), reason="episode tests run with SIM2REAL_SLOW=1 (~2-5 min each)")
+
+
+@pytest.fixture(scope="module")
+def plans(tmp_path_factory):
+    """Each row planned once, out of process (routine_check.preplan_file: the comp's model never loads in the test process)."""
+    if not (twin_available() and fh.CAD_EXPORTER.is_dir()):
+        pytest.skip("bam_ws's twin or the cad-exporter clone is not here")
+    from sim2real.sim.homing import routine_check as rc
+
+    return rc.preplan_file(RECOMMENDED_ROWS, tmp_path_factory.mktemp("plans") / "plans.pkl")
+
+
+def _moving(command) -> bool:
+    """A command that moves its joint (not a hold, not limp, not a 1 urad re-capture)."""
+    if command.mode in ("hold", "limp", "stop", "brake"):
+        return False
+    if command.mode == "move_by" and abs(float(command.distance or 0.0)) < 1e-5:
+        return False
+    return True
+
+
+def test_the_routine_walks_the_five_bar_to_ready_after_easing_c1_not_to_its_home(plans):
+    """With the claw on, the five-bar's home is ~101 mm into the belt (bam_rack_twin full_arm): phase 0 ends at READY."""
+    from sim2real.sim.homing.fullarm_plant import C1, J2
+    from sim2real.sim.homing.fullarm_routine import ready_cad
+
+    first = plans["park_first+witness @ READY"]["sequences"][0]
+    names = [s.name for s in first.steps]
+    walk = [k for k, n in enumerate(names) if n.startswith("J2 + C1 home")]
+    assert walk and all("to READY" in names[k] for k in walk)
+    assert names[walk[0] - 1] == "C1 eases off its stop (J2 held)"
+    last = first.steps[-1]
+    target = {c.joint: c.position for c in last.commands if c.joint in (J2, C1)}
+    ready = ready_cad()
+    assert target[J2] == pytest.approx(ready[J2], abs=1e-9) and target[C1] == pytest.approx(ready[C1], abs=1e-9)
+
+
+def _movers(sequence) -> list[set]:
+    """Per step, the joints it moves: a real relative move, or a position target other than the one that joint already held."""
+    held: dict = {}
+    out = []
+    for step in sequence.steps:
+        moving = set()
+        for c in step.commands:
+            if c.mode == "position":
+                if held.get(c.joint) is None or abs(held[c.joint] - float(c.position)) > 1e-9:
+                    moving.add(c.joint)
+                held[c.joint] = float(c.position)
+            else:
+                held[c.joint] = None
+                if _moving(c):
+                    moving.add(c.joint)
+        out.append(moving)
+    return out
+
+
+def test_phase_1_closes_the_claw_first_then_moves_one_wrist_joint_at_a_time(plans):
+    from sim2real.sim.homing.fullarm_plant import CLAW, WRIST
+
+    for row in RECOMMENDED_ROWS:
+        second = plans[row]["sequences"][1]
+        names = [s.name for s in second.steps]
+        movers = _movers(second)
+        first_wrist = min(k for k, moving in enumerate(movers) if moving & set(WRIST))
+        assert names.index("claw closes") < first_wrist
+        for step, moving in zip(second.steps, movers, strict=True):
+            assert len(moving & set(WRIST)) <= 1, f"{row}: step {step.name!r} moves {moving}"
+            assert not (moving & set(WRIST) and CLAW in moving), f"{row}: {step.name!r} moves the claw with a wrist joint"
+
+
+def test_the_park_touch_is_never_a_reference_and_w2_is_defined_with_w1_parked(plans):
+    from sim2real.sim.homing.fullarm_plant import W1, W2
+
+    for row in ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY"):
+        second = plans[row]["sequences"][1]
+        names = [s.name for s in second.steps]
+        park = names.index("W1 park touch")
+        assert not second.steps[park].define_position
+        defines = [k for k, s in enumerate(second.steps) if s.define_position]
+        w2 = next(k for k in defines if W2 in second.steps[k].define_position)
+        w1 = next(k for k in defines if W1 in second.steps[k].define_position)
+        assert park < w2 < w1
+
+
+def test_a_multi_touch_locates_without_a_reference_and_defines_on_its_last_slow_retouch(plans):
+    from sim2real.sim.homing.fullarm_plant import WRIST
+
+    plan = plans["multi x2 (3D-printer) @ READY"]
+    second = plan["sequences"][1]
+    by_name = {s.name: s for s in second.steps}
+    for role in ("W1", "W2", "W3"):
+        locate = by_name[f"{role} locates"]
+        retouch = by_name[f"{role} re-touch 1"]
+        assert not locate.define_position and retouch.define_position
+        fast = next(c.speed for c in locate.commands if c.joint in WRIST and _moving(c))
+        gentle = next(c.speed for c in retouch.commands if c.joint in WRIST and _moving(c))
+        assert math.degrees(fast) == pytest.approx(60.0) and math.degrees(gentle) == pytest.approx(9.0)
+    uses = {(step, use) for step, _, _, use in plan["evidence_plan"]}
+    assert ("W1 locates", "locate") in uses and ("W1 re-touch 1", "define") in uses
+
+
+def test_the_routine_ends_holding_ready_with_the_claw_plumb(plans):
+    from sim2real.sim.homing.fullarm_plant import W1, W2
+    from sim2real.sim.homing.fullarm_routine import READY_TD4_WRIST_DEG
+
+    second = plans["park_first+witness @ READY"]["sequences"][1]
+    end = {c.joint: c.position for s in second.steps[-2:] for c in s.commands if c.joint in (W1, W2) and c.mode == "position"}
+    assert math.degrees(end[W2]) == pytest.approx(READY_TD4_WRIST_DEG[1]) and math.degrees(end[W1]) == pytest.approx(READY_TD4_WRIST_DEG[0])
+
+
+# ---------------------------------------------------------------------------------------------------------------- the checks
+
+
+def _stall(joint, side, raw_deg, torque=1.0):
+    from robot_models.homing.types import StallEvidence
+
+    return StallEvidence(joint, side, torque, math.radians(raw_deg), rung="mujoco")
+
+
+def test_touch_consistency_refuses_retouches_or_a_locate_that_disagree():
+    from sim2real.sim.homing.fullarm_plant import W1
+    from sim2real.sim.homing.fullarm_routine import FullArmRoutine
+    from sim2real.sim.homing.procedures import HomingRefused
+
+    routine = FullArmRoutine.__new__(FullArmRoutine)  # the check alone: no five-bar procedure built
+    routine.consistency_tol_deg, routine.locate_tol_deg, routine.notes = 0.25, 1.5, {}
+    routine._consistency([_stall(W1, 1, 100.0), _stall(W1, 1, 100.1)], {W1: (1, math.radians(100.4))})
+    with pytest.raises(HomingRefused, match="consistency"):
+        routine._consistency([_stall(W1, 1, 100.0), _stall(W1, 1, 100.6)], {W1: (1, math.radians(100.3))})
+    with pytest.raises(HomingRefused, match="consistency"):
+        routine._consistency([_stall(W1, 1, 100.0)], {W1: (1, math.radians(102.0))})
+
+
+def test_the_span_witness_refuses_a_stall_on_an_obstacle_on_either_side():
+    from robot_models.homing.types import BacklashModel, BacklashTable, JointBacklash
+
+    from sim2real.sim.homing.fullarm_plant import W2, arm_prior
+    from sim2real.sim.homing.fullarm_routine import FullArmRoutine
+    from sim2real.sim.homing.procedures import HomingRefused
+
+    prior = arm_prior()
+    span = math.degrees(prior.stops.span_rad(W2))
+    low = -100.0
+    table = BacklashTable((JointBacklash(W2, BacklashModel("B0")),))
+    routine = FullArmRoutine.__new__(FullArmRoutine)
+    routine.span_tol_deg, routine.notes = 1.0, {}
+    routine._span(prior, [_stall(W2, -1, low), _stall(W2, +1, low + span + 0.3)], table)  # a 0.3 deg gap: fine
+    assert routine.notes["span_error_deg"]["W2"] == pytest.approx(0.3, abs=1e-6)
+    with pytest.raises(HomingRefused, match="span"):
+        routine._span(prior, [_stall(W2, -1, low), _stall(W2, +1, low + span - 18.0)], table)  # stalled 18 deg short: an obstacle
+
+
+def test_rotor_phases_from_a_homed_file(tmp_path):
+    """The witness's calibration from the rack's bam-homed/1 file: each board's zero reading wrapped to one rotor turn (36 deg)."""
+    from sim2real.sim.homing.fullarm_routine import rotor_phase_from_homed
+
+    path = tmp_path / "latest.json"
+    path.write_text(json.dumps({"schema": "bam-homed/1", "joints": {
+        "revolute_11": {"homed": True, "sign": 1, "zero_board_rad": math.radians(-11.08)},
+        "revolute_14": {"homed": True, "sign": 1, "zero_board_rad": math.radians(-145.06)},
+        "revolute_5": {"homed": True, "sign": 1, "zero_board_rad": math.radians(-47.46)}}}))
+    phases = rotor_phase_from_homed(path)
+    assert phases["revolute_11"] == pytest.approx(-11.08) and phases["revolute_14"] == pytest.approx(-1.06)
+    assert phases["revolute_5"] == pytest.approx(-11.46)
+
+
+# ---------------------------------------------------------------------------------------------------------------- episodes (slow)
+
+
+@slow
+@needs_twin
+def test_a_branched_episode_equals_a_full_one(tmp_path):
+    """routine_check runs a cell's five-bar phase once and every row from a copy: that row's numbers must be a full run's."""
+    from sim2real.sim.homing import routine_check as rc
+
+    rows = ["park_first+witness @ READY", "multi x2 (3D-printer) @ READY"]
+    rc.PLANS.update(rc.preplan_file(rows, tmp_path / "plans.pkl"))
+    job = {"cell_index": 22, "cell": ruler.grid_cells()[22], "environment": "nominal", "rows": rows}
+    branched = rc.run_job(job, branch=True)[0]
+    full = rc.run_job({**job, "rows": rows[:1]}, branch=False)[0]
+    for key in ("outcome", "time_s", "zero_error_deg", "belt_contact_ticks", "belt_after_liftoff_ticks", "peak_speed_deg_s", "witness_deg"):
+        assert branched[key] == full[key], key
+
+
+@slow
+@needs_twin
+def test_the_routine_homes_from_a_rest_on_the_belt(tmp_path):
+    from sim2real.sim.homing import routine_check as rc
+
+    row = "park_first+witness @ READY"
+    rc.PLANS.update(rc.preplan_file([row], tmp_path / "plans.pkl"))
+    report = rc.run_job({"cell_index": 22, "cell": ruler.grid_cells()[22], "environment": "nominal", "rows": [row]}, branch=False)[0]
+    assert report["belt_start_bodies"], "the start rests on the belt"
+    assert report["outcome_class"] == "homed" and report["covered"]
+    assert report["belt_after_liftoff_ticks"] == 0
