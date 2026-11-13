@@ -140,10 +140,30 @@ def starts(rig: WristRig, n_sobol: int = 15) -> list[WristStart]:
     sampler = qmc.Sobol(d=6, scramble=True, seed=SOBOL_SEED)
     out = [WristStart("real_power_up", dict(zip(rig.joints, np.radians([81.0, -38.6, 0.0]), strict=True)),
                       dict(zip(rig.joints, (0.11, -0.07, 0.05), strict=True)))]
-    for k, row in enumerate(sampler.random(n_sobol)):
-        out.append(WristStart(f"sobol-{k:02d}", {j: lo[j] + row[i] * (hi[j] - lo[j]) for i, j in enumerate(rig.joints)},
-                              {j: (row[3 + i] - 0.5) * math.radians(36.0) for i, j in enumerate(rig.joints)}))
+    # WHY skip a draw whose links interpenetrate (2026-11-12): a start is where the wrist RESTS at power-up; draw 14 put the tip's ArUco
+    # holder 6 mm into the base's marker plate and the first tick ejected CAN 15 at 7 rad/s. Draws keep their index as their name, so a
+    # name means the same pose in every result; a skipped draw is simply absent.
+    k = 0
+    while len(out) < n_sobol + 1:
+        row = sampler.random(1)[0]
+        start = WristStart(f"sobol-{k:02d}", {j: lo[j] + row[i] * (hi[j] - lo[j]) for i, j in enumerate(rig.joints)},
+                           {j: (row[3 + i] - 0.5) * math.radians(36.0) for i, j in enumerate(rig.joints)})
+        k += 1
+        if at_rest(start):
+            out.append(start)
+        if k > 20 * (n_sobol + 1):
+            raise RuntimeError(f"fewer than {n_sobol} collision-free wrist starts in {k} Sobol draws")
     return out
+
+
+def at_rest(start: WristStart) -> bool:
+    """No contact (stop teeth or the self-contact pairs bam_ur_wrist.self_contact adds) at the start pose."""
+    import mujoco  # noqa: PLC0415
+
+    plant = WristPlant(gravity=False)
+    plant.reset(start)
+    mujoco.mj_forward(plant.plant.model, plant.plant.data)
+    return int(plant.plant.data.ncon) == 0
 
 
 # ---------------------------------------------------------------------------------------------------------------- the plant
@@ -189,7 +209,8 @@ class WristPlant:
         self.frame = {j: 0.0 for j in self.joint_names}
         self.time = 0.0
         self.start = start
-        self.log = {"t": [], "link": [], "position": [], "effort": [], "touching": [], "setpoint": []}
+        self.log = {"t": [], "link": [], "position": [], "effort": [], "touching": [], "setpoint": [], "self_contact": []}
+        self._stop_geoms = {g for pair in self.plant.wrist.stop_pairs.values() for side in pair for g in side}
         self._record(None)
         return self.state()
 
@@ -242,6 +263,18 @@ class WristPlant:
             out.append(("upper" if q[i] > 0 else "lower") if on else "")
         return out
 
+    def _self_contact(self) -> str:
+        """Truth only (never seen by a procedure): the body pairs in contact other than the stop teeth, e.g. the tip's ArUco holder on
+        the base's marker plate (bam_ur_wrist.self_contact) - "" when none."""
+        model, data = self.plant.model, self.plant.data
+        pairs = set()
+        for i in range(data.ncon):
+            contact = data.contact[i]
+            if contact.geom1 in self._stop_geoms or contact.geom2 in self._stop_geoms:
+                continue
+            pairs.add("|".join(sorted((model.body(model.geom_bodyid[contact.geom1]).name, model.body(model.geom_bodyid[contact.geom2]).name))))
+        return ",".join(sorted(pairs))
+
     def _record(self, targets) -> None:
         raw = self._raw()
         self.log["t"].append(self.time)
@@ -249,6 +282,7 @@ class WristPlant:
         self.log["position"].append([raw[i] + self.frame[j] for i, j in enumerate(self.joint_names)])
         self.log["effort"].append(list(np.asarray(self.reading.torque_nm, dtype=float)))
         self.log["touching"].append(self._touching())
+        self.log["self_contact"].append(self._self_contact())
         self.log["setpoint"].append([math.nan if not targets or targets.get(j) is None else targets[j] for j in self.joint_names])
 
     def truth(self) -> dict:
@@ -480,10 +514,13 @@ def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[di
     finished = outcome == "done"
     result = procedure.observe(prior, [phase]) if finished else None
     truth = plant.truth()
-    stalls = []
+    stalls, stalled_on_self = [], {}
     for _, tick, joint, side in procedure.references if finished else []:
-        link = plant.log["link"][phase.log["plant_offset"] + tick][rig.joints.index(joint)]
+        row = phase.log["plant_offset"] + tick
+        link = plant.log["link"][row][rig.joints.index(joint)]
         stalls.append(StallCheck(joint, side, math.degrees(link), math.degrees(prior.stops.q_rad(joint, side))))
+        if plant.log["self_contact"][row]:  # the stall was a link hitting a link, not the drive's stop (truth, for the report)
+            stalled_on_self[rig.can[joint]] = plant.log["self_contact"][row]
     joints, twin = [], {}
     twin_result = None
     if result is not None and contacts is not None:
@@ -502,7 +539,10 @@ def run_episode(name: str, start: WristStart, contacts: dict | None) -> tuple[di
     note = {"zero_error_vs_twin_deg": twin, "latched_turns": truth["latched_turns"],
             "start_deg": {rig.can[j]: math.degrees(v) for j, v in start.q_rad.items()},
             "events": [(e.index, e.name, e.outcome, round(e.finished, 2)) for e in phase.events][-4:]}
+    if stalled_on_self:
+        note["stalled_on_self_contact"] = stalled_on_self
     if not finished:
+        note["self_contact_at_end"] = plant.log["self_contact"][-1]
         note["ended_at_deg"] = {rig.can[j]: round(math.degrees(v), 3) for j, v in truth["link_rad"].items()}
     return record.to_dict(), note
 

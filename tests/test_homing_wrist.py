@@ -69,3 +69,18 @@ def test_the_plant_reads_board_plus_frame_and_scores_against_the_latched_offset(
 def test_single_touch_homes_from_the_real_power_up(rig):
     record, note = wrist.run_episode("single_touch", wrist.starts(rig, 1)[0], None)
     assert record["finished"], record["outcome"]
+
+
+def test_every_start_is_a_pose_the_rig_can_rest_in(rig):
+    """A start is where the wrist rests at power-up, so its links cannot interpenetrate. 2026-11-12: Sobol draw 14 put the tip's ArUco
+    holder 6 mm into the base's marker plate; the first tick ejected CAN 15 at 7 rad/s and both procedures were charged a guard trip for
+    a pose no real wrist can be in."""
+    import mujoco  # noqa: PLC0415
+
+    for start in wrist.starts(rig, 15):
+        plant = wrist.WristPlant()
+        plant.reset(start)
+        mujoco.mj_forward(plant.plant.model, plant.plant.data)
+        assert plant.plant.data.ncon == 0, f"{start.name}: {plant.plant.data.ncon} contacts at rest"
+    names = [s.name for s in wrist.starts(rig, 15)]
+    assert len(names) == 16 and names[:15] == ["real_power_up"] + [f"sobol-{k:02d}" for k in range(14)]  # draws keep their names
