@@ -8,9 +8,15 @@ not run dirty refuses (commit first, then run).
 
 from __future__ import annotations
 
+import json
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from typing import Any
+
+# The keys a results file names its CODE by (a CAD bundle id such as ``bundle_sha`` is content, not code). WHY a fixed list: the pass-6
+# check (2026-11-13) found the MuJoCo results stamped ``bam_ws_sha`` "b37778bb1-dirty" while nothing in the file said clean or not.
+CODE_STAMPS = ("sim2real_sha", "robot_models_sha", "bam_ws_sha")
 
 
 def _git(directory: Path, *argv: str) -> str:
@@ -39,4 +45,24 @@ def is_clean(sha: str) -> bool:
     return sha != "unknown" and not sha.endswith("-dirty")
 
 
-__all__ = ["code_sha", "is_clean"]
+def stamps_clean(results: Mapping[str, Any]) -> bool:
+    """The rule: true only when ``results`` names its code (at least one of ``CODE_STAMPS``) and every code stamp present - a sha, or a
+    list of them when runs disagree - is clean (:func:`is_clean`)."""
+
+    present = [results[key] for key in CODE_STAMPS if key in results]
+    values = [v for value in present for v in (value if isinstance(value, (list, tuple)) else [value])]
+    return bool(values) and all(isinstance(v, str) and is_clean(v) for v in values)
+
+
+def write_results(path: Path | str, results: Mapping[str, Any], *, indent: int | None = None,
+                  default: Callable[[Any], Any] | None = None, newline: bool = False) -> dict:
+    """Write a results file with ``provenance_clean`` by :func:`stamps_clean` - and a writer's own false (e.g. a dirty score it was told to
+    allow) is never turned into true. Returns what was written."""
+
+    out = dict(results)
+    out["provenance_clean"] = stamps_clean(out) and out.get("provenance_clean", True) is not False
+    Path(path).write_text(json.dumps(out, indent=indent, default=default) + ("\n" if newline else ""))
+    return out
+
+
+__all__ = ["CODE_STAMPS", "code_sha", "is_clean", "stamps_clean", "write_results"]

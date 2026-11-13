@@ -33,7 +33,6 @@ any other nq) whose Karnopp friction, drive torques and sensing are indexed by t
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import sys
 import time
@@ -55,6 +54,7 @@ from robot_msgs.control import (
 from robot_msgs.sensor import JointState
 from robot_msgs.std import Header
 
+from sim2real.provenance import write_results
 from .bench import compact, expand, git_sha, run_phase
 from .mujoco_plant import BAM_WS_SRC, bam_ws_path
 from .procedures import HomingRefused
@@ -795,7 +795,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     results = run_bench(procedures=tuple(args.procedures), n_sobol=args.sobol, workers=min(args.workers, 3))
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(results))
+    write_results(args.out, results)
     for name, v in results["verdicts"]["B0"].items():
         print(f"B0 {name:16s} rel {v['reliability_pct']:6.1f}%  zero p95 vs CAD {v['zero_p95_deg']}  vs twin {v['zero_p95_vs_twin_deg']}  "
               f"{'PASS' if v['pass'] else 'FAIL'}")

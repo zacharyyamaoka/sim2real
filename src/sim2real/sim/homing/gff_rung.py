@@ -42,7 +42,6 @@ error (and on CAD masses at nominal).
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import time
 from dataclasses import replace
@@ -50,6 +49,7 @@ from pathlib import Path
 
 from robot_models.homing.metrics import EpisodeRecord, JointOutcome, scorecard
 
+from sim2real.provenance import write_results
 from .bench import EPISODE_COLUMNS, compact, expand, git_sha, prior_for, run_episode
 from .geometry import BUNDLE_SHA, C1, DRIVES, EXPORT, J1, J2, ROLE, FivebarGeometry
 from .mujoco_bench import kinematic_reference, twin_prior
@@ -382,7 +382,7 @@ def main(argv=None) -> int:
     results = run_bench(rows=tuple(args.rows), models=tuple(args.models), masses=tuple(args.masses), ff_scales=tuple(args.ff),
                         n_starts=args.starts, workers=args.workers)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(results, default=float))
+    write_results(args.out, results, default=float)
     for model, by_name in results["verdicts"].items():
         for name, v in by_name.items():
             print(f"{model} {name:62s} rel {v['reliability_pct']:6.1f}%  zero p95 vs twin {v['zero_p95_vs_twin_deg']}  vs CAD "

@@ -41,7 +41,8 @@ from typing import Any
 
 import numpy as np
 
-from .geometry import BUNDLE_SHA, C1, DRIVES, J1, J2, ROLE
+from sim2real.provenance import write_results
+from .geometry import BUNDLE_SHA, DRIVES, J1, ROLE
 from .real_plant import (
     DRIVE_JOINTS,
     J1_HOLD_CAP_NM,
@@ -736,8 +737,7 @@ def score(run_dirs: list[Path], *, mujoco_json: Path = MUJOCO_JSON, out: Path = 
     if notes is not None:
         # the page's prose (verdict, findings), written by the coordinator from these numbers, kept beside them
         results.update(json.loads(Path(notes).read_text()))
-    Path(out).write_text(json.dumps(results, indent=1, default=float) + "\n")
-    return results
+    return write_results(out, results, indent=1, default=float, newline=True)
 
 
 def main(argv=None) -> int:

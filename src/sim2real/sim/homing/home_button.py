@@ -38,6 +38,7 @@ from pathlib import Path
 import numpy as np
 from robot_msgs.control import ServoCommand
 
+from sim2real.provenance import write_results
 from .geometry import C1, DRIVES, EXPORT, J1, J2, MIRROR
 from .mujoco_plant import BAM_WS_SRC, MujocoRigPlant, bam_ws_path
 from .plant import Start
@@ -365,7 +366,7 @@ def main(argv=None) -> int:
                "real_runs": [{k: v for k, v in run.items() if k != "trace"} | {"trace": run["trace"]} for run in real["runs"]],
                "passed": sum(r["verdict"]["pass"] for r in replays), "total": len(replays), "seconds": round(time.time() - t0, 1)}
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(payload) + "\n")
+    write_results(args.out, payload, newline=True)
     for r in replays:
         v = r["verdict"]
         print(f"{r['run']:32s} {r['branch']:6s} {r['kind']}  {r['status']:8s} end - real {v['end_minus_real_deg']} deg  "

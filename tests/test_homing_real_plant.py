@@ -182,3 +182,34 @@ def test_a_limp_drive_is_not_a_runaway():
     phase = run_phase_real(plant, _seq(step), peaks=peaks)
     assert phase.status == "done" and not bus.holds
     assert peaks[("limp", "J2", "limp")] == pytest.approx(RUNAWAY_RAD_S + 0.1)
+
+
+@dataclass
+class BoardWriteBus(StandInBus):
+    """A stand-in with the plant-of-record's two board-frame writers (fivebar_plant ``diagnostic_next`` = ``d cfg-set-output``, RAM;
+    ``recapture_next``), recording any call."""
+
+    writes: list = field(default_factory=list)
+
+    def diagnostic_next(self, can_id, line):
+        self.writes.append(("diagnostic", can_id, line))
+
+    def recapture_next(self, *can_ids):
+        self.writes.append(("recapture", can_ids))
+
+
+def test_a_define_never_writes_a_board_even_on_a_bus_that_could():
+    """tview's step "3. cfg-set-output 0.34722 / 0.66347" is named after his tview line, but on the real rung its define stays on the host
+    (module docstring): the pass-6 check read the name as a RAM write to CAN 12 / 13. Pinned, so a refactor cannot start writing."""
+
+    bus = BoardWriteBus()
+    plant = RealRigPlant(bus, make_command=make, j1_command=lambda j1: ("hold", j1), signs=(-1.0, 1.0))
+    plant.reset(None)
+    from robot_msgs.control import ServoCommand
+
+    command = ServoCommand(name=DRIVES, position=np.array([0.0, math.radians(125.0), math.radians(238.85)]), velocity=np.zeros(3),
+                           max_effort=np.array([7.0, 10.0, 10.0]), feedforward_effort=np.zeros(3))
+    plant.tick(command, 0.01, {J2: math.radians(125.0), C1: math.radians(238.85)})
+    plant.tick(command, 0.01, {})
+    assert bus.writes == []
+    assert plant.state().position[DRIVES.index(C1)] == pytest.approx(math.radians(238.85))  # the frame moved, on the host

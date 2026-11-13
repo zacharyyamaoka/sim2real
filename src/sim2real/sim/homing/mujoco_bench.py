@@ -34,6 +34,7 @@ from pathlib import Path
 from robot_models.homing.metrics import backlash_gate_deg, scorecard
 from robot_msgs.control import Elapsed, Reached
 
+from sim2real.provenance import write_results
 from .bench import (
     EPISODE_COLUMNS,
     NAMED_WHY,
@@ -565,7 +566,7 @@ def main(argv=None) -> int:
                     "gate_deg": results["gate_deg"], "episode_columns": results["episode_columns"],
                     "calibration_twin_gap_deg": {m: (c or {}).get("twin_gap_deg") for m, c in results["calibration"].items()},
                     **rescore_backlash_vs_twin(results)}
-        args.out.write_text(json.dumps(rescored, indent=1))
+        write_results(args.out, rescored, indent=1)
         for model, by_name in rescored["scorecards_vs_twin"].items():
             for name, card in by_name.items():
                 was = rescored["stored_scorecards_vs_twin"][model][name]
@@ -575,7 +576,7 @@ def main(argv=None) -> int:
         return 0
     if args.merge:
         merged = merge(*(json.loads(path.read_text()) for path in args.merge))
-        args.out.write_text(json.dumps(merged))
+        write_results(args.out, merged)
         print(f"{args.out}: {len(merged['procedures'])} procedures")
         return 0
     if args.add_traces:
@@ -585,7 +586,7 @@ def main(argv=None) -> int:
         wanted = args.trace or [(name, "B2", "bowl") for name in
                                 (RECOVER_PREFIX_NAME + "press_reverse", TIMED + "press_reverse", RECOVER_PREFIX_NAME + "tview_v2")]
         results["traces"] = [trace_of(geometry, model, name, rests[start]) for name, model, start in wanted]
-        args.out.write_text(json.dumps(results))
+        write_results(args.out, results)
         print(f"{args.out}: {len(results['traces'])} traces")
         return 0
     procedures = [] if args.only_timed else [RECOVER_PREFIX_NAME + inner_name(p) for p in args.procedures]
@@ -594,7 +595,7 @@ def main(argv=None) -> int:
     results = run_bench(procedures=tuple(procedures), models=tuple(args.models), n_sobol=args.sobol, workers=min(args.workers, 3),
                         cogging=not args.no_cogging)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(results))
+    write_results(args.out, results)
     for model, by_name in results["verdicts"].items():
         for name, v in by_name.items():
             print(f"{model} {name:42s} rel {v['reliability_pct']:6.1f}%  zero p95 vs CAD {v['zero_p95_deg']}  vs twin "

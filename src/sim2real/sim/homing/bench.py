@@ -19,7 +19,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 import time
 from dataclasses import dataclass
@@ -30,6 +29,7 @@ from robot_models.homing.metrics import EpisodeRecord, JointOutcome, StallCheck,
 from robot_models.homing.protocols import Phase, Prior
 from robot_msgs.control import JointCommandSequenceController
 
+from sim2real.provenance import write_results
 from .geometry import BUNDLE_SHA, C1, DRIVES, EXPORT, J1, J2, MIRROR, ROLE, FivebarGeometry
 from .plant import HIDDEN_GAP_ARCMIN, KinematicStopPlant, PlantTrip, Start, hidden_backlash
 from .procedures import PROCEDURES, HomingRefused, PressReverse, home_cad, identify_backlash
@@ -433,7 +433,7 @@ def main(argv=None) -> int:
         results = json.loads(args.rescore.read_text())
         results["scorecards_by_scope"] = split_scorecards(results["episodes"], results["starts"], results["rung"], results["gate_deg"])
         results["ruling"] = RULING
-        args.out.write_text(json.dumps(results))
+        write_results(args.out, results)
         for name, card in results["scorecards_by_scope"][WORKING].get("B2", {}).items():
             print(f"B2 working assembly {name:34s} rel {card['reliability_pct']:6.1f}%  gate {card['reliability_gate_pass']}")
         return 0
@@ -441,7 +441,7 @@ def main(argv=None) -> int:
     results = run_bench(procedures=tuple(procedures), models=tuple(args.models), n_sobol=args.sobol,
                         workers=min(args.workers, 3))
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(results))
+    write_results(args.out, results)
     for model, by_name in results["scorecards_by_scope"][WORKING].items():
         for name, card in by_name.items():
             print("working assembly", end=" ")
