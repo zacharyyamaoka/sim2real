@@ -1,0 +1,872 @@
+{
+ "schema": "sim2real_homing_bench/1",
+ "rig": "five-bar",
+ "rung": "real",
+ "attempts_recover_first": {},
+ "models": [
+  "rig"
+ ],
+ "environment": "real \u00b7 rig",
+ "bundle_sha": "8957130",
+ "hardstops_sha256": "9d42c878c519023c4513279fe80129668f6811fe4014b079c60239edeb161717",
+ "sim2real_sha": "f9c7298",
+ "robot_models_sha": "17869ad",
+ "provenance_clean": true,
+ "bam_ws_sha": "b37778bb1",
+ "bam_ws_sha_source": "the runs' receipts (fivebar_homed.json code.bam_ws)",
+ "gate_deg": 0.1,
+ "zero_vs_kinematic_deg": 0.1,
+ "reliability_target_pct": 100.0,
+ "hidden_gap_arcmin": null,
+ "dt_s": 0.01,
+ "procedures": [
+  "single_touch+gff",
+  "tview_v2+gff"
+ ],
+ "procedures_planned": [
+  "tview_v2",
+  "single_touch",
+  "two_level_touch+gff",
+  "single_touch+gff",
+  "tview_v2+gff"
+ ],
+ "not_run": {
+  "two_level_touch+gff": "not runnable on the real arm in either form. Behind recover_first (the MuJoCo row) the blind recovery's re-hold after its first J2 seek ran away on the real arm at 91-93 deg/s powered, every start (run real_two_level_touch_gff_*, the plant's controlled stop and the home button each time). Bare (the home button as the recovery), its first seek carries the gravity feed-forward planned for the upper stop (J2 6.6 N.m) from the hanging rest, where gravity is ~0: on the MuJoCo rung that lunges J2 to 3.4 rad/s and the sequence's own speed guard aborts it (B0 and B2, home start) - not sent to the arm.",
+  "press_reverse+gff": "not run on the real arm: its second side walks J2 to -85 deg (Craig 5) and seeks J2's lower stop (CAD -90.03 = Craig ~0), below the unidentified contact the real arm meets at Craig j2 12.6 / 16.5 deg (fivebar-real-night F08, two stalls on one map; fivebar_homed.LADDER_J2_MIN_DEG 20 keeps every stage above it). It would press up to 10 N.m into that contact and define it as J2's lower stop: a guaranteed wrong zero and an unknown thing pressed. Needs the contact identified (Zach's eye at j2 ~17) or a second side that stays above j2 20."
+ },
+ "starts": [
+  {
+   "name": "home",
+   "offset_deg": [
+    0.0,
+    0.0
+   ],
+   "why": "the home button's own rest (homed_083647's home): margins 0.057 / 0.041"
+  },
+  {
+   "name": "c1-10",
+   "offset_deg": [
+    0.0,
+    -10.0
+   ],
+   "why": "the crank 10 deg below home: margins 0.111 / 0.064"
+  },
+  {
+   "name": "j2+4",
+   "offset_deg": [
+    4.0,
+    0.0
+   ],
+   "why": "L1 4 deg above home: margins 0.086 / 0.072"
+  },
+  {
+   "name": "j2+4 c1-10",
+   "offset_deg": [
+    4.0,
+    -10.0
+   ],
+   "why": "both: margins 0.145 / 0.099"
+  }
+ ],
+ "stall_board_deg": {
+  "J2": -109.715,
+  "C1": 102.42
+ },
+ "stall_gate_deg_live": 1.5,
+ "stall_tolerance_deg_scored": 1.0,
+ "gates": {
+  "reliability": "100 % of >= 4 starts finished with every referenced stall within 1.0 deg (robot_models STALL_TOLERANCE_DEG) of its stop's known board position (the live gate aborts at tview_run's 1.5)",
+  "spread": "max - min of the identified zero over the reliable starts <= 0.1 deg, per joint (J2, C1)",
+  "vs_mujoco": "|(row - consensus of the run rows) on the real arm - the same on the MuJoCo rung| <= 0.1 deg, per joint, worst over B0 / B1 / B2 (the real arm has no truth, so each rung's zero is compared as its offset from the rows' consensus: what a row adds or removes that its peers do not)"
+ },
+ "zero_frame": "q_URDF = sign x board + offset (sign J2 -1, C1 +1, homed_083647); the boards keep their frame across sessions (frame check at every open), so zeros of different starts and rows compare directly",
+ "j1": "held, never homed on the real rung (its CAD stops +-89.98 deg are unconfirmed on the rack; tview_run holds it)",
+ "scorecards": {
+  "rig": {
+   "single_touch+gff": {
+    "episodes": 4,
+    "time_to_home_s": 26.765,
+    "time_to_home_p95_s": 28.53,
+    "reliability_pct": 100.0,
+    "any_start_pct": null,
+    "backlash_error_deg": null,
+    "backlash_error_max_deg": null,
+    "backlash_observable_pct": 0.0,
+    "joint_angle_error_deg": null,
+    "joint_angle_error_max_deg": null,
+    "joint_angle_error_median_deg": null,
+    "joint_angle_error_worst_joint": null,
+    "joints_unzeroed": 8,
+    "zero_gate_deg": 0.1,
+    "zero_gate_pass": null,
+    "reliability_gate_pass": true,
+    "backlash_gate_pass": null,
+    "zero_median_deg": {
+     "J2": 15.17794240453897,
+     "C1": 95.07875498326105
+    },
+    "zero_spread_deg": {
+     "J2": 0.04943847656249467,
+     "C1": 0.005493164062485789
+    },
+    "zero_spread_max_deg": 0.04943847656249467,
+    "zero_vs_twin_median_deg": {
+     "J2": 14.892310473128635,
+     "C1": 95.07931607821338
+    },
+    "real_minus_mujoco_deg": 0.012326957105506575
+   },
+   "tview_v2+gff": {
+    "episodes": 4,
+    "time_to_home_s": 58.71,
+    "time_to_home_p95_s": 60.39,
+    "reliability_pct": 100.0,
+    "any_start_pct": null,
+    "backlash_error_deg": null,
+    "backlash_error_max_deg": null,
+    "backlash_observable_pct": 0.0,
+    "joint_angle_error_deg": null,
+    "joint_angle_error_max_deg": null,
+    "joint_angle_error_median_deg": null,
+    "joint_angle_error_worst_joint": null,
+    "joints_unzeroed": 8,
+    "zero_gate_deg": 0.1,
+    "zero_gate_pass": null,
+    "reliability_gate_pass": true,
+    "backlash_gate_pass": null,
+    "zero_median_deg": {
+     "J2": 15.201836718749982,
+     "C1": 95.06776865513604
+    },
+    "zero_spread_deg": {
+     "J2": 0.016479492187498224,
+     "C1": 0.005493164062485789
+    },
+    "zero_spread_max_deg": 0.016479492187498224,
+    "zero_vs_twin_median_deg": {
+     "J2": 14.916204787339648,
+     "C1": 95.06832975008838
+    },
+    "real_minus_mujoco_deg": 0.01232695710550652
+   }
+  }
+ },
+ "verdicts": {
+  "rig": {
+   "single_touch+gff": {
+    "reliability_pct": 100.0,
+    "reliability_gate_pass": true,
+    "zero_spread_max_deg": 0.04943847656249467,
+    "spread_gate_pass": true,
+    "real_minus_mujoco_deg": 0.012326957105506575,
+    "vs_mujoco_gate_pass": true,
+    "zero_starts": 4,
+    "pass": true
+   },
+   "tview_v2+gff": {
+    "reliability_pct": 100.0,
+    "reliability_gate_pass": true,
+    "zero_spread_max_deg": 0.016479492187498224,
+    "spread_gate_pass": true,
+    "real_minus_mujoco_deg": 0.01232695710550652,
+    "vs_mujoco_gate_pass": true,
+    "zero_starts": 4,
+    "pass": true
+   },
+   "two_level_touch+gff": {
+    "pass": false,
+    "not_run": "not runnable on the real arm in either form. Behind recover_first (the MuJoCo row) the blind recovery's re-hold after its first J2 seek ran away on the real arm at 91-93 deg/s powered, every start (run real_two_level_touch_gff_*, the plant's controlled stop and the home button each time). Bare (the home button as the recovery), its first seek carries the gravity feed-forward planned for the upper stop (J2 6.6 N.m) from the hanging rest, where gravity is ~0: on the MuJoCo rung that lunges J2 to 3.4 rad/s and the sequence's own speed guard aborts it (B0 and B2, home start) - not sent to the arm.",
+    "reliability_gate_pass": false,
+    "spread_gate_pass": false,
+    "vs_mujoco_gate_pass": false
+   },
+   "press_reverse+gff": {
+    "pass": false,
+    "not_run": "not run on the real arm: its second side walks J2 to -85 deg (Craig 5) and seeks J2's lower stop (CAD -90.03 = Craig ~0), below the unidentified contact the real arm meets at Craig j2 12.6 / 16.5 deg (fivebar-real-night F08, two stalls on one map; fivebar_homed.LADDER_J2_MIN_DEG 20 keeps every stage above it). It would press up to 10 N.m into that contact and define it as J2's lower stop: a guaranteed wrong zero and an unknown thing pressed. Needs the contact identified (Zach's eye at j2 ~17) or a second side that stays above j2 20.",
+    "reliability_gate_pass": false,
+    "spread_gate_pass": false,
+    "vs_mujoco_gate_pass": false
+   }
+  }
+ },
+ "episodes": {
+  "rig": {
+   "single_touch+gff": [
+    [
+     "home",
+     true,
+     "done",
+     28.53,
+     [
+      [
+       "J2",
+       1,
+       -109.8303223,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6947021,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "c1-10",
+     true,
+     "done",
+     26.46,
+     [
+      [
+       "J2",
+       1,
+       -109.8083496,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6947021,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4",
+     true,
+     "done",
+     27.07,
+     [
+      [
+       "J2",
+       1,
+       -109.8577881,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.689209,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4 c1-10",
+     true,
+     "done",
+     26.43,
+     [
+      [
+       "J2",
+       1,
+       -109.8138428,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6947021,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ]
+   ],
+   "tview_v2+gff": [
+    [
+     "home",
+     true,
+     "done",
+     60.39,
+     [
+      [
+       "J2",
+       1,
+       -109.786377,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.7056885,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "c1-10",
+     true,
+     "done",
+     56.53,
+     [
+      [
+       "J2",
+       1,
+       -109.7973633,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.7056885,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4",
+     true,
+     "done",
+     59.54,
+     [
+      [
+       "J2",
+       1,
+       -109.7973633,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.7056885,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4 c1-10",
+     true,
+     "done",
+     57.88,
+     [
+      [
+       "J2",
+       1,
+       -109.8028564,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.7111816,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ]
+   ]
+  }
+ },
+ "episode_columns": [
+  "start",
+  "finished",
+  "outcome",
+  "time_s",
+  "stalls [joint, side, board_deg, expected_board_deg]",
+  "joints [joint, zero_error_deg (None: no truth), gap_identified_deg, gap_truth_deg]"
+ ],
+ "real_rows": {
+  "single_touch+gff": [
+   {
+    "start": "home",
+    "run": "real_single_touch_gff_110013",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 28.53,
+    "start_rest_joint_deg": [
+     91.7486,
+     -124.8818
+    ],
+    "start_rest_board_deg": [
+     14.5513916015625,
+     -1.2908935546875
+    ],
+    "zero_deg_J2": 15.169702658445214,
+    "zero_deg_C1": 95.07875498326105,
+    "zero_minus_median_deg_J2": -0.008239746093755329,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.1153,
+     0.2747
+    ],
+    "incident": null
+   },
+   {
+    "start": "c1-10",
+    "run": "real_single_touch_gff_110013",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 26.46,
+    "start_rest_joint_deg": [
+     90.2929,
+     -135.9011
+    ],
+    "start_rest_board_deg": [
+     16.0015869140625,
+     -12.3101806640625
+    ],
+    "zero_deg_J2": 15.191675314695216,
+    "zero_deg_C1": 95.07875498326105,
+    "zero_minus_median_deg_J2": 0.013732910156246447,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0933,
+     0.2747
+    ],
+    "incident": null
+   },
+   {
+    "start": "j2+4",
+    "run": "real_single_touch_gff_110013",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 27.07,
+    "start_rest_joint_deg": [
+     93.9349,
+     -126.387
+    ],
+    "start_rest_board_deg": [
+     12.37060546875,
+     -2.7960205078125
+    ],
+    "zero_deg_J2": 15.142236838132721,
+    "zero_deg_C1": 95.08424814732354,
+    "zero_minus_median_deg_J2": -0.035705566406248224,
+    "zero_minus_median_deg_C1": 0.005493164062485789,
+    "stalls_off_deg": [
+     -0.1428,
+     0.2692
+    ],
+    "incident": null
+   },
+   {
+    "start": "j2+4 c1-10",
+    "run": "real_single_touch_gff_110013",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 26.43,
+    "start_rest_joint_deg": [
+     90.8697,
+     -135.6979
+    ],
+    "start_rest_board_deg": [
+     15.4302978515625,
+     -12.10693359375
+    ],
+    "zero_deg_J2": 15.186182150632725,
+    "zero_deg_C1": 95.07875498326105,
+    "zero_minus_median_deg_J2": 0.008239746093755329,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0988,
+     0.2747
+    ],
+    "incident": null
+   }
+  ],
+  "tview_v2+gff": [
+   {
+    "start": "home",
+    "run": "real_tview_v2_gff_110337",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 60.39,
+    "start_rest_joint_deg": [
+     91.0126,
+     -126.4254
+    ],
+    "start_rest_board_deg": [
+     15.287475585937498,
+     -2.83447265625
+    ],
+    "zero_deg_J2": 15.212823046874977,
+    "zero_deg_C1": 95.06776865513604,
+    "zero_minus_median_deg_J2": 0.010986328124994671,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0714,
+     0.2857
+    ],
+    "incident": null
+   },
+   {
+    "start": "c1-10",
+    "run": "real_tview_v2_gff_110337",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 56.53,
+    "start_rest_joint_deg": [
+     90.3699,
+     -136.0055
+    ],
+    "start_rest_board_deg": [
+     15.93017578125,
+     -12.41455078125
+    ],
+    "zero_deg_J2": 15.201836718749982,
+    "zero_deg_C1": 95.06776865513604,
+    "zero_minus_median_deg_J2": 0.0,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0824,
+     0.2857
+    ],
+    "incident": null
+   },
+   {
+    "start": "j2+4",
+    "run": "real_tview_v2_gff_110337",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 59.54,
+    "start_rest_joint_deg": [
+     93.3526,
+     -126.5353
+    ],
+    "start_rest_board_deg": [
+     12.9473876953125,
+     -2.9388427734375
+    ],
+    "zero_deg_J2": 15.201836718749982,
+    "zero_deg_C1": 95.06776865513604,
+    "zero_minus_median_deg_J2": 0.0,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0824,
+     0.2857
+    ],
+    "incident": null
+   },
+   {
+    "start": "j2+4 c1-10",
+    "run": "real_tview_v2_gff_110337",
+    "finished": true,
+    "reliable": true,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "done",
+    "time_s": 57.88,
+    "start_rest_joint_deg": [
+     90.8148,
+     -135.7473
+    ],
+    "start_rest_board_deg": [
+     15.4852294921875,
+     -12.1563720703125
+    ],
+    "zero_deg_J2": 15.196343554687479,
+    "zero_deg_C1": 95.06227549107355,
+    "zero_minus_median_deg_J2": -0.005493164062503553,
+    "zero_minus_median_deg_C1": -0.005493164062485789,
+    "stalls_off_deg": [
+     -0.0879,
+     0.2912
+    ],
+    "incident": null
+   }
+  ]
+ },
+ "rows": {
+  "single_touch+gff": {
+   "mujoco": {
+    "B0": {
+     "zero_error_median_deg": {
+      "J2": 0.2854915,
+      "C1": 0.0016748
+     },
+     "n": 16,
+     "time_to_home_s": 21.87,
+     "reliability_pct": 100.0
+    },
+    "B1": {
+     "zero_error_median_deg": {
+      "J2": 0.2515898,
+      "C1": -0.046393550000000006
+     },
+     "n": 16,
+     "time_to_home_s": 21.92,
+     "reliability_pct": 100.0
+    },
+    "B2": {
+     "zero_error_median_deg": {
+      "J2": 0.25103875,
+      "C1": -0.0471839
+     },
+     "n": 16,
+     "time_to_home_s": 21.925,
+     "reliability_pct": 100.0
+    }
+   },
+   "mujoco_row": "single_touch+gff \u00b7 real form \u00b7 end group +22 % \u00b7 ff nominal",
+   "zero_starts": 4,
+   "comparison": {
+    "B0": {
+     "J2": {
+      "real_minus_consensus_deg": -0.011947157105506534,
+      "mujoco_minus_consensus_deg": 0.0003798000000000412,
+      "real_minus_mujoco_deg": -0.012326957105506575
+     },
+     "C1": {
+      "real_minus_consensus_deg": 0.005493164062514211,
+      "mujoco_minus_consensus_deg": 0.0,
+      "real_minus_mujoco_deg": 0.005493164062514211
+     }
+    },
+    "B1": {
+     "J2": {
+      "real_minus_consensus_deg": -0.011947157105506534,
+      "mujoco_minus_consensus_deg": -0.00012470000000003312,
+      "real_minus_mujoco_deg": -0.0118224571055065
+     },
+     "C1": {
+      "real_minus_consensus_deg": 0.005493164062514211,
+      "mujoco_minus_consensus_deg": -7.80000000000225e-06,
+      "real_minus_mujoco_deg": 0.005500964062514213
+     }
+    },
+    "B2": {
+     "J2": {
+      "real_minus_consensus_deg": -0.011947157105506534,
+      "mujoco_minus_consensus_deg": 0.00037852500000001843,
+      "real_minus_mujoco_deg": -0.012325682105506552
+     },
+     "C1": {
+      "real_minus_consensus_deg": 0.005493164062514211,
+      "mujoco_minus_consensus_deg": 5.000000000143778e-08,
+      "real_minus_mujoco_deg": 0.005493114062514209
+     }
+    }
+   }
+  },
+  "tview_v2+gff": {
+   "mujoco": {
+    "B0": {
+     "zero_error_median_deg": {
+      "J2": 0.2847319,
+      "C1": 0.0016748
+     },
+     "n": 16,
+     "time_to_home_s": 48.4,
+     "reliability_pct": 100.0
+    },
+    "B1": {
+     "zero_error_median_deg": {
+      "J2": 0.25183920000000004,
+      "C1": -0.04637795
+     },
+     "n": 16,
+     "time_to_home_s": 48.055,
+     "reliability_pct": 100.0
+    },
+    "B2": {
+     "zero_error_median_deg": {
+      "J2": 0.2502817,
+      "C1": -0.047184
+     },
+     "n": 16,
+     "time_to_home_s": 48.04,
+     "reliability_pct": 100.0
+    }
+   },
+   "mujoco_row": "tview_v2+gff \u00b7 real form \u00b7 end group +22 % \u00b7 ff nominal",
+   "zero_starts": 4,
+   "comparison": {
+    "B0": {
+     "J2": {
+      "real_minus_consensus_deg": 0.011947157105506534,
+      "mujoco_minus_consensus_deg": -0.0003797999999999857,
+      "real_minus_mujoco_deg": 0.01232695710550652
+     },
+     "C1": {
+      "real_minus_consensus_deg": -0.0054931640625,
+      "mujoco_minus_consensus_deg": 0.0,
+      "real_minus_mujoco_deg": -0.0054931640625
+     }
+    },
+    "B1": {
+     "J2": {
+      "real_minus_consensus_deg": 0.011947157105506534,
+      "mujoco_minus_consensus_deg": 0.00012470000000003312,
+      "real_minus_mujoco_deg": 0.0118224571055065
+     },
+     "C1": {
+      "real_minus_consensus_deg": -0.0054931640625,
+      "mujoco_minus_consensus_deg": 7.80000000000225e-06,
+      "real_minus_mujoco_deg": -0.005500964062500002
+     }
+    },
+    "B2": {
+     "J2": {
+      "real_minus_consensus_deg": 0.011947157105506534,
+      "mujoco_minus_consensus_deg": -0.0003785249999999629,
+      "real_minus_mujoco_deg": 0.012325682105506497
+     },
+     "C1": {
+      "real_minus_consensus_deg": -0.0054931640625,
+      "mujoco_minus_consensus_deg": -4.999999999449889e-08,
+      "real_minus_mujoco_deg": -0.0054931140625000055
+     }
+    }
+   }
+  }
+ },
+ "mujoco_json": "/home/bam/sim2real/src/sim2real/data/homing_fivebar_mujoco_pass6_2026-11-13.json",
+ "run_dirs": [
+  "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_single_touch_gff_110013",
+  "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_tview_v2_gff_110337"
+ ],
+ "video": {
+  "run": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_single_touch_gff_110013",
+  "episode": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_single_touch_gff_110013/episodes/01_c1-10.npz",
+  "frames": [
+   812,
+   1233
+  ],
+  "fps": 15,
+  "speed": 2,
+  "seconds_real": 28.42037010192871,
+  "mp4": "/home/bam/bam_ws/reports/media/homing-real-pass6-2026-11-13/real_single_touch_gff_110013_ep01.mp4",
+  "gif": "/home/bam/bam_ws/reports/media/homing-real-pass6-2026-11-13/real_single_touch_gff_110013_ep01.gif",
+  "caption": "The real five-bar, single_touch+gff from the c1-10 start, x2 (D435, run real_single_touch_gff_110013, episode 1): J2 lifts L1 onto its upper stop with the crank limp, C1 seeks its stop with J2 pushing, the zero is defined there, and the fed move takes the arm home with no trip (peak powered J2 41.0 / C1 61.5 deg/s, under the 86 deg/s runaway limit)."
+ },
+ "pass": 6,
+ "verdict_html": "<b>The real rung PASSES for both fed rows: 8 of 8 real episodes finished, no trip, no recovery needed.</b> single_touch+gff: 4/4 starts, zero spread J2 0.049&deg; / C1 0.005&deg;, real - MuJoCo 0.012&deg; (worst of B0/B1/B2), median time to home 26.8 s. tview_v2+gff: 4/4 starts, zero spread J2 0.016&deg; / C1 0.005&deg;, real - MuJoCo 0.012&deg;, median time to home 58.7 s. Every gate is the frozen one (reliability 100 % of &ge; 4 starts, spread &le; 0.1&deg;, real - MuJoCo &le; 0.1&deg;). Peak powered speed on the real arm: J2 41-54 &deg;/s, C1 58-62 &deg;/s, against the 86 &deg;/s runaway limit. J1 held, never homed.",
+ "findings_html": [
+  "<b>Gravity feed-forward on every hold and move fixed the pass-5 failure.</b> Pass 5's 16 real episodes all tripped 0.1-0.2 s after the zero (an un-fed hold let J2 drop past 86 &deg;/s); with the fed rows (sim2real gravity_ff, the comp massid_real_093852) all 8 real episodes ran to home with keep_fed held_trips 0.",
+  "<b>The zero moved between sessions by more than it scatters within one.</b> C1's zero is 95.079&deg; (single_touch+gff) / 95.068&deg; (tview_v2+gff) today against 95.139&deg; on pass 5's un-fed rows (frame check: same frame, &lt; 0.06 mrad); J2 15.178 / 15.202&deg; against ~15.21&deg;. Within a session both rows repeat to 0.005-0.05&deg;. Not a gate (each rung compares within its session); the likely cause is the press load at the defining stall changing with the feed-forward, unproven.",
+  "<b>tview_v2+gff's weak spot from the MuJoCo rung did not show on the arm.</b> MuJoCo predicted C1's un-fed seek at 79.2 &deg;/s; the real arm peaked at 58-61 &deg;/s on C1 in every episode."
+ ]
+}
