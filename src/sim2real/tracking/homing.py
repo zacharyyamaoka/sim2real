@@ -99,6 +99,17 @@ def _episode_rows(results: dict, model: str, procedure: str) -> list[dict]:
     return rows
 
 
+TAG_MAX = 64  # W&B refuses a longer tag
+
+
+def _tag(text: str) -> str:
+    """``text`` as a W&B tag: itself when it fits, else its head and an 8-hex digest of the whole (still one tag per procedure); the
+    full name stays in the run's name and config (pass 7's 'recover_first(fed)+single_touch_c1seek+gff · ...' names run to 76)."""
+    if len(text) <= TAG_MAX:
+        return text
+    return text[: TAG_MAX - 10].rstrip() + " ~" + hashlib.sha256(text.encode()).hexdigest()[:8]
+
+
 def start_rows_for(results: dict, procedure: str) -> list[dict]:
     """The starts ``procedure`` ran from: ``results["starts"]`` when it is one list; when it comes in families (pass7_rung, 2026-11-13:
     {family: [start, ...]}, each row on its own family) the family ``results["rows"]`` names for the procedure's row."""
@@ -146,7 +157,7 @@ def records(results: dict) -> list[dict]:
             flags = {k: v for k, v in card.items() if isinstance(v, bool)}
             out.append({"id": run_id("homing", results["rung"], model, procedure, evaluation),
                         "name": f"{procedure} · {results['rung']} · {model}", "group": f"{results['rung']} · {model}",
-                        "job_type": "homing", "tags": ["homing", results["rung"], model, procedure, "latest"],
+                        "job_type": "homing", "tags": ["homing", results["rung"], model, _tag(procedure), "latest"],
                         "notes": f"{procedure} on the {results['rung']} rung, hidden backlash {model}, bundle {results['bundle_sha']}",
                         "config": config, "history": [numbers], "summary": {**numbers, **{k: int(v) for k, v in flags.items()}},
                         "tables": {"starts": _episode_rows(results, model, procedure)}})
