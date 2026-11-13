@@ -158,15 +158,18 @@ def test_the_replay_matches_the_racks_w2_and_w3_seek_travel():
 
 
 @needs_twin
-def test_resting_on_the_belt_j2s_first_seek_lurches_past_the_runaway_stop():
-    """The rack's power-up rest (2026-11-13 15:50: hanging, the claw on the belt): J2's first seek at 0.1 rev/s sticks on the belt, then
-    slips past the 86 deg/s runaway stop - the reason the motor-driven five-bar home stays sim-only (PEP 0047). Remove when it is fixed."""
+def test_resting_on_the_belt_a_0_1_rev_s_first_seek_lurches_and_the_0_05_default_does_not():
+    """The rack's power-up rest (2026-11-13 15:50: hanging, the claw on the belt): J2's first seek at single_touch's 0.1 rev/s sticks on the
+    belt, then slips past the 86 deg/s runaway stop; FullArmHome's default first seek (0.05 rev/s) does not (PEP 0047)."""
     from sim2real.sim.homing.fullarm_check import run_episode
     from sim2real.sim.homing.fullarm_plant import FullArmHomingPlant, arm_prior, hanging_start
     from sim2real.sim.homing.fullarm_procedures import FullArmHome
 
-    plant = FullArmHomingPlant("B0", settle_s=3.0, belt_top_m=0.0)
-    start = hanging_start(plant)
-    report = run_episode(FullArmHome(fivebar_only=True, wrist_during_fivebar="hold"), plant, start, arm_prior())
-    assert report.outcome.startswith("tripped: runaway: J2") and "J2 seeks" in report.outcome
-    assert any(plant.log["belt_contact"])
+    outcomes = {}
+    for label, speed in (("old", None), ("default", 0.05)):
+        plant = FullArmHomingPlant("B0", settle_s=3.0, belt_top_m=0.0, contact_timeconst_s=0.01)
+        start = hanging_start(plant)
+        report = run_episode(FullArmHome(fivebar_only=True, wrist_during_fivebar="brake", j2_first_seek_rev_s=speed), plant, start, arm_prior())
+        outcomes[label] = (report.outcome, report.peak_speed_deg_s["J2"], any(plant.log["belt_contact"]))
+    assert outcomes["old"][0].startswith("tripped: runaway: J2") and "J2 seeks" in outcomes["old"][0] and outcomes["old"][2]
+    assert outcomes["default"][0] == "done" and outcomes["default"][1] < 86.0
