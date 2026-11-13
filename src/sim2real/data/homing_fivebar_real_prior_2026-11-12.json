@@ -1,0 +1,395 @@
+{
+ "schema": "sim2real_homing_real_prior/1",
+ "bundle_sha": "8957130",
+ "hardstops_sha256": "9d42c878c519023c4513279fe80129668f6811fe4014b079c60239edeb161717",
+ "cad": {
+  "_type": "robot_models.homing.types/StopMap",
+  "sides": [
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_3",
+    "side": -1,
+    "q_rad": -1.570368,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": [
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Base:1+Base Link:1+Small Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_3",
+    "side": 1,
+    "q_rad": 1.570368,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": [
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Base:1+Base Link:1+Small Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_6",
+    "side": -1,
+    "q_rad": -1.571274,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": [
+     "L1 Right:1+Hardstop:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_6",
+    "side": 1,
+    "q_rad": 2.181662,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": [
+     "L1 Right:1+Hardstop:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_8",
+    "side": -1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_8",
+    "side": 1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_7",
+    "side": -1,
+    "q_rad": -1.966836,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": [
+     "5-Bar-Linkage-v9:1+C1:1",
+     "L1 Right:1+Spacer:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_7",
+    "side": 1,
+    "q_rad": 3.451798,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": [
+     "5-Bar-Linkage-v9:1+C1:1",
+     "L1 Right:1+Spacer:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_34",
+    "side": -1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_34",
+    "side": 1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   }
+  ],
+  "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519"
+ },
+ "twin": {
+  "_type": "robot_models.homing.types/StopMap",
+  "sides": [
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_3",
+    "side": -1,
+    "q_rad": -1.5714432168776602,
+    "basis": "measured",
+    "source": "the twin's own contact (mujoco_plant.twin_contacts)",
+    "pair": [
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Base:1+Base Link:1+Small Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_3",
+    "side": 1,
+    "q_rad": 1.5714432160907639,
+    "basis": "measured",
+    "source": "the twin's own contact (mujoco_plant.twin_contacts)",
+    "pair": [
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Base:1+Base Link:1+Small Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_6",
+    "side": -1,
+    "q_rad": -1.571315139253175,
+    "basis": "measured",
+    "source": "the twin's own contact (mujoco_plant.twin_contacts)",
+    "pair": [
+     "L1 Right:1+Hardstop:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_6",
+    "side": 1,
+    "q_rad": 2.1766767823480593,
+    "basis": "measured",
+    "source": "the twin's own contact (mujoco_plant.twin_contacts)",
+    "pair": [
+     "L1 Right:1+Hardstop:1",
+     "Shoulder-JMC60ASM400 (1:10):1+Shoulder:1+Front Plate:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_8",
+    "side": -1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_8",
+    "side": 1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_7",
+    "side": -1,
+    "q_rad": -1.966770351422168,
+    "basis": "measured",
+    "source": "the twin's own contact (mujoco_plant.twin_contacts)",
+    "pair": [
+     "5-Bar-Linkage-v9:1+C1:1",
+     "L1 Right:1+Spacer:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_7",
+    "side": 1,
+    "q_rad": 3.4518077929543347,
+    "basis": "measured",
+    "source": "the twin's own contact (mujoco_plant.twin_contacts)",
+    "pair": [
+     "5-Bar-Linkage-v9:1+C1:1",
+     "L1 Right:1+Spacer:1"
+    ]
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_34",
+    "side": -1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   },
+   {
+    "_type": "robot_models.homing.types/StopSide",
+    "joint": "revolute_34",
+    "side": 1,
+    "q_rad": null,
+    "basis": "cad",
+    "source": "bam_fb_test_rig hardstops.json sha256 9d42c878c519",
+    "pair": []
+   }
+  ],
+  "source": "twin contacts"
+ },
+ "joints": [
+  "revolute_3",
+  "revolute_6",
+  "revolute_7"
+ ],
+ "seek_side": {
+  "revolute_3": 1,
+  "revolute_6": 1,
+  "revolute_7": 1
+ },
+ "caps_nm": {
+  "revolute_3": 10.0,
+  "revolute_6": 10.0,
+  "revolute_7": 7.0
+ },
+ "mujoco_tables": {
+  "B0": {
+   "cad": {
+    "_type": "robot_models.homing.types/BacklashTable",
+    "entries": [
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_6",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.0,
+       "compliance_rad_per_nm": 4.7321953483148296e-07
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD; gap clipped from -4.949e-03 rad"
+     },
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_7",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.0,
+       "compliance_rad_per_nm": 6.144540464373247e-07
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD; gap clipped from -1.009e-04 rad"
+     },
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_3",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.0021504942733074905,
+       "compliance_rad_per_nm": 8.809958940148021e-09
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD"
+     }
+    ]
+   },
+   "twin": null
+  },
+  "B1": {
+   "cad": {
+    "_type": "robot_models.homing.types/BacklashTable",
+    "entries": [
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_6",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.0,
+       "compliance_rad_per_nm": 2.3134088307150725e-05
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD; gap clipped from -4.228e-03 rad"
+     },
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_7",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.001055673311499028,
+       "compliance_rad_per_nm": 2.3884128403864734e-05
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD"
+     },
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_3",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.0031697592772239602,
+       "compliance_rad_per_nm": 2.22513385265799e-05
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD"
+     }
+    ]
+   },
+   "twin": null
+  },
+  "B2": {
+   "cad": {
+    "_type": "robot_models.homing.types/BacklashTable",
+    "entries": [
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_6",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.0,
+       "compliance_rad_per_nm": 2.4053612572145547e-05
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD; gap clipped from -4.223e-03 rad"
+     },
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_7",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.001060336249698146,
+       "compliance_rad_per_nm": 2.4744050895047263e-05
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD"
+     },
+     {
+      "_type": "robot_models.homing.types/JointBacklash",
+      "joint": "revolute_3",
+      "model": {
+       "_type": "robot_models.homing.types/BacklashModel",
+       "kind": "B2",
+       "gap_rad": 0.0031686055335455876,
+       "compliance_rad_per_nm": 2.3562871898130666e-05
+      },
+      "gap_observable": true,
+      "compliance_observable": true,
+      "source": "identify: compliance: two-level torque slope; gap: stop span vs CAD"
+     }
+    ]
+   },
+   "twin": null
+  }
+ },
+ "source": {
+  "mujoco": "/home/bam/sim2real/src/sim2real/data/homing_fivebar_mujoco_pass4_2026-11-12.json",
+  "sim2real_sha": "7d99488"
+ }
+}

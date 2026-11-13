@@ -1,0 +1,1077 @@
+{
+ "schema": "sim2real_homing_bench/1",
+ "rig": "five-bar",
+ "rung": "real",
+ "attempts_recover_first": {
+  "recover_first+two_level_touch+gff": [
+   {
+    "start": "home",
+    "run": "real_two_level_touch_gff_063829",
+    "status": "stopped",
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 91 deg/s powered, over 86 deg/s, in step 're-hold revolute_6 before: recover: J2 - 15 deg (lift L1 off), crank limp'",
+     "tick": 2140,
+     "time_s": 21.400000000000002,
+     "board_deg": [
+      -108.2373046875,
+      56.953125
+     ]
+    },
+    "time_s": null
+   },
+   {
+    "start": "c1-10",
+    "run": "real_two_level_touch_gff_063829",
+    "status": "stopped",
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 93 deg/s powered, over 86 deg/s, in step 're-hold revolute_6 before: recover: J2 - 15 deg (lift L1 off), crank limp'",
+     "tick": 2149,
+     "time_s": 21.490000000000002,
+     "board_deg": [
+      -108.1988525390625,
+      56.942138671875
+     ]
+    },
+    "time_s": null
+   },
+   {
+    "start": "j2+4",
+    "run": "real_two_level_touch_gff_063829",
+    "status": "stopped",
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 93 deg/s powered, over 86 deg/s, in step 're-hold revolute_6 before: recover: J2 - 15 deg (lift L1 off), crank limp'",
+     "tick": 2150,
+     "time_s": 21.5,
+     "board_deg": [
+      -108.1988525390625,
+      56.9476318359375
+     ]
+    },
+    "time_s": null
+   },
+   {
+    "start": "j2+4 c1-10",
+    "run": "real_two_level_touch_gff_063829",
+    "status": "stopped",
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 91 deg/s powered, over 86 deg/s, in step 're-hold revolute_6 before: recover: J2 - 15 deg (lift L1 off), crank limp'",
+     "tick": 2165,
+     "time_s": 21.650000000000002,
+     "board_deg": [
+      -108.3306884765625,
+      57.06298828125
+     ]
+    },
+    "time_s": null
+   },
+   {
+    "start": "home",
+    "run": "real_rf_two_level_touch_gff_064427",
+    "status": "stopped",
+    "incident": {
+     "kind": "stall_gate",
+     "message": "stall gate: a define in \"recover: C1 + until the hub meets L1's plate, J2 pressed on its stop: define both positions\" off its stop's known board position (J2 +3.66 deg; gate 1.5 deg)",
+     "tick": 4584,
+     "time_s": 45.84,
+     "board_deg": [
+      -106.051025390625,
+      70.2685546875
+     ]
+    },
+    "time_s": null
+   },
+   {
+    "start": "c1-10",
+    "run": "real_rf_two_level_touch_gff_064427",
+    "status": "stopped",
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 87 deg/s powered, over 86 deg/s, in step 're-hold revolute_7 before: recover: C1 + until it stalls, J2 holds'",
+     "tick": 2631,
+     "time_s": 26.310000000000002,
+     "board_deg": [
+      -68.6590576171875,
+      49.15283203125
+     ]
+    },
+    "time_s": null
+   },
+   {
+    "start": "j2+4",
+    "run": "real_rf_two_level_touch_gff_064427",
+    "status": "stopped",
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 87 deg/s powered, over 86 deg/s, in step 're-hold revolute_7 before: recover: C1 + until it stalls, J2 holds'",
+     "tick": 2513,
+     "time_s": 25.13,
+     "board_deg": [
+      -68.7469482421875,
+      49.185791015625
+     ]
+    },
+    "time_s": null
+   },
+   {
+    "start": "j2+4 c1-10",
+    "run": "real_rf_two_level_touch_gff_064427",
+    "status": "stopped",
+    "incident": {
+     "kind": "trip",
+     "message": "the bus tripped: PlantTrip: bus exchange failed (TimeoutError: ) after 0.151 s; a controlled stop: J2 held, C1 stopped where they were, J1 left as it was (no brake); each board alone after the hold: CAN 12 mode 10, CAN 13 mode 0, CAN 11 mode 10 (a lost frame)",
+     "tick": 321,
+     "time_s": 3.21,
+     "board_deg": [
+      16.007080078125,
+      -12.1893310546875
+     ]
+    },
+    "time_s": null
+   }
+  ]
+ },
+ "models": [
+  "rig"
+ ],
+ "environment": "real \u00b7 rig",
+ "bundle_sha": "8957130",
+ "hardstops_sha256": "9d42c878c519023c4513279fe80129668f6811fe4014b079c60239edeb161717",
+ "sim2real_sha": "8db26c3",
+ "robot_models_sha": "17869ad",
+ "bam_ws_sha": "d7d9f1b05",
+ "gate_deg": 0.1,
+ "zero_vs_kinematic_deg": 0.1,
+ "reliability_target_pct": 100.0,
+ "hidden_gap_arcmin": null,
+ "dt_s": 0.01,
+ "procedures": [
+  "tview_v2",
+  "single_touch"
+ ],
+ "procedures_planned": [
+  "tview_v2",
+  "single_touch",
+  "two_level_touch+gff"
+ ],
+ "not_run": {
+  "two_level_touch+gff": "not runnable on the real arm in either form. Behind recover_first (the MuJoCo row) the blind recovery's re-hold after its first J2 seek ran away on the real arm at 91-93 deg/s powered, every start (run real_two_level_touch_gff_*, the plant's controlled stop and the home button each time). Bare (the home button as the recovery), its first seek carries the gravity feed-forward planned for the upper stop (J2 6.6 N.m) from the hanging rest, where gravity is ~0: on the MuJoCo rung that lunges J2 to 3.4 rad/s and the sequence's own speed guard aborts it (B0 and B2, home start) - not sent to the arm.",
+  "press_reverse+gff": "not run on the real arm: its second side walks J2 to -85 deg (Craig 5) and seeks J2's lower stop (CAD -90.03 = Craig ~0), below the unidentified contact the real arm meets at Craig j2 12.6 / 16.5 deg (fivebar-real-night F08, two stalls on one map; fivebar_homed.LADDER_J2_MIN_DEG 20 keeps every stage above it). It would press up to 10 N.m into that contact and define it as J2's lower stop: a guaranteed wrong zero and an unknown thing pressed. Needs the contact identified (Zach's eye at j2 ~17) or a second side that stays above j2 20."
+ },
+ "starts": [
+  {
+   "name": "home",
+   "offset_deg": [
+    0.0,
+    0.0
+   ],
+   "why": "the home button's own rest (homed_083647's home): margins 0.057 / 0.041"
+  },
+  {
+   "name": "c1-10",
+   "offset_deg": [
+    0.0,
+    -10.0
+   ],
+   "why": "the crank 10 deg below home: margins 0.111 / 0.064"
+  },
+  {
+   "name": "j2+4",
+   "offset_deg": [
+    4.0,
+    0.0
+   ],
+   "why": "L1 4 deg above home: margins 0.086 / 0.072"
+  },
+  {
+   "name": "j2+4 c1-10",
+   "offset_deg": [
+    4.0,
+    -10.0
+   ],
+   "why": "both: margins 0.145 / 0.099"
+  }
+ ],
+ "stall_board_deg": {
+  "J2": -109.715,
+  "C1": 102.42
+ },
+ "stall_gate_deg_live": 1.5,
+ "stall_tolerance_deg_scored": 1.0,
+ "gates": {
+  "reliability": "100 % of >= 4 starts finished with every referenced stall within 1.0 deg (robot_models STALL_TOLERANCE_DEG) of its stop's known board position (the live gate aborts at tview_run's 1.5)",
+  "spread": "max - min of the identified zero over the reliable starts <= 0.1 deg, per joint (J2, C1)",
+  "vs_mujoco": "|(row - consensus of the run rows) on the real arm - the same on the MuJoCo rung| <= 0.1 deg, per joint, worst over B0 / B1 / B2 (the real arm has no truth, so each rung's zero is compared as its offset from the rows' consensus: what a row adds or removes that its peers do not)"
+ },
+ "zero_frame": "q_URDF = sign x board + offset (sign J2 -1, C1 +1, homed_083647); the boards keep their frame across sessions (frame check at every open), so zeros of different starts and rows compare directly",
+ "j1": "held, never homed on the real rung (its CAD stops +-89.98 deg are unconfirmed on the rack; tview_run holds it)",
+ "scorecards": {
+  "rig": {
+   "tview_v2": {
+    "episodes": 4,
+    "time_to_home_s": null,
+    "time_to_home_p95_s": null,
+    "reliability_pct": 0.0,
+    "any_start_pct": null,
+    "backlash_error_deg": null,
+    "backlash_error_max_deg": null,
+    "backlash_observable_pct": 0.0,
+    "joint_angle_error_deg": null,
+    "joint_angle_error_max_deg": null,
+    "joint_angle_error_median_deg": null,
+    "joint_angle_error_worst_joint": null,
+    "joints_unzeroed": 0,
+    "zero_gate_deg": 0.1,
+    "zero_gate_pass": null,
+    "reliability_gate_pass": false,
+    "backlash_gate_pass": null,
+    "zero_median_deg": {
+     "J2": 15.210076464843725,
+     "C1": 95.13094004185481
+    },
+    "zero_spread_deg": {
+     "J2": 0.016479492187498224,
+     "C1": 0.005493164062514211
+    },
+    "zero_spread_max_deg": 0.016479492187498224,
+    "zero_vs_twin_median_deg": {
+     "J2": null,
+     "C1": null
+    },
+    "real_minus_mujoco_deg": 0.016030501953139212
+   },
+   "single_touch": {
+    "episodes": 4,
+    "time_to_home_s": null,
+    "time_to_home_p95_s": null,
+    "reliability_pct": 0.0,
+    "any_start_pct": null,
+    "backlash_error_deg": null,
+    "backlash_error_max_deg": null,
+    "backlash_observable_pct": 0.0,
+    "joint_angle_error_deg": null,
+    "joint_angle_error_max_deg": null,
+    "joint_angle_error_median_deg": null,
+    "joint_angle_error_worst_joint": null,
+    "joints_unzeroed": 0,
+    "zero_gate_deg": 0.1,
+    "zero_gate_pass": null,
+    "reliability_gate_pass": false,
+    "backlash_gate_pass": null,
+    "zero_median_deg": {
+     "J2": 15.216394552976471,
+     "C1": 95.13917978794854
+    },
+    "zero_spread_deg": {
+     "J2": 0.06042480468750355,
+     "C1": 0.0
+    },
+    "zero_spread_max_deg": 0.06042480468750355,
+    "zero_vs_twin_median_deg": {
+     "J2": 14.930762621566137,
+     "C1": 95.13974088290087
+    },
+    "real_minus_mujoco_deg": 0.016030501953139212
+   }
+  }
+ },
+ "verdicts": {
+  "rig": {
+   "tview_v2": {
+    "reliability_pct": 0.0,
+    "reliability_gate_pass": false,
+    "zero_spread_max_deg": 0.016479492187498224,
+    "spread_gate_pass": true,
+    "real_minus_mujoco_deg": 0.016030501953139212,
+    "vs_mujoco_gate_pass": true,
+    "zero_starts": 4,
+    "pass": false
+   },
+   "single_touch": {
+    "reliability_pct": 0.0,
+    "reliability_gate_pass": false,
+    "zero_spread_max_deg": 0.06042480468750355,
+    "spread_gate_pass": true,
+    "real_minus_mujoco_deg": 0.016030501953139212,
+    "vs_mujoco_gate_pass": true,
+    "zero_starts": 4,
+    "pass": false
+   },
+   "two_level_touch+gff": {
+    "pass": false,
+    "not_run": "not runnable on the real arm in either form. Behind recover_first (the MuJoCo row) the blind recovery's re-hold after its first J2 seek ran away on the real arm at 91-93 deg/s powered, every start (run real_two_level_touch_gff_*, the plant's controlled stop and the home button each time). Bare (the home button as the recovery), its first seek carries the gravity feed-forward planned for the upper stop (J2 6.6 N.m) from the hanging rest, where gravity is ~0: on the MuJoCo rung that lunges J2 to 3.4 rad/s and the sequence's own speed guard aborts it (B0 and B2, home start) - not sent to the arm.",
+    "reliability_gate_pass": false,
+    "spread_gate_pass": false,
+    "vs_mujoco_gate_pass": false
+   },
+   "press_reverse+gff": {
+    "pass": false,
+    "not_run": "not run on the real arm: its second side walks J2 to -85 deg (Craig 5) and seeks J2's lower stop (CAD -90.03 = Craig ~0), below the unidentified contact the real arm meets at Craig j2 12.6 / 16.5 deg (fivebar-real-night F08, two stalls on one map; fivebar_homed.LADDER_J2_MIN_DEG 20 keeps every stage above it). It would press up to 10 N.m into that contact and define it as J2's lower stop: a guaranteed wrong zero and an unknown thing pressed. Needs the contact identified (Zach's eye at j2 ~17) or a second side that stays above j2 20.",
+    "reliability_gate_pass": false,
+    "spread_gate_pass": false,
+    "vs_mujoco_gate_pass": false
+   }
+  }
+ },
+ "episodes": {
+  "rig": {
+   "tview_v2": [
+    [
+     "home",
+     false,
+     "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.7808838,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6397705,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "c1-10",
+     false,
+     "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.786377,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6452637,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4",
+     false,
+     "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.7918701,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6397705,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4 c1-10",
+     false,
+     "runaway: J2 at 103 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.7973633,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6452637,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ]
+   ],
+   "single_touch": [
+    [
+     "home",
+     false,
+     "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.7808838,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6342773,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "c1-10",
+     false,
+     "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.7698975,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6342773,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4",
+     false,
+     "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.8303223,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6342773,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ],
+    [
+     "j2+4 c1-10",
+     false,
+     "runaway: J2 at 86 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     null,
+     [
+      [
+       "J2",
+       1,
+       -109.786377,
+       -109.715
+      ],
+      [
+       "C1",
+       1,
+       102.6342773,
+       102.42
+      ]
+     ],
+     [
+      [
+       "J2",
+       null,
+       null,
+       null
+      ],
+      [
+       "C1",
+       null,
+       null,
+       null
+      ]
+     ]
+    ]
+   ]
+  }
+ },
+ "episode_columns": [
+  "start",
+  "finished",
+  "outcome",
+  "time_s",
+  "stalls [joint, side, board_deg, expected_board_deg]",
+  "joints [joint, zero_error_deg (None: no truth), gap_identified_deg, gap_truth_deg]"
+ ],
+ "real_rows": {
+  "tview_v2": [
+   {
+    "start": "home",
+    "run": "real_tview_v2_070054",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     91.7212,
+     -124.9258
+    ],
+    "start_rest_board_deg": [
+     14.5733642578125,
+     -1.3348388671875
+    ],
+    "zero_deg_J2": 15.21831621093748,
+    "zero_deg_C1": 95.13368662388606,
+    "zero_minus_median_deg_J2": 0.008239746093755329,
+    "zero_minus_median_deg_C1": 0.00274658203125,
+    "stalls_off_deg": [
+     -0.0659,
+     0.2198
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     "tick": 766,
+     "time_s": 7.66,
+     "board_deg": [
+      -96.998291015625,
+      95.09765625
+     ]
+    }
+   },
+   {
+    "start": "c1-10",
+    "run": "real_tview_v2_070054",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     90.3589,
+     -135.9066
+    ],
+    "start_rest_board_deg": [
+     15.941162109375,
+     -12.315673828125
+    ],
+    "zero_deg_J2": 15.212823046874977,
+    "zero_deg_C1": 95.12819345982355,
+    "zero_minus_median_deg_J2": 0.0027465820312517764,
+    "zero_minus_median_deg_C1": -0.002746582031264211,
+    "stalls_off_deg": [
+     -0.0714,
+     0.2253
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     "tick": 827,
+     "time_s": 8.27,
+     "board_deg": [
+      -96.9378662109375,
+      95.09765625
+     ]
+    }
+   },
+   {
+    "start": "j2+4",
+    "run": "real_tview_v2_070054",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     93.3197,
+     -126.4254
+    ],
+    "start_rest_board_deg": [
+     12.9803466796875,
+     -2.8289794921875
+    ],
+    "zero_deg_J2": 15.207329882812473,
+    "zero_deg_C1": 95.13368662388606,
+    "zero_minus_median_deg_J2": -0.0027465820312517764,
+    "zero_minus_median_deg_C1": 0.00274658203125,
+    "stalls_off_deg": [
+     -0.0769,
+     0.2198
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 102 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     "tick": 767,
+     "time_s": 7.67,
+     "board_deg": [
+      -96.943359375,
+      95.0921630859375
+     ]
+    }
+   },
+   {
+    "start": "j2+4 c1-10",
+    "run": "real_tview_v2_070054",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 103 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     90.3644,
+     -135.7528
+    ],
+    "start_rest_board_deg": [
+     15.9356689453125,
+     -12.161865234375
+    ],
+    "zero_deg_J2": 15.201836718749982,
+    "zero_deg_C1": 95.12819345982355,
+    "zero_minus_median_deg_J2": -0.008239746093742895,
+    "zero_minus_median_deg_C1": -0.002746582031264211,
+    "stalls_off_deg": [
+     -0.0824,
+     0.2253
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 103 deg/s powered, over 86 deg/s, in step '4. move to (0.25, 0.4) v0.1'",
+     "tick": 777,
+     "time_s": 7.7700000000000005,
+     "board_deg": [
+      -96.9598388671875,
+      95.1251220703125
+     ]
+    }
+   }
+  ],
+  "single_touch": [
+   {
+    "start": "home",
+    "run": "real_single_touch_065618",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     89.1119,
+     -128.2437
+    ],
+    "start_rest_board_deg": [
+     17.1881103515625,
+     -4.6527099609375
+    ],
+    "zero_deg_J2": 15.219141135007723,
+    "zero_deg_C1": 95.13917978794854,
+    "zero_minus_median_deg_J2": 0.0027465820312517764,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0659,
+     0.2143
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     "tick": 1269,
+     "time_s": 12.69,
+     "board_deg": [
+      -102.1124267578125,
+      99.041748046875
+     ]
+    }
+   },
+   {
+    "start": "c1-10",
+    "run": "real_single_touch_065618",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     90.3369,
+     -135.978
+    ],
+    "start_rest_board_deg": [
+     15.963134765625,
+     -12.3870849609375
+    ],
+    "zero_deg_J2": 15.230127463132717,
+    "zero_deg_C1": 95.13917978794854,
+    "zero_minus_median_deg_J2": 0.013732910156246447,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0549,
+     0.2143
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     "tick": 1349,
+     "time_s": 13.49,
+     "board_deg": [
+      -102.2113037109375,
+      99.0032958984375
+     ]
+    }
+   },
+   {
+    "start": "j2+4",
+    "run": "real_single_touch_065618",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     93.836,
+     -126.4254
+    ],
+    "start_rest_board_deg": [
+     12.469482421875,
+     -2.83447265625
+    ],
+    "zero_deg_J2": 15.169702658445214,
+    "zero_deg_C1": 95.13917978794854,
+    "zero_minus_median_deg_J2": -0.046691894531257105,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.1153,
+     0.2143
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 88 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     "tick": 1010,
+     "time_s": 10.1,
+     "board_deg": [
+      -102.12890625,
+      98.9703369140625
+     ]
+    }
+   },
+   {
+    "start": "j2+4 c1-10",
+    "run": "real_single_touch_065618",
+    "finished": false,
+    "reliable": false,
+    "evidence_complete": true,
+    "zero_used": true,
+    "outcome": "runaway: J2 at 86 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+    "time_s": null,
+    "start_rest_joint_deg": [
+     90.8038,
+     -135.7199
+    ],
+    "start_rest_board_deg": [
+     15.496215820312502,
+     -12.1234130859375
+    ],
+    "zero_deg_J2": 15.21364797094522,
+    "zero_deg_C1": 95.13917978794854,
+    "zero_minus_median_deg_J2": -0.0027465820312517764,
+    "zero_minus_median_deg_C1": 0.0,
+    "stalls_off_deg": [
+     -0.0714,
+     0.2143
+    ],
+    "incident": {
+     "kind": "runaway",
+     "message": "runaway: J2 at 86 deg/s powered, over 86 deg/s, in step 'J2 + C1 home'",
+     "tick": 1650,
+     "time_s": 16.5,
+     "board_deg": [
+      -102.12890625,
+      99.4317626953125
+     ]
+    }
+   }
+  ]
+ },
+ "rows": {
+  "tview_v2": {
+   "mujoco": {
+    "B0": {
+     "zero_error_median_deg": {
+      "J2": 0.2846852,
+      "C1": 0.001787
+     },
+     "n": 16,
+     "time_to_home_s": 67.155,
+     "reliability_pct": 100.0
+    },
+    "B1": {
+     "zero_error_median_deg": {
+      "J2": 0.25078924999999996,
+      "C1": -0.040043
+     },
+     "n": 16,
+     "time_to_home_s": 69.625,
+     "reliability_pct": 100.0
+    },
+    "B2": {
+     "zero_error_median_deg": {
+      "J2": 0.2501018,
+      "C1": -0.0407182
+     },
+     "n": 16,
+     "time_to_home_s": 67.08500000000001,
+     "reliability_pct": 100.0
+    }
+   },
+   "mujoco_row": "recover_first+tview_v2",
+   "zero_starts": 4,
+   "comparison": {
+    "B0": {
+     "J2": {
+      "real_minus_consensus_deg": -0.003159044066373795,
+      "mujoco_minus_consensus_deg": -0.0005180499999999921,
+      "real_minus_mujoco_deg": -0.002640994066373803
+     },
+     "C1": {
+      "real_minus_consensus_deg": -0.004119873046860789,
+      "mujoco_minus_consensus_deg": -0.00012332499999999987,
+      "real_minus_mujoco_deg": -0.0039965480468607895
+     }
+    },
+    "B1": {
+     "J2": {
+      "real_minus_consensus_deg": -0.003159044066373795,
+      "mujoco_minus_consensus_deg": -0.0070040749999999985,
+      "real_minus_mujoco_deg": 0.0038450309336262034
+     },
+     "C1": {
+      "real_minus_consensus_deg": -0.004119873046860789,
+      "mujoco_minus_consensus_deg": -0.019810825,
+      "real_minus_mujoco_deg": 0.01569095195313921
+     }
+    },
+    "B2": {
+     "J2": {
+      "real_minus_consensus_deg": -0.003159044066373795,
+      "mujoco_minus_consensus_deg": -0.007271799999999995,
+      "real_minus_mujoco_deg": 0.0041127559336262
+     },
+     "C1": {
+      "real_minus_consensus_deg": -0.004119873046860789,
+      "mujoco_minus_consensus_deg": -0.020150375,
+      "real_minus_mujoco_deg": 0.016030501953139212
+     }
+    }
+   }
+  },
+  "single_touch": {
+   "mujoco": {
+    "B0": {
+     "zero_error_median_deg": {
+      "J2": 0.2857213,
+      "C1": 0.0020336499999999997
+     },
+     "n": 16,
+     "time_to_home_s": 65.16,
+     "reliability_pct": 100.0
+    },
+    "B1": {
+     "zero_error_median_deg": {
+      "J2": 0.26479739999999996,
+      "C1": -0.00042135
+     },
+     "n": 16,
+     "time_to_home_s": 67.245,
+     "reliability_pct": 100.0
+    },
+    "B2": {
+     "zero_error_median_deg": {
+      "J2": 0.2646454,
+      "C1": -0.00041745
+     },
+     "n": 16,
+     "time_to_home_s": 65.14,
+     "reliability_pct": 100.0
+    }
+   },
+   "mujoco_row": "recover_first+single_touch",
+   "zero_starts": 4,
+   "comparison": {
+    "B0": {
+     "J2": {
+      "real_minus_consensus_deg": 0.0031590440663720187,
+      "mujoco_minus_consensus_deg": 0.0005180499999999921,
+      "real_minus_mujoco_deg": 0.0026409940663720266
+     },
+     "C1": {
+      "real_minus_consensus_deg": 0.004119873046860789,
+      "mujoco_minus_consensus_deg": 0.00012332499999999987,
+      "real_minus_mujoco_deg": 0.0039965480468607895
+     }
+    },
+    "B1": {
+     "J2": {
+      "real_minus_consensus_deg": 0.0031590440663720187,
+      "mujoco_minus_consensus_deg": 0.0070040749999999985,
+      "real_minus_mujoco_deg": -0.0038450309336279798
+     },
+     "C1": {
+      "real_minus_consensus_deg": 0.004119873046860789,
+      "mujoco_minus_consensus_deg": 0.019810825,
+      "real_minus_mujoco_deg": -0.01569095195313921
+     }
+    },
+    "B2": {
+     "J2": {
+      "real_minus_consensus_deg": 0.0031590440663720187,
+      "mujoco_minus_consensus_deg": 0.007271799999999995,
+      "real_minus_mujoco_deg": -0.004112755933627976
+     },
+     "C1": {
+      "real_minus_consensus_deg": 0.004119873046860789,
+      "mujoco_minus_consensus_deg": 0.020150375,
+      "real_minus_mujoco_deg": -0.016030501953139212
+     }
+    }
+   }
+  }
+ },
+ "mujoco_json": "/home/bam/sim2real/src/sim2real/data/homing_fivebar_mujoco_pass4_2026-11-12.json",
+ "run_dirs": [
+  "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_two_level_touch_gff_063829",
+  "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_rf_two_level_touch_gff_064427",
+  "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_single_touch_065618",
+  "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_tview_v2_070054"
+ ],
+ "video": {
+  "run": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_single_touch_065618",
+  "episode": "/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing/real_single_touch_065618/episodes/01_c1-10.npz",
+  "frames": [
+   1040,
+   1259
+  ],
+  "fps": 15,
+  "speed": 2,
+  "seconds_real": 15.611347436904907,
+  "mp4": "/home/bam/bam_ws/reports/media/homing-real-2026-11-13/real_single_touch_065618_ep01.mp4",
+  "gif": "/home/bam/bam_ws/reports/media/homing-real-2026-11-13/real_single_touch_065618_ep01.gif",
+  "caption": "The real five-bar, single_touch from the c1-10 start, \u00d72 (D435, run real_single_touch_065618, episode 1): J2 lifts L1 onto its upper stop with the crank limp, then C1 seeks its stop with J2 pushing; the zero is defined there. The clip ends where the J2 + C1 move home met the rack's 86 \u00b0/s runaway ceiling: the plant held the arm, and the home button took it home."
+ },
+ "verdict_html": "<b>The real rung FAILS on reliability: 0 of 16 real episodes finished.</b> On the two rows the real arm could run (tview_v2, single_touch: 4 starts each), every stall landed within 0.12\u00b0 (J2) / 0.21\u00b0 (C1) of its stop's known board position and the zero repeats: <b>spread J2 0.016\u00b0 / C1 0.005\u00b0 (tview_v2), J2 0.060\u00b0 / C1 0.000\u00b0 (single_touch)</b>, inside the 0.1\u00b0 gate; the two rows agree on the real arm within 0.006\u00b0 (J2) / 0.008\u00b0 (C1), and their offset from each other matches the MuJoCo rung's within 0.016\u00b0 (worst of B0/B1/B2), inside 0.1\u00b0. Each episode then stopped 0.1-0.2 s after the zero was defined: the first un-fed hold let the real arm (end group 22 % over CAD) drop J2 at 86-103 \u00b0/s powered, over the rack's 86 \u00b0/s runaway ceiling, so the plant held it and the home button took it home. two_level_touch+gff and press_reverse+gff did not run on the real arm (reasons below). J1 was held, never homed.",
+ "findings_html": [
+  "<b>CAN 12's board trajectory turned a re-anchored setpoint into a 91 \u00b0/s spring-off.</b> A plain position command leaves <code>servo.default_accel_limit</code> (100 rev/s\u00b2, CAN 12 only, records/fivebar-bench) in charge: after a seek pressed its stop the firmware walked its control position 25\u00b0 back from where it was and fed that trajectory's velocity to the D term, pushing J2 off the stop at +7.7 N\u00b7m (4 of 4 starts of the first run). The real plant now sends velocity/accel limits of moteus' \"none\" (a plain PD, as the MuJoCo board model and PlantBackend intend); the home button's own walks (PlantBackend) still carry the default.",
+  "<b>The blind recovery (recover_first) cannot hold the real arm.</b> Its holds carry no gravity feed-forward at 8 N\u00b7m: with L1 near horizontal the real J2 dropped at 87 \u00b0/s (2 of 4), its step-11 define found J2 pushed 3.7\u00b0 off its stop by the crank's hub (1 of 4), and one start lost a bus exchange. So every MuJoCo row, all of which ran behind recover_first, was run bare on the real arm, with the home button as the recovery (which is what sets every real start).",
+  "<b>No-feed-forward holds and moves cannot carry the real arm's L1.</b> tview_v2's first waypoint and single_touch's move home both begin with a hold at the stop: J2 drops (86-103 \u00b0/s) before the move can catch it. The MuJoCo twin (lighter CAD masses) also passes the ceiling in these procedures, later: 124 \u00b0/s on tview's second waypoint, 111 \u00b0/s on single_touch's move home. Either way the zero is already defined.",
+  "<b>two_level_touch+gff has no real form.</b> Behind recover_first it never reaches its own steps (above). Bare, its first seek carries the feed-forward planned for the upper stop (J2 6.6 N\u00b7m) from the hanging rest: MuJoCo lunges J2 to 3.4 rad/s and aborts (B0, B2), so it was not sent to the arm. The +gff feed-forward is planned for the pose a step ends at; it needs the pose the step starts from too.",
+  "<b>press_reverse+gff not run:</b> its second side walks J2 to Craig 5\u00b0 and seeks J2's lower stop at Craig ~0\u00b0, below the unidentified contact the real arm meets at Craig 12.6-16.5\u00b0 (the F08 stalls; fivebar_homed keeps every stage above Craig 20\u00b0).",
+  "<b>The home button refuses at its own home.</b> bam_fivebar_recovery.home.classify calls the real hanging rest (89.1, -128.2) <code>past_straight</code> (the branch boundary runs through home) and its settle cannot change a hanging rest: run real_rf_two_level_touch_gff_064427 ended on that refusal at home. The runner now skips a walk when the arm already rests within 2\u00b0 of its target and walks the starts by fivebar_homed's board leg.",
+  "<b>A plant close left CAN 12 in BRAKE</b> after that refusal (the next run refused to open: \"CAN 12 is in mode 15\"); it read mode 0 at the release check 2 min later. Bus exchanges were lost twice in one run (6.5 per million known); each time the plant held and the home button recovered.",
+  "<b>Encoder step:</b> J2's zeros differ by multiples of 0.011\u00b0 (360\u00b0/32768); C1 read the same stall value on every single_touch start."
+ ]
+}

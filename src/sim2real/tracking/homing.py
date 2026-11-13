@@ -43,6 +43,10 @@ COLUMNS = (
     ("True-zero error vs twin contact p95 (°)", "vs_twin.joint_angle_error_deg", True),
     ("Backlash error p95 (°)", "backlash_error_deg", True),
     ("Time to home, median (s)", "time_to_home_s", True),
+    # the real rung's zero checks (it has no truth): the zero's spread over its starts, and its offset from the run rows' consensus
+    # against the same on the MuJoCo rung (real_bench.score); empty on the simulated rungs
+    ("Zero repeat spread, real (°)", "zero_spread_max_deg", True),
+    ("Real − MuJoCo zero (°)", "real_minus_mujoco_deg", True),
 )
 
 
@@ -69,6 +73,15 @@ def _numbers(card: dict, prefix: str = "") -> dict:
 
 def _episode_rows(results: dict, model: str, procedure: str) -> list[dict]:
     from robot_models.homing.metrics import reliable  # noqa: PLC0415
+
+    if results["rung"] == "real":
+        # WHY its own rows (real_bench.score): no true zero on the real arm, so no zero error; a start is inside the gate when it is
+        # reliable and its zero sits within the gate of the row's median (the spread gate's per-start view)
+        gate = results["gate_deg"]
+        return [{**row, "worst_zero_error_deg": None,
+                 "inside_gate": bool(row["reliable"] and all(row.get(f"zero_minus_median_deg_{j}") is not None
+                                                             and abs(row[f"zero_minus_median_deg_{j}"]) <= gate for j in ("J2", "C1")))}
+                for row in results["real_rows"].get(procedure, [])]
 
     from ..sim.homing.bench import expand  # noqa: PLC0415 -- the compact rows' one reader
 
