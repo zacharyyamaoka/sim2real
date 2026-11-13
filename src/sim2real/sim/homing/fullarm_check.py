@@ -297,7 +297,8 @@ def _job(job: dict) -> dict:
     from .fullarm_procedures import FullArmHome  # noqa: F401,PLC0415
 
     belt = job.get("belt_top_m")
-    plant = FullArmHomingPlant(job["kind"], job.get("truth", "cad"), belt_top_m=belt, settle_s=3.0 if job.get("hanging") else 0.5)
+    plant = FullArmHomingPlant(job["kind"], job.get("truth", "cad"), belt_top_m=belt, settle_s=3.0 if job.get("hanging") else 0.5,
+                               contact_timeconst_s=job.get("contact_timeconst_s"))
     table = None
     if job.get("table"):
         table = table_from_json(job["table"])
@@ -424,6 +425,13 @@ def sweep_jobs(sweep: str, *, n_wrist: int = 12) -> list[dict]:
             hang = ArmStart("hanging on the belt", *HOME_CRAIG_DEG, family="hanging")
             for kind in ("B0", "B1", "B2"):
                 add(spec, kind, hang, hanging=True, belt_top_m=0.0, tag=kind)
+    elif sweep == "fivebar_soft":
+        # the same with the stop / loop pairs at a 10 ms time constant (the bundle's 2 ms): is the kick the twin's stiff contacts?
+        for job in sweep_jobs("fivebar", n_wrist=n_wrist):
+            job["contact_timeconst_s"] = 0.01
+            job["key"] += " soft"
+            job["procedure"] = {**job["procedure"], "name": job["procedure"]["name"] + " [stops 10 ms]"}
+            jobs.append(job)
     elif sweep == "wrist_policy":
         for policy in ("hold", "brake"):
             for start in starts("real") + starts("wrist", 4):

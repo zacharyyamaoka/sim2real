@@ -308,7 +308,8 @@ class FullArmHomingPlant:
 
     def __init__(self, kind: str = "B0", truth: str = "cad", *, cogging: bool = True, settle_s: float = 0.5,
                  runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
-                 limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None):
+                 limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None,
+                 contact_timeconst_s: float | None = None):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -328,6 +329,9 @@ class FullArmHomingPlant:
         # the belt's top face (world z, m): 0 is the rack's belt; +0.10 stands in for the claw propped 10 cm off it (a prop under it the
         # whole run - Zach's prop, 2026-11-13). None (the default): no belt within reach - every sweep before 2026-11-13 16:00 ran so
         self.belt_top_m = BELT_AWAY_M if belt_top_m is None else float(belt_top_m)
+        # WHY a knob (sim 2026-11-13 evening): with the exporter's 2 ms stop / loop pairs the five-bar kicks J2 to 142-324 deg/s leaving its
+        # upper stops on some starts; at 10 ms it does not. None keeps the bundle's (every run before then).
+        self.contact_timeconst_s = contact_timeconst_s
         model = self.rig.model
         self.claw_qadr = int(model.jnt_qposadr[model.joint(CLAW).id])
         self.claw_dof = int(model.jnt_dofadr[model.joint(CLAW).id])
@@ -421,6 +425,11 @@ class FullArmHomingPlant:
 
         model = self.rig.model
         model.geom_pos[model.geom(BELT).id][2] = self.belt_top_m - BELT_HALF_M[2]  # the model is cached per process: set every reset
+        if not hasattr(self, "_pair_solref0"):
+            self._pair_solref0 = model.pair_solref.copy()
+        model.pair_solref[:] = self._pair_solref0
+        if self.contact_timeconst_s is not None:
+            model.pair_solref[:, 0] = self.contact_timeconst_s
         q = self.place(start)
         boards = real_boards()
         wrist_board = BoardConfig(kp=self.wrist_gains[0], ki=0.0, kd=self.wrist_gains[1], ilimit=0.0, max_torque_nm=WRIST_MAX_NM)
