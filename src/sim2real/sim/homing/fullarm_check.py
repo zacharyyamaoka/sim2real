@@ -146,6 +146,16 @@ class EpisodeReport:
     witness_deg: dict = field(default_factory=dict)
     notes: dict = field(default_factory=dict)
     trace: dict | None = None
+    # the belt (a plant built with belt=True; empty otherwise): what rested on it at power-on, every tick something touched it, and the
+    # ticks AFTER lift-off (the first tick nothing touched it) - a homing that presses the belt again has hit something it cannot see
+    belt_start_bodies: list = field(default_factory=list)
+    belt_contact_ticks: int = 0
+    belt_first_s: float | None = None
+    belt_last_s: float | None = None
+    belt_liftoff_s: float | None = None
+    belt_after_liftoff_ticks: int = 0
+    belt_bodies: list = field(default_factory=list)
+    settle_waited_s: float | None = None
 
     def record(self, scored: Sequence[str]) -> EpisodeRecord:
         """robot_models' EpisodeRecord over the ``scored`` joints (J1 is held and never homed in the real form: never scored)."""
@@ -203,6 +213,10 @@ def run_episode(procedure, plant: FullArmHomingPlant, start: ArmStart, prior, *,
     breaches = guard_ticks(log, rules)
     touched = [(k, pairs) for k, pairs in enumerate(log["self_contact"]) if pairs]
     t = log["t"]
+    belt = log.get("belt_contact") or [[] for _ in t]
+    on_belt = [k for k, pairs in enumerate(belt) if pairs]
+    liftoff = next((k for k, pairs in enumerate(belt) if not pairs), None)
+    after = [k for k in on_belt if liftoff is not None and k > liftoff]
     report = EpisodeReport(
         procedure=procedure.name, environment=environment or f"mujoco/{plant.kind}/{plant.truth_name}", start=start.name,
         family=start.family, finished=finished, outcome=outcome, time_s=plant.time if finished else None, zero_error_deg=zero,
@@ -216,7 +230,13 @@ def run_episode(procedure, plant: FullArmHomingPlant, start: ArmStart, prior, *,
         torque_cap_nm={ROLE[j]: v for j, v in BOARD_MAX_NM.items()},
         peak_current_a={ROLE[j]: round(v / KT_NM_PER_A[j], 3) for j, v in plant.peak_torque_nm.items()},
         start_settled_deg=dict(truth["start_settled_deg"]), witness_deg=dict(procedure.notes.get("witness_deg", {})),
-        notes={k: v for k, v in procedure.notes.items() if k in ("witness_refused", "phase1_parked")})
+        notes={k: v for k, v in procedure.notes.items() if k in ("witness_refused", "phase1_parked", "retries", "touch_spread_deg",
+                                                                 "span_error_deg", "consistency_refused")},
+        belt_start_bodies=sorted(c.split("/", 1)[1] for c in truth.get("start_belt") or []), belt_contact_ticks=len(on_belt),
+        belt_first_s=t[on_belt[0]] if on_belt else None, belt_last_s=t[on_belt[-1]] if on_belt else None,
+        belt_liftoff_s=t[liftoff] if liftoff is not None else None, belt_after_liftoff_ticks=len(after),
+        belt_bodies=sorted({c.split("/", 1)[1] for k in on_belt for c in belt[k]}),
+        settle_waited_s=truth.get("settle_waited_s"))
     if trace_every:
         report.trace = trace_of(plant, phases, every=trace_every)
     return report
@@ -235,7 +255,8 @@ def trace_of(plant: FullArmHomingPlant, phases, every: int = 3) -> dict:
     return {"t": [log["t"][k] for k in keep], "qpos": [log["qpos"][k] for k in keep] if "qpos" in log else None,
             "link_deg": [[round(math.degrees(v), 3) for v in log["link"][k]] for k in keep],
             "effort_nm": [[round(v, 4) for v in log["effort"][k]] for k in keep],
-            "self_contact": [log["self_contact"][k] for k in keep], "step": [step_at.get(k, "") for k in keep], "joints": list(JOINTS)}
+            "self_contact": [log["self_contact"][k] for k in keep], "step": [step_at.get(k, "") for k in keep], "joints": list(JOINTS),
+            "belt": [list((log.get("belt_contact") or [[]] * len(log["t"]))[k]) for k in keep]}
 
 
 # ---------------------------------------------------------------------------------------------------------------- starts

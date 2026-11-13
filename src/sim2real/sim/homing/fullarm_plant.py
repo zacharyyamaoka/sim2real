@@ -119,6 +119,11 @@ BELT_CENTRE_M = (0.35, 0.04)
 BELT_HALF_M = (0.225, 0.80, 0.25)  # WHY 0.5 m deep: a thin slab raised for the prop let the arm pass under it
 BELT = "belt"
 START_PENETRATION_M = 0.005  # a start may rest on the belt (contact), never sit 5 mm into it
+# WHY a stiffer belt when asked (``belt_solref``; the homing routine's start grid, 2026-11-13): on MuJoCo's default soft contact (0.02 s) the
+# limp arm crept ~0.6 deg/s along the belt and never came to rest in 10 s of settling - a rubber belt's static friction holds it. 2 ms (the
+# stops' class, 8 physics steps) with the stops' solimp holds it still within 0.3 s.
+BELT_STIFF_SOLREF = (0.002, 1.0)
+BELT_STIFF_SOLIMP = (0.99, 0.999, 0.0001, 0.5, 2.0)  # bam_fb_test_rig STIFF.stop_solimp
 BELT_AWAY_M = -10.0  # the belt's top when a plant is built without one
 
 
@@ -249,11 +254,13 @@ class ArmPrior(Prior):
     turn: Mapping[str, float] = field(default_factory=dict)
 
 
-def arm_prior(table=None, *, phase_error_deg: float = 0.0) -> ArmPrior:
-    """The procedures' prior: CAD stops, every joint, the rotor phases as calibrated (``phase_error_deg`` adds a calibration error)."""
+def arm_prior(table=None, *, phase_error_deg: float = 0.0, rotor_phase_deg: Mapping[str, float] | None = None) -> ArmPrior:
+    """The procedures' prior: CAD stops, every joint, the rotor phases as calibrated (``phase_error_deg`` adds a calibration error;
+    ``rotor_phase_deg`` is the calibration of a plant given other phases than ``ROTOR_PHASE_DEG``)."""
+    phases = ROTOR_PHASE_DEG if rotor_phase_deg is None else rotor_phase_deg
     return ArmPrior(stops=cad_stops(), joints=JOINTS, seek_side={J1: +1, J2: +1, C1: +1, W1: +1, W2: -1, W3: +1, CLAW: -1},
                     table=table, caps_nm=dict(BOARD_MAX_NM),
-                    rotor_phase={j: math.radians(v + phase_error_deg) for j, v in ROTOR_PHASE_DEG.items()}, turn=dict(TURN_RAD))
+                    rotor_phase={j: math.radians(v + phase_error_deg) for j, v in phases.items()}, turn=dict(TURN_RAD))
 
 
 # -- starts ---------------------------------------------------------------------------------------------------------------------------
@@ -309,7 +316,8 @@ class FullArmHomingPlant:
     def __init__(self, kind: str = "B0", truth: str = "cad", *, cogging: bool = True, settle_s: float = 0.5,
                  runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
                  limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None,
-                 contact_timeconst_s: float | None = None):
+                 contact_timeconst_s: float | None = None, settle_all: bool = False, belt_solref: tuple[float, float] | None = None,
+                 rotor_phase_deg: Mapping[str, float] | None = None):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -332,6 +340,13 @@ class FullArmHomingPlant:
         # WHY a knob (sim 2026-11-13 evening): with the exporter's 2 ms stop / loop pairs the five-bar kicks J2 to 142-324 deg/s leaving its
         # upper stops on some starts; at 10 ms it does not. None keeps the bundle's (every run before then).
         self.contact_timeconst_s = contact_timeconst_s
+        # WHY settle_all (the homing routine's start grid, 2026-11-13): a start is where the arm was when the power went; the WHOLE arm then
+        # falls (onto the belt, its stops or itself) before power-on - the five-bar's drives are unpowered too - so power-on waits until every
+        # joint is still, not only the wrist. False: the wrist's stillness only (every sweep before then).
+        self.settle_all = bool(settle_all)
+        self.belt_solref = None if belt_solref is None else (float(belt_solref[0]), float(belt_solref[1]))
+        # the boards' sub-turn offsets (hidden truths): ROTOR_PHASE_DEG unless a perturbation draws another power-up frame
+        self.rotor_phase_deg = dict(ROTOR_PHASE_DEG if rotor_phase_deg is None else rotor_phase_deg)
         model = self.rig.model
         self.claw_qadr = int(model.jnt_qposadr[model.joint(CLAW).id])
         self.claw_dof = int(model.jnt_dofadr[model.joint(CLAW).id])
@@ -371,6 +386,10 @@ class FullArmHomingPlant:
     def place(self, start: ArmStart) -> np.ndarray:
         """``start``'s closed pose on this twin (``fullarm_home.place`` for the five-bar), refused where the arm would sit in self-contact."""
         import mujoco  # noqa: PLC0415
+
+        # WHY here too, not only in reset (2026-11-13): the model is cached per process and shared by every plant on the same rig, so the
+        # belt's height is this plant's state - a place() before this plant's first reset read whatever the last plant left there
+        self.rig.model.geom_pos[self.rig.model.geom(BELT).id][2] = self.belt_top_m - BELT_HALF_M[2]
 
         five = fh.FullStart(start.name, start.j2_deg, start.c1_deg, start.knee, start.wrist_deg, False, start.family, start.j1_deg)
         try:
@@ -425,6 +444,13 @@ class FullArmHomingPlant:
 
         model = self.rig.model
         model.geom_pos[model.geom(BELT).id][2] = self.belt_top_m - BELT_HALF_M[2]  # the model is cached per process: set every reset
+        belt = model.geom(BELT).id
+        if not hasattr(self, "_belt_sol0"):
+            self._belt_sol0 = (model.geom_solref[belt].copy(), model.geom_solimp[belt].copy())
+        model.geom_solref[belt], model.geom_solimp[belt] = self._belt_sol0
+        if self.belt_solref is not None:
+            model.geom_solref[belt] = self.belt_solref
+            model.geom_solimp[belt] = BELT_STIFF_SOLIMP
         if not hasattr(self, "_pair_solref0"):
             self._pair_solref0 = model.pair_solref.copy()
         model.pair_solref[:] = self._pair_solref0
@@ -467,10 +493,12 @@ class FullArmHomingPlant:
             if self.settle_s > 0:
                 sim.step(self.settle_s)
                 still, waited = 0.0, 0.0
-                while still < 0.3 and waited < 5.0:
+                watched = slice(None) if self.settle_all else wrist_dofs
+                limit = 10.0 if self.settle_all else 5.0
+                while still < 0.3 and waited < limit:
                     sim.step(0.05)
                     waited += 0.05
-                    still = still + 0.05 if float(np.max(np.abs(sim.data.qvel[wrist_dofs]))) < 0.01 else 0.0
+                    still = still + 0.05 if float(np.max(np.abs(sim.data.qvel[watched]))) < 0.01 else 0.0
                 self.settle_waited_s = waited
         finally:
             model.dof_frictionloss[wrist_dofs] = sliding
@@ -484,11 +512,12 @@ class FullArmHomingPlant:
             if joint in FIVEBAR:
                 self.hidden[joint] = FIVEBAR_HIDDEN_RAD[joint]
             else:
-                raw = wrap_turn(motor + math.radians(ROTOR_PHASE_DEG[joint]), TURN_RAD[joint])
+                raw = wrap_turn(motor + math.radians(self.rotor_phase_deg[joint]), TURN_RAD[joint])
                 self.hidden[joint] = motor - raw  # raw = motor - hidden
         self.frame = {j: 0.0 for j in JOINTS}
         self.start = start
         self.start_settled_deg = {ROLE[j]: round(math.degrees(self._link(j)), 3) for j in JOINTS}
+        self.start_belt = self.belt_contacts()  # what rests on the belt at power-on
         self._velocity = {j: 0.0 for j in JOINTS}
         self.peak_powered_rad_s = {j: 0.0 for j in JOINTS}
         self.peak_torque_nm = {j: 0.0 for j in JOINTS}
@@ -608,7 +637,8 @@ class FullArmHomingPlant:
     def truth(self) -> dict:
         return {"time_s": self.time, "link_rad": {j: self._link(j) for j in JOINTS}, "motor_rad": {j: self._motor(j) for j in JOINTS},
                 "true_offset_rad": dict(self.hidden), "frame_rad": dict(self.frame), "backlash": dict(self.backlash),
-                "start_settled_deg": dict(self.start_settled_deg), "kind": self.kind, "truth": self.truth_name}
+                "start_settled_deg": dict(self.start_settled_deg), "kind": self.kind, "truth": self.truth_name,
+                "start_belt": list(getattr(self, "start_belt", [])), "settle_waited_s": getattr(self, "settle_waited_s", None)}
 
     def _stops_touching(self) -> list[str]:
         contacts = self.rig.stop_contacts(self.sim.data)
