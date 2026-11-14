@@ -407,7 +407,12 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
     wb = json.loads(wandb_summary.read_text()) if wandb_summary and wandb_summary.is_file() else {}
     nominal_rows = sorted({k.split(" | ")[0] for k in cards if k.endswith(" | nominal")},
                           key=lambda r: rank_key(cards[f"{r} | nominal"]))
-    maps = "".join(f"<div class='map'>{coverage_svg(episodes, row, ruler.NOMINAL)}</div>" for row in nominal_rows)
+    # WHY not every row's map (the page's size: each map is 144 cells): the rows as run, plus the recommended one and the two orders under
+    # the tight witness; a table row's map is its plain row's (the table only re-zeroes)
+    shown = [r for r in nominal_rows if (not r.endswith(TIGHT) and "+table" not in r) or r in
+             (recommended + TIGHT if not recommended.endswith(TIGHT) else recommended, "zach_v1 @ READY" + TIGHT,
+              "park_first+witness @ READY" + TIGHT, "V1+table, park_first on a W1 refusal @ READY" + TIGHT)]
+    maps = "".join(f"<div class='map'>{coverage_svg(episodes, row, ruler.NOMINAL)}</div>" for row in shown)
     done = sum(1 for e in episodes if e.get("environment") == ruler.NOMINAL)
     planned = len(ruler.grid_cells()) * 5 + len(ruler.subset_cells()) * 3
     calib = "".join(f"<li><b>{esc(env)}</b>: {esc(c.get('outcome'))}; gap error vs hidden (′): {esc(c.get('gap_error_arcmin'))}</li>"
