@@ -435,8 +435,11 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              (recommended + TIGHT if not recommended.endswith(TIGHT) else recommended, "zach_v1 @ READY" + TIGHT,
               "park_first+witness @ READY" + TIGHT, "V1+table, park_first on a W1 refusal @ READY" + TIGHT)]
     maps = "".join(f"<div class='map'>{coverage_svg(episodes, row, ruler.NOMINAL)}</div>" for row in shown)
-    done = sum(1 for e in episodes if e.get("environment") == ruler.NOMINAL)
-    planned = len(ruler.grid_cells()) * 5 + len(ruler.subset_cells()) * 3
+    run = [e for e in episodes if not e.get("derived_from") and not str(e.get("environment", "")).endswith(" · folded wrist")]
+    done = sum(1 for e in run if e.get("environment") == ruler.NOMINAL)
+    from sim2real.sim.homing.routine_check import plan_jobs  # noqa: PLC0415
+
+    planned = sum(len(j["rows"]) for j in plan_jobs("light") if j["environment"] == ruler.NOMINAL)
     calib = "".join(f"<li><b>{esc(env)}</b>: {esc(c.get('outcome'))}; gap error vs hidden (′): {esc(c.get('gap_error_arcmin'))}</li>"
                     for env, c in calibrations.items())
     wandb_line = (f"<p>W&amp;B: <a href='{esc(wb.get('project_url', ''))}'>{esc(wb.get('project', 'Homing · bam_fb_v2'))}</a>"
@@ -445,7 +448,9 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              f"<title>Homing routine bam_fb_v2</title><style>{CSS}</style></head><body>",
              "<h1>A better homing routine for the full arm (bam_fb_v2) — sim only</h1>",
              f"<p class='verdict'>{notes.get('verdict', '')}</p><p class='sub'>{notes.get('qualification', '')}</p>",
-             f"<p class='sub'>Episodes scored: {done} nominal of ~{planned} planned + {len(episodes) - done} perturbed. "
+             f"<p class='sub'>Episodes run: {done} of {planned} planned on the nominal twin + {len(run) - done} in the perturbed twins "
+             f"(+ {len(episodes) - len(run)} derived or folded-wrist rows). The whole 144-cell grid ran V1 and park_first - the recommended "
+             f"routine's two paths; multi x2, press_reverse and the subset rows ran on READY's 36 cells (routine_check --plan light). "
              f"Ruler frozen before any routine ran (<code>sim2real.sim.homing.routine_ruler</code>, {esc(notes.get('ruler_commit', ''))}). "
              f"Twin: MuJoCo, bam_fb_v2 @ cad-exporter 09374d7, the rack's belt as a contact.</p>", wandb_line,
              video(media, notes.get("hero", ""), notes.get("hero_caption", "")),
