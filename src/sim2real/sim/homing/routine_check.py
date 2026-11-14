@@ -55,6 +55,9 @@ PERTURBED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY",
 LIGHT_GRID_ROWS = ("zach_v1 @ READY", "park_first+witness @ READY")
 LIGHT_PERTURBED_ROWS = ("park_first+witness @ READY", "press_reverse (backlash every home) @ READY", "zach_v1 @ READY")
 LIGHT_SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)",)
+# Zach's J1 (2026-11-13 night, ruler amendment 5): the recommended routine's two paths with J1 homed at READY before the claw, run on the
+# whole nominal grid and every twin's subset - their "+table" rows, the tight witness and the W1-refusal branch derive as before
+J1_ROWS = ("zach_v1+J1 @ READY", "park_first+witness+J1 @ READY")
 TABLE_ENVIRONMENTS = ("B1", "B2")  # where a stored table can differ from B0's (B0: every gap 0)
 CALIBRATION_START = {"name": "calibration: power lost at READY, claw plumb", "j2_deg": ruler.FIVEBAR_LEVELS["READY"][0],
                      "c1_deg": ruler.FIVEBAR_LEVELS["READY"][1], "wrist_deg": (1.167, 90.0, 0.0), "claw_deg": 30.0, "knee": -1,
@@ -86,6 +89,20 @@ def needs_table(row: str) -> bool:
     from .fullarm_routine import ROWS  # noqa: PLC0415
 
     return bool(ROWS[row].get("needs_table"))
+
+
+def homes_j1(row: str) -> bool:
+    from .fullarm_routine import ROWS  # noqa: PLC0415
+
+    return bool((ROWS.get(row.removesuffix(TIGHT_SUFFIX)) or {}).get("home_j1"))
+
+
+def j1_overrides(rows) -> dict:
+    """The plant a job's rows need: J1 PD-only where they home J1 (fullarm_plant's j1_integrator WHY). A job never mixes the two."""
+    homing = {homes_j1(row) for row in rows}
+    if len(homing) > 1:
+        raise ValueError(f"a job's rows must all home J1 or all hold it: {list(rows)}")
+    return {"j1_integrator": False} if homing == {True} else {}
 
 
 def episode_key(row: str, environment: str, cell_name: str) -> str:
@@ -169,12 +186,19 @@ def procedure_for(row: str):
 
 
 def plan_jobs(plan: str = "all") -> list[dict]:
-    """One job per (cell, environment): the rows to run there. ``plan``: all, nominal (the grid and the subset rows), perturbed, smoke."""
+    """One job per (cell, environment): the rows to run there. ``plan``: all, nominal (the grid and the subset rows), perturbed, smoke,
+    light (module comment), j1 (``J1_ROWS`` on every nominal cell and every twin's subset)."""
     cells = ruler.grid_cells()
     subset = {c["name"] for c in ruler.subset_cells()}
     jobs = []
     first = next(iter(ruler.FIVEBAR_LEVELS))
     for index, cell in enumerate(cells):
+        if plan == "j1":
+            jobs.append({"cell_index": index, "cell": cell, "environment": ruler.NOMINAL, "rows": list(J1_ROWS)})
+            if cell["name"] in subset:
+                jobs += [{"cell_index": index, "cell": cell, "environment": environment, "rows": list(J1_ROWS)}
+                         for environment in ruler.ENVIRONMENTS if environment != ruler.NOMINAL]
+            continue
         light = plan == "light" and cell["family"] != first
         if plan in ("all", "nominal", "smoke", "light"):
             grid_rows = LIGHT_GRID_ROWS if light else GRID_ROWS
@@ -227,6 +251,8 @@ def _report_row(report, row: str, job: dict, wall_s: float, branched: bool, keep
     out.update({"procedure": row, "row": row, "environment": job["environment"], "cell_index": job["cell_index"],
                 "cell": job["cell"].get("cell"), "wall_s": round(wall_s, 1), "branched": branched,
                 "key": episode_key(row, job["environment"], job["cell"]["name"])})
+    if homes_j1(row):
+        out["homes_j1"] = True  # ruler amendment 5: J1 is scored
     out["outcome_class"] = ruler.outcome_class(out)
     out["covered"] = ruler.covered(out)
     return out
@@ -244,14 +270,15 @@ def run_job(job: dict, *, tables: dict | None = None, branch: bool = True, trace
 
     environment, cell = job["environment"], job["cell"]
     start = ArmStart(**{k: v for k, v in cell.items() if k != "cell"})
-    plant = FullArmHomingPlant(**{**plant_kwargs(environment), **(plant_overrides or {})})
+    plant = FullArmHomingPlant(**{**plant_kwargs(environment), **j1_overrides(job["rows"]), **(plant_overrides or {})})
     table_rows = (tables or {}).get(environment)
     try:
         plant.place(start)
     except StartRefused as error:
         return [{"refused_start": str(error), "procedure": row, "row": row, "environment": environment, "cell_index": job["cell_index"],
                  "cell": cell.get("cell"), "start": cell["name"], "family": cell["family"], "outcome_class": "infeasible", "covered": False,
-                 "key": episode_key(row, environment, cell["name"])} for row in job["rows"]]
+                 "key": episode_key(row, environment, cell["name"]), **({"homes_j1": True} if homes_j1(row) else {})}
+                for row in job["rows"]]
     out = []
     shared = None  # (plant after phase 0, [phase 0], its signature)
     for row in job["rows"]:
@@ -365,7 +392,8 @@ def partition(episodes: list[dict]) -> list[dict]:
 # motor_past_link (side x (gap / 2 + compliance x torque)) to its zero - so "<order> + table" moves exactly as "<order>". A table row is
 # derived from its plain row wherever it was not run (V1 + table on the nominal grid; both orders in the twins whose gaps are B0, with the
 # nominal twin's table); routine_check's own "+table" episodes, where they exist, check the derivation (test_homing_routine).
-TABLE_OF = {"zach_v1 @ READY": "zach_v1+table @ READY", "park_first+witness @ READY": "park_first+witness+table @ READY"}
+TABLE_OF = {"zach_v1 @ READY": "zach_v1+table @ READY", "park_first+witness @ READY": "park_first+witness+table @ READY",
+            "zach_v1+J1 @ READY": "zach_v1+table+J1 @ READY", "park_first+witness+J1 @ READY": "park_first+witness+table+J1 @ READY"}
 SEEK_SIDE_ROLE = {"W1": +1, "W2": -1, "W3": +1, "CLAW": -1}
 STALL_TORQUE_NM = {"W1": 1.0, "W2": 1.0, "W3": 1.0, "CLAW": 0.3}  # a stall is read saturated at its seek's cap (Stall's lead > cap / kp)
 
@@ -446,7 +474,8 @@ TIGHT_WITNESS_DEG = 0.5
 # plain row, so its episodes are the plain row's with each defining stall re-judged against the trusted home's own reading of that stall
 TIGHT_ROWS = ("park_first+witness @ READY", "park_first+witness+table @ READY", "multi x2 (3D-printer) @ READY",
               "multi x3 (3D-printer) @ READY", "fast single @ READY", "zach_v1 @ READY", "press_reverse (backlash every home) @ READY",
-              "zach_v1+table @ READY")
+              "zach_v1+table @ READY", "zach_v1+J1 @ READY", "park_first+witness+J1 @ READY", "zach_v1+table+J1 @ READY",
+              "park_first+witness+table+J1 @ READY")
 # WHY press_reverse gets only the five-bar's: its wrist stalls are pressed at two levels on both sides, so they read the gap and the wind-up
 # a one-touch reference does not; its span witness already guards the wrist
 FIVEBAR_ONLY_TIGHT = ("press_reverse (backlash every home) @ READY",)
@@ -457,11 +486,12 @@ TIGHT_SUFFIX = " · witness 0.5° (stall-calibrated)"
 STALE_CALIBRATION = {"phase_cal_error": "nominal"}
 
 
-def trusted_homes(episodes: list[dict], environment: str) -> list[dict]:
+def trusted_homes(episodes: list[dict], environment: str, row: str = "park_first+witness @ READY") -> list[dict]:
     """The plain park_first runs in ``environment`` that ended on their right stops - homed, or inaccurate only by an uncorrected gap
     (B1 / B2 without a table). WHY not "homed" alone (2026-11-13): on the geared twins no table-less run is homed, so the five-bar's
-    reference came out empty and its witness skipped C1 stalling 44 deg short on the claw jammed against the base."""
-    return [e for e in episodes if e.get("environment") == environment and e.get("row") == "park_first+witness @ READY"
+    reference came out empty and its witness skipped C1 stalling 44 deg short on the claw jammed against the base. ``row``: J1's
+    reference comes from the park_first runs that home J1 (``park_first+witness+J1``)."""
+    return [e for e in episodes if e.get("environment") == environment and e.get("row") == row
             and ruler.outcome_class(e) in ("homed", "inaccurate")]
 
 
@@ -491,6 +521,10 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
         homed = trusted_homes(episodes, source)
         fivebar = {role: statistics.median([e["zero_error_deg"][role] for e in homed if e["zero_error_deg"].get(role) is not None])
                    for role in FIVEBAR_ROLES if any(e["zero_error_deg"].get(role) is not None for e in homed)}
+        j1_homes = [e["zero_error_deg"]["J1"] for e in trusted_homes(episodes, source, "park_first+witness+J1 @ READY")
+                    if e["zero_error_deg"].get("J1") is not None]
+        if j1_homes:
+            fivebar["J1"] = statistics.median(j1_homes)
         references[environment] = ({**(reference or {}), **{f"fivebar:{k}": v for k, v in fivebar.items()}} or None)
     out = []
     for episode in episodes:
@@ -511,7 +545,7 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
                     worst = max((abs((v - reference[role] + 18.0) % 36.0 - 18.0) for v in values), default=0.0)
                     if worst > tol_deg:
                         off[role] = round(worst, 3)
-            for role in FIVEBAR_ROLES:
+            for role in FIVEBAR_ROLES + (("J1",) if episode.get("homes_j1") else ()):
                 value, ref = episode["zero_error_deg"].get(role), reference.get(f"fivebar:{role}")
                 if value is None or ref is None:
                     continue
@@ -534,7 +568,9 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
 # never trusts it and parks back 135 deg. So "V1, and park_first's path when the tight witness refuses W1's stall" moves exactly as V1 when
 # the witness passes and exactly as park_first when it does not, decided by a reading the rack has at that tick.
 FALLBACK = {"zach_v1 @ READY": ("park_first+witness @ READY", "V1, park_first on a W1 refusal @ READY"),
-            "zach_v1+table @ READY": ("park_first+witness+table @ READY", "V1+table, park_first on a W1 refusal @ READY")}
+            "zach_v1+table @ READY": ("park_first+witness+table @ READY", "V1+table, park_first on a W1 refusal @ READY"),
+            "zach_v1+J1 @ READY": ("park_first+witness+J1 @ READY", "V1+J1, park_first on a W1 refusal @ READY"),
+            "zach_v1+table+J1 @ READY": ("park_first+witness+table+J1 @ READY", "V1+table+J1, park_first on a W1 refusal @ READY")}
 
 
 def fallback_derived(episodes: list[dict]) -> list[dict]:
@@ -642,7 +678,7 @@ def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--plan", default="all", choices=("all", "nominal", "perturbed", "smoke", "light"))
+    parser.add_argument("--plan", default="all", choices=("all", "nominal", "perturbed", "smoke", "light", "j1"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--workers", type=int, default=8)

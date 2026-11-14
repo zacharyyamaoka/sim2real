@@ -237,7 +237,7 @@ def test_two_plants_on_one_cached_rig_each_get_their_own_contacts_back():
 import os  # noqa: E402
 
 RECOMMENDED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
-                    "zach_v1 @ READY")
+                    "zach_v1 @ READY", "zach_v1+J1 @ READY")
 slow = pytest.mark.skipif(not os.environ.get("SIM2REAL_SLOW"), reason="episode tests run with SIM2REAL_SLOW=1 (~2-5 min each)")
 
 
@@ -629,3 +629,86 @@ def test_the_report_ranks_routines_on_readys_cells_like_for_like_and_subset_only
     assert full["coverage"] == pytest.approx(500 / 6, abs=0.01) and full["grid_coverage"] == pytest.approx(500 / 12, abs=0.01)
     assert full["grid_feasible"] == 12
     assert "grid_coverage" not in dict(ranked)["subset"]
+
+
+# ---------------------------------------------------------------------------------------------------------------- J1 (amendment 5)
+
+
+def test_j1_rows_tilt_j1_to_its_minus_90_stop_from_ready_then_back_before_the_claw(plans):
+    """Zach's order (2026-11-13 night): J2/C1 -> READY -> J1 seeks its stop -> J1 back to its working angle -> the claw and the wrist. The seek
+    is a torque-capped move toward stops.json's revolute_3 side -1 (-89.97 deg) with J1's gravity as feed-forward and J2 / C1 held at READY
+    on their comp at the tilt; its stall defines J1 at that stop."""
+    from robot_msgs.control import Stall
+
+    from sim2real.sim.homing.fullarm_plant import C1, J1, J2
+    from sim2real.sim.homing.fullarm_procedures import stall_lead
+    from sim2real.sim.homing.fullarm_routine import J1_KP_NM_PER_RAD, J1_SEEK_CAP_NM, J1_STOP_SIDE, j1_gravity_nm
+
+    second = plans["zach_v1+J1 @ READY"]["sequences"][1]
+    names = [s.name for s in second.steps]
+    assert names[:6] == ["phase 1: everything holds", "J1 tilts toward its stop", "J1 seeks its stop", "J1 back toward its working angle",
+                         "J1 back to its working angle", "claw closes"]
+    seek = second.steps[2]
+    command = {c.joint: c for c in seek.commands}
+    tilt = {c.joint: c for c in second.steps[1].commands}[J1]
+    assert tilt.mode == "move_by" and tilt.distance < 0.0  # relative: before its stall J1 reads only its board's own frame
+    # the setpoint runs past the stop by more than the stall's lead from the furthest the tilt can leave J1 (46 deg short of the stop)
+    assert abs(command[J1].distance) > math.radians(46.0) + stall_lead(J1, J1_SEEK_CAP_NM, J1_KP_NM_PER_RAD)
+    assert J1_STOP_SIDE == -1 and command[J1].mode == "move_by" and command[J1].distance < 0.0
+    assert command[J1].max_effort == pytest.approx(J1_SEEK_CAP_NM) and command[J1].feedforward_effort < 0.0
+    stall = [d for d in seek.done_when if isinstance(d, Stall)]
+    assert len(stall) == 1 and stall[0].joint == J1 and stall[0].lead == pytest.approx(stall_lead(J1, J1_SEEK_CAP_NM, J1_KP_NM_PER_RAD))
+    assert math.degrees(seek.define_position[J1]) == pytest.approx(-89.972, abs=0.01)
+    # J2 / C1 on their comp at the tilt: C1 carries less than at the vertical plane (gravity turns onto the joint axes as J1 goes to -90)
+    holds = {c.joint: c for c in second.steps[0].commands}
+    assert abs(command[C1].feedforward_effort) < 0.5 * abs(holds[C1].feedforward_effort) and command[J2].mode == holds[J2].mode
+    back = {c.joint: c for c in second.steps[4].commands}[J1]
+    assert back.mode == "position" and back.position == pytest.approx(0.0)
+    # the last part's feed-forward is within 0.7 N.m of J1's gravity at 0: the PD rests it inside its reach tolerance there
+    assert abs(back.feedforward_effort - j1_gravity_nm(0.0)) < 0.7
+    claw = {c.joint: c for c in second.steps[5].commands}[J1]
+    assert claw.position == pytest.approx(0.0) and claw.feedforward_effort == pytest.approx(j1_gravity_nm(0.0))
+    assert plans["zach_v1+J1 @ READY"]["evidence_plan"][0][1:] == (J1, -1, "define")
+
+
+def test_the_j1_cap_beats_its_gravity_and_friction_over_the_whole_sweep():
+    """J1's seek cannot stall short on friction: its cap less the worst gravity on the way (every hanging wrist pose of the grid, 15 %
+    heavier than the twin) still exceeds the JMC breakaway (0.74 N.m identified on CAN 12; July's crank 1-1.5 N.m)."""
+    from sim2real.sim.homing.fullarm_routine import (J1_FRICTION_MAX_NM, J1_GRAVITY_AT_READY_NM, J1_GRAVITY_WORST_NM, J1_SEEK_CAP_NM,
+                                                     j1_gravity_nm)
+
+    sweep = [abs(v) for deg, v in J1_GRAVITY_AT_READY_NM.items() if deg <= 0]
+    assert max(sweep) <= J1_GRAVITY_WORST_NM
+    assert J1_SEEK_CAP_NM - 1.15 * J1_GRAVITY_WORST_NM > J1_FRICTION_MAX_NM >= 1.5
+    assert j1_gravity_nm(math.radians(-65.0)) == pytest.approx(J1_GRAVITY_AT_READY_NM[-65]) and j1_gravity_nm(0.0) < 0.0
+    assert j1_gravity_nm(math.radians(-62.5)) == pytest.approx(0.5 * (J1_GRAVITY_AT_READY_NM[-65] + J1_GRAVITY_AT_READY_NM[-60]))
+
+
+def test_the_ruler_scores_j1_only_for_rows_that_home_it():
+    good = report(zero_error_deg={"J1": 0.02, "J2": 0.01, "C1": -0.02, "W1": 0.003, "W2": 0.0, "W3": -0.004, "CLAW": 0.001})
+    assert ruler.outcome_class(good) == "homed" and ruler.outcome_class({**good, "homes_j1": True}) == "homed"
+    off = {**good, "zero_error_deg": {**good["zero_error_deg"], "J1": 0.5}}
+    assert ruler.outcome_class(off) == "homed"  # a row that holds J1: J1 is not its business
+    assert ruler.outcome_class({**off, "homes_j1": True}) == "inaccurate"
+    wrong = {**good, "homes_j1": True, "zero_error_deg": {**good["zero_error_deg"], "J1": 36.0}}
+    assert ruler.outcome_class(wrong) == "silent_wrong"
+    unzeroed = {**good, "homes_j1": True, "zero_error_deg": {**good["zero_error_deg"], "J1": None}}
+    assert ruler.outcome_class(unzeroed) == "silent_wrong"
+    assert "J1" in ruler.card([{**good, "homes_j1": True}])["zero_error_p95_deg_by_joint"]
+
+
+def test_the_plant_runs_j1_without_its_integrator_when_asked():
+    if not twin_available():
+        pytest.skip("bam_ws's twin is not here")
+    from sim2real.sim.homing.fullarm_plant import ArmStart, FullArmHomingPlant
+    from sim2real.sim.homing.routine_ruler import FIVEBAR_LEVELS
+
+    j2, c1 = FIVEBAR_LEVELS["READY"]
+    start = ArmStart("j1 board", j2, c1, (1.167, 90.0, 0.0), 30.0)
+    boards = {}
+    for integrator in (True, False):
+        plant = FullArmHomingPlant("B0", belt_top_m=0.0, j1_integrator=integrator)
+        plant.reset(start)
+        boards[integrator] = {d.role: d.config for d in plant.sim.drives}
+    assert boards[True]["J1"].ki > 0.0 and boards[False]["J1"].ki == 0.0 and boards[False]["J1"].ilimit == 0.0
+    assert boards[False]["J2"].ki == boards[True]["J2"].ki  # only J1's loop changes

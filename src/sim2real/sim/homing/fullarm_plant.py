@@ -317,7 +317,8 @@ class FullArmHomingPlant:
                  runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
                  limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None,
                  contact_timeconst_s: float | None = None, settle_all: bool = False, belt_solref: tuple[float, float] | None = None,
-                 rotor_phase_deg: Mapping[str, float] | None = None, contact_timeconst_scope: str = "all", log_qpos: bool = True):
+                 rotor_phase_deg: Mapping[str, float] | None = None, contact_timeconst_scope: str = "all", log_qpos: bool = True,
+                 j1_integrator: bool = True):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -349,6 +350,9 @@ class FullArmHomingPlant:
         # WHY a switch (the homing routine's grid, 2026-11-13, a loaded machine): the whole pose every tick is only for a video; a sweep
         # without one keeps its workers ~1 GB lighter over a 100 s episode and its deep copies small
         self.log_qpos = bool(log_qpos)
+        # WHY a knob (Zach, 2026-11-13 night: "J1 control is PD + gravity FF only, no integrator"): the record's CAN 11 board has ki 16000
+        # (ilimit 0.5 N.m); the routines that home J1 run it as the rack does now - PD plus the feed-forward their commands carry
+        self.j1_integrator = bool(j1_integrator)
         # WHY settle_all (the homing routine's start grid, 2026-11-13): a start is where the arm was when the power went; the WHOLE arm then
         # falls (onto the belt, its stops or itself) before power-on - the five-bar's drives are unpowered too - so power-on waits until every
         # joint is still, not only the wrist. False: the wrist's stillness only (every sweep before then).
@@ -476,6 +480,10 @@ class FullArmHomingPlant:
                         model.pair_solref[k, 0] = self.contact_timeconst_s
         q = self.place(start)
         boards = real_boards()
+        if not self.j1_integrator:
+            from dataclasses import replace as _replace  # noqa: PLC0415
+
+            boards["J1"] = _replace(boards["J1"], ki=0.0, ilimit=0.0)
         wrist_board = BoardConfig(kp=self.wrist_gains[0], ki=0.0, kd=self.wrist_gains[1], ilimit=0.0, max_torque_nm=WRIST_MAX_NM)
         drives = [Drive(r, self.signs[r], boards[r]) for r in ("J1", "J2", "C1")] + [Drive(r, 1.0, wrist_board) for r in ("W1", "W2", "W3")]
         sim = RigSim(self.rig, tuple(drives), log_hz=1e-6)

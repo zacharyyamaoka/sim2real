@@ -42,7 +42,7 @@ from pathlib import Path
 from robot_models.homing.fit import fit
 from robot_models.homing.protocols import Phase
 from robot_models.homing.types import BacklashModel, BacklashTable, HomingResult, JointBacklash
-from robot_msgs.control import Elapsed, JointCommand, JointCommandSequence
+from robot_msgs.control import Elapsed, JointCommand, JointCommandSequence, Reached
 
 from ... import paths as _paths
 from . import procedures as five
@@ -55,6 +55,7 @@ from .fullarm_procedures import (
     PARK_BACK_RAD,
     PARK_BACK_SPEED,
     PARK_SEEK_SIDE,
+    J1_HOLD_CAP_NM,
     WITNESS_TOL_RAD,
     WRIST_CAP_NM,
     WRIST_HOLD_CAP_NM,
@@ -70,6 +71,7 @@ from .fullarm_procedures import (
     arm_comp,
     full_step,
     project,
+    stall_lead,
     step_readings,
     witness_error,
     wrist_seek_distance,
@@ -96,6 +98,56 @@ SPAN_TOL_DEG = 1.0
 GAP_MAX_DEG = 1.0  # the most backlash a GIM4305-10 could plausibly carry (datasheet class: 12-18 arcmin): a "gap" past it is not a gap
 TOUCHES = ("single", "multi", "press_reverse")
 WRIST_POSES = ("ready", "bowl")
+
+# -- J1's home (Zach, 2026-11-13 night: "J2/C1 -> READY -> tilt J1 UPWARD to its top hard stop (stall seek) -> then the wrists"; J1 is
+# PD + gravity feed-forward, no integrator) ---------------------------------------------------------------------------------------------
+# WHY side -1: J1 rolls the five-bar plane about the arm's spine (the twin's +x at z 0.615 m); at 0 the arm hangs and BOTH stops lift its
+# lower end to horizontal (the claw from z 0.32 to 0.61 m at -88, 0.60 m at +88 deg, READY), so "up" picks no side. -89.972 deg (stops.json
+# revolute_3 side -1) swings the lower end away from the D435 (deployment.json can11: board - = away; Zach 2026-11-10's "horizontal",
+# "more range of motion if you swing away from it") and is bam_fivebar.j1_stop_seek's stop; +89.975 swings toward the camera's rail.
+J1_STOP_SIDE = -1
+J1_KP_NM_PER_RAD = 200.0 / TAU  # CAN 11's kp 200 N.m/rev (mujoco_plant.REAL_BOARD_RECORD; the 11-11 conf get)
+# J1's gravity hold torque (N.m, the twin's statics: READY, the wrist at TD4, the claw at 30 deg) every 5 deg of J1 - its feed-forward.
+# The comp (arm_comp) holds J2 / C1 at any J1 but returns 0 for J1 itself.
+J1_GRAVITY_AT_READY_NM = {-90: -3.875, -85: -4.022, -80: -4.142, -75: -4.23, -70: -4.285, -65: -4.309, -60: -4.299, -55: -4.257, -50: -4.182,
+                          -45: -4.075, -40: -3.938, -35: -3.77, -30: -3.574, -25: -3.351, -20: -3.102, -15: -2.829, -10: -2.535, -5: -2.222,
+                          0: -1.891, 5: -1.547, 10: -1.19, 15: -0.825, 20: -0.453, 25: -0.078, 30: 0.298, 35: 0.672, 40: 1.04, 45: 1.401,
+                          50: 1.75, 55: 2.087, 60: 2.408, 65: 2.71, 70: 2.992, 75: 3.251, 80: 3.485, 85: 3.693, 90: 3.869}
+# WHY 4.57: the worst |gravity| on the -90 sweep over every hanging wrist pose of READY's 36 grid cells (twin statics, 1 deg steps)
+J1_GRAVITY_WORST_NM = 4.57
+# WHY 1.5: the JMC drive's breakaway, upper bound (0.74 N.m Coulomb identified on CAN 12, a 60ASM200 + 10:1; July's crank broke away at
+# 1-1.5 N.m: bam_fivebar.description.JMC)
+J1_FRICTION_MAX_NM = 1.5
+# WHY 7.0 (= J1's hold cap): 7.0 - 1.15 x 4.57 = 1.74 N.m > the 1.5 breakaway, so a seek with gravity 15 % heavier than the twin's cannot
+# stall short on friction; on its stop J1 presses ~7.0 - 3.9 = 3.1 N.m (~45 N on the stop's 68 mm lever)
+J1_SEEK_CAP_NM = J1_HOLD_CAP_NM
+J1_SEEK_SPEED = 0.02 * TAU  # 7.2 deg/s: C1's ease speed; the sweep's 90 deg in ~13 s
+J1_RETURN_SPEED = 0.03 * TAU
+J1_WORK_RAD = 0.0  # the plane vertical (deployment.json can11 gravity_modes.vertical)
+# WHY relative moves until the stall defines J1: before it J1 reads its board's own frame (a hidden offset in the twin, the power-up's on
+# the rack), so a "to -50 deg" means nothing - the tilt is "by -55 deg" from wherever J1 hangs (0-6 deg on the grid, a few more sagged)
+J1_TILT_RAD = math.radians(-55.0)
+J1_MID_RAD = math.radians(-50.0)  # where the tilt leaves J1 from a start at about +5 deg: the feed-forward's pivot
+J1_RETURN_MID_RAD = math.radians(-40.0)  # the return's first part ends here (after the stall: the homed frame)
+# the seek's setpoint: from the tilt's end to the stop (35-46 deg over the grid's J1 starts and sag) plus the stall's lead and 15 deg spare
+J1_SEEK_TRAVEL_RAD = math.radians(46.0 + 15.0)
+
+
+def j1_gravity_nm(j1_rad: float) -> float:
+    """J1's gravity hold torque at ``j1_rad`` (N.m, linear between ``J1_GRAVITY_AT_READY_NM``'s 5 deg points): its feed-forward."""
+    deg = max(-90.0, min(90.0, math.degrees(j1_rad)))
+    low = 5 * math.floor(deg / 5.0)
+    high = min(90, low + 5)
+    if high == low:
+        return J1_GRAVITY_AT_READY_NM[int(low)]
+    a = (deg - low) / 5.0
+    return (1.0 - a) * J1_GRAVITY_AT_READY_NM[int(low)] + a * J1_GRAVITY_AT_READY_NM[int(high)]
+
+
+def _reached_j1() -> list:
+    """J1's move done-when: within 0.5 deg, or arrived and still within what friction and the feed-forward's error can sag it."""
+    return [Reached(joints=(J1,), tolerance=math.radians(0.5)),
+            Reached(joints=(J1,), tolerance=math.radians(0.5) + J1_FRICTION_MAX_NM / J1_KP_NM_PER_RAD, speed=0.02, dwell=0.3)]
 
 
 def craig_to_cad(joint: str, craig_deg: float) -> float:
@@ -163,9 +215,10 @@ def _c1seek_ready_class():
 _c1seek_ready_class()
 
 
-def fivebar_hold_at(target: dict, comp: str = DEFAULT_COMP, ff_scale: float = 1.0) -> dict:
-    """The five-bar held at ``target`` (CAD rad) on the comp's gravity there, J1 held: what phase 1 sends J1 / J2 / C1 every step."""
-    gravity = arm_comp(comp, ff_scale).torque({J1: 0.0, J2: target[J2], C1: target[C1]}) or {J2: 0.0, C1: 0.0}
+def fivebar_hold_at(target: dict, comp: str = DEFAULT_COMP, ff_scale: float = 1.0, j1_rad: float = 0.0) -> dict:
+    """The five-bar held at ``target`` (CAD rad) on the comp's gravity there with J1 at ``j1_rad`` (the plane's tilt turns gravity onto
+    the joint axes), J1 held: what phase 1 sends J1 / J2 / C1 every step."""
+    gravity = arm_comp(comp, ff_scale).torque({J1: j1_rad, J2: target[J2], C1: target[C1]}) or {J2: 0.0, C1: 0.0}
     return {J1: _hold(J1), J2: JointCommand.to(J2, target[J2], speed=0.1 * TAU, max_effort=10.0, feedforward_effort=gravity[J2]),
             C1: JointCommand.to(C1, target[C1], speed=0.1 * TAU, max_effort=7.0, feedforward_effort=gravity[C1])}
 
@@ -194,6 +247,9 @@ class FullArmRoutine(FullArmHome):
     # plate on the forearm (W1 parked at +33, W3 at -119): a silent wrong. Calibrated on a trusted home's own stall (the rack's
     # rotor_phase_from_homed is), the same stop reads the same to ~0.1 deg (the rack's W1 / W2 / claw over three homes), so 0.5 deg holds.
     witness_tol_deg: float = math.degrees(WITNESS_TOL_RAD)
+    # J1's home before the claw and the wrist (module constants' WHY); off: J1 held as PEP 0047 holds it
+    home_j1: bool = False
+    j1_cap_nm: float = J1_SEEK_CAP_NM
     evidence_plan: list = field(default_factory=list)
 
     def __post_init__(self):
@@ -212,7 +268,7 @@ class FullArmRoutine(FullArmHome):
     def default_name(self) -> str:
         touch = {"single": "single" if abs(self.seek_speed_deg_s - RECIPE_SEEK_DEG_S) < 1e-9 else f"single {self.seek_speed_deg_s:g} deg/s",
                  "multi": f"multi x{self.touches}", "press_reverse": "press_reverse"}[self.touch]
-        return f"{self.order}{'+witness' if self.witness else ''} · {touch} · wrist at {self.wrist_pose}"
+        return f"{self.order}{'+witness' if self.witness else ''}{' +J1' if self.home_j1 else ''} · {touch} · wrist at {self.wrist_pose}"
 
     @property
     def _seek_speed(self) -> float:
@@ -232,13 +288,16 @@ class FullArmRoutine(FullArmHome):
         if self.wrist_only or len(so_far) != 1:
             return super().plan(prior, so_far)
         target = ready_cad() if self.wrist_pose == "ready" else {j: v for j, v in five.home_cad(prior).items() if j in (J2, C1)}
-        return self._phase1(prior, fivebar_holds=fivebar_hold_at(target, self.comp, self.ff_scale))
+        return self._phase1(prior, fivebar_holds=fivebar_hold_at(target, self.comp, self.ff_scale), fivebar_target=target)
 
-    def _phase1(self, prior: ArmPrior, fivebar_holds: dict | None = None) -> JointCommandSequence:
+    def _phase1(self, prior: ArmPrior, fivebar_holds: dict | None = None, fivebar_target: dict | None = None) -> JointCommandSequence:
         self.evidence_plan = []
         holds = {**fivebar_holds, **{j: _hold(j) for j in (*WRIST, CLAW)}}
         side = {j: int(prior.seek_side[j]) for j in (*WRIST, CLAW)}
         steps = [full_step("phase 1: everything holds", [], [Elapsed(duration=0.3)], holds=holds, timeout=1.0)]
+        if self.home_j1:
+            j1_steps, holds = self._j1_home(prior, fivebar_target or ready_cad(), holds)
+            steps += j1_steps
         claw_stop = prior.stops.q_rad(CLAW, side[CLAW])
         # the claw first (PEP 0047, 3): its zero is the closed fingers; seek side and stop from the prior (Zach re-mounts it reversed)
         steps.append(full_step("claw closes", [_seek(CLAW, side[CLAW], CLAW_CAP_NM)], [_stall(CLAW, CLAW_CAP_NM)], holds=holds,
@@ -287,6 +346,37 @@ class FullArmRoutine(FullArmHome):
                                        holds={**holds, W1: _to(W1, w1, WRIST_HOLD_CAP_NM)}))
         self.notes["phase1_parked"] = self.order == "park_first"
         return JointCommandSequence(joint_names=JOINTS, steps=tuple(steps), name=f"claw + wrist ({self.name})")
+
+    def _j1_home(self, prior: ArmPrior, target: dict, holds: dict) -> tuple[list, dict]:
+        """J1 to its stop and back (module constants' WHY): a move to the sweep's middle, a torque-capped seek to the stop whose stall
+        defines J1 there, a move back to the working angle - each with J1's gravity as feed-forward and J2 / C1 held at ``target`` on
+        their comp at that part's tilt. Returns the steps and the holds the rest of the phase keeps (J1 at its working angle)."""
+        stop = prior.stops.q_rad(J1, J1_STOP_SIDE)
+        cap = self.j1_cap_nm
+
+        def at(j1_rad: float, j1: JointCommand) -> dict:
+            five = fivebar_hold_at(target, self.comp, self.ff_scale, j1_rad=j1_rad)
+            return {**holds, J2: five[J2], C1: five[C1], J1: j1}
+
+        steps = []
+        tilt = JointCommand.move_by(J1, J1_TILT_RAD, speed=J1_SEEK_SPEED, max_effort=cap, feedforward_effort=j1_gravity_nm(0.5 * J1_MID_RAD))
+        steps.append(full_step("J1 tilts toward its stop", [tilt], _reached_j1(), holds=at(0.5 * J1_MID_RAD, tilt)))
+        middle = 0.5 * (J1_MID_RAD + stop)
+        distance = J1_STOP_SIDE * (J1_SEEK_TRAVEL_RAD + stall_lead(J1, cap, J1_KP_NM_PER_RAD))
+        seek = JointCommand.move_by(J1, distance, speed=J1_SEEK_SPEED, max_effort=cap, feedforward_effort=j1_gravity_nm(middle))
+        steps.append(full_step("J1 seeks its stop", [seek], [_stall(J1, cap, J1_KP_NM_PER_RAD)], holds=at(middle, seek),
+                               define={J1: stop}))
+        self.evidence_plan.append(("J1 seeks its stop", J1, J1_STOP_SIDE, "define"))
+        # WHY two parts back (the twin, 2026-11-13 night): one constant feed-forward over the whole 90 deg (gravity -3.9 at the stop,
+        # -1.9 at 0) left J1 resting 4.1 deg short of 0 on its PD alone, outside its reach tolerance - the step timed out
+        back = JointCommand.to(J1, J1_RETURN_MID_RAD, speed=J1_RETURN_SPEED, max_effort=cap,
+                               feedforward_effort=j1_gravity_nm(0.5 * (stop + J1_RETURN_MID_RAD)))
+        steps.append(full_step("J1 back toward its working angle", [back], _reached_j1(), holds=at(0.5 * (stop + J1_RETURN_MID_RAD), back)))
+        home = JointCommand.to(J1, J1_WORK_RAD, speed=J1_RETURN_SPEED, max_effort=cap,
+                               feedforward_effort=j1_gravity_nm(J1_WORK_RAD + 0.25 * (J1_RETURN_MID_RAD - J1_WORK_RAD)))
+        steps.append(full_step("J1 back to its working angle", [home], _reached_j1(), holds=at(0.5 * J1_RETURN_MID_RAD, home)))
+        held = JointCommand.to(J1, J1_WORK_RAD, speed=J1_RETURN_SPEED, max_effort=cap, feedforward_effort=j1_gravity_nm(J1_WORK_RAD))
+        return steps, at(J1_WORK_RAD, held)
 
     def _seek_cmd(self, joint: str, side: int, speed: float, cap: float = WRIST_CAP_NM) -> JointCommand:
         return JointCommand.move_by(joint, side * wrist_seek_distance(self._kp), speed=speed, max_effort=cap)
@@ -445,6 +535,11 @@ ROWS = {
     # added after READY's nominal map (ruler amendment 2): V1's order with the stored table - V1 covered the most of READY, and the table
     # is what a single touch needs on a geared joint
     "zach_v1+table @ READY": {"order": "zach_v1", "witness": False, "touch": "single", "needs_table": True},
+    # added for Zach's J1 (ruler amendment 5): the recommended routine's two paths with J1 homed at READY before the claw and the wrist
+    "zach_v1+J1 @ READY": {"order": "zach_v1", "witness": False, "touch": "single", "home_j1": True},
+    "park_first+witness+J1 @ READY": {"order": "park_first", "touch": "single", "home_j1": True},
+    "zach_v1+table+J1 @ READY": {"order": "zach_v1", "witness": False, "touch": "single", "needs_table": True, "home_j1": True},
+    "park_first+witness+table+J1 @ READY": {"order": "park_first", "touch": "single", "needs_table": True, "home_j1": True},
 }
 
 

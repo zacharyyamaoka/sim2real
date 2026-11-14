@@ -66,6 +66,10 @@ special family - it is where most cells land, as on the rack.
 
 4 x 36 = 144 cells. The perturbation environments run on ``subset_cells`` (24: one W1 / W2 diagonal per five-bar pose).
 
+*Amendment 5 (2026-11-13 night, Zach: "even in this report I don't see J1 being homed"):* a row that homes J1 (its episodes carry
+``homes_j1``) is scored on J1 too - J1 joins ``scored_roles`` for that episode, under the same 0.1 deg / 1 deg gates; rows that hold J1 as
+before are scored as before. No metric or target moves.
+
 *Amendment 4 (2026-11-13, a labelling bug):* the controller reports a step that never finished as "aborted: step ... was not done
 within", which the first ``outcome_class`` counted as a trip; it is a timeout, as the table above defines. Coverage is unchanged.
 
@@ -205,8 +209,13 @@ def _p95(values: Sequence[float]) -> float | None:
     return values[max(0, math.ceil(0.95 * len(values)) - 1)]
 
 
+def scored_roles(report: dict) -> tuple:
+    """The joints an episode is scored on: ``SCORED_ROLES``, plus J1 when its row homes J1 (amendment 5)."""
+    return SCORED_ROLES + (("J1",) if report.get("homes_j1") else ())
+
+
 def scored_errors(report: dict) -> dict:
-    return {role: report["zero_error_deg"].get(role) for role in SCORED_ROLES}
+    return {role: report["zero_error_deg"].get(role) for role in scored_roles(report)}
 
 
 def wrong_stop(report: dict) -> bool:
@@ -224,7 +233,7 @@ def outcome_class(report: dict) -> str:
         if wrong_stop(report):
             return "silent_wrong"
         errors = [v for v in scored_errors(report).values() if v is not None]
-        if len(errors) < len(SCORED_ROLES):
+        if len(errors) < len(scored_roles(report)):
             return "silent_wrong"  # WHY: a routine that claims a home but leaves a scored joint unzeroed has not homed the arm
         return "homed" if max(abs(v) for v in errors) <= GATE_DEG else "inaccurate"
     outcome = report["outcome"]
@@ -283,10 +292,11 @@ def card(rows: Sequence[dict], environment: str = NOMINAL) -> dict:
     worst = [max(abs(v) for v in scored_errors(r).values() if v is not None) for r in finished
              if any(v is not None for v in scored_errors(r).values())]
     out["zero_error_p95_deg"] = _p95(worst)
+    roles = SCORED_ROLES + (("J1",) if any(r.get("homes_j1") for r in rows) else ())
     out["zero_error_p95_deg_by_joint"] = {role: _p95([abs(r["zero_error_deg"][role]) for r in finished if r["zero_error_deg"].get(role) is not None])
-                                          for role in SCORED_ROLES}
+                                          for role in roles}
     spread = {}
-    for role in SCORED_ROLES:
+    for role in roles:
         values = [r["zero_error_deg"][role] for r in finished if r["zero_error_deg"].get(role) is not None and not wrong_stop(r)]
         spread[role] = round(max(values) - min(values), 5) if len(values) >= 2 else None
     out["repeatability_deg_by_joint"] = spread
@@ -329,6 +339,6 @@ def verdict(card_: dict, environment: str = NOMINAL) -> dict:
     return out
 
 
-__all__ = ["CLAW_LEVELS_DEG", "ENVIRONMENTS", "FIVEBAR_LEVELS", "GATE_DEG", "folded_subset_cells", "J1_LEVELS_DEG", "NOMINAL", "OUTCOMES", "SCORED_ROLES", "TARGETS",
+__all__ = ["CLAW_LEVELS_DEG", "ENVIRONMENTS", "FIVEBAR_LEVELS", "GATE_DEG", "folded_subset_cells", "J1_LEVELS_DEG", "NOMINAL", "OUTCOMES", "SCORED_ROLES", "scored_roles", "TARGETS",
            "W3_LEVELS_DEG", "WRIST_LEVELS_DEG", "WRONG_STOP_DEG", "card", "clean", "covered", "grid_cells", "outcome_class", "score",
            "subset_cells", "tuning_cells", "verdict", "wrong_stop"]
