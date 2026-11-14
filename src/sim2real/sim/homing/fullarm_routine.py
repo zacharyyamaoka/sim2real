@@ -416,7 +416,13 @@ def rotor_phase_from_homed(path) -> dict:
     calibration. A board boots reading ``wrap(q + phase)`` and the file's ``zero_board_rad`` is its reading at joint 0, so the phase is
     that reading wrapped to one rotor turn - valid across power cycles while the gear train and the encoder calibration stay as they were.
 
-    Take it only from a home you trust (camera-checked): a zero assigned on an obstacle calibrates the witness to that obstacle."""
+    Take it only from a home you trust (camera-checked): a zero assigned on an obstacle calibrates the witness to that obstacle. The rack's
+    trusted one (the Sim to Real Agent, 2026-11-13: Zach from video, the ArUco CAD check within 0.5 deg at W3 -90 / +120 / +150) is
+    homed_2026-11-13T182448Z.json (11:24): W3's + stop at +2.78 deg mod 36. 10:24's W3 stall (+11.02 mod 36) stalled early.
+
+    WHY no expected-travel check anywhere in this routine (Zach, 2026-11-13: "you don't actually know how far it should move before
+    seeking"): a seek that ends short because the joint started near its stop is a valid home; only the rotor phase (and press_reverse's
+    stop-to-stop span) can refuse a stall."""
     import json  # noqa: PLC0415
 
     from .fullarm_plant import TURN_RAD, wrap_turn  # noqa: PLC0415

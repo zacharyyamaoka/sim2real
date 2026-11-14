@@ -425,3 +425,26 @@ def test_the_routine_homes_from_a_rest_on_the_belt(tmp_path):
     assert report["belt_start_bodies"], "the start rests on the belt"
     assert report["outcome_class"] == "homed" and report["covered"]
     assert report["belt_after_liftoff_ticks"] == 0
+
+
+RACK_HOMED_1124 = Path("/archive/datasets/bam_rig/full_arm/homed/homed_2026-11-13T182448Z.json")
+
+
+@pytest.mark.skipif(not RACK_HOMED_1124.is_file(), reason="the rack's 11:24 homed file is not here")
+def test_the_witness_calibrated_on_the_racks_1124_home_accepts_its_own_stalls_and_puts_w3s_stop_at_2_78():
+    """Ground truth (the Sim to Real Agent, 2026-11-13; Zach from video, the ArUco CAD check within 0.5 deg): W3's + stop is the 11:24
+    stall, board 1.9334 rad, +2.78 deg mod 36; 10:24's W3 stall (4.5906 rad, +11.02 mod 36) stalled early - the witness refuses it."""
+    from sim2real.sim.homing.fullarm_plant import W3, TURN_RAD, arm_prior, wrap_turn
+    from sim2real.sim.homing.fullarm_procedures import witness_error
+    from sim2real.sim.homing.fullarm_routine import rotor_phase_from_homed
+
+    phases = rotor_phase_from_homed(RACK_HOMED_1124)
+    prior = arm_prior(rotor_phase_deg=phases)
+    stop = prior.stops.q_rad(W3, +1)
+    assert math.degrees(wrap_turn(stop + prior.rotor_phase[W3], TURN_RAD[W3])) == pytest.approx(2.78, abs=0.01)
+    document = json.loads(RACK_HOMED_1124.read_text())
+    for joint, entry in document["joints"].items():
+        for stall in entry.get("stops_board_rad", [])[:1]:
+            side = +1 if joint in ("revolute_11", "revolute_17") else -1
+            assert abs(math.degrees(witness_error(prior, joint, side, stall))) < 0.01, joint
+    assert abs(math.degrees(witness_error(prior, W3, +1, 4.5906))) > 8.0  # 10:24's early stall
