@@ -450,7 +450,8 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     qualification += (f". On {len(trips)} of {n} nominal starts ({pct(len(trips), n)}) the twin’s five-bar home from a belt rest trips J2’s or "
                       "C1’s 86°/s runaway stop or times out, the same for every routine; the rack runs its own staged five-bar home, "
                       "which the twin does not model yet. Time (78 s median) and speed miss their targets everywhere. Sim only; the "
-                      "twin’s wrist gaps, claw mass and belt friction are assumptions.")
+                      "twin’s wrist gaps, claw mass and belt friction are assumptions, and on the rack the five-bar’s zeros carry the "
+                      "camera’s J2 +0.8° / C1 −3.8° until its stall angles are re-anchored (the witness checks the same stop, not the angle).")
     rack_text = ""
     if rack:
         good, every = rack["good"], rack["all"]
@@ -488,6 +489,16 @@ by construction), a 0.5° witness on all six homed joints refuses every one of t
 park_first {park.get('silent_wrong', 0)} → {parkt.get('silent_wrong', 0)}. Its price: a calibration gone stale (an encoder recalibrated,
 the gear train rebuilt) refuses everything - safe, and the <i>phase_cal_error</i> twin shows it. Re-take the calibration after any such
 job.{rack_text}</li>
+<li><b>The witness proves the same stop, not the right angle.</b> It compares each stall with a trusted home's stall mod one rotor
+turn, so a home is only as accurate as the stop angle that trusted home assigned; the twin's {fmt(rec.get('zero_error_p95_deg'), 3)}° is
+against the twin's own truth. On the rack the wrist's 11:24 reference is ArUco-checked to ±0.5° (W3 at −90 / +120 / +150), and the
+camera fit puts the five-bar's homed map off by J2 +0.8° and C1 −3.8° (the Sim to Real Agent, Nov 13 night). While J2's and C1's stall
+angles come from homed_083647, every home reproduces that offset and the witness cannot see it. Re-anchor the two stall angles to the
+camera once, after checking the offset holds across the camera's poses (one that changes with pose is as-built geometry - the Nov 11
+strips fit found L2 1.5 % short and tilted 2.4° - and belongs in the as-built model, not the zero); the witness then keeps every home on
+that anchor. The witness's phases do not change: re-anchoring moves the angle assigned to a stop, not the board's reading at it. Its
+other blind spot: a wrong stall within 0.5° of a whole 36° turn passes (about 1 in 36 of evenly spread wrong stalls; none in the twin),
+which the same camera check after a home closes.</li>
 <li><b>V1's order beats park_first once the witness is tight.</b> V1 covers {fmt(v1t.get('coverage_pct'), 1)} % against park_first's
 {fmt(parkt.get('coverage_pct'), 1)} % and is {fmt((park.get('time_to_home_median_s') or 0) - (v1.get('time_to_home_median_s') or 0), 0)} s
 faster: its own failure (W1 sweeping into the forearm when the wrist starts folded) is refused, not silent, under the witness, while
@@ -537,7 +548,8 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
  <li>the ruler's four amendments, none moving a metric or target: lift-off is 2 s clear of the belt; rows added after READY's
  map (V1 in the perturbed twins, the tight witness and the table as derived rows); the perturbation subset made a W1 / W2 diagonal (it had
  been W2 −150 only, a sampling bug - the folded-wrist runs are shown apart); step timeouts labelled timeouts, not trips.</li></ul></li>
-<li><b>Left, not blocked:</b> the five-bar's lift-off from a belt rest (the coverage ceiling; its lane: model the rack's staged five-bar home
+<li><b>Left, not blocked:</b> re-anchor J2's and C1's stall angles to the camera (the fit says J2 +0.8°, C1 −3.8°; check it holds across
+ poses first - the Sim to Real Agent's rig); the five-bar's lift-off from a belt rest (the coverage ceiling; its lane: model the rack's staged five-bar home
  in the twin and re-score, or fix the J2/C1 runaways in <code>single_touch_ready+gff</code>); a retry after a refusal (turn W3 and
  touch W2 again) to win back the refused starts; accel-limited or better-damped wrist moves before any speed-up; the real rung through the
  Sim to Real Agent.</li>
