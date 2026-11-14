@@ -181,13 +181,13 @@ def video(media: dict, name: str, caption: str, *, poster: bool = True) -> str:
             f"right the wrist close-up · <a href='{gif}'>GIF</a>{replay}</figcaption></figure>")
 
 
-def sequence_table(plans: dict, row: str) -> str:
+def sequence_table(plans: dict, row: str, phases: tuple = (0, 1)) -> str:
     plan = plans.get(row)
     if not plan:
         return "<p class='sub'>(the plan is not cached)</p>"
     out = []
     for phase, sequence in enumerate(plan["sequences"]):
-        if sequence is None:
+        if sequence is None or phase not in phases:
             continue
         steps = []
         for step in sequence.steps:
@@ -352,8 +352,11 @@ of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
                f"five-bar held: the claw closes, then each wrist joint touches its stop once at 1 N·m and 36°/s, is witnessed "
                f"<b>as its defining step ends</b> (0.5° on the 11:24 home's stall: W3's + stop at +2.78° mod 36°; no expected-travel "
                f"check - a seek may end short because the joint started near its stop), goes to 0, and the routine ends at TD4. "
-               f"The stored table corrects each zero for its gap and wind-up. <code>python -m sim2real.sim.homing.fullarm_routine --row "
-               f"'{esc(base)}' --out plan.json</code> writes it as JSON.</p>")
+               + ("<b>The branch:</b> W1's first seek is the same move in V1 and park_first; if the witness refuses its stall (the "
+                  "gripper on the forearm, a folded wrist), do not assign it - carry on with park_first's path (W1 back 135°, W2, W1 again, "
+                  "W3). " if "on a W1 refusal" in base else "")
+               + f"The stored table corrects each zero for its gap and wind-up. <code>python -m sim2real.sim.homing.fullarm_routine "
+               f"--out plan.json</code> writes both paths and the branch rule as JSON.</p>")
     decisions = """<ul>
 <li><b>Decided for you</b> (each a default in code; undo in one line):
  <ul><li>the wrist homes at READY, not the five-bar's home (undo: <code>wrist_pose="bowl"</code>);</li>
@@ -430,7 +433,10 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              f"<h3>The stored tables (identify_backlash once per twin)</h3><ul class='sub'>{calib}</ul>",
              "<h2>What we found</h2>", notes.get("findings", ""),
              "<h2>Videos</h2>", "".join(video(media, name, caption) for name, caption in notes.get("videos", [])),
-             f"<h2>The sequence for the rack: {esc(recommended)}</h2>", notes.get("handoff", ""), sequence_table(plans, recommended),
+             f"<h2>The sequence for the rack: {esc(recommended)}</h2>", notes.get("handoff", ""),
+             *(("<h3>Path 1: V1 (W1's first stall passes the witness)</h3>", sequence_table(plans, "zach_v1+table @ READY", phases=(1,)),
+                "<h3>Path 2: park_first (W1's first stall refused)</h3>", sequence_table(plans, "park_first+witness+table @ READY", phases=(1,)))
+               if "on a W1 refusal" in recommended else (sequence_table(plans, recommended),)),
              "<h2>Decisions and what is left</h2>", notes.get("decisions", ""),
              "<h2>Provenance</h2>", notes.get("provenance", ""), "</body></html>"]
     page = "".join(parts)
