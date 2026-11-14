@@ -1,5 +1,5 @@
 [
- {"name": "zach_v1_j1_ready_belt_rest", "row": "zach_v1+J1 @ READY", "environment": "nominal", "cell_index": 22, "still_s": 52.0},
+ {"name": "zach_v1_j1_ready_belt_rest", "row": "zach_v1+J1 @ READY", "environment": "nominal", "cell_index": 22, "still_step": "J1 back"},
  {"name": "zach_v1_ready_belt_rest", "row": "zach_v1 @ READY", "environment": "nominal", "cell_index": 22, "still_s": 45.0},
  {"name": "park_first_ready_belt_rest", "row": "park_first+witness @ READY", "environment": "nominal", "cell_index": 22, "still_s": 60.0},
  {"name": "multi_x2_ready_belt_rest", "row": "multi x2 (3D-printer) @ READY", "environment": "nominal", "cell_index": 22, "still_s": 55.0},

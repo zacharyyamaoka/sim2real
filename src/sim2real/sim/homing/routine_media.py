@@ -76,6 +76,23 @@ def write_rrd(report: dict, model, path: Path) -> Path | None:
     return path
 
 
+def j1_path(trace: dict) -> dict | None:
+    """J1 in a filmed episode from its seek on (deg, N.m): where the seek began, the lowest angle, the highest angle once the return to
+    READY's J1 began, and the peak effort. WHY (2026-11-14): READY's J1 is -12.7 deg because the side-table clutter blocks J1 above -7
+    (envelope -9) - the return must not overshoot toward it, and the twin has no clutter to hit, so the trace is the check."""
+    from .fullarm_plant import J1  # noqa: PLC0415
+
+    joints, steps = trace.get("joints") or [], trace.get("step") or []
+    seek = next((k for k, name in enumerate(steps) if name.startswith("J1 seeks")), None)
+    back = next((k for k, name in enumerate(steps) if name.startswith("J1 back")), None)
+    if J1 not in joints or seek is None or back is None:
+        return None
+    i = joints.index(J1)
+    angle = [row[i] for row in trace["link_deg"]]
+    return {"seek_from_deg": angle[seek], "lowest_deg": min(angle[seek:]), "highest_after_return_deg": max(angle[back:]),
+            "peak_effort_nm": max(abs(row[i]) for row in trace["effort_nm"][seek:]), "seek_t_s": trace["t"][seek], "back_t_s": trace["t"][back]}
+
+
 def film(item: dict, out_dir: Path) -> dict:
     from PIL import Image  # noqa: PLC0415
 
@@ -89,6 +106,9 @@ def film(item: dict, out_dir: Path) -> dict:
     times = report["trace"]["t"]
     at = item.get("still_s")
     pick = len(times) // 2 if at is None else min(range(len(times)), key=lambda k: abs(times[k] - at))
+    # WHY a step too: a still "when J1 sits on its stop" is a step boundary, not a time - phase 0's length moves it from start to start
+    if item.get("still_step"):
+        pick = next((k for k, name in enumerate(report["trace"]["step"]) if name.startswith(item["still_step"])), pick)
     still = mp4.with_suffix(".jpg")
     count = 0
 
@@ -103,8 +123,9 @@ def film(item: dict, out_dir: Path) -> dict:
 
     files = encode(frames(), mp4)
     rrd = write_rrd(report, model, mp4.with_suffix(".rrd"))
-    report.pop("trace", None)
+    j1 = j1_path(report.pop("trace", None) or {})
     return {**item, **files, "still": str(still), "rrd": None if rrd is None else str(rrd), "frames": count, "speedup": SPEEDUP,
+            **({"j1": j1} if j1 else {}),
             "report": {k: report.get(k) for k in ("outcome", "outcome_class", "covered", "time_s", "zero_error_deg", "belt_drag_s",
                                                    "belt_after_liftoff_ticks", "self_contact_pairs", "witness_deg", "notes", "start")}}
 

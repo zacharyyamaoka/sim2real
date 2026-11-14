@@ -26,6 +26,8 @@ CACHE = Path.home() / ".cache" / "sim2real" / "homing_routine" / "episodes_2026-
 CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_tight_2026-11-13.json"
 PLANS = Path.home() / ".cache" / "sim2real" / "homing_routine_plans.pkl"
 PLANS_J1 = Path.home() / ".cache" / "sim2real" / "homing_routine_plans_j1.pkl"  # the J1 rows' plans (routine_check --plan j1)
+# the control that splits J1's wrist losses between J1's home and the rack's J1 gravity (tools/homing_routine_j1_control.py)
+J1_CONTROL = Path(__file__).resolve().parents[1] / "src" / "sim2real" / "data" / "homing_routine_j1_control_2026-11-14.json"
 MEDIA_REL = "media/homing-routine-2026-11-13"
 # the rack's wrist homes of 2026-11-13 (10:24, 10:50, 11:24 and the cold one after the 18:05 power-up); 10:24's W3 stalled early
 RACK_HOMED = Path("/archive/datasets/bam_rig/full_arm/homed")
@@ -346,6 +348,77 @@ def lost_split(episodes: list, routine: str) -> dict:
             "belt_last_s": max(belt_s) if belt_s else None, "j1_lost": sum(v for (w, _), v in lost.items() if w == "J1 home")}
 
 
+def j1_split(episodes: list, row: str) -> dict:
+    """What J1's own seek did in each of ``row``'s episodes, whatever the rest of the arm did: "stop" - its stall recorded within
+    ``WRONG_STOP_DEG`` of the CAD stop; "wrong" - recorded further off (a gravity stall read as the stop: silent wrong); "refused" - the
+    episode ended in J1's home with no J1 stall (the seek timed out: J1 never assigned); "before" - lost before J1 moved.
+    WHY its own count (2026-11-14, the dispatcher: an FF-off or low-cap seed must refuse or flag, never record a stop): the ruler's class
+    is the whole arm's, so a V1 W1 gravity stall on the same start would hide what J1 did."""
+    from collections import Counter  # noqa: PLC0415
+
+    from sim2real.sim.homing.routine_check import ended_in  # noqa: PLC0415
+
+    out, wrong_deg, error_deg = Counter(), [], []
+    for e in episodes:
+        if e.get("row") != row or e.get("outcome_class") == "infeasible":
+            continue
+        stall = next((s for s in e.get("stalls") or [] if s["joint"] == "revolute_3"), None)
+        if stall is not None:
+            off = stall["link_deg"] - stall["cad_deg"]
+            out["wrong" if abs(off) > ruler.WRONG_STOP_DEG else "stop"] += 1
+            (wrong_deg if abs(off) > ruler.WRONG_STOP_DEG else error_deg).append(off)
+        else:
+            out["refused" if ended_in(e) == "J1 home" else "before"] += 1
+    return {**{k: out.get(k, 0) for k in ("stop", "wrong", "refused", "before")}, "n": sum(out.values()),
+            "wrong_deg": wrong_deg, "stop_error_deg": max((abs(v) for v in error_deg), default=None)}
+
+
+def j1_contacts(episodes: list, with_j1: str = "zach_v1+J1 @ READY", without: str = "zach_v1 @ READY") -> dict:
+    """What J1's home adds to the arm's contacts, start by start in the same twin: the self-contact pairs and the belt re-contacts the J1
+    row has that the row without J1 does not, and how much later J1's home makes the same routine end (homed both ways)."""
+    old = {(e.get("environment"), e.get("start")): e for e in episodes if e.get("row") == without and "refused_start" not in e}
+    compared, new, shifts = 0, [], []
+    for e in episodes:
+        o = old.get((e.get("environment"), e.get("start")))
+        if e.get("row") != with_j1 or o is None or "refused_start" in e or e.get("environment") not in PHYSICAL:
+            continue
+        compared += 1
+        extra = set(e.get("self_contact_pairs") or []) - set(o.get("self_contact_pairs") or [])
+        if extra or ((e.get("belt_after_liftoff_ticks") or 0) > 0 and not (o.get("belt_after_liftoff_ticks") or 0)):
+            new.append((e.get("environment"), e.get("start"), sorted(extra)))
+        if e.get("outcome_class") == o.get("outcome_class") == "homed" and e.get("time_s") and o.get("time_s"):
+            shifts.append(e["time_s"] - o["time_s"])
+    shifts.sort()
+    return {"compared": compared, "new": new, "shift_s": shifts[len(shifts) // 2] if shifts else None}
+
+
+def j1_landing(episodes: list, with_j1: str = "zach_v1+J1 @ READY", without: str = "zach_v1 @ READY") -> dict:
+    """How the J1 rows' plant (the rack's J1 gravity from power-on) changes phase 0, start by start in the same twin: J1's settled angle
+    against the CAD plant's, the other joints' worst settled difference, and the starts phase 0 lost only one way.
+    WHY (2026-11-14): phase 0 runs before J1 moves, so a start it loses only with J1 is the plant's landing, never J1's home."""
+    import statistics  # noqa: PLC0415
+
+    from sim2real.sim.homing.routine_check import ended_in  # noqa: PLC0415
+
+    old = {(e.get("environment"), e.get("start")): e for e in episodes if e.get("row") == without and "refused_start" not in e}
+    j1_diff, other, only_now, only_before, compared = [], [], 0, 0, 0
+    for e in episodes:
+        o = old.get((e.get("environment"), e.get("start")))
+        if e.get("row") != with_j1 or o is None or "refused_start" in e or e.get("environment") not in PHYSICAL:
+            continue
+        compared += 1
+        a, b = e.get("start_settled_deg") or {}, o.get("start_settled_deg") or {}
+        if a.get("J1") is not None and b.get("J1") is not None:
+            j1_diff.append(a["J1"] - b["J1"])
+            other.append(max(abs(a[k] - b[k]) for k in ("J2", "C1", "W1", "W2", "W3", "CLAW") if a.get(k) is not None and b.get(k) is not None))
+        lost_now, lost_before = ended_in(e) == "phase 0", ended_in(o) == "phase 0"
+        only_now += lost_now and not lost_before
+        only_before += lost_before and not lost_now
+    return {"compared": compared, "j1_settle_median_deg": statistics.median(j1_diff) if j1_diff else None,
+            "j1_settle_range_deg": [min(j1_diff), max(j1_diff)] if j1_diff else None, "other_worst_deg": max(other) if other else None,
+            "other_median_deg": statistics.median(other) if other else None, "phase0_only_with_j1": only_now, "phase0_only_without": only_before}
+
+
 def wrong_range(episodes: list, rows: tuple, role: str) -> tuple[float, float] | None:
     """The |zero error| range of ``role`` over the silent-wrong homes of ``rows`` whose worst joint is ``role`` (no folded-wrist cells)."""
     values = []
@@ -422,7 +495,8 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                  "multi x3 (3D-printer) @ READY")
     w2_short = wrong_range(episodes, park_rows, "W2")
     w1_short = wrong_range(episodes, ("zach_v1 @ READY", "zach_v1+table @ READY"), "W1")
-    c1_short = wrong_range(episodes, tuple({e.get("row") for e in episodes if TIGHT not in str(e.get("row"))}), "C1")
+    c1_short = wrong_range(episodes, tuple({e.get("row") for e in episodes if TIGHT not in str(e.get("row")) and not is_seed(e.get("row"))}),
+                           "C1")
     slow_ratio = wrist_speed_ratio(episodes, ("zach_v1 @ READY", "park_first+witness @ READY"))
     fast_ratio = wrist_speed_ratio(episodes, ("multi x2 (3D-printer) @ READY", "fast single @ READY", "multi x3 (3D-printer) @ READY"))
     press_t = _c(cards, "press_reverse (backlash every home) @ READY" + TIGHT)
@@ -441,8 +515,9 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     order = ("Zach’s V1 order, falling back to PEP 0047’s parking path when W1’s first stall is refused" if "on a W1 refusal" in base
              else "Zach’s V1 order" if base.startswith("zach_v1") else "PEP 0047’s park_first order")
     if "+J1" in base:
-        order += (" - after J1 is homed: from READY it tilts to its −89.97° stop under a 7 N·m cap with gravity feed-forward, is "
-                  "defined there and comes back to 0 before the claw")
+        order += (" - after J1 is homed as the rack homes it: from READY one seek to its −89.97° stop under an 11 N·m cap on the rack's "
+                  "gains and gravity feed-forward, the stop read only when J1 stands still pushing past 9 N·m, then back to READY's "
+                  "−12.7° before the claw")
     rec_ready = _c(ruler.score(ready_only(episodes)), recommended)
     if (rec.get("cells") or 0) > (rec_ready.get("cells") or 0):
         reach = (f"{fmt(rec.get('coverage_pct'), 0)} % of the {rec.get('feasible')} holdable starts of the nominal grid "
@@ -459,8 +534,15 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                f"0 silent wrong in every twin, {reach}, zeros p95 "
                f"{fmt(rec.get('zero_error_p95_deg'), 3)}°, {fmt(rec.get('time_to_home_median_s'), 0)} s median.")
     handed = split["homed"] + split["belt"] + split["wrist_lost"]
-    j1_note = (f" (J1’s home lost {split['j1_lost']}: the starts where C1 had stalled on the claw jammed against the base, which the "
-               f"C1 witness refuses before J1 moves on the rack, or the 0.50 kg claw)" if split["j1_lost"] else "")
+    j1_note = ""
+    if split["j1_lost"]:
+        from collections import Counter  # noqa: PLC0415
+
+        from sim2real.sim.homing.routine_check import ended_in  # noqa: PLC0415
+
+        where = Counter((e.get("environment"), e.get("outcome_class")) for e in episodes
+                        if e.get("row") == recommended and e.get("environment") in PHYSICAL and ended_in(e) == "J1 home")
+        j1_note = " (J1’s home lost " + ", ".join(f"{v} {cls} in {env}" for (env, cls), v in sorted(where.items())) + ")"
     qualification = ((f"Every start it lost was lost in the five-bar’s phase 0{', or in J1’s home' if split['j1_lost'] else ''}, not the "
                       f"wrist{j1_note}: the wrist phase homed all {handed} starts it was handed over the nominal grid and the five "
                       f"physical twins") if not split["wrist_lost"] else f"The wrist phase lost {split['wrist_lost']} of the {handed} starts it was handed")
@@ -473,34 +555,111 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     j1_text = ""
     if "+J1" in base:
         j1_eps = [e for e in episodes if e.get("row") == recommended and e.get("environment") in PHYSICAL]
-        j1_errors = [abs(e["zero_error_deg"]["J1"]) for e in j1_eps if e.get("finished") and (e.get("zero_error_deg") or {}).get("J1") is not None]
-        from sim2real.sim.homing.routine_check import ended_in  # noqa: PLC0415
-
-        j1_lost = [e for e in j1_eps if ended_in(e) == "J1 home"]
         no_j1_rows = recommended.replace("+J1", "")
         ready_cards = ruler.score(ready_only(episodes))
         with_j1, without = _c(ready_cards, recommended), _c(ready_cards, no_j1_rows)
-        whole_with, whole_without = _c(cards, recommended), _c(cards, no_j1_rows)
+        whole_without = _c(cards, no_j1_rows)
         j1_peak = [e["peak_speed_deg_s"].get("J1") for e in j1_eps if (e.get("peak_speed_deg_s") or {}).get("J1") is not None]
-        j1_text = (f"<li><b>J1 is homed now (Zach: J2/C1 → READY → J1 to its top stop → the wrist).</b> J1 rolls the five-bar plane about "
-                   f"the arm's spine; at 0 the arm hangs and both stops lift it to horizontal, so the seek takes the −89.97° stop, the side "
-                   f"that swings away from the D435 (Zach's 11-10 'horizontal'). From READY it tilts by −55°, seeks at 7.2°/s under 7 N·m "
-                   f"with J1's gravity as feed-forward (PD only, no integrator) and J2/C1 held on their comp at the tilt, and its stall "
-                   f"defines J1; it comes back to 0 in two parts before the claw. 7 N·m − 1.15 × 4.57 N·m (the worst gravity on the sweep "
-                   f"over every hanging wrist pose) = 1.74 N·m > the JMC's 1.5 N·m breakaway, so it cannot stall short on friction; on "
-                   f"the stop it presses ~3.1 N·m. Over the nominal grid and the physical twins J1's zero is "
-                   f"{fmt(max(j1_errors) if j1_errors else None, 3)}° at worst ({len(j1_errors)} finished homes) and "
-                   f"{len(j1_lost)} starts were lost in a J1 step. At READY the routine covers {fmt(with_j1.get('coverage_pct'), 1)} % with J1 "
-                   f"against {fmt(without.get('coverage_pct'), 1)} % without - the difference is phase 0's knife edge (the same plan on the "
-                   f"same plant came out differently on 3 of 63 starts between runs), not J1 - and the routine without J1 covers "
-                   f"{fmt(whole_without.get('coverage_pct'), 1)} % of the whole grid; median {fmt(with_j1.get('time_to_home_median_s'), 0)} s "
-                   f"against {fmt(without.get('time_to_home_median_s'), 0)} s; J1 peaks at {fmt(max(j1_peak) if j1_peak else None, 1)}°/s. "
-                   f"Along the −90 sweep (twin statics, 1° steps, five-bar at READY, all 36 hanging wrist poses) nothing touches itself or "
-                   f"the belt - J1 moves the arm rigidly - and the arm sweeps y −0.43…+0.27 m, z 0.18…0.80 m; the rack's rails and the "
-                   f"D435 are not in the twin. On the rack J1's first stall has no trusted reference: check it within 3.5° of the gravity "
-                   f"rest's frame and confirm with the ArUco check, then witness every later home at 0.5° on it - and note the witness "
-                   f"cannot tell J1's two stops apart (179.95° = 5 rotor turns within 0.05°), so check the seek's direction from the "
-                   f"motion.</li>")
+        from sim2real.sim.homing.fullarm_routine import (  # noqa: PLC0415
+            J1_ADVERSARIAL_ROWS, J1_FRICTION_MAX_NM, J1_GRAVITY_WORST_NM, J1_JOINT_CAP_NM, J1_SEEK_CAP_NM, J1_STALL_EFFORT_NM)
+
+        own = j1_split(j1_eps, recommended)
+        seeds = {row: j1_split(episodes, row) for row in J1_ADVERSARIAL_ROWS}
+        path = (media.get("zach_v1_j1_ready_belt_rest") or {}).get("j1") or {}
+        rule_margin = J1_STALL_EFFORT_NM - J1_GRAVITY_WORST_NM - J1_FRICTION_MAX_NM
+        landing = j1_landing(episodes)
+        controlled = json.loads(J1_CONTROL.read_text()).get("starts", []) if J1_CONTROL.is_file() else []
+        control = [c for c in controlled if c.get("wrist_lost_only_with_j1", True)]
+        homes = [c for c in control if c.get("lost_to") == "J1's home"]
+        touched_control = {(c["environment"], c["start"]): c["touched_only_with_j1"] for c in controlled if c.get("touched_only_with_j1")}
+        gap = ""
+        if landing["compared"]:
+            gap = (f"Most of the gap is not J1's home but the J1 rows' plant: they feel the rack's J1 gravity from power-on, so the arm lands "
+                   f"on the belt differently (J1 settles {fmt(-landing['j1_settle_median_deg'], 1)}° lower, median, the other joints up to "
+                   f"{fmt(landing['other_worst_deg'], 0)}° apart) and phase 0 - which runs before J1 moves - lost "
+                   f"{landing['phase0_only_with_j1']} starts only with it and {landing['phase0_only_without']} only without.")
+            if control:
+                def why(c: dict) -> str:
+                    e = next((x for x in episodes if x.get("row") == "zach_v1+J1 @ READY" and x.get("environment") == c["environment"]
+                              and x.get("start") == c["start"]), {})
+                    return str(e.get("outcome", "")).removeprefix("aborted: ")
+
+                gap += (f" The wrist lost {len(control)} starts only with J1. A control - V1 and park_first on the same plant with J1 held, "
+                        f"not homed (<code>tools/homing_routine_j1_control.py</code>) - loses {len(control) - len(homes)} of them the same way, "
+                        f"so those are the landing too" + ("; " + "; ".join(
+                            f"{c['environment']} {c['start'].split(' claw')[0]} is J1's home: with J1 held V1 ends "
+                            f"{(c['rows'].get('zach_v1 @ READY') or {}).get('rack_j1_gravity_held')}, with J1 at −12.7° it ends "
+                            f"'{esc(why(c))}'" for c in homes) if homes else "; none is J1's home") + ".")
+
+        def seed(row: str) -> str:
+            s = seeds.get(row) or {}
+            parts = [f"{s.get('stop', 0)} on the real stop", f"{s.get('refused', 0)} timed out", f"{s.get('wrong', 0)} recorded short"]
+            if s.get("wrong_deg"):
+                lo, hi = fmt(min(abs(v) for v in s["wrong_deg"]), 1), fmt(max(abs(v) for v in s["wrong_deg"]), 1)
+                parts[-1] += f" ({lo}° short)" if lo == hi else f" ({lo}-{hi}° short)"
+            return (f"{', '.join(parts)} of the {s.get('n', 0) - s.get('before', 0)} starts that reached J1's home "
+                    f"({s.get('before', 0)} lost in phase 0)")
+
+        clearance = (f"In the filmed start J1 seeks from {fmt(path.get('seek_from_deg'), 1)}°, bottoms at {fmt(path.get('lowest_deg'), 2)}° "
+                     f"and from its return on never rises past {fmt(path.get('highest_after_return_deg'), 2)}° (the clutter's envelope is "
+                     f"−9°), pressing at most {fmt(path.get('peak_effort_nm'), 1)} N·m. " if path else "")
+        touched = j1_contacts(episodes)
+
+        def contact(env: str, start: str, pairs: list) -> str:
+            seen = touched_control.get((env, start))
+            told = "" if seen is None else (f", first at {fmt(seen.get('first_s'), 1)} s; the control "
+                                            + ("touches it too: the landing" if seen.get("touched_by") == "the plant's landing"
+                                               else "does not: J1's home"))
+            return f"{env} {start.split(' claw')[0]} ({', '.join(pairs) or 'the belt'}{told})"
+
+        if touched["compared"]:
+            clearance += ((f"Over the {touched['compared']} starts run both ways, J1's home added no contact: the J1 row touched only what "
+                           f"the same start touched without J1, and homed {fmt(touched['shift_s'], 0)} s later (median). ")
+                          if not touched["new"] else
+                          (f"Over the {touched['compared']} starts run both ways, {len(touched['new'])} touched something only with J1 - "
+                           + "; ".join(contact(env, start, pairs) for env, start, pairs in touched["new"]) + ". "))
+        j1_text = (f"<li><b>J1 is homed as the rack homed it (2026-11-14 05:41Z / 05:56Z): J2/C1 → READY → J1 to its top stop → back to "
+                   f"READY's −12.7° → the claw and the wrist.</b> One seek of −110° at 7.2°/s under an {J1_SEEK_CAP_NM:g} N·m cap toward "
+                   f"stops.json's −89.972° stop - the side the rack homed on (board −1.31529 / −1.31654, 0.07° apart; zero_board 0.25439, "
+                   f"sign +1), which swings the arm away from the D435 - on the rack's own gains (<code>bam_rack_twin.hardware.j1_gains</code>: "
+                   f"kp ×14 / kd ×16.8, the gravity feed-forward 5.32·sin(q<sub>board</sub> − 0.075) every tick, no integrator), with J2/C1 "
+                   f"held on their comp at the tilt. It ends on robot_msgs' new <code>EffortStall</code>: J1 still (&lt; 0.01 rad/s for 0.2 s) "
+                   f"while its effort pushes past {J1_STALL_EFFORT_NM:g} N·m; the stall defines J1 and the next step eases it off at once, back "
+                   f"to −12.7° under the joint's {J1_JOINT_CAP_NM:g} N·m cap. Margins: gravity peaks at the stop at {J1_GRAVITY_WORST_NM:g} N·m "
+                   f"and friction adds ≤ {J1_FRICTION_MAX_NM:g}, so only the stop can push J1 past {J1_STALL_EFFORT_NM:g} N·m "
+                   f"({rule_margin:.2f} N·m to spare); the cap leaves {J1_SEEK_CAP_NM - J1_STALL_EFFORT_NM:g} N·m to fire the rule and presses "
+                   f"{J1_JOINT_CAP_NM - J1_SEEK_CAP_NM:.2f} N·m inside {J1_JOINT_CAP_NM:g}. The twin's own CAD gravity on J1 is wrong - it "
+                   f"rests J1 at +24° where the real arm hangs at −10.3°, and gives 3.9 N·m at the stop against the rack's 5.2 - so the "
+                   f"twin's J1 feels the rack's measured curve instead. Result: J1 recorded its real stop on {own['stop']} of {own['n']} "
+                   f"recommended-routine starts (READY, the nominal twin and the five physical twins; {own['before']} were lost in phase 0 "
+                   f"before J1 moved), worst "
+                   f"{'under 0.001' if (own['stop_error_deg'] or 0) < 0.001 else fmt(own['stop_error_deg'], 3)}° off; {own['wrong']} recorded "
+                   f"a wrong stop and {own['refused']} timed out in J1's home. "
+                   f"At READY the routine covers {fmt(with_j1.get('coverage_pct'), 1)} % with J1 against {fmt(without.get('coverage_pct'), 1)} % "
+                   f"without (the routine without J1 covers {fmt(whole_without.get('coverage_pct'), 1)} % of the whole grid); median "
+                   f"{fmt(with_j1.get('time_to_home_median_s'), 0)} s against {fmt(without.get('time_to_home_median_s'), 0)} s; J1 peaks at "
+                   f"{fmt(max(j1_peak) if j1_peak else None, 1)}°/s. {gap}</li>"
+                   f"<li><b>The stall rule holds under adversarial seeds</b> (V1+J1 on the subset's six READY starts, nominal twin). Feed-forward "
+                   f"off at the 11 N·m cap: {seed('zach_v1+J1 FF off @ READY')} - the PD alone carries gravity and friction (≤ "
+                   f"{J1_GRAVITY_WORST_NM + J1_FRICTION_MAX_NM:.1f} N·m), so the seek still reaches the stop and only the stop passes 9 N·m - "
+                   f"which is how the rack's own minimal J1 home ran at 05:56Z (velocity mode, no feed-forward, 11 N·m, the 9 N·m rule). "
+                   f"Cap 5.5 N·m: {seed('zach_v1+J1 cap 5.5 @ READY')}. Feed-forward off and cap 5.5: "
+                   f"{seed('zach_v1+J1 FF off, cap 5.5 @ READY')} - J1 sags short under gravity, and 5.5 &lt; 9 can never fire the rule. "
+                   f"The same seed on the old lead stall: {seed('zach_v1+J1 FF off, cap 5.5, lead rule @ READY')} - the gravity stall read "
+                   f"as the stop, the rack's 22:54 trap and the silent wrong the rule exists to stop. So the rule, not the cap, keeps a "
+                   f"gravity stall out: with it a fault either finds the real stop or times out and holds.</li>"
+                   f"<li><b>J1's clearance and the rack's side.</b> On the rack J1 starts at READY's −12.7°, seeks away from the "
+                   f"side-table clutter that blocks it above −7° (<code>full_arm/obstacles/j1_contact_20261114T0711Z.json</code>, "
+                   f"envelope −9°) and comes back to −12.7°, so it never has to rise above where it began. {clearance}Along 0 → −90° "
+                   f"(twin statics, 1° steps, five-bar at READY, every hanging wrist pose) "
+                   f"nothing touches itself or the belt - J1 moves the arm rigidly - and the arm sweeps y −0.43…+0.27 m, z 0.18…0.80 m; the "
+                   f"clutter, the rails and the D435 are not in the twin, and the grid's J1 starts (0°, +6°) sit in the band the clutter "
+                   f"blocks, so they are twin-only. On the rack: phase 0's READY hold and J1's home run in one process with J1's "
+                   f"feed-forward on from the first tick (hand-offs between processes sagged J1 15-30°); J1's zero goes through "
+                   f"<code>bam_rack_twin.hardware.zero_writer</code>; the witness is the 05:41Z / 05:56Z stalls' phase at 0.5°, blind to "
+                   f"which stop (the two are 179.95° apart = 5 rotor turns within 0.05°), so check the direction from the motion. I "
+                   f"retract my earlier advice to check J1's first stall within 3.5° of the gravity rest's frame: that frame was 10.93° "
+                   f"off, and only the camera (hand-eye −11.0 ± 0.5°) could vouch for the first stall.</li>")
     rack_text = ""
     if rack:
         good, every = rack["good"], rack["all"]
@@ -585,8 +744,9 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
     handoff = (f"<p>Phase 0 is the rack's own staged five-bar home (stalls, C1 eased off, the corridor to READY) - this routine adds a "
                f"rotor-phase witness on J2 and C1 calibrated on the trusted manual stall zero. Phase 1, below, runs at READY with the "
                f"five-bar held: "
-               + ("J1 tilts by −55°, seeks its −89.97° stop at 0.02 rev/s under 7 N·m with gravity feed-forward (PD only), is defined "
-                  "at the stall and comes back to 0 in two parts; then " if "+J1" in base else "")
+               + ("J1 seeks its −89.97° stop at 0.02 rev/s under 11 N·m on the rack's j1_gains (PD + gravity feed-forward every tick, no "
+                  "integrator), is defined when it stands still pushing past 9 N·m (EffortStall), eases off at once and goes back to "
+                  "READY's −12.7° under its 17.98 N·m cap - all in the process that held READY; then " if "+J1" in base else "")
                + f"the claw closes, then each wrist joint touches its stop once at 1 N·m and 36°/s, is witnessed "
                f"<b>as its defining step ends</b> (0.5° on the 11:24 home's stall: W3's + stop at +2.78° mod 36°; no expected-travel "
                f"check - a seek may end short because the joint started near its stop), goes to 0, and the routine ends at TD4. "
@@ -597,9 +757,10 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
                f"--out plan.json</code> writes both paths and the branch rule as JSON.</p>")
     decisions = """<ul>
 <li><b>Decided for you</b> (each a default in code; undo in one line):
- <ul><li>J1 seeks its −89.97° stop (away from the D435; both stops lift the hanging arm to horizontal) under 7 N·m with gravity
- feed-forward and no integrator, from READY before the claw, and the ruler scores J1 for rows that home it (amendment 5)
- (undo: <code>home_j1=False</code>);</li>
+ <ul><li>J1 homes as the rack homed it - one 11 N·m seek to its −89.97° stop on the rack's j1_gains, done on robot_msgs'
+ <code>EffortStall</code> at 9 N·m, then back to READY's −12.7° before the claw - and the ruler scores J1 for rows that home it
+ (amendment 5) (undo: <code>home_j1=False</code>; the old lead stall: <code>j1_stall_rule="lead"</code>);</li>
+ <li>the twin's J1 feels the rack's measured gravity, not the CAD's (undo: <code>j1_rack=False</code> on the plant);</li>
  <li>the wrist homes at READY, not the five-bar's home (undo: <code>wrist_pose="bowl"</code>);</li>
  <li>V1's order over PEP 0047's park_first for the rack (undo: <code>order="park_first"</code>);</li>
  <li>the witness at 0.5° on a trusted home's stall, the five-bar's drives included (undo: <code>witness_tol_deg=2.0</code>);</li>
@@ -611,12 +772,14 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
  poses first - the Sim to Real Agent's rig); the five-bar's lift-off from a belt rest (the coverage ceiling; its lane: model the rack's staged five-bar home
  in the twin and re-score, or fix the J2/C1 runaways in <code>single_touch_ready+gff</code>); a retry after a refusal (turn W3 and
  touch W2 again) to win back the refused starts; accel-limited or better-damped wrist moves before any speed-up; the real rung through the
- Sim to Real Agent.</li>
+ Sim to Real Agent; J1's feed-forward on the rack's pose fit - the READY curve is pose-blind (5.2 N·m at the stop where the fit puts the
+ twin's 32 settled wrist poses at 2.1-3.5), which the effort rule does not need, but it is why no check can tell a missing feed-forward from
+ the curve's own error on the seek's lag.</li>
 <li><b>Needs you:</b> nothing irreversible.</li>
 <li><b>Not done:</b> no hardware moved (sim only); the five-bar's homing itself is unchanged beyond the witness.</li>
 </ul>"""
-    videos = [(k, v) for k, v in (("zach_v1_j1_ready_belt_rest", "J1 first: V1+J1 from the same rest - the five-bar to READY, J1 tilts to its "
-                                                                  "−89.97° stop and back, then the claw and the wrist (homed)"),
+    videos = [(k, v) for k, v in (("zach_v1_j1_ready_belt_rest", "J1 first: V1+J1 - the five-bar to READY, J1 seeks its −89.97° stop "
+                                                                  "and comes back to READY's −12.7°, then the claw and the wrist"),
                                   ("zach_v1_ready_belt_rest", "V1 at READY from a rest on the belt (homed)"),
                                   ("park_first_ready_belt_rest", "park_first at READY from the same rest (homed)"),
                                   ("multi_x2_ready_belt_rest", "the 3D-printer double touch from the same rest"),
@@ -632,7 +795,8 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
     if "+J1" in base and "zach_v1_j1_ready_belt_rest" in media:
         hero = "zach_v1_j1_ready_belt_rest"
         hero_caption = ("the recommended motion from a power cut at READY: the arm lands on the belt, the five-bar homes and walks to "
-                        "READY, J1 tilts the plane to its −89.97° stop and comes back to 0, the claw closes, W1 / W2 / W3 touch their stops, TD4")
+                        "READY, J1 rolls the plane to its −89.97° stop and comes back to READY's −12.7°, the claw closes, W1 / W2 / W3 "
+                        "touch their stops, TD4")
     return {"recommended": base, "verdict": verdict, "qualification": qualification, "findings": findings, "handoff": handoff,
             "decisions": decisions, "videos": videos, "hero": hero,
             "hero_caption": hero_caption,
@@ -663,13 +827,22 @@ def grid_scope(run: list[dict]) -> str:
     return text
 
 
+def is_seed(row: str | None) -> bool:
+    """An adversarial J1 seed (fullarm_routine.J1_ADVERSARIAL_ROWS) or its tight-witness re-judging: a fault injected to test J1's stall
+    rule, not a routine - kept out of the rankings, the scoreboard and the maps, counted in J1's finding (j1_split)."""
+    from sim2real.sim.homing.fullarm_routine import J1_ADVERSARIAL_ROWS  # noqa: PLC0415
+
+    return str(row or "").removesuffix(TIGHT) in J1_ADVERSARIAL_ROWS
+
+
 def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Path | None, recommended: str, notes: dict) -> str:
-    episodes, calibrations = load(results_path)
+    every_episode, calibrations = load(results_path)
+    episodes = [e for e in every_episode if not is_seed(e.get("row"))]
     cards = ruler.score(episodes)
     ranked = overall(ruler.score(ready_only(episodes)), whole=cards)
     media_ = json.loads(media_index.read_text()) if media_index.is_file() else {}
     wb_ = json.loads(wandb_summary.read_text()) if wandb_summary and wandb_summary.is_file() else {}
-    notes = {**auto_notes(cards, ranked, episodes, calibrations, media_, wb_), **notes}
+    notes = {**auto_notes(cards, ranked, every_episode, calibrations, media_, wb_), **notes}
     recommended = notes.get("recommended") or recommended
     media = json.loads(media_index.read_text()) if media_index.is_file() else {}
     plans = {**(pickle.loads(PLANS.read_bytes()) if PLANS.is_file() else {}),
@@ -701,7 +874,8 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              f"<p class='sub'>Episodes run: {done} of {planned} planned on the nominal twin (the J1 rows' {sum(1 for e in run if e.get('homes_j1') and e.get('environment') == ruler.NOMINAL)} "
              f"on READY's cells included) + {len(run) - done} in the perturbed twins "
              f"(+ {len(episodes) - len(run)} derived or folded-wrist rows). {grid_scope(run)} "
-             + ("J1's rows (V1+J1, park_first+J1) ran READY's 36 cells and every twin's 6 READY cells. " if any(e.get("homes_j1") for e in run) else "")
+             + ("J1's rows (V1+J1, park_first+J1) ran READY's 36 cells and every twin's 6 READY cells, the four adversarial J1 "
+                "seeds the subset's 6 READY cells. " if any(e.get("homes_j1") for e in run) else "")
              + f"Ruler frozen before any routine ran (<code>sim2real.sim.homing.routine_ruler</code>, {esc(notes.get('ruler_commit', ''))}). "
              f"Twin: MuJoCo, bam_fb_v2 @ cad-exporter 09374d7, the rack's belt as a contact.</p>", wandb_line,
              video(media, notes.get("hero", ""), notes.get("hero_caption", "")),

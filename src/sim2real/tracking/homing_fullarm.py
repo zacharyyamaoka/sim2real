@@ -97,13 +97,16 @@ def evaluation_digest(card: dict, episodes: list[dict], results: dict) -> str:
 
 def records(results: dict, *, replays: dict | None = None) -> list[dict]:
     """One W&B run record per (routine, environment) card (wandb_log.push's shape, plus ``images`` and ``replay``)."""
-    from sim2real.sim.homing.fullarm_routine import ROWS  # noqa: PLC0415
+    from sim2real.sim.homing.fullarm_routine import J1_ADVERSARIAL_ROWS, ROWS  # noqa: PLC0415
+    from sim2real.sim.homing.routine_check import TIGHT_SUFFIX  # noqa: PLC0415
     from sim2real.sim.homing.routine_figures import coverage_png  # noqa: PLC0415
 
     replays = replays or {}
     out = []
     for key, card in results["cards"].items():
         routine, environment = key.split(" | ")
+        # WHY a role (2026-11-14): the J1 seeds are faults injected to test J1's stall rule, not routines - the report's panels show routines
+        seed = routine.removesuffix(TIGHT_SUFFIX) in J1_ADVERSARIAL_ROWS
         episodes = [e for e in results["episodes"] if e.get("row") == routine and e.get("environment") == environment]
         evaluation = evaluation_digest(card, episodes, results)
         result_id = f"homing-bam_fb_v2-{routine}-{environment}"
@@ -114,12 +117,14 @@ def records(results: dict, *, replays: dict | None = None) -> list[dict]:
                   "routine_spec": spec, "plant": results.get("plant"), "ruler": results.get("ruler"), "targets": results.get("targets"),
                   "sim2real_sha": results.get("sim2real_sha"), "bam_ws_sha": results.get("bam_ws_sha"), "bundle": results.get("bundle"),
                   "cells_run": card.get("cells"), "feasible": card.get("feasible"), "result_id": result_id, "evaluation": evaluation,
-                  "evaluation_state": "latest", "rig": "bam_fb_v2", "wrist_pose": "five-bar home" if "PEP 0047" in routine else "READY"}
+                  "evaluation_state": "latest", "rig": "bam_fb_v2", "wrist_pose": "five-bar home" if "PEP 0047" in routine else "READY",
+                  "role": "adversarial J1 seed" if seed else "routine"}
         numbers = _flat(card)
         replay = replays.get(key) or {}
         out.append({"id": run_id("homing-bam_fb_v2", routine, environment, evaluation), "name": f"{routine} · {environment}",
                     "group": environment, "job_type": "homing-routine",
-                    "tags": ["homing", "bam_fb_v2", environment, _tag(routine), "latest"] + (["passes"] if card["verdict"]["pass"] else []),
+                    "tags": ["homing", "bam_fb_v2", environment, _tag(routine), "latest"] + (["passes"] if card["verdict"]["pass"] else [])
+                            + (["adversarial"] if seed else []),
                     "notes": f"{routine} on the bam_fb_v2 twin, {environment}: {results['environments'].get(environment)}",
                     "config": config, "history": [numbers], "summary": numbers,
                     "tables": {"starts": [_start_row(e) for e in episodes], "metrics": [numbers],
@@ -175,8 +180,11 @@ def build_report(results: dict, *, entity: str = ENTITY, project: str = PROJECT)
 
     L = wr.Layout  # noqa: N806
 
+    from sim2real.sim.homing.fullarm_routine import RECOMMENDED  # noqa: PLC0415
+
     def runset(name: str, *filters):
-        return wr.Runset(entity=entity, project=project, name=name, filters=[expr.Config("evaluation_state") == "latest", *filters])
+        return wr.Runset(entity=entity, project=project, name=name, filters=[expr.Config("evaluation_state") == "latest",
+                                                                             expr.Config("role") == "routine", *filters])
 
     nominal = runset("nominal", expr.Config("environment") == "nominal")
     every = runset("every environment")
@@ -193,7 +201,10 @@ def build_report(results: dict, *, entity: str = ENTITY, project: str = PROJECT)
             "the twin lets it fall onto the belt first. Sim only (MuJoCo, bam_fb_v2 bundle @ cad-exporter 09374d7). Runs named "
             "'· witness 0.5° (stall-calibrated)', '+table' (where not run) and 'V1…, park_first on a W1 refusal' are derived exactly from "
             "the runs of the same motion: a witness and a stored table only read a run's stalls, and V1 and park_first command the same "
-            "up to W1's first stall. **Recommended: V1+table, park_first on a W1 refusal, witness 0.5°.**")),
+            f"up to W1's first stall. **Recommended: {RECOMMENDED.removesuffix(' @ READY')}, witness 0.5°** - J1 homed as the rack "
+            "homed it (one 11 N·m seek to its −89.97° stop on the rack's j1_gains, the stop read only when J1 stands still pushing past "
+            "9 N·m, back to READY's −12.7°). The adversarial J1 seeds (feed-forward off, cap 5.5, the old lead stall) are runs tagged "
+            "'adversarial' (config role), kept out of these panels.")),
         wr.PanelGrid(hide_run_sets=False, runsets=[nominal],
                      panels=[wr.ParallelCoordinatesPlot(title="Every routine against every target (nominal twin)", columns=columns,
                                                         layout=L(x=0, y=0, w=24, h=10)),

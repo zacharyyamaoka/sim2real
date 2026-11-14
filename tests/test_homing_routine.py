@@ -741,3 +741,69 @@ def test_j1s_adversarial_seeds_refuse_and_the_lead_rule_records_the_gravity_stal
     assert out[rows[0]]["outcome_class"] == "homed" and abs(out[rows[0]]["zero_error_deg"]["J1"]) < 0.1
     assert out[rows[1]]["outcome_class"] == "timeout" and "J1 seeks its stop" in out[rows[1]]["outcome"]
     assert out[rows[2]]["outcome_class"] == "silent_wrong" and out[rows[2]]["zero_error_deg"]["J1"] < -5.0
+
+
+def _report_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("homing_routine_report", Path(__file__).parents[1] / "tools" / "homing_routine_report.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_j1s_own_count_reads_its_stall_not_the_whole_arms_class():
+    """The report's J1 finding (2026-11-14: an FF-off or low-cap seed must refuse or flag, never record a stop): J1's seek is counted on its
+    own - a stall within 1 deg of the CAD stop, one further off (a gravity stall read as the stop), a timeout in J1's home with no J1
+    stall, or a start lost before J1 moved - whatever the wrist did afterwards (a V1 W1 gravity stall must not hide it)."""
+    module = _report_module()
+    stop = {"joint": "revolute_3", "side": -1, "cad_deg": -89.972}
+    w1_short = {"joint": "revolute_11", "side": 1, "link_deg": 101.4, "cad_deg": 169.85}
+    episodes = [report(row="seed", stalls=[{**stop, "link_deg": -89.97}, w1_short]),  # J1 right, the wrist silently wrong after it
+                report(row="seed", stalls=[{**stop, "link_deg": -75.53}]),  # the gravity stall, 14.4 deg short
+                report(row="seed", stalls=[], finished=False, outcome="aborted: step 'J1 seeks its stop' was not done within 40.0 s"),
+                report(row="seed", stalls=[], finished=False, outcome="aborted: step 'J2 walks to READY' was not done within 40.0 s"),
+                {"row": "seed", "refused_start": "self-contact", "outcome_class": "infeasible"},
+                report(row="other", stalls=[{**stop, "link_deg": -60.0}])]
+    for e in episodes:
+        e.setdefault("outcome_class", ruler.outcome_class(e))
+    split = module.j1_split(episodes, "seed")
+    assert (split["stop"], split["wrong"], split["refused"], split["before"], split["n"]) == (1, 1, 1, 1, 4)
+    assert split["wrong_deg"] == [pytest.approx(14.442, abs=1e-3)] and split["stop_error_deg"] == pytest.approx(0.002, abs=1e-6)
+    assert module.is_seed("zach_v1+J1 FF off @ READY") and module.is_seed("zach_v1+J1 cap 5.5 @ READY" + module.TIGHT)
+    assert not module.is_seed("zach_v1+J1 @ READY") and not module.is_seed(None)
+
+
+def test_the_wandb_records_mark_the_j1_seeds_apart_from_the_routines(tmp_path, monkeypatch):
+    """The seeds are faults injected to test J1's stall rule: W&B keeps them as runs, tagged and with config role, and the report's panels
+    filter on role == routine."""
+    from sim2real.tracking import homing_fullarm as hf
+
+    monkeypatch.setattr(hf, "MEDIA", tmp_path)
+    cell = ruler.grid_cells()[22]
+    episodes = []
+    for row in ("zach_v1+J1 @ READY", "zach_v1+J1 FF off @ READY"):
+        r = report(procedure=row, environment="nominal", start=cell["name"], homes_j1=True)
+        r["zero_error_deg"] = {**r["zero_error_deg"], "J1": 0.0}
+        r.update({"row": row, "cell": cell["cell"], "key": f"{row} | nominal | {cell['name']}", "outcome_class": "homed", "covered": True})
+        episodes.append(r)
+    results = {"cards": ruler.score(episodes), "episodes": episodes, "environments": {k: v["why"] for k, v in ruler.ENVIRONMENTS.items()},
+               "plant": {}, "ruler": "test", "targets": {}, "sim2real_sha": "abc", "bam_ws_sha": "def", "bundle": "b"}
+    roles = {b["config"]["routine"]: (b["config"]["role"], "adversarial" in b["tags"]) for b in hf.records(results)}
+    assert roles == {"zach_v1+J1 @ READY": ("routine", False), "zach_v1+J1 FF off @ READY": ("adversarial J1 seed", True)}
+
+
+def test_a_filmed_j1_home_reports_where_j1_went_from_its_seek_on():
+    """routine_media.j1_path: the seek's start, its lowest angle, the highest after the return began (READY's J1 must not overshoot toward
+    the clutter's -9 deg envelope), and the peak effort - from the trace's own steps."""
+    from sim2real.sim.homing.fullarm_plant import J1, J2
+    from sim2real.sim.homing.routine_media import j1_path
+
+    trace = {"joints": [J1, J2], "t": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+             "step": ["phase 0", "J1 seeks its stop", "J1 seeks its stop", "J1 back to READY's angle", "J1 back to READY's angle", "claw closes"],
+             "link_deg": [[6.0, 0.0], [5.0, 0.0], [-89.97, 0.0], [-40.0, 0.0], [-12.4, 0.0], [-12.7, 0.0]],
+             "effort_nm": [[0.0, 0.0], [-2.0, 0.0], [-10.2, 0.0], [3.0, 0.0], [1.0, 0.0], [-1.0, 0.0]]}
+    path = j1_path(trace)
+    assert path == {"seek_from_deg": 5.0, "lowest_deg": -89.97, "highest_after_return_deg": -12.4, "peak_effort_nm": 10.2, "seek_t_s": 1.0,
+                    "back_t_s": 3.0}
+    assert j1_path({**trace, "step": ["phase 0"] * 6}) is None

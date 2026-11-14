@@ -612,7 +612,8 @@ class FullArmHomingPlant:
 
     def _pre_step(self, data) -> None:
         if self.j1_rack:
-            # the measured gravity in place of the CAD's: a joint torque that makes J1's hold torque J1_POSE_FIT's
+            # the measured gravity in place of the CAD's: a joint torque that makes J1's hold torque the rack's measured READY curve
+            # (j1_gains.j1_gravity_nm - pose-blind, so the twin cannot show how the wrist's pose moves it; the rack's pose fit can)
             data.qfrc_applied[self.rig.dof_adr("J1")] += self.j1_gravity_hold_nm(data) - self.j1_measured_gravity_nm(data)
         for role, (ripple, sign, offset) in self.cogging.items():
             q = float(data.qpos[self.rig.qpos_adr(role)])
