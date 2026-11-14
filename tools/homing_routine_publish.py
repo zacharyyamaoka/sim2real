@@ -19,6 +19,7 @@ from sim2real.provenance import write_results
 from sim2real.sim.homing import routine_check as rc
 
 ROOT = Path(__file__).resolve().parents[1]
+from sim2real.sim.homing.fullarm_routine import RECOMMENDED  # noqa: E402 - the routine the page leads with
 CACHE = Path.home() / ".cache" / "sim2real" / "homing_routine" / "episodes_2026-11-13.jsonl"
 CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_tight_2026-11-13.json"
 # WHY two files (feedback_source_only_git_boundary): git keeps the cards, the calibrations and the raw run episodes gzipped (every derived
@@ -90,7 +91,7 @@ def main(argv=None) -> int:
         notes = ROOT / "tools" / "homing_routine_notes.json"
         subprocess.run([sys.executable, str(ROOT / "tools" / "homing_routine_report.py"), "--out", str(REPORT), "--results", str(RESULTS),
                         "--wandb", str(WANDB_OUT), "--notes", str(notes), "--recommended",
-                        json.loads(notes.read_text()).get("recommended", "zach_v1+table @ READY") if notes.is_file() else "zach_v1+table @ READY"],
+                        json.loads(notes.read_text()).get("recommended", RECOMMENDED) if notes.is_file() else RECOMMENDED],
                        check=True)
     return 0
 

@@ -194,10 +194,12 @@ def plan_jobs(plan: str = "all") -> list[dict]:
     if plan == "smoke":
         jobs = [j for j in jobs if j["cell_index"] in (22,)]
     # WHY this order (a loaded machine, 2026-11-13): READY's 6 x 6 wrist map first (the answer to the order and the touch), then the
-    # perturbed subset (backlash, friction, mass, calibration), then the other three five-bar poses - a run stopped early still answers
+    # other three five-bar poses' nominal cells (Zach's "what percent of starting configurations", over the whole grid), then the
+    # perturbed subset - a run stopped early still answers. (Until the rack's pause at 18:15 the perturbed subset ran second; READY's six
+    # subset cells per twin had all run by then.)
     first = next(iter(ruler.FIVEBAR_LEVELS))
     jobs.sort(key=lambda j: (0 if (j["environment"] == ruler.NOMINAL and j["cell"]["family"] == first) else
-                             1 if j["environment"] != ruler.NOMINAL else 2, j["cell_index"]))
+                             1 if j["environment"] == ruler.NOMINAL else 2, j["cell_index"]))
     return jobs
 
 
