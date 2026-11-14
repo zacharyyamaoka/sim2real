@@ -47,6 +47,13 @@ GRID_ROWS = ("zach_v1 @ READY", "park_first+witness @ READY", "multi x2 (3D-prin
 SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)", "fast single @ READY", "multi x3 (3D-printer) @ READY")
 PERTURBED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
                   "park_first+witness+table @ READY", "zach_v1 @ READY", "zach_v1+table @ READY")
+# WHY a lighter plan past READY's map (2026-11-13 18:00, a machine at load 65-72: the full plan was ~4 h more): the "+table" rows are exact
+# from their plain rows (table_derived), multi x2 moved exactly as park_first on every READY start but faster, and the subset rows'
+# answers came from READY - so the other five-bar poses run V1 and park_first (the recommended routine's two paths), the perturbed twins
+# those two and press_reverse, and the subset rows past READY only PEP 0047
+LIGHT_GRID_ROWS = ("zach_v1 @ READY", "park_first+witness @ READY")
+LIGHT_PERTURBED_ROWS = ("park_first+witness @ READY", "press_reverse (backlash every home) @ READY", "zach_v1 @ READY")
+LIGHT_SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)",)
 TABLE_ENVIRONMENTS = ("B1", "B2")  # where a stored table can differ from B0's (B0: every gap 0)
 CALIBRATION_START = {"name": "calibration: power lost at READY, claw plumb", "j2_deg": ruler.FIVEBAR_LEVELS["READY"][0],
                      "c1_deg": ruler.FIVEBAR_LEVELS["READY"][1], "wrist_deg": (1.167, 90.0, 0.0), "claw_deg": 30.0, "knee": -1,
@@ -165,15 +172,23 @@ def plan_jobs(plan: str = "all") -> list[dict]:
     cells = ruler.grid_cells()
     subset = {c["name"] for c in ruler.subset_cells()}
     jobs = []
+    first = next(iter(ruler.FIVEBAR_LEVELS))
     for index, cell in enumerate(cells):
-        if plan in ("all", "nominal", "smoke"):
-            rows = list(GRID_ROWS) + (list(SUBSET_ROWS) if cell["name"] in subset else [])
+        light = plan == "light" and cell["family"] != first
+        if plan in ("all", "nominal", "smoke", "light"):
+            grid_rows = LIGHT_GRID_ROWS if light else GRID_ROWS
+            subset_rows = LIGHT_SUBSET_ROWS if light else SUBSET_ROWS
+            rows = list(grid_rows) + (list(subset_rows) if cell["name"] in subset else [])
             jobs.append({"cell_index": index, "cell": cell, "environment": ruler.NOMINAL, "rows": rows})
-        if plan in ("all", "perturbed") and cell["name"] in subset:
+        if plan in ("all", "perturbed", "light") and cell["name"] in subset:
             for environment in ruler.ENVIRONMENTS:
                 if environment == ruler.NOMINAL:
                     continue
-                rows = [r for r in PERTURBED_ROWS if not needs_table(r) or environment in TABLE_ENVIRONMENTS]
+                perturbed_rows = LIGHT_PERTURBED_ROWS if plan == "light" else PERTURBED_ROWS
+                rows = [r for r in perturbed_rows if not needs_table(r) or environment in TABLE_ENVIRONMENTS]
+                if plan == "light" and environment not in TABLE_ENVIRONMENTS:
+                    # press_reverse's point is the backlash (B1, B2); elsewhere its walk-across timed out on the folded cells already
+                    rows = [r for r in rows if not r.startswith("press_reverse")]
                 jobs.append({"cell_index": index, "cell": cell, "environment": environment, "rows": rows})
     if plan == "smoke":
         jobs = [j for j in jobs if j["cell_index"] in (22,)]
@@ -590,7 +605,7 @@ def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--plan", default="all", choices=("all", "nominal", "perturbed", "smoke"))
+    parser.add_argument("--plan", default="all", choices=("all", "nominal", "perturbed", "smoke", "light"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--workers", type=int, default=8)
