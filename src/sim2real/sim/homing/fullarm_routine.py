@@ -20,9 +20,14 @@ stays as it was; the rows here differ from it in three ways:
                       compliance identified on each run, no stored table; the measured stop span must sit within ``span_tol_deg`` of the
                       CAD's plus a plausible gap, else it refuses (a stall on an obstacle on either side breaks the span).
 3. **Every defining stall passes the rotor-phase witness** (PEP 0047's): a board boots reading its output modulo one rotor turn, so on its
-   true stop it must read ``stop + phase`` mod 36 deg - including the locate of a multi touch.
+   true stop it must read ``stop + phase`` mod 36 deg - including the locate of a multi touch. ``witness_tol_deg`` is PEP 0047's 2 deg by
+   default; the rack runs 0.5 deg on a trusted home's own stall (``rotor_phase_from_homed``, ``rack_plan``), which the grid showed refuses
+   every near-stop stall the 2 deg one lets through and no true stop (routine_check.tight_witness).
 
-The rows (``ROWS``) are the ruler's list (routine_ruler's docstring); ``make_row(name)`` builds one.
+The rows (``ROWS``) are the ruler's list (routine_ruler's docstring); ``make_row(name)`` builds one. **The recommended routine**
+(``RECOMMENDED``): V1's order with the stored table and the 0.5 deg witness, taking park_first's path when the witness refuses W1's
+first stall - the two orders command the same up to that stall, so the grid scores it exactly from their runs (routine_check.FALLBACK)
+and ``rack_plan_fallback`` hands the rack both paths and the branch rule.
 
 Every angle shown is in degrees; the sequences are SI (rad, rad/s, N.m).
 """
