@@ -549,3 +549,50 @@ def test_the_five_bars_tight_witness_is_calibrated_on_a_geared_twin_too():
     jammed = next(d for d in derived if d["start"] == "jammed")
     assert jammed["outcome_class"] == "refused" and "C1" in jammed["tight_off"]
     assert all(d["outcome_class"] != "refused" for d in derived if d["start"] != "jammed")
+
+
+def test_a_lost_start_is_placed_in_phase_0_or_the_wrist_by_the_step_or_joint_it_ended_on():
+    """The report's "every lost start is phase 0" is counted by routine_check.ended_in: the step a trip or a timeout happened in, the joints a
+    witness refused (a five-bar joint among them fired first), or a finished wrong home's worst joint."""
+    from sim2real.sim.homing.routine_check import ended_in
+
+    assert ended_in(report(outcome_class="homed")) is None
+    assert ended_in(report(outcome_class="infeasible")) is None
+    lost = lambda outcome, outcome_class: report(outcome=outcome, outcome_class=outcome_class, finished=False)  # noqa: E731
+    assert ended_in(lost("tripped: runaway: J2 at 123 deg/s powered, over 86 deg/s at t 6.32 s in step 'C1 seeks (J2 pushing)'",
+                         "tripped")) == "phase 0"
+    assert ended_in(lost("aborted: step 'J2 + C1 home (to READY) (waypoint 11 of 54)' was not done within 40.0 s", "timeout")) == "phase 0"
+    assert ended_in(lost("aborted: step 'W1 walks across' was not done within 40.0 s", "timeout")) == "wrist"
+    assert ended_in(lost("refused: tight witness {'C1': 9.262} deg off the trusted home's stall", "refused")) == "phase 0"
+    assert ended_in(lost("refused: rotor-phase witness: {'W2': [2.033]} deg off the stop's phase (tolerance 2.0)", "refused")) == "wrist"
+    # a stale calibration refuses the wrist; a five-bar stall in the same refusal was seen first, in phase 0
+    assert ended_in(lost("refused: tight witness {'CLAW': 1.5, 'W1': 1.5} deg off the trusted home's stall", "refused")) == "wrist"
+    assert ended_in(lost("refused: tight witness {'CLAW': 1.5, 'W1': 1.5, 'C1': 9.262} deg off the trusted home's stall", "refused")) == "phase 0"
+    wrong = report(outcome_class="silent_wrong", zero_error_deg={"J2": 0.005, "C1": 45.25, "W1": 0.001, "W2": 0.0, "W3": 0.0, "CLAW": 0.0})
+    assert ended_in(wrong) == "phase 0"
+    wrong["zero_error_deg"] = {"J2": 0.005, "C1": 0.007, "W1": 67.6, "W2": 0.0, "W3": None, "CLAW": 0.0}
+    assert ended_in(wrong) == "wrist"
+
+
+def test_the_racks_homes_repeat_their_seek_stop_phase_and_a_stall_off_the_stop_stands_out(tmp_path):
+    """fullarm_routine.rack_phase_spread: each joint's seek-stop reading mod one rotor turn over the rack's homed files - what the 0.5 deg
+    witness has to fit inside. Two homes on W3's stop a power cycle apart (two rotor turns) agree; the 10:24-like early stall is 8.25 off;
+    phases either side of the turn's wrap are 0.02 apart, not 35.98."""
+    from sim2real.sim.homing.fullarm_routine import rack_phase_spread
+
+    def homed(name, stops_deg):
+        joints = {joint: {"can_id": can, "homed": True, "sign": 1, "zero_board_rad": math.radians(deg - 5.0), "stops_board_rad": [math.radians(deg)]}
+                  for joint, can, deg in stops_deg}
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps({"schema": "bam-homed/1", "joints": joints}))
+        return path
+
+    paths = [homed("a", [("revolute_17", 16, 110.777), ("revolute_11", 14, 35.99)]),
+             homed("b", [("revolute_17", 16, 182.775), ("revolute_11", 14, 72.01)]),
+             homed("c", [("revolute_17", 16, 263.023)])]
+    out = rack_phase_spread(paths)
+    assert out["W3"]["phases_deg"] == pytest.approx([2.777, 2.775, 11.023], abs=1e-6)
+    assert out["W3"]["spread_deg"] == pytest.approx(8.248, abs=1e-6)
+    assert rack_phase_spread(paths[:2])["W3"]["spread_deg"] == pytest.approx(0.002, abs=1e-6)
+    assert out["W1"]["spread_deg"] == pytest.approx(0.02, abs=1e-6)
+    assert "W2" not in out

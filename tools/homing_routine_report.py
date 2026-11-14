@@ -26,6 +26,11 @@ CACHE = Path.home() / ".cache" / "sim2real" / "homing_routine" / "episodes_2026-
 CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_tight_2026-11-13.json"
 PLANS = Path.home() / ".cache" / "sim2real" / "homing_routine_plans.pkl"
 MEDIA_REL = "media/homing-routine-2026-11-13"
+# the rack's wrist homes of 2026-11-13 (10:24, 10:50, 11:24 and the cold one after the 18:05 power-up); 10:24's W3 stalled early
+RACK_HOMED = Path("/archive/datasets/bam_rig/full_arm/homed")
+RACK_WRIST_HOMES = ("homed_2026-11-13T172448Z.json", "homed_2026-11-13T175048Z.json", "homed_2026-11-13T182448Z.json",
+                    "homed_2026-11-14T011708Z.json")
+PHYSICAL = ("nominal", "B1", "B2", "friction", "claw_heavy", "phase_draw_2")  # every twin but the stale witness calibration
 ROLES = ("J2", "C1", "W1", "W2", "W3", "CLAW")
 
 CSS = """
@@ -290,6 +295,62 @@ def fivebar_p95(card: dict) -> float | None:
     return max(values) if values else None
 
 
+def lost_split(episodes: list, routine: str) -> dict:
+    """The recommended routine's starts over the nominal grid and the physical twins: homed, and the lost ones by where they were lost
+    (routine_check.ended_in) and how (trip / timeout / refused / wrong)."""
+    from collections import Counter  # noqa: PLC0415
+
+    from sim2real.sim.homing.routine_check import ended_in  # noqa: PLC0415
+
+    homed, lost = 0, Counter()
+    for e in episodes:
+        if e.get("row") != routine or e.get("environment") not in PHYSICAL:
+            continue
+        where = ended_in(e)
+        if where is None:
+            homed += e.get("outcome_class") == "homed"
+            continue
+        lost[(where, e.get("outcome_class"))] += 1
+    return {"homed": homed, "lost": lost, "wrist_lost": sum(v for (w, _), v in lost.items() if w == "wrist")}
+
+
+def wrong_range(episodes: list, rows: tuple, role: str) -> tuple[float, float] | None:
+    """The |zero error| range of ``role`` over the silent-wrong homes of ``rows`` whose worst joint is ``role`` (no folded-wrist cells)."""
+    values = []
+    for e in episodes:
+        if e.get("row") not in rows or e.get("outcome_class") != "silent_wrong" or str(e.get("environment", "")).endswith("folded wrist"):
+            continue
+        errors = {k: abs(v) for k, v in (e.get("zero_error_deg") or {}).items() if v is not None}
+        if errors and max(errors, key=errors.get) == role:
+            values.append(errors[role])
+    return (min(values), max(values)) if values else None
+
+
+def wrist_speed_ratio(episodes: list, rows: tuple) -> float | None:
+    """Median over the homed nominal starts of ``rows`` of the wrist's worst peak speed / its ceiling."""
+    ratios = []
+    for e in episodes:
+        if e.get("row") not in rows or e.get("environment") != ruler.NOMINAL or e.get("outcome_class") != "homed":
+            continue
+        peak, ceiling = e.get("peak_speed_deg_s") or {}, e.get("speed_ceiling_deg_s") or {}
+        wrist = [peak[r] / ceiling[r] for r in ("W1", "W2", "W3") if peak.get(r) is not None and ceiling.get(r)]
+        if wrist:
+            ratios.append(max(wrist))
+    ratios.sort()
+    return ratios[len(ratios) // 2] if ratios else None
+
+
+def rack_check() -> dict | None:
+    """fullarm_routine.rack_phase_spread over the rack's Nov 13 wrist homes (all four, and without 10:24's early W3), or None off this
+    machine."""
+    from sim2real.sim.homing.fullarm_routine import rack_phase_spread  # noqa: PLC0415
+
+    paths = [RACK_HOMED / name for name in RACK_WRIST_HOMES]
+    if not all(path.is_file() for path in paths):
+        return None
+    return {"all": rack_phase_spread(paths), "good": rack_phase_spread(paths[1:])}
+
+
 def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, media: dict, wb: dict) -> dict:
     """The page's words from the numbers (every number below is read from the cards; the prose is the analysis of record)."""
     full = [(r, s) for r, s in ranked if s["environments"] >= 5]
@@ -301,8 +362,10 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     v1t, parkt = _c(cards, "zach_v1 @ READY" + TIGHT), _c(cards, "park_first+witness @ READY" + TIGHT)
     pep, multi, press = _c(cards, "PEP 0047 (wrist at the five-bar's home)"), _c(cards, "multi x2 (3D-printer) @ READY"), _c(
         cards, "press_reverse (backlash every home) @ READY")
-    fast, park_b2, table_b2 = _c(cards, "fast single @ READY"), _c(cards, "park_first+witness @ READY", "B2"), _c(
-        cards, "park_first+witness+table @ READY", "B2")
+    # WHY the 0.5 deg rows here: a plain row's p95 on B2 carries its silent wrongs (C1 jammed 44 deg), which is the witness's point, not
+    # the table's
+    fast, park_b2, table_b2 = _c(cards, "fast single @ READY"), _c(cards, "park_first+witness @ READY" + TIGHT, "B2"), _c(
+        cards, "park_first+witness+table @ READY" + TIGHT, "B2")
     nominal = [e for e in episodes if e.get("environment") == ruler.NOMINAL and e.get("row") == "park_first+witness @ READY"
                and "refused_start" not in e]
     trips = [e for e in nominal if e.get("outcome_class") in ("tripped", "timeout")]
@@ -311,7 +374,29 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     locate = [v for e in episodes if e.get("row") == "multi x2 (3D-printer) @ READY" for v in
               ((e.get("notes") or {}).get("locate_minus_retouch_deg") or {}).values()]
     worst_locate = max((abs(v) for v in locate), default=None)
+    locate_true = [abs(v) for e in episodes if e.get("row") == "multi x2 (3D-printer) @ READY" and e.get("outcome_class") == "homed"
+                   for v in ((e.get("notes") or {}).get("locate_minus_retouch_deg") or {}).values()]
+    true_locate = max(locate_true, default=None)
     n = len(nominal)
+    split = lost_split(episodes, recommended)
+    lost = split["lost"]
+    phase0 = {how: v for (where, how), v in lost.items() if where == "phase 0"}
+    park_rows = ("park_first+witness @ READY", "park_first+witness+table @ READY", "multi x2 (3D-printer) @ READY", "fast single @ READY",
+                 "multi x3 (3D-printer) @ READY")
+    w2_short = wrong_range(episodes, park_rows, "W2")
+    w1_short = wrong_range(episodes, ("zach_v1 @ READY", "zach_v1+table @ READY"), "W1")
+    c1_short = wrong_range(episodes, tuple({e.get("row") for e in episodes if TIGHT not in str(e.get("row"))}), "C1")
+    slow_ratio = wrist_speed_ratio(episodes, ("zach_v1 @ READY", "park_first+witness @ READY"))
+    fast_ratio = wrist_speed_ratio(episodes, ("multi x2 (3D-printer) @ READY", "fast single @ READY", "multi x3 (3D-printer) @ READY"))
+    press_t = _c(cards, "press_reverse (backlash every home) @ READY" + TIGHT)
+    press_homes = [e for e in episodes if e.get("row") == "press_reverse (backlash every home) @ READY" and e.get("environment") in ("B1", "B2")
+                   and e.get("outcome_class") == "homed"]
+    press_missed = [e for e in press_homes if any((e.get("gap_truth_deg") or {}).get(r) and not (e.get("gap_identified_deg") or {}).get(r)
+                                                   for r in ("W1", "W2", "W3"))]
+    rack = rack_check()
+
+    def rng(span, digits=2):
+        return "—" if span is None else f"{span[0]:.{digits}f}-{span[1]:.{digits}f}"
 
     def pct(k, total):
         return f"{100.0 * k / total:.0f} %" if total else "—"
@@ -322,12 +407,29 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                f"tight rotor-phase witness (0.5° on a trusted home’s own stall, the five-bar’s drives included) and the stored backlash table: "
                f"0 silent wrong in every twin, {fmt(rec.get('coverage_pct'), 0)} % of the nominal start grid, zeros p95 "
                f"{fmt(rec.get('zero_error_p95_deg'), 3)}°, {fmt(rec.get('time_to_home_median_s'), 0)} s median.")
-    qualification = (f"Coverage is capped by the five-bar’s own home from a rest on the belt, not by the wrist: {len(trips)} of {n} nominal "
-                     f"starts ({pct(len(trips), n)}) trip J2’s or C1’s 86°/s runaway stop or time out before the wrist moves, the same "
-                     "for every routine. Time misses the 60 s target everywhere (the five-bar alone takes ~39 s). Sim only; the twin’s "
-                     "wrist gaps, claw mass and belt friction are assumptions.")
+    qualification = (f"Every start it lost was lost in the five-bar’s phase 0, not the wrist: the wrist phase homed all {split['homed']} "
+                     f"starts it was handed over the nominal grid and the five physical twins" if not split["wrist_lost"] else
+                     f"The wrist phase lost {split['wrist_lost']} of the {split['homed'] + split['wrist_lost']} starts it was handed")
+    qualification += (f". On {len(trips)} of {n} nominal starts ({pct(len(trips), n)}) the twin’s five-bar home from a belt rest trips J2’s or "
+                      "C1’s 86°/s runaway stop or times out, the same for every routine; the rack runs its own staged five-bar home, "
+                      "which the twin does not model yet. Time (78 s median) and speed miss their targets everywhere. Sim only; the "
+                      "twin’s wrist gaps, claw mass and belt friction are assumptions.")
+    rack_text = ""
+    if rack:
+        good, every = rack["good"], rack["all"]
+        rack_text = (f" <b>On the rack</b> (<code>rack_phase_spread</code> over the Nov 13 wrist homes at 10:24, 10:50, 11:24 and the cold one "
+                     f"after the 18:05 power-up): each joint's seek stop repeated its phase mod 36° within "
+                     f"{fmt(every.get('W1', {}).get('spread_deg'), 3)}° (W1), {fmt(every.get('W2', {}).get('spread_deg'), 3)}° (W2), "
+                     f"{fmt(good.get('W3', {}).get('spread_deg'), 3)}° (W3 without 10:24) and {fmt(every.get('CLAW', {}).get('spread_deg'), 3)}° "
+                     f"(the claw's closed stop); 10:24's early W3 stall sits {fmt(every.get('W3', {}).get('spread_deg'), 2)}° off. 0.5° leaves "
+                     f"room for the real spread and refuses that home.")
     findings = f"""
 <ol>
+<li><b>The wrist phase homes every start it is handed; the coverage that is missing is the five-bar's.</b> Over the nominal grid and the
+five physical twins the recommended routine homed {split['homed']} starts and lost {sum(lost.values())}: {split['wrist_lost']} in the wrist
+phase, and in phase 0 {phase0.get('tripped', 0)} J2/C1 runaway trips, {phase0.get('timeout', 0)} walk-home timeouts and
+{phase0.get('refused', 0)} C1 stalls on the claw jammed against the base that the witness refused (one start, in every twin). Phase 0
+here is the twin's <code>single_touch_ready+gff</code>; on the rack the Sim to Real Agent's staged five-bar home replaces it.</li>
 <li><b>The belt moves the wrist's home to READY.</b> PEP 0047 homes the wrist at the five-bar's home, the gravity bowl, where the claw's
 tips sit ~101 mm into the belt (bam_rack_twin full_arm; with the belt as a contact the twin refuses that pose). Run as landed it homed
 {fmt(pep.get('coverage_pct'), 0)} % of its starts ({pep.get('outcomes', {}).get('tripped', 0)} trips walking down into the belt,
@@ -339,27 +441,29 @@ nominal starts that lift-off - J2's first seek with C1 limp, C1's seek with J2 p
 runaway stop. A slower first seek (0.025 rev/s) and C1 seeking beside J2 (c1_seek) fixed 1 of 6 of them in a probe. This is the five-bar
 lane's next problem (PEP 0047's evening section), and it caps every routine here.</li>
 <li><b>The 2° witness lets near-stop obstacles through; 0.5° on a trusted home's own stall does not.</b> park_first parks W1 anywhere in
-(−30°, +35°]; with W3 near −120° the gripper plate meets the forearm 1.2-2.0° before W2's stop, inside PEP 0047's 2° tolerance:
-{park.get('silent_wrong', 0)} silent wrongs on the nominal grid. Zach's V1 assigned W1's forearm stall as its stop ({v1.get('silent_wrong', 0)}
-silent wrongs, 64-68° off), and once the five-bar's C1 stalled 45° short on the claw jammed against the base ({len(c1_on_base)} start),
-wrong for every routine because the five-bar had no witness. Calibrated on a trusted home's own stall - the rack's
-<code>rotor_phase_from_homed</code> is one by construction; its W1, W2 and claw stalls repeat to 0.006-0.13° over three homes - a 0.5°
-witness on all six homed joints refuses every one of them and no true stop: V1 {v1.get('silent_wrong', 0)} → {v1t.get('silent_wrong', 0)},
+(−30°, +35°]; with W3 near −120° the gripper plate (W3's stop block) meets the forearm (L2) {rng(w2_short)}° before W2's stop, inside PEP
+0047's 2° tolerance: {park.get('silent_wrong', 0)} silent wrongs on the nominal grid. Zach's V1, which runs without a witness, assigned W1's
+stall on the forearm as its stop when the wrist started folded ({v1.get('silent_wrong', 0)} silent wrongs, {rng(w1_short, 0)}° off), and
+once the five-bar's C1 stalled {rng(c1_short, 0)}° short on the claw jammed against the base ({len(c1_on_base)} start), wrong for every
+routine because the five-bar had no witness. Calibrated on a trusted home's own stall (the rack's <code>rotor_phase_from_homed</code> is one
+by construction), a 0.5° witness on all six homed joints refuses every one of them and no true stop: V1 {v1.get('silent_wrong', 0)} → {v1t.get('silent_wrong', 0)},
 park_first {park.get('silent_wrong', 0)} → {parkt.get('silent_wrong', 0)}. Its price: a calibration gone stale (an encoder recalibrated,
 the gear train rebuilt) refuses everything - safe, and the <i>phase_cal_error</i> twin shows it. Re-take the calibration after any such
-job.</li>
+job.{rack_text}</li>
 <li><b>V1's order beats park_first once the witness is tight.</b> V1 covers {fmt(v1t.get('coverage_pct'), 1)} % against park_first's
 {fmt(parkt.get('coverage_pct'), 1)} % and is {fmt((park.get('time_to_home_median_s') or 0) - (v1.get('time_to_home_median_s') or 0), 0)} s
 faster: its own failure (W1 sweeping into the forearm when the wrist starts folded) is refused, not silent, under the witness, while
 park_first's parking leaves W1 off zero for W2's seek and opens the plate-on-forearm stall. Both touch the forearm at ≤ 1 N·m on some starts
 (Zach, 10:15: accepted).</li>
-<li><b>The 3D-printer double touch buys no accuracy here.</b> Its fast locate and slow re-touch read the same stall within
-{fmt(worst_locate, 4)}°: a torque-capped stall is read standing still at a fixed torque, with no trigger latency for a slow approach to
-remove. Its {fmt(multi.get('time_to_home_median_s'), 0)} s median comes from its 60°/s moves - the fast single control without the re-touch
-is {fmt(fast.get('time_to_home_median_s'), 0)} s - and at 60°/s the wrist's held moves overshoot to 1.8× the 86°/s ceiling. The
-forward-and-back that pays is touching BOTH stops: press_reverse identifies every wrist gap every home (wrist zeros p95
-{fmt(wrist_p95(_c(cards, 'press_reverse (backlash every home) @ READY', 'B2')), 3)}° on the geared B2 twin) and its span check refuses the
-near-stop stalls - for {fmt((press.get('time_to_home_median_s') or 0) - (park.get('time_to_home_median_s') or 0), 0)} s more.</li>
+<li><b>The 3D-printer double touch buys no accuracy here.</b> On every true stop its fast locate and slow re-touch read the same angle
+within {fmt(true_locate, 4)}° ({fmt(worst_locate, 3)}° at most on the wrong stops): a torque-capped stall is read standing still at a fixed
+torque, with no trigger latency for a slow approach to remove. Its {fmt(multi.get('time_to_home_median_s'), 0)} s median comes from its
+60°/s moves - the fast single control without the re-touch is {fmt(fast.get('time_to_home_median_s'), 0)} s - and at 60°/s the wrist peaks
+at {fmt(fast_ratio, 2)}× its 86°/s ceiling on the median start ({fmt(slow_ratio, 2)}× at the recipe's 36°/s). The forward-and-back that
+pays is touching BOTH stops: press_reverse identifies the wrist's gaps itself (wrist zeros p95
+{fmt(wrist_p95(_c(cards, 'press_reverse (backlash every home) @ READY', 'B2')), 3)}° on the geared B2 twin; it read a 0.3° gap as 0 on
+{len(press_missed)} of its {len(press_homes)} B1/B2 homes) and its span check refuses the near-stop stalls - for
+{fmt((press_t.get('time_to_home_median_s') or 0) - (rec.get('time_to_home_median_s') or 0), 0)} s more than the recommended routine.</li>
 <li><b>Backlash needs the table (or press_reverse).</b> With hidden gaps a single touch reads each wrist stop 0.46-0.50° off (B2: park_first
 {fmt(park_b2.get('coverage_pct'), 0)} % coverage, wrist p95 {fmt(wrist_p95(park_b2), 3)}°); the stored identify_backlash table brings the
 wrist to {fmt(wrist_p95(table_b2), 3)}° ({fmt(table_b2.get('coverage_pct'), 0)} %; the five-bar's own zeros sit at
@@ -372,8 +476,9 @@ of {_c(cards, 'press_reverse (backlash every home) @ READY', 'friction').get('fe
 {_c(cards, 'press_reverse (backlash every home) @ READY', 'claw_heavy').get('feasible', 0)} with the 0.50 kg claw; identify_backlash (PEP 0047)
 walks the same way, so take the table's calibration on a light, warm wrist and fix that step before leaning on it.</li>
 <li><b>Speed and time.</b> Every routine misses the 0.8 × speed margin: the wrist's kp 75 / kd 0.75 PD is underdamped on the twin, so a held
-move overshoots its ramp ~2× (75°/s at the recipe's 36°/s), and the five-bar's trips peak far higher. Time: the five-bar phase is ~39 s, 23 s
-of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
+move overshoots its ramp ~2× ({fmt(slow_ratio, 2)}× the 86°/s ceiling at the recipe's 36°/s), and the five-bar's trips peak far higher. Time:
+the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s against the 60 s target (the five-bar's own home took
+36-45 s alone in the phase-0 probe).</li>
 </ol>"""
     handoff = (f"<p>Phase 0 is the rack's own staged five-bar home (stalls, C1 eased off, the corridor to READY) - this routine adds a "
                f"rotor-phase witness on J2 and C1 calibrated on the trusted manual stall zero. Phase 1, below, runs at READY with the "
@@ -394,7 +499,8 @@ of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
  <li>the ruler's four amendments, none moving a metric or target: lift-off is 2 s clear of the belt; rows added after READY's
  map (V1 in the perturbed twins, the tight witness and the table as derived rows); the perturbation subset made a W1 / W2 diagonal (it had
  been W2 −150 only, a sampling bug - the folded-wrist runs are shown apart); step timeouts labelled timeouts, not trips.</li></ul></li>
-<li><b>Left, not blocked:</b> the five-bar's lift-off from a belt rest (the coverage ceiling; its lane); a retry after a refusal (turn W3 and
+<li><b>Left, not blocked:</b> the five-bar's lift-off from a belt rest (the coverage ceiling; its lane: model the rack's staged five-bar home
+ in the twin and re-score, or fix the J2/C1 runaways in <code>single_touch_ready+gff</code>); a retry after a refusal (turn W3 and
  touch W2 again) to win back the refused starts; accel-limited or better-damped wrist moves before any speed-up; the real rung through the
  Sim to Real Agent.</li>
 <li><b>Needs you:</b> nothing irreversible.</li>
@@ -405,7 +511,7 @@ of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
                                   ("multi_x2_ready_belt_rest", "the 3D-printer double touch from the same rest"),
                                   ("press_reverse_ready_belt_rest", "press_reverse: both stops at two levels, every home"),
                                   ("zach_v1_forearm_stall", "V1: W1 stalls on the forearm and assigns it as its stop (silent wrong; the tight witness refuses it)"),
-                                  ("park_first_w2_short_on_the_plate", "park_first: W2 stops 1.24° short on the gripper plate against the forearm"),
+                                  ("park_first_w2_short_on_the_plate", "park_first: W2 stops 1.24° short on the gripper plate (W3\u2019s stop block) against the forearm (L2)"),
                                   ("fivebar_trip_from_the_belt", "the five-bar's lift-off from a belt rest trips J2's runaway stop"),
                                   ("pep0047_wrist_at_the_bowl", "PEP 0047 as landed: the walk to the five-bar's home drives the claw into the belt"))
               if k in media]
@@ -421,12 +527,16 @@ def grid_scope(run: list[dict]) -> str:
     nominal = {(e.get("cell") or {}).get("fivebar") for e in run if e.get("environment") == ruler.NOMINAL and e.get("row") == "zach_v1 @ READY"}
     poses = [p for p in ruler.FIVEBAR_LEVELS if p in nominal]
     missing = [p for p in ruler.FIVEBAR_LEVELS if p not in nominal]
-    perturbed = {e.get("start") for e in run if e.get("environment") not in (ruler.NOMINAL, None)
-                 and not str(e.get("environment")).endswith(" · folded wrist")}
+    per_twin: dict = {}
+    for e in run:
+        if e.get("environment") not in (ruler.NOMINAL, None) and not str(e.get("environment")).endswith(" · folded wrist"):
+            per_twin.setdefault(e["environment"], set()).add(e.get("start"))
+    counts = sorted({len(v) for v in per_twin.values()}) or [0]
+    perturbed = f"{counts[0]}" if len(counts) == 1 else f"{counts[0]}-{counts[-1]}"
     text = (f"The nominal grid ran every row on {', '.join(poses)} ({36 * len(poses)} cells)"
             + (f"; {', '.join(missing)} were not run - the sweep was paused while the rack homed and the host was starved, and the "
                f"remaining cells are one command away (routine_check --plan light --workers 2, the cache skips what ran)" if missing else "")
-            + f". The perturbed twins ran {len(perturbed)} of the 24 subset cells each.")
+            + f". The perturbed twins ran {perturbed} of the 24 subset cells each.")
     return text
 
 

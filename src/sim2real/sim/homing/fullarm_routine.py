@@ -479,6 +479,33 @@ def rotor_phase_from_homed(path) -> dict:
     return out
 
 
+def rack_phase_spread(paths) -> dict:
+    """Role -> {"phases_deg", "spread_deg", "files"}: each homed joint's seek-stop reading (``stops_board_rad[0]``) mod one rotor turn, over
+    the rack's bam-homed/1 files - how tightly the real stall repeats its phase across homes and power cycles, i.e. what the rotor-phase
+    witness's tolerance has to fit inside. The spread is taken around the first file's phase, so readings either side of the turn's wrap
+    stay close. WHY (2026-11-13): RACK_WITNESS_TOL_DEG 0.5 rests on the twin's stalls (~0.003 deg); this is its check against the real ones."""
+    import json  # noqa: PLC0415
+
+    from .fullarm_plant import ROLE, TURN_RAD  # noqa: PLC0415
+
+    out: dict = {}
+    for path in paths:
+        document = json.loads(Path(path).read_text())
+        for joint, entry in (document.get("joints") or {}).items():
+            stops = entry.get("stops_board_rad") or []
+            if not entry.get("homed") or not stops or joint not in ROLE or joint not in TURN_RAD:
+                continue
+            turn = math.degrees(TURN_RAD[joint])
+            row = out.setdefault(ROLE[joint], {"turn_deg": turn, "phases_deg": [], "files": []})
+            row["phases_deg"].append(math.degrees(float(stops[0])) % turn)
+            row["files"].append(Path(path).name)
+    for row in out.values():
+        turn, first = row["turn_deg"], row["phases_deg"][0]
+        offsets = [((phase - first + turn / 2.0) % turn) - turn / 2.0 for phase in row["phases_deg"]]
+        row["spread_deg"] = max(offsets) - min(offsets)
+    return out
+
+
 # Phase-0 variants tried on the grid's five-bar trips (routine_check's probe, not the ruler's rows): J2's first seek slower, and C1 seeking
 # beside J2 (c1_seek) so the crank is never limp while L1 lifts the arm off the belt
 EXPERIMENTAL_ROWS = {

@@ -368,6 +368,34 @@ SEEK_SIDE_ROLE = {"W1": +1, "W2": -1, "W3": +1, "CLAW": -1}
 STALL_TORQUE_NM = {"W1": 1.0, "W2": 1.0, "W3": 1.0, "CLAW": 0.3}  # a stall is read saturated at its seek's cap (Stall's lead > cap / kp)
 
 
+_FIVEBAR_ROLES = {"J1", "J2", "C1"}
+
+
+def ended_in(episode: dict) -> str | None:
+    """Where a lost start was lost - "phase 0" (the five-bar) or "wrist" (phase 1) - or None for a home or a start the twin cannot hold.
+    A trip or a timeout is placed by the step it happened in; a refusal by the joints the witness refused (a five-bar joint among them was
+    seen first, in phase 0); a finished wrong home by its worst joint. WHY (2026-11-13): the report's headline that every start the
+    recommended routine lost was lost in phase 0 is counted here, not read off the plots."""
+    import re  # noqa: PLC0415
+
+    outcome_class = episode.get("outcome_class") or ruler.outcome_class(episode)
+    if outcome_class in ("homed", "infeasible"):
+        return None
+    outcome = str(episode.get("outcome") or "")
+    step = re.search(r"step '([^']+)'", outcome)
+    if step:
+        names = set(re.findall(r"\b(J1|J2|C1|W1|W2|W3|claw|CLAW)\b", step.group(1)))
+        return "phase 0" if names and {n.upper() for n in names} <= _FIVEBAR_ROLES else "wrist"
+    refused = re.search(r"\{([^}]*)\}", outcome) if outcome_class == "refused" else None
+    if refused:
+        joints = set(re.findall(r"'([A-Z0-9]+)'", refused.group(1)))
+        return "phase 0" if joints & _FIVEBAR_ROLES else "wrist"
+    errors = {role: abs(v) for role, v in (episode.get("zero_error_deg") or {}).items() if v is not None}
+    if errors:
+        return "phase 0" if max(errors, key=errors.get) in _FIVEBAR_ROLES else "wrist"
+    return "wrist"
+
+
 def with_table(episode: dict, table: list[dict]) -> dict:
     """``episode`` (a plain single-touch run) re-zeroed with ``table`` (table_to_json rows): each scored wrist / claw zero moves by its
     defining stall's motor_past_link."""
