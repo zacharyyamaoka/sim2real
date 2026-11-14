@@ -99,6 +99,13 @@ SHORT = {"silent_wrong": "silent wrong", "coverage_pct": "coverage", "zero_error
          "peak_speed_ratio": "speed"}
 
 
+def current_cell(episodes, routine: str, environment: str) -> str:
+    if not episodes:
+        return "—"
+    ratio, joint = current_ratio(episodes, routine, environment)
+    return "—" if ratio is None else f"{ratio:.2f} <span class='sub'>{esc(joint)}</span>"
+
+
 def verdict_chips(card: dict) -> str:
     """How many targets pass, and the names of those that fail."""
     measured = {k: v for k, v in card["verdict"].items() if k != "pass" and v is not None}
@@ -108,12 +115,26 @@ def verdict_chips(card: dict) -> str:
             + (f"<br><span class='sub'>✗ {esc(failing)}</span>" if failing else ""))
 
 
-def scoreboard(cards: dict, environment: str = ruler.NOMINAL) -> str:
+def current_ratio(episodes: list[dict], routine: str, environment: str = ruler.NOMINAL) -> tuple[float | None, str]:
+    """The worst powered joint's peak current over its board's cap (torque over the board's maximum torque: current is torque / Kt),
+    and which joint - the brief's "peak current vs the caps" (the frozen ruler scores speed; this is reported beside it)."""
+    worst, joint = None, ""
+    for e in episodes:
+        if e.get("row") != routine or e.get("environment") != environment or "refused_start" in e:
+            continue
+        for role, peak in (e.get("peak_torque_nm") or {}).items():
+            cap = (e.get("torque_cap_nm") or {}).get(role)
+            if cap and role != "J1" and (worst is None or peak / cap > worst):
+                worst, joint = peak / cap, role
+    return worst, joint
+
+
+def scoreboard(cards: dict, environment: str = ruler.NOMINAL, episodes: list | None = None) -> str:
     rows = sorted(((key.split(" | ")[0], card) for key, card in cards.items() if key.endswith(f" | {environment}")), key=lambda rc: rank_key(rc[1]))
     head = ("<tr><th>routine (ranked)</th><th>cells run / feasible</th><th>coverage %</th><th>silent wrong</th><th>refused</th>"
             "<th>tripped / timeout</th><th>inaccurate</th><th>zero p95 °</th><th>W1 / W2 / W3 p95 °</th><th>repeat °</th>"
             "<th>backlash ID % · err p95 ′</th><th>time median / p95 s</th><th>belt after lift-off</th><th>peak speed / ceiling</th>"
-            "<th>targets</th></tr>")
+            "<th>peak current / board cap</th><th>targets</th></tr>")
     body = []
     for routine, card in rows:
         o = card["outcomes"]
@@ -126,7 +147,8 @@ def scoreboard(cards: dict, environment: str = ruler.NOMINAL) -> str:
             f"<td>{fmt(by.get('W1'), 3)} / {fmt(by.get('W2'), 3)} / {fmt(by.get('W3'), 3)}</td><td>{fmt(card['repeatability_deg'], 4)}</td>"
             f"<td>{fmt(card['backlash_identified_pct'], 0)} · {fmt(card['backlash_error_p95_arcmin'], 2)}</td>"
             f"<td>{fmt(card['time_to_home_median_s'], 1)} / {fmt(card['time_to_home_p95_s'], 1)}</td><td>{card['belt_after_liftoff']}</td>"
-            f"<td>{fmt(card['peak_speed_ratio'], 2)}</td><td>{verdict_chips(card)}</td></tr>")
+            f"<td>{fmt(card['peak_speed_ratio'], 2)}</td><td>{current_cell(episodes, routine, environment)}</td>"
+            f"<td>{verdict_chips(card)}</td></tr>")
     return f"<div class='scroll'><table>{head}{''.join(body)}</table></div>"
 
 
@@ -437,7 +459,7 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "refuse everything (re-take the calibration), a loose one passes it. Rows ending “witness 0.5°” are the same runs re-judged by "
              "the tight witness, and the “V1 …, park_first on a W1 refusal” rows are exact from V1's and park_first's runs (they move the "
              "same up to W1's first stall); neither moves the arm differently.</p>", overall_table(ranked),
-             "<h2>Scoreboard, nominal twin</h2>", scoreboard(cards),
+             "<h2>Scoreboard, nominal twin</h2>", scoreboard(cards, episodes=episodes),
              "<h2>Coverage maps (nominal)</h2><p class='sub'>Rows W1, columns W2 (°), one panel per five-bar pose; hover a cell for its start "
              "and outcome.</p>", maps,
              "<h2>Perturbed twins (one W1 / W2 diagonal per five-bar pose, 24 cells)</h2>", perturbed(cards),
