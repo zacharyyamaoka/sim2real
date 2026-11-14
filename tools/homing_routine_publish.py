@@ -21,7 +21,11 @@ from sim2real.sim.homing import routine_check as rc
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path.home() / ".cache" / "sim2real" / "homing_routine" / "episodes_2026-11-13.jsonl"
 CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_tight_2026-11-13.json"
-RESULTS = ROOT / "src" / "sim2real" / "data" / "homing_routine_2026-11-13.json"
+# WHY two files (feedback_source_only_git_boundary): git keeps the cards, the calibrations and the raw run episodes gzipped (every derived
+# row is recomputed from them by routine_check); the full results with every derived episode, which the report and W&B read, stay in the cache
+RESULTS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "results_2026-11-13.json"
+COMMITTED = ROOT / "src" / "sim2real" / "data" / "homing_routine_2026-11-13.json"
+EPISODES_GZ = ROOT / "src" / "sim2real" / "data" / "homing_routine_episodes_2026-11-13.jsonl.gz"
 MEDIA = Path("/home/bam/bam_ws/reports/media/homing-routine-2026-11-13/media.json")
 REPLAYS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "replays.json"
 WANDB_OUT = ROOT / "src" / "sim2real" / "data" / "homing_routine_wandb_2026-11-13.json"
@@ -41,6 +45,14 @@ def final_results() -> dict:
     calibrations = json.loads(CALIBRATIONS.read_text())
     results = rc.results(episodes + errors, {k: v.get("table") for k, v in calibrations.items() if v.get("table")}, calibrations)
     write_results(RESULTS, results, default=str)
+    import gzip  # noqa: PLC0415
+
+    with gzip.open(EPISODES_GZ, "wt") as handle:
+        for e in episodes + errors:
+            handle.write(json.dumps(e, default=str) + "\n")
+    write_results(COMMITTED, {k: v for k, v in results.items() if k != "episodes"} | {
+        "episodes": f"{EPISODES_GZ.name}: the {len(episodes)} run episodes (+{len(errors)} errors); routine_check.results() re-derives the rest"},
+        default=str)
     return results
 
 

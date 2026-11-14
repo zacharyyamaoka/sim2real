@@ -21,7 +21,7 @@ from sim2real.sim.homing import routine_ruler as ruler
 from sim2real.sim.homing.routine_figures import coverage_svg
 
 DATA = Path(__file__).resolve().parents[1] / "src" / "sim2real" / "data"
-RESULTS = DATA / "homing_routine_2026-11-13.json"
+RESULTS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "results_2026-11-13.json"  # the full results (homing_routine_publish)
 CACHE = Path.home() / ".cache" / "sim2real" / "homing_routine" / "episodes_2026-11-13.jsonl"
 CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_tight_2026-11-13.json"
 PLANS = Path.home() / ".cache" / "sim2real" / "homing_routine_plans.pkl"
