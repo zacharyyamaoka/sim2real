@@ -568,7 +568,7 @@ def test_a_lost_start_is_placed_in_phase_0_or_the_wrist_by_the_step_or_joint_it_
     assert ended_in(lost("aborted: step 'J2 + C1 home (to READY) (waypoint 11 of 54)' was not done within 40.0 s", "timeout")) == "phase 0"
     assert ended_in(lost("aborted: step 'W1 walks across' was not done within 40.0 s", "timeout")) == "wrist"
     # J1's home is its own place: a J1 step's timeout or a J1 refusal is neither the five-bar's phase 0 nor the wrist
-    assert ended_in(lost("aborted: step 'J1 tilts toward its stop' was not done within 40.0 s", "timeout")) == "J1 home"
+    assert ended_in(lost("aborted: step 'J1 seeks its stop' was not done within 40.0 s", "timeout")) == "J1 home"
     assert ended_in(lost("refused: tight witness {'J1': 3.1} deg off the trusted home's stall", "refused")) == "J1 home"
     assert ended_in(lost("aborted: step 'J1 to home' was not done within 40.0 s", "timeout")) == "phase 0"  # the five-bar's own J1 hold
     assert ended_in(lost("refused: tight witness {'C1': 9.262} deg off the trusted home's stall", "refused")) == "phase 0"
@@ -642,57 +642,50 @@ def test_the_report_ranks_routines_on_readys_cells_like_for_like_and_subset_only
 # ---------------------------------------------------------------------------------------------------------------- J1 (amendment 5)
 
 
-def test_j1_rows_tilt_j1_to_its_minus_90_stop_from_ready_then_back_before_the_claw(plans):
-    """Zach's order (2026-11-13 night): J2/C1 -> READY -> J1 seeks its stop -> J1 back to its working angle -> the claw and the wrist. The seek
-    is a torque-capped move toward stops.json's revolute_3 side -1 (-89.97 deg) with J1's gravity as feed-forward and J2 / C1 held at READY
-    on their comp at the tilt; its stall defines J1 at that stop."""
-    from robot_msgs.control import Stall
+def test_j1_rows_seek_j1_to_its_minus_90_stop_from_ready_then_back_to_readys_angle_before_the_claw(plans):
+    """Zach's order (2026-11-13 night), matched to the rack's real J1 homes (2026-11-14): J2/C1 -> READY -> one capped seek toward stops.json's
+    revolute_3 side -1 (-89.97 deg) done on the effort stall (9 N.m, the rack's rule) and defining J1 there, J2 / C1 held at READY on their
+    comp at the tilt -> J1 back to READY's -12.7 deg (0 is blocked at READY) -> the claw and the wrist, J1 held there on its feed-forward."""
+    from robot_msgs.control import EffortStall
 
     from sim2real.sim.homing.fullarm_plant import C1, J1, J2
-    from sim2real.sim.homing.fullarm_procedures import stall_lead
-    from sim2real.sim.homing.fullarm_routine import J1_KP_NM_PER_RAD, J1_SEEK_CAP_NM, J1_STOP_SIDE, j1_gravity_nm
+    from sim2real.sim.homing.fullarm_routine import (J1_ENVELOPE_MAX_RAD, J1_JOINT_CAP_NM, J1_READY_RAD, J1_SEEK_CAP_NM, J1_STALL_EFFORT_NM,
+                                                     J1_STOP_SIDE, j1_gravity_nm)
 
     second = plans["zach_v1+J1 @ READY"]["sequences"][1]
     names = [s.name for s in second.steps]
-    assert names[:6] == ["phase 1: everything holds", "J1 tilts toward its stop", "J1 seeks its stop", "J1 back toward its working angle",
-                         "J1 back to its working angle", "claw closes"]
-    seek = second.steps[2]
+    assert names[:4] == ["phase 1: everything holds", "J1 seeks its stop", "J1 back to READY's angle", "claw closes"]
+    seek = second.steps[1]
     command = {c.joint: c for c in seek.commands}
-    tilt = {c.joint: c for c in second.steps[1].commands}[J1]
-    assert tilt.mode == "move_by" and tilt.distance < 0.0  # relative: before its stall J1 reads only its board's own frame
-    # the setpoint runs past the stop by more than the stall's lead from the furthest the tilt can leave J1 (46 deg short of the stop)
-    assert abs(command[J1].distance) > math.radians(46.0) + stall_lead(J1, J1_SEEK_CAP_NM, J1_KP_NM_PER_RAD)
-    assert J1_STOP_SIDE == -1 and command[J1].mode == "move_by" and command[J1].distance < 0.0
-    assert command[J1].max_effort == pytest.approx(J1_SEEK_CAP_NM) and command[J1].feedforward_effort < 0.0
-    stall = [d for d in seek.done_when if isinstance(d, Stall)]
-    assert len(stall) == 1 and stall[0].joint == J1 and stall[0].lead == pytest.approx(stall_lead(J1, J1_SEEK_CAP_NM, J1_KP_NM_PER_RAD))
+    # relative (before its stall J1 reads only its board's frame), the whole way from the grid's highest start (+6 deg, a few sagged)
+    assert J1_STOP_SIDE == -1 and command[J1].mode == "move_by" and command[J1].distance < -math.radians(96.0 + 5.0)
+    assert command[J1].max_effort == pytest.approx(J1_SEEK_CAP_NM) == pytest.approx(11.0) and command[J1].feedforward_effort < 0.0
+    assert [type(d) for d in seek.done_when] == [EffortStall] and seek.done_when[0].effort == pytest.approx(J1_STALL_EFFORT_NM)
     assert math.degrees(seek.define_position[J1]) == pytest.approx(-89.972, abs=0.01)
-    # J2 / C1 on their comp at the tilt: C1 carries less than at the vertical plane (gravity turns onto the joint axes as J1 goes to -90)
     holds = {c.joint: c for c in second.steps[0].commands}
-    assert abs(command[C1].feedforward_effort) < 0.5 * abs(holds[C1].feedforward_effort) and command[J2].mode == holds[J2].mode
-    back = {c.joint: c for c in second.steps[4].commands}[J1]
-    assert back.mode == "position" and back.position == pytest.approx(0.0)
-    # the last part's feed-forward is within 0.7 N.m of J1's gravity at 0: the PD rests it inside its reach tolerance there
-    assert abs(back.feedforward_effort - j1_gravity_nm(0.0)) < 0.7
-    claw = {c.joint: c for c in second.steps[5].commands}[J1]
-    assert claw.position == pytest.approx(0.0) and claw.feedforward_effort == pytest.approx(j1_gravity_nm(0.0))
+    assert abs(command[C1].feedforward_effort) < 0.7 * abs(holds[C1].feedforward_effort) and command[J2].mode == holds[J2].mode
+    back = {c.joint: c for c in second.steps[2].commands}[J1]
+    assert back.mode == "position" and math.degrees(back.position) == pytest.approx(-12.7) and back.max_effort == pytest.approx(J1_JOINT_CAP_NM)
+    claw = {c.joint: c for c in second.steps[3].commands}[J1]
+    assert claw.position == pytest.approx(J1_READY_RAD) and claw.feedforward_effort == pytest.approx(j1_gravity_nm(J1_READY_RAD))
+    # nothing J1 is sent after its stall goes above the clutter's envelope (-9 deg; the contact is at -7)
+    for step in second.steps[2:]:
+        j1 = {c.joint: c for c in step.commands}[J1]
+        assert j1.position is None or j1.position <= J1_ENVELOPE_MAX_RAD
     assert plans["zach_v1+J1 @ READY"]["evidence_plan"][0][1:] == (J1, -1, "define")
 
 
-def test_the_j1_cap_beats_its_gravity_and_friction_over_the_whole_sweep():
-    """J1's seek cannot stall short on friction: its cap less the worst gravity on the way (every hanging wrist pose of the grid, 15 %
-    heavier than the twin) still exceeds the JMC breakaway (0.74 N.m identified on CAN 12; July's crank 1-1.5 N.m)."""
-    from sim2real.sim.homing.fullarm_routine import (J1_FRICTION_MAX_NM, J1_GRAVITY_AT_READY_NM, J1_GRAVITY_WORST_NM, J1_SEEK_CAP_NM,
-                                                     j1_gravity_nm)
+def test_j1s_effort_stall_reads_only_the_stop_and_its_caps_leave_room():
+    """The rack's J1 load peaks at the stop (j1_gains.j1_gravity_nm, the measured READY curve: 5.2 N.m) and friction adds <= 1.5 N.m: a gravity
+    stall can never push 9 N.m (the 22:54 trap), the seek's 11 N.m cap can (the stop is found), and both sit inside the joint's 17.98."""
+    from sim2real.sim.homing.fullarm_routine import (J1_FRICTION_MAX_NM, J1_GRAVITY_WORST_NM, J1_JOINT_CAP_NM, J1_READY_RAD, J1_SEEK_CAP_NM,
+                                                     J1_STALL_EFFORT_NM, j1_gravity_nm)
 
-    sweep = [abs(v) for deg, v in J1_GRAVITY_AT_READY_NM.items() if deg <= 0]
-    assert max(sweep) <= J1_GRAVITY_WORST_NM
-    assert J1_SEEK_CAP_NM - 1.15 * J1_GRAVITY_WORST_NM > J1_FRICTION_MAX_NM >= 1.5
-    from sim2real.sim.homing.fullarm_routine import J1_GRAVITY_WORST_HEAVY_CLAW_NM
-
-    assert J1_SEEK_CAP_NM - J1_GRAVITY_WORST_HEAVY_CLAW_NM > J1_FRICTION_MAX_NM  # the 0.50 kg claw twin: margin left, no 15 % on top
-    assert j1_gravity_nm(math.radians(-65.0)) == pytest.approx(J1_GRAVITY_AT_READY_NM[-65]) and j1_gravity_nm(0.0) < 0.0
-    assert j1_gravity_nm(math.radians(-62.5)) == pytest.approx(0.5 * (J1_GRAVITY_AT_READY_NM[-65] + J1_GRAVITY_AT_READY_NM[-60]))
+    sweep = [abs(j1_gravity_nm(math.radians(deg))) for deg in range(-90, round(math.degrees(J1_READY_RAD)) + 1)]
+    assert max(sweep) == pytest.approx(J1_GRAVITY_WORST_NM, abs=0.02)
+    assert J1_STALL_EFFORT_NM > J1_GRAVITY_WORST_NM + J1_FRICTION_MAX_NM
+    assert J1_GRAVITY_WORST_NM + J1_FRICTION_MAX_NM < J1_STALL_EFFORT_NM < J1_SEEK_CAP_NM < J1_JOINT_CAP_NM == pytest.approx(17.98)
+    assert abs(j1_gravity_nm(J1_READY_RAD)) < 0.5  # READY's J1 sits near the arm's hang point (the rack's -10.3 deg)
 
 
 def test_the_ruler_scores_j1_only_for_rows_that_home_it():
@@ -709,10 +702,10 @@ def test_the_ruler_scores_j1_only_for_rows_that_home_it():
 
 
 
-def test_the_recommended_rack_plan_homes_j1_first_and_says_how_to_witness_its_first_stall(tmp_path):
-    """The default CLI (the recommended routine, both paths and the branch): J1's seek, its define and its back-to-0 come before the claw in
-    both paths, the stops carry J1's side -1, and the plan says J1's first stall has no trusted reference yet (3.5 deg from the frame, then
-    the camera) and that the witness cannot tell J1's two stops apart."""
+def test_the_recommended_rack_plan_homes_j1_first_with_the_racks_rule_gains_and_zero_writer(tmp_path):
+    """The default CLI (the recommended routine, both paths and the branch): J1's seek, its define and its move back to READY's -12.7 deg come
+    before the claw in both paths; the plan carries the rack's facts - the effort stall at 9 N.m on an 11 N.m seek inside the joint's 17.98,
+    the gains from bam_rack_twin.hardware.j1_gains, one process, the zero through zero_writer, the 05:41Z / 05:56Z stalls as the reference."""
     import sys
 
     out = tmp_path / "plan.json"
@@ -723,8 +716,28 @@ def test_the_recommended_rack_plan_homes_j1_first_and_says_how_to_witness_its_fi
     assert plan["row"] == "V1+table+J1, park_first on a W1 refusal @ READY"
     for sequence in (plan["sequence"], plan["sequence_park_first"]):
         names = [s["name"] for s in sequence["steps"]]
-        assert names.index("J1 seeks its stop") < names.index("J1 back to its working angle") < names.index("claw closes")
+        assert names.index("J1 seeks its stop") < names.index("J1 back to READY's angle") < names.index("claw closes")
     assert plan["stops"]["J1"]["seek_side"] == -1 and plan["stops"]["J1"]["lower_deg"] == pytest.approx(-89.972, abs=0.01)
-    assert plan["evidence_plan"][0]["role"] == "J1" and plan["j1"]["cap_nm"] == pytest.approx(7.0)
-    assert "3.5 deg" in plan["j1"]["witness"]["first_home"] and "5 rotor turns" in plan["j1"]["witness"]["blind_spot"]
-    assert plan["branch"]["shared_steps"][-1] == "W1 seeks" and "J1 seeks its stop" in plan["branch"]["shared_steps"]
+    j1 = plan["j1"]
+    assert j1["seek"]["cap_nm"] == pytest.approx(11.0) and "EffortStall" in j1["seek"]["stall_rule"] and "9.0" in j1["seek"]["stall_rule"]
+    assert j1["joint_cap_nm"] == pytest.approx(17.98) and j1["ready_deg"] == pytest.approx(-12.7) and "j1_gains" in j1["gains"]
+    assert "zero_writer" in j1["zero_write"] and "ONE process" in j1["one_process"] and "-1.31529" in j1["witness"]["reference"]
+    assert plan["evidence_plan"][0]["role"] == "J1" and plan["branch"]["shared_steps"][-1] == "W1 seeks"
+
+
+@slow
+def test_j1s_adversarial_seeds_refuse_and_the_lead_rule_records_the_gravity_stall(tmp_path):
+    """The rack's 22:54 trap on the twin with the rack's J1 (its gains, its feed-forward, its measured gravity): with the feed-forward off the
+    effort stall still finds the real stop; with the cap under the load at the stop plus friction it never records one (the step times out);
+    the lead rule on that same seek records the gravity stall ~14 deg short - the silent wrong the effort stall exists for."""
+    from sim2real.sim.homing import routine_check as rc
+    from sim2real.sim.homing import routine_ruler
+
+    rows = ["zach_v1+J1 FF off @ READY", "zach_v1+J1 FF off, cap 5.5 @ READY", "zach_v1+J1 FF off, cap 5.5, lead rule @ READY"]
+    rc.PLANS.update(rc.preplan_file(rows, tmp_path / "plans.pkl"))
+    cells = routine_ruler.grid_cells()
+    index = next(i for i, c in enumerate(cells) if c["name"].startswith("READY W1 -30 W2 +90 W3 -120"))
+    out = {r["row"]: r for r in rc.run_job({"cell_index": index, "cell": cells[index], "environment": "nominal", "rows": rows}, tables={})}
+    assert out[rows[0]]["outcome_class"] == "homed" and abs(out[rows[0]]["zero_error_deg"]["J1"]) < 0.1
+    assert out[rows[1]]["outcome_class"] == "timeout" and "J1 seeks its stop" in out[rows[1]]["outcome"]
+    assert out[rows[2]]["outcome_class"] == "silent_wrong" and out[rows[2]]["zero_error_deg"]["J1"] < -5.0

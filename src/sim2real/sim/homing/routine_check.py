@@ -58,6 +58,17 @@ LIGHT_SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)",)
 # Zach's J1 (2026-11-13 night, ruler amendment 5): the recommended routine's two paths with J1 homed at READY before the claw, run on the
 # whole nominal grid and every twin's subset - their "+table" rows, the tight witness and the W1-refusal branch derive as before
 J1_ROWS = ("zach_v1+J1 @ READY", "park_first+witness+J1 @ READY")
+
+
+def j1_plant(rows) -> dict:
+    """The plant a job's rows share (fullarm_routine.row_plant): the rack's J1 for the rows that home it, the adversarial seeds' knobs.
+    WHY one per job: phase 0 runs once per job and every row branches from that plant."""
+    from .fullarm_routine import row_plant  # noqa: PLC0415
+
+    configs = {tuple(sorted(row_plant(row).items())) for row in rows}
+    if len(configs) > 1:
+        raise ValueError(f"a job's rows must share one plant: {list(rows)}")
+    return dict(next(iter(configs))) if configs else {}
 TABLE_ENVIRONMENTS = ("B1", "B2")  # where a stored table can differ from B0's (B0: every gap 0)
 CALIBRATION_START = {"name": "calibration: power lost at READY, claw plumb", "j2_deg": ruler.FIVEBAR_LEVELS["READY"][0],
                      "c1_deg": ruler.FIVEBAR_LEVELS["READY"][1], "wrist_deg": (1.167, 90.0, 0.0), "claw_deg": 30.0, "knee": -1,
@@ -194,6 +205,13 @@ def plan_jobs(plan: str = "all") -> list[dict]:
             if cell["name"] in subset:
                 jobs += [{"cell_index": index, "cell": cell, "environment": environment, "rows": list(J1_ROWS)}
                          for environment in ruler.ENVIRONMENTS if environment != ruler.NOMINAL]
+                # the adversarial J1 seeds on the subset's nominal cells, one job per plant they need (fullarm_routine.J1_ADVERSARIAL_ROWS)
+                from .fullarm_routine import J1_ADVERSARIAL_ROWS, row_plant  # noqa: PLC0415
+
+                groups: dict = {}
+                for row in J1_ADVERSARIAL_ROWS:
+                    groups.setdefault(tuple(sorted(row_plant(row).items())), []).append(row)
+                jobs += [{"cell_index": index, "cell": cell, "environment": ruler.NOMINAL, "rows": rows} for rows in groups.values()]
             continue
         light = plan == "light" and cell["family"] != first
         if plan in ("all", "nominal", "smoke", "light"):
@@ -272,7 +290,7 @@ def run_job(job: dict, *, tables: dict | None = None, branch: bool = True, trace
 
     environment, cell = job["environment"], job["cell"]
     start = ArmStart(**{k: v for k, v in cell.items() if k != "cell"})
-    plant = FullArmHomingPlant(**{**plant_kwargs(environment), **(plant_overrides or {})})
+    plant = FullArmHomingPlant(**{**plant_kwargs(environment), **j1_plant(job["rows"]), **(plant_overrides or {})})
     table_rows = (tables or {}).get(environment)
     try:
         plant.place(start)
@@ -402,7 +420,7 @@ STALL_TORQUE_NM = {"W1": 1.0, "W2": 1.0, "W3": 1.0, "CLAW": 0.3}  # a stall is r
 
 _FIVEBAR_ROLES = {"J1", "J2", "C1"}
 # the steps of J1's home in phase 1 (fullarm_routine.FullArmRoutine._j1_home): their losses are J1's, not the five-bar's phase 0
-J1_HOME_STEPS = ("J1 tilts toward its stop", "J1 seeks its stop", "J1 back toward its working angle", "J1 back to its working angle")
+J1_HOME_STEPS = ("J1 seeks its stop", "J1 back to READY's angle")
 
 
 def ended_in(episode: dict) -> str | None:
@@ -483,7 +501,8 @@ TIGHT_WITNESS_DEG = 0.5
 TIGHT_ROWS = ("park_first+witness @ READY", "park_first+witness+table @ READY", "multi x2 (3D-printer) @ READY",
               "multi x3 (3D-printer) @ READY", "fast single @ READY", "zach_v1 @ READY", "press_reverse (backlash every home) @ READY",
               "zach_v1+table @ READY", "zach_v1+J1 @ READY", "park_first+witness+J1 @ READY", "zach_v1+table+J1 @ READY",
-              "park_first+witness+table+J1 @ READY")
+              "park_first+witness+table+J1 @ READY", "zach_v1+J1 FF off @ READY", "zach_v1+J1 cap 5.5 @ READY",
+              "zach_v1+J1 FF off, cap 5.5 @ READY", "zach_v1+J1 FF off, cap 5.5, lead rule @ READY")
 # WHY press_reverse gets only the five-bar's: its wrist stalls are pressed at two levels on both sides, so they read the gap and the wind-up
 # a one-touch reference does not; its span witness already guards the wrist
 FIVEBAR_ONLY_TIGHT = ("press_reverse (backlash every home) @ READY",)

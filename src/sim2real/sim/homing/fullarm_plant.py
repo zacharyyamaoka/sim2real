@@ -54,6 +54,28 @@ from . import fullarm_home as fh
 from .mujoco_plant import BAM_WS_SRC, bam_ws_path, cogging_terms, real_boards
 from .plant import PlantTrip
 
+# -- J1 as the rack runs it (2026-11-14, the Sim to Real Agent's real J1 homes) -----------------------------------------------------------
+# WHY read from bam_rack_twin.hardware.j1_gains, never a number of ours (the dispatcher, 2026-11-14: "use those gains, not your own"): every
+# tool on the rack that holds or moves J1 sends kp x14 / kd x16.8 and the gravity feed-forward that module computes - one place
+J1_GAINS_PY = BAM_WS_SRC / "dev" / "bam_rack_twin" / "bam_rack_twin" / "hardware" / "j1_gains.py"
+J1_RACK_ZERO_BOARD_RAD = 0.25439  # latest.json revolute_3 since the real top-stop homes (05:41Z / 05:56Z): board = URDF J1 + this
+# WHY the twin's J1 feels the rack's measured READY curve (j1_gains.j1_gravity_nm: 5.32 sin(board - 0.075), the 34 holds of j1gsweep_062149
+# within their 0.3 N.m friction band, -5.2 N.m at the stop) instead of the CAD's: the CAD puts the shoulder's COM 32 mm on the wrong side
+# of J1's axis (pid_tuna_full_arm/j1_gravity/j1_pose_fit.json: the CAD alone misses the holds by 1.97 N.m RMS; at READY the twin's CAD
+# rests J1 at +24 deg where the arm hangs at -10 deg). The pose-aware fit there (1.592 x the CAD's hanging moment + a refit shoulder sine)
+# is not used: on the twin's own READY wrist (TD4) its hanging term reads ~1.1 N.m under the rack's sweep pose and puts the stop's load at
+# 3.2 N.m, not the measured 5.5. Pose-blind like the rack's own feed-forward, so J1's load at other five-bar poses is the READY one.
+
+
+def j1_rack_gains():
+    """The rack's J1 module (kp / kd scales, ``j1_gravity_nm``), loaded from its file: no bam_rack_twin package import."""
+    import importlib.util  # noqa: PLC0415
+
+    spec = importlib.util.spec_from_file_location("bam_rack_twin_j1_gains", J1_GAINS_PY)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 TAU = 2.0 * math.pi
 CONTROL_DT = 0.01
 
@@ -317,7 +339,8 @@ class FullArmHomingPlant:
                  runaway_rad_s: float | None = RUNAWAY_RAD_S, wrist_friction: str = "sliding", check_every: int = 1,
                  limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None,
                  contact_timeconst_s: float | None = None, settle_all: bool = False, belt_solref: tuple[float, float] | None = None,
-                 rotor_phase_deg: Mapping[str, float] | None = None, contact_timeconst_scope: str = "all", log_qpos: bool = True):
+                 rotor_phase_deg: Mapping[str, float] | None = None, contact_timeconst_scope: str = "all", log_qpos: bool = True,
+                 j1_rack: bool = False, j1_ff: bool = True):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
@@ -349,6 +372,16 @@ class FullArmHomingPlant:
         # WHY a switch (the homing routine's grid, 2026-11-13, a loaded machine): the whole pose every tick is only for a video; a sweep
         # without one keeps its workers ~1 GB lighter over a 100 s episode and its deep copies small
         self.log_qpos = bool(log_qpos)
+        # WHY the rack's J1 (2026-11-14): J1's own board gains (kp 200) and the CAD's gravity were neither the arm's. ``j1_rack``: J1 runs
+        # the rack's kp x14 / kd x16.8 with no integrator, its gravity feed-forward computed every tick from the angle (as arm_hold and
+        # every J1 tool send it, from power-up), and the twin's J1 feels the measured READY gravity instead of the CAD's (module WHY).
+        # ``j1_ff`` False: that feed-forward off (the adversarial seed of a seek run without it - the rack's 22:54 gravity stall).
+        self.j1_rack, self.j1_ff = bool(j1_rack), bool(j1_ff)
+        # WHY the function and the two scales, not the module: the plant is deep-copied after phase 0 (routine_check's branching), and a
+        # module object does not copy
+        gains = j1_rack_gains() if self.j1_rack else None
+        self._j1_gravity = gains.j1_gravity_nm if gains else None
+        self._j1_scales = (float(gains.J1_KP_SCALE), float(gains.J1_KD_SCALE)) if gains else (1.0, 1.0)
         # WHY settle_all (the homing routine's start grid, 2026-11-13): a start is where the arm was when the power went; the WHOLE arm then
         # falls (onto the belt, its stops or itself) before power-on - the five-bar's drives are unpowered too - so power-on waits until every
         # joint is still, not only the wrist. False: the wrist's stillness only (every sweep before then).
@@ -476,6 +509,9 @@ class FullArmHomingPlant:
                         model.pair_solref[k, 0] = self.contact_timeconst_s
         q = self.place(start)
         boards = real_boards()
+        if self.j1_rack:
+            kp_scale, kd_scale = self._j1_scales
+            boards["J1"] = replace(boards["J1"], kp=boards["J1"].kp * kp_scale, kd=boards["J1"].kd * kd_scale, ki=0.0, ilimit=0.0)
         wrist_board = BoardConfig(kp=self.wrist_gains[0], ki=0.0, kd=self.wrist_gains[1], ilimit=0.0, max_torque_nm=WRIST_MAX_NM)
         drives = [Drive(r, self.signs[r], boards[r]) for r in ("J1", "J2", "C1")] + [Drive(r, 1.0, wrist_board) for r in ("W1", "W2", "W3")]
         sim = RigSim(self.rig, tuple(drives), log_hz=1e-6)
@@ -556,7 +592,28 @@ class FullArmHomingPlant:
 
     # -- physics hooks --------------------------------------------------------------------------------------------------------------
 
+    def j1_gravity_hold_nm(self, data, *, shoulder_only: bool = False) -> float:
+        """J1's gravity hold torque on the twin's CAD masses (N.m, URDF frame, MuJoCo's qfrc_bias convention at rest): from the subtree
+        J1 carries, or only the shoulder body's own mass."""
+        model = self.rig.model
+        shoulder = model.body("shoulder").id
+        joint = model.joint(J1).id
+        if shoulder_only:
+            mass, com = float(model.body_mass[shoulder]), data.xipos[shoulder]
+        else:
+            mass, com = float(model.body_subtreemass[shoulder]), data.subtree_com[shoulder]
+        lever = np.asarray(com) - np.asarray(data.xanchor[joint])
+        return -float(np.dot(data.xaxis[joint], np.cross(lever, mass * np.asarray(model.opt.gravity))))
+
+    def j1_measured_gravity_nm(self, data) -> float:
+        """J1's hold torque as the rack measured it at READY (j1_gains.j1_gravity_nm on the rack's board frame), at the twin's J1."""
+        q1 = float(data.qpos[self.rig.qpos_adr("J1")])
+        return float(self._j1_gravity(q1 + J1_RACK_ZERO_BOARD_RAD))
+
     def _pre_step(self, data) -> None:
+        if self.j1_rack:
+            # the measured gravity in place of the CAD's: a joint torque that makes J1's hold torque J1_POSE_FIT's
+            data.qfrc_applied[self.rig.dof_adr("J1")] += self.j1_gravity_hold_nm(data) - self.j1_measured_gravity_nm(data)
         for role, (ripple, sign, offset) in self.cogging.items():
             q = float(data.qpos[self.rig.qpos_adr(role)])
             data.qfrc_applied[self.rig.dof_adr(role)] -= sign * float(ripple.torque_nm(sign * q + offset))
@@ -626,7 +683,11 @@ class FullArmHomingPlant:
             self.sim.states[role].ramp_target_rad = None
             # WHY ilimit_scale 0 and no velocity target (mujoco_plant.MujocoRigPlant.tick): the boards run as PDs on the setpoint the
             # sequence controller ramps, as the rack runner's adapter sends them
-            self.sim._send(role, MoteusCommand(position_rad=sign * target, feedforward_torque_nm=sign * float(feedforward[i]),
+            ff = float(feedforward[i])
+            if self.j1_rack and joint == J1:
+                # the rack's J1 feed-forward, every tick from J1's angle (arm_hold and every J1 tool), or none (the adversarial seed)
+                ff = float(self._j1_gravity(self._link(J1) + J1_RACK_ZERO_BOARD_RAD)) if self.j1_ff else 0.0
+            self.sim._send(role, MoteusCommand(position_rad=sign * target, feedforward_torque_nm=sign * ff,
                                                ilimit_scale=0.0, maximum_torque_nm=float(min(cap[i], BOARD_MAX_NM[joint]))))
         self.sim.step(dt)
         self.time += dt
