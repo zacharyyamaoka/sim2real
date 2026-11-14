@@ -579,17 +579,25 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                    f"{fmt(landing['other_worst_deg'], 0)}° apart) and phase 0 - which runs before J1 moves - lost "
                    f"{landing['phase0_only_with_j1']} starts only with it and {landing['phase0_only_without']} only without.")
             if control:
+                import re  # noqa: PLC0415
+
                 def why(c: dict) -> str:
                     e = next((x for x in episodes if x.get("row") == "zach_v1+J1 @ READY" and x.get("environment") == c["environment"]
                               and x.get("start") == c["start"]), {})
-                    return str(e.get("outcome", "")).removeprefix("aborted: ")
+                    outcome = str(e.get("outcome", "")).removeprefix("aborted: ")
+                    trip = re.search(r"(revolute_\d+) was driven faster than ([\d.]+) \(\+?(-?[\d.]+).*in step '([^']+)'", outcome)
+                    if trip:
+                        return (f"'{trip.group(4)}' trips the twin's {trip.group(2)} rad/s runaway stop at {abs(float(trip.group(3))):.1f} "
+                                f"rad/s")
+                    return f"it ends '{esc(outcome)}'"
 
                 gap += (f" The wrist lost {len(control)} starts only with J1. A control - V1 and park_first on the same plant with J1 held, "
                         f"not homed (<code>tools/homing_routine_j1_control.py</code>) - loses {len(control) - len(homes)} of them the same way, "
                         f"so those are the landing too" + ("; " + "; ".join(
                             f"{c['environment']} {c['start'].split(' claw')[0]} is J1's home: with J1 held V1 ends "
-                            f"{(c['rows'].get('zach_v1 @ READY') or {}).get('rack_j1_gravity_held')}, with J1 at −12.7° it ends "
-                            f"'{esc(why(c))}'" for c in homes) if homes else "; none is J1's home") + ".")
+                            f"{(c['rows'].get('zach_v1 @ READY') or {}).get('rack_j1_gravity_held')}, with J1 at −12.7° {why(c)}"
+                            for c in homes) if homes else "; none is J1's home") + ".")
+        reached = {row: (s.get("n", 0) - s.get("before", 0), s.get("before", 0)) for row, s in seeds.items()}
 
         def seed(row: str) -> str:
             s = seeds.get(row) or {}
@@ -597,27 +605,34 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
             if s.get("wrong_deg"):
                 lo, hi = fmt(min(abs(v) for v in s["wrong_deg"]), 1), fmt(max(abs(v) for v in s["wrong_deg"]), 1)
                 parts[-1] += f" ({lo}° short)" if lo == hi else f" ({lo}-{hi}° short)"
-            return (f"{', '.join(parts)} of the {s.get('n', 0) - s.get('before', 0)} starts that reached J1's home "
-                    f"({s.get('before', 0)} lost in phase 0)")
+            if len(set(reached.values())) == 1:  # every seed reached J1's home on the same starts: said once, in the bullet's lead
+                return ", ".join(parts)
+            return f"{', '.join(parts)} of the {reached[row][0]} starts that reached J1's home"
+
+        seeds_reached = next(iter(set(reached.values()))) if len(set(reached.values())) == 1 else None
 
         clearance = (f"In the filmed start J1 seeks from {fmt(path.get('seek_from_deg'), 1)}°, bottoms at {fmt(path.get('lowest_deg'), 2)}° "
                      f"and from its return on never rises past {fmt(path.get('highest_after_return_deg'), 2)}° (the clutter's envelope is "
                      f"−9°), pressing at most {fmt(path.get('peak_effort_nm'), 1)} N·m. " if path else "")
         touched = j1_contacts(episodes)
 
-        def contact(env: str, start: str, pairs: list) -> str:
+        def contact(env: str, start: str, pairs: list, *, verdict: bool = True) -> str:
             seen = touched_control.get((env, start))
-            told = "" if seen is None else (f", first at {fmt(seen.get('first_s'), 1)} s; the control "
-                                            + ("touches it too: the landing" if seen.get("touched_by") == "the plant's landing"
-                                               else "does not: J1's home"))
-            return f"{env} {start.split(' claw')[0]} ({', '.join(pairs) or 'the belt'}{told})"
+            told = "" if seen is None else (f", first at {fmt(seen.get('first_s'), 1)} s" + (
+                "" if not verdict else "; the control " + ("touches it too: the landing" if seen.get("touched_by") == "the plant's landing"
+                                                          else "does not: J1's home")))
+            named = {"hard_stop_3/l2": "the gripper plate on the forearm"}  # W3's stop block (the plate) on L2
+            return f"{env} {start.split(' claw')[0]} ({', '.join(named.get(p, p) for p in pairs) or 'the belt'}{told})"
 
+        landed = all((touched_control.get((env, start)) or {}).get("touched_by") == "the plant's landing" for env, start, _ in touched["new"])
         if touched["compared"]:
             clearance += ((f"Over the {touched['compared']} starts run both ways, J1's home added no contact: the J1 row touched only what "
                            f"the same start touched without J1, and homed {fmt(touched['shift_s'], 0)} s later (median). ")
                           if not touched["new"] else
-                          (f"Over the {touched['compared']} starts run both ways, {len(touched['new'])} touched something only with J1 - "
-                           + "; ".join(contact(env, start, pairs) for env, start, pairs in touched["new"]) + ". "))
+                          ((f"J1's home added no contact: over the {touched['compared']} starts run both ways, {len(touched['new'])} touched "
+                            f"something only on the J1 rows' plant, and the control with J1 held touches each the same way - " if landed else
+                            f"Over the {touched['compared']} starts run both ways, {len(touched['new'])} touched something only with J1 - ")
+                           + "; ".join(contact(env, start, pairs, verdict=not landed) for env, start, pairs in touched["new"]) + ". "))
         j1_text = (f"<li><b>J1 is homed as the rack homed it (2026-11-14 05:41Z / 05:56Z): J2/C1 → READY → J1 to its top stop → back to "
                    f"READY's −12.7° → the claw and the wrist.</b> One seek of −110° at 7.2°/s under an {J1_SEEK_CAP_NM:g} N·m cap toward "
                    f"stops.json's −89.972° stop - the side the rack homed on (board −1.31529 / −1.31654, 0.07° apart; zero_board 0.25439, "
@@ -639,7 +654,10 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                    f"without (the routine without J1 covers {fmt(whole_without.get('coverage_pct'), 1)} % of the whole grid); median "
                    f"{fmt(with_j1.get('time_to_home_median_s'), 0)} s against {fmt(without.get('time_to_home_median_s'), 0)} s; J1 peaks at "
                    f"{fmt(max(j1_peak) if j1_peak else None, 1)}°/s. {gap}</li>"
-                   f"<li><b>The stall rule holds under adversarial seeds</b> (V1+J1 on the subset's six READY starts, nominal twin). Feed-forward "
+                   f"<li><b>The stall rule holds under adversarial seeds</b> (V1+J1 on the subset's six READY starts, nominal twin"
+                   + (f"; {seeds_reached[1]} were lost in phase 0 before J1 moved, the same for every seed, so each counts the "
+                      f"{seeds_reached[0]} that reached J1's home" if seeds_reached else "")
+                   + f"). Feed-forward "
                    f"off at the 11 N·m cap: {seed('zach_v1+J1 FF off @ READY')} - the PD alone carries gravity and friction (≤ "
                    f"{J1_GRAVITY_WORST_NM + J1_FRICTION_MAX_NM:.1f} N·m), so the seek still reaches the stop and only the stop passes 9 N·m - "
                    f"which is how the rack's own minimal J1 home ran at 05:56Z (velocity mode, no feed-forward, 11 N·m, the 9 N·m rule). "
