@@ -48,9 +48,10 @@ SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)", "fast single @ READY",
 PERTURBED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
                   "park_first+witness+table @ READY", "zach_v1 @ READY", "zach_v1+table @ READY")
 # WHY a lighter plan past READY's map (2026-11-13 18:00, a machine at load 65-72: the full plan was ~4 h more): the "+table" rows are exact
-# from their plain rows (table_derived), multi x2 moved exactly as park_first on every READY start but faster, and the subset rows'
-# answers came from READY - so the other five-bar poses run V1 and park_first (the recommended routine's two paths), the perturbed twins
-# those two and press_reverse, and the subset rows past READY only PEP 0047
+# from their plain rows (table_derived); multi x2 ended as park_first did on 34 of READY's 36 starts (the other two: the near-stop plate
+# stalls, refused in both by the tight witness) at its own, faster pace; and the subset rows' answers came from READY - so the other
+# five-bar poses run V1 and park_first (the recommended routine's two paths), the perturbed twins those two and press_reverse (B1 / B2),
+# and the subset rows past READY only PEP 0047
 LIGHT_GRID_ROWS = ("zach_v1 @ READY", "park_first+witness @ READY")
 LIGHT_PERTURBED_ROWS = ("park_first+witness @ READY", "press_reverse (backlash every home) @ READY", "zach_v1 @ READY")
 LIGHT_SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)",)
