@@ -58,6 +58,14 @@ ul{padding-left:20px}li{margin:3px 0}
 """
 
 
+def url_safe(url: str) -> str:
+    """A W&B link with its spaces, middle dot and em dash percent-encoded (wandb returns them raw), so it opens from any viewer."""
+    from urllib.parse import quote, unquote, urlsplit, urlunsplit  # noqa: PLC0415
+
+    parts = urlsplit(url or "")
+    return urlunsplit((parts.scheme, parts.netloc, quote(unquote(parts.path), safe="/=-_.~"), parts.query, parts.fragment))
+
+
 def esc(text) -> str:
     return html.escape(str(text))
 
@@ -566,8 +574,9 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
     planned = sum(len(j["rows"]) for j in plan_jobs("light") if j["environment"] == ruler.NOMINAL)
     calib = "".join(f"<li><b>{esc(env)}</b>: {esc(c.get('outcome'))}; gap error vs hidden (′): {esc(c.get('gap_error_arcmin'))}</li>"
                     for env, c in calibrations.items())
-    wandb_line = (f"<p>W&amp;B: <a href='{esc(wb.get('project_url', ''))}'>{esc(wb.get('project', 'Homing · bam_fb_v2'))}</a>"
-                  + (f" · report <a href='{esc(wb['report'])}'>{esc(wb['report'])}</a>" if wb.get("report") else "") + "</p>") if wb else ""
+    wandb_line = (f"<p>W&amp;B: <a href='{esc(url_safe(wb.get('project_url', '')))}'>project {esc(wb.get('project', 'Homing · bam_fb_v2'))}</a>"
+                  + (f" · <a href='{esc(url_safe(wb['report']))}'>the report (parallel coordinates, coverage maps, replays)</a>"
+                     if wb.get("report") else "") + "</p>") if wb else ""
     parts = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
              f"<title>Homing routine bam_fb_v2</title><style>{CSS}</style></head><body>",
              "<h1>A better homing routine for the full arm (bam_fb_v2) — sim only</h1>",
@@ -586,7 +595,8 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "power-up frame), then zero error, then time. The stale-calibration twin is shown apart: there a tight witness is meant to "
              "refuse everything (re-take the calibration), a loose one passes it. Rows ending “witness 0.5°” are the same runs re-judged by "
              "the tight witness, and the “V1 …, park_first on a W1 refusal” rows are exact from V1's and park_first's runs (they move the "
-             "same up to W1's first stall); neither moves the arm differently.</p>", overall_table(ranked),
+             "same up to W1's first stall); neither moves the arm differently. A row without the stored table scores 0 % on B1 and B2: each wrist "
+             "stop reads 0.46-0.50° off there, past the 0.1° gate, which is the table's point.</p>", overall_table(ranked),
              "<h2>Scoreboard, nominal twin</h2>", scoreboard(cards, episodes=episodes),
              "<h2>Coverage maps (nominal)</h2><p class='sub'>Rows W1, columns W2 (°), one panel per five-bar pose; hover a cell for its start "
              "and outcome.</p>", maps,
