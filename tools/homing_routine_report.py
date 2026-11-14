@@ -416,6 +416,20 @@ of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
             "ruler_commit": "sim2real 7806abf (frozen), amendments 1-4"}
 
 
+def grid_scope(run: list[dict]) -> str:
+    """What the grid actually covered, read from the runs (the sweep was paused for the rack and capped afterwards)."""
+    nominal = {(e.get("cell") or {}).get("fivebar") for e in run if e.get("environment") == ruler.NOMINAL and e.get("row") == "zach_v1 @ READY"}
+    poses = [p for p in ruler.FIVEBAR_LEVELS if p in nominal]
+    missing = [p for p in ruler.FIVEBAR_LEVELS if p not in nominal]
+    perturbed = {e.get("start") for e in run if e.get("environment") not in (ruler.NOMINAL, None)
+                 and not str(e.get("environment")).endswith(" · folded wrist")}
+    text = (f"The nominal grid ran every row on {', '.join(poses)} ({36 * len(poses)} cells)"
+            + (f"; {', '.join(missing)} were not run - the sweep was paused while the rack homed and the host was starved, and the "
+               f"remaining cells are one command away (routine_check --plan light --workers 2, the cache skips what ran)" if missing else "")
+            + f". The perturbed twins ran {len(perturbed)} of the 24 subset cells each.")
+    return text
+
+
 def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Path | None, recommended: str, notes: dict) -> str:
     episodes, calibrations = load(results_path)
     cards = ruler.score(episodes)
@@ -449,8 +463,7 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "<h1>A better homing routine for the full arm (bam_fb_v2) — sim only</h1>",
              f"<p class='verdict'>{notes.get('verdict', '')}</p><p class='sub'>{notes.get('qualification', '')}</p>",
              f"<p class='sub'>Episodes run: {done} of {planned} planned on the nominal twin + {len(run) - done} in the perturbed twins "
-             f"(+ {len(episodes) - len(run)} derived or folded-wrist rows). The whole 144-cell grid ran V1 and park_first - the recommended "
-             f"routine's two paths; multi x2, press_reverse and the subset rows ran on READY's 36 cells (routine_check --plan light). "
+             f"(+ {len(episodes) - len(run)} derived or folded-wrist rows). {grid_scope(run)} "
              f"Ruler frozen before any routine ran (<code>sim2real.sim.homing.routine_ruler</code>, {esc(notes.get('ruler_commit', ''))}). "
              f"Twin: MuJoCo, bam_fb_v2 @ cad-exporter 09374d7, the rack's belt as a contact.</p>", wandb_line,
              video(media, notes.get("hero", ""), notes.get("hero_caption", "")),
