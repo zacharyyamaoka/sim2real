@@ -15,10 +15,11 @@ import os
 import subprocess
 from pathlib import Path
 
+from ... import paths as _paths
 from . import routine_check as rc
 from . import routine_ruler as ruler
 
-RRD_PYTHON = Path("/home/bam/data_recorder/.venv/bin/python")
+RRD_PYTHON = _paths.DATA_RECORDER / ".venv" / "bin" / "python"
 RRD_TOOL = Path(__file__).resolve().parents[4] / "tools" / "homing_routine_rrd.py"
 STICK_BODIES = ("shoulder", "l1", "l2", "hard_stop", "hard_stop_2", "hard_stop_3", "moving_finger")
 SPEEDUP = 4.0

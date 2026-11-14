@@ -31,14 +31,15 @@ from pathlib import Path
 
 import numpy as np
 
+from . import paths as _paths
 from .metrics.series import SAME_INPUT_TOLERANCE_RAD, RepeatFloor, pair_rms, repeat_floor
 from .result import FLOOR_CHECK, RULER_TWINNED, RULING_2150, TOOL_GATE_MM, CalibrationResult, Node, check, verdict_of, with_checks
 
-RACK = Path("/archive/datasets/bam_rig/rack_2026-11-10")
+RACK = _paths.RACK_DIR  # $SIM2REAL_RACK_DIR (sim2real.paths)
 WRIST = RACK / "ur_wrist" / "coverage"
 FIVEBAR = RACK / "fivebar_real"
 # the classic traj_compare run views built for these runs (bam_ws bam_sim2real_present, one folder per run slug)
-RUN_VIEWS = Path("/home/bam/bam_ws/reports/sim2real-presentation-proposals-2026-11-11/runs")
+RUN_VIEWS = _paths.BAM_WS / "reports" / "sim2real-presentation-proposals-2026-11-11" / "runs"
 BINS = {"position": 10.0, "speed": 20.0, "acceleration": 200.0}   # degrees, °/s, °/s²
 WORKSPACE_CELL_MM = 20.0
 # the wrist's twin traces: each real run replayed on the twin of record (it5) by the wrist lane's own player, cached by bam_ws
@@ -328,7 +329,7 @@ def routines_from_rows(rows: list[dict], prefix: str, stress: str = "noise stres
 # descriptions and the PROPOSED good-data thresholds. WHY two places, main first (coordinator, 2026-11-11): bam_ws main's copy once the
 # lane lands, so a worktree sweep cannot break the page; the lane's worktree only until then
 _REACHABLE = "src/dev/bam_ur_wrist_coverage/bam_ur_wrist_coverage/data/reachable_2026-11-11.json"
-REACHABLE_EXPORT_CANDIDATES = (Path("/home/bam/bam_ws") / _REACHABLE, Path("/home/bam/bam_ws-worktrees/ur-wrist-coverage") / _REACHABLE)
+REACHABLE_EXPORT_CANDIDATES = (_paths.BAM_WS / _REACHABLE, Path("/home/bam/bam_ws-worktrees/ur-wrist-coverage") / _REACHABLE)
 REACHABLE_EXPORT = next((path for path in REACHABLE_EXPORT_CANDIDATES if path.exists()), REACHABLE_EXPORT_CANDIDATES[0])
 MULTI3 = WRIST / "multi3"
 
@@ -761,7 +762,7 @@ def fivebar_job_configs() -> list[tuple[str, Path, Path | None, str]]:
 # the five-bar lane's reachable mask (bam_ws claude/fivebar-guard @ 6a8818843, schema bam_fivebar.reachable/1): main first, the lane's
 # worktree until it lands (as the wrist's)
 _FIVEBAR_REACHABLE = "src/dev/bam_fivebar/bam_fivebar/data/reachable_2026-11-11.json"
-FIVEBAR_REACHABLE_CANDIDATES = (Path("/home/bam/bam_ws") / _FIVEBAR_REACHABLE, Path("/home/bam/bam_ws-worktrees/fivebar-guard") / _FIVEBAR_REACHABLE)
+FIVEBAR_REACHABLE_CANDIDATES = (_paths.BAM_WS / _FIVEBAR_REACHABLE, Path("/home/bam/bam_ws-worktrees/fivebar-guard") / _FIVEBAR_REACHABLE)
 # the tick-clock refit's twin replayed on the five repeats (bam_fivebar.refit --evaluate --start refit_breakdown_123729)
 AFTER_TWIN = FIVEBAR / "refit_repeats_025953" / "after_twin.json"
 

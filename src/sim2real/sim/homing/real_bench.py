@@ -41,6 +41,7 @@ from typing import Any
 
 import numpy as np
 
+from ... import paths as _paths
 from sim2real.provenance import write_results
 from .geometry import BUNDLE_SHA, DRIVES, J1, ROLE
 from .real_plant import (
@@ -62,7 +63,7 @@ DATA = Path(__file__).resolve().parents[2] / "data"
 PRIOR_JSON = DATA / "homing_fivebar_real_prior_2026-11-12.json"
 RESULTS_JSON = DATA / "homing_fivebar_real_2026-11-12.json"
 MUJOCO_JSON = DATA / "homing_fivebar_mujoco_pass4_2026-11-12.json"
-RAW_DIR = Path("/archive/datasets/bam_rig/rack_2026-11-10/fivebar/homing")
+RAW_DIR = _paths.RACK_DIR / "fivebar" / "homing"
 RUNG = "real"
 ENVIRONMENT = "real · rig"
 DT = 0.01

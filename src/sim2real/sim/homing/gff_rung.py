@@ -49,6 +49,7 @@ from pathlib import Path
 
 from robot_models.homing.metrics import EpisodeRecord, JointOutcome, scorecard
 
+from ... import paths as _paths
 from sim2real.provenance import code_sha, write_results
 from .bench import EPISODE_COLUMNS, compact, expand, prior_for, run_episode
 from .geometry import BUNDLE_SHA, C1, DRIVES, EXPORT, J1, J2, ROLE, FivebarGeometry
@@ -330,7 +331,7 @@ def run_bench(*, rows=ROWS, models=MODELS, masses=tuple(MASSES), ff_scales=FF_SC
         "hardstops_sha256": geometry.hardstops_sha256,
         "loops_sha256": geometry.loops_sha256,
         "sim2real_sha": code_sha(Path(__file__).resolve().parents[4]),
-        "robot_models_sha": code_sha(Path("/home/bam/robot_models")),
+        "robot_models_sha": code_sha(_paths.ROBOT_MODELS),
         "bam_ws_sha": code_sha(BAM_WS_SRC.parent),
         "dt_s": 0.01,
         "gate_deg": GATE_DEG,

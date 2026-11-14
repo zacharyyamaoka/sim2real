@@ -39,6 +39,7 @@ import numpy as np
 
 from robot_models.homing.metrics import EpisodeRecord, JointOutcome, StallCheck, scorecard
 
+from ... import paths as _paths
 from .bench import run_phase
 from .fullarm_plant import (
     CLAW,
@@ -70,11 +71,11 @@ MAX_EPISODE_S = 400.0
 SPEED_CEILING_RAD_S = {J1: 1.5, **{j: 1.5 for j in FIVEBAR}, **{j: WRIST_SPEED_CEILING_RAD_S for j in WRIST}, CLAW: 1.5}
 HOME_CRAIG_DEG = (91.01, -126.438)  # gff_rung.HOME_CRAIG_DEG: the homed map's home
 REAL_OFFSETS_DEG = ((0.0, 0.0), (0.0, -10.0), (4.0, 0.0), (4.0, -10.0))  # gff_rung.REAL_OFFSETS_DEG: the real lane's five-bar starts
-REAL_V1_JSON = Path("/archive/datasets/bam_rig/rack_2026-11-13/wrist_home_v1/wrist_home_v1_172448.json")
+REAL_V1_JSON = _paths.RIG_DATA / "rack_2026-11-13" / "wrist_home_v1" / "wrist_home_v1_172448.json"
 SOBOL_SEED = 20261113
 # WHY its own source (default bam_ws main): the guard landed on main (35f9d1f0b) and the bam_fb_v2 comp is still on a lane
 # (SIM2REAL_BAM_WS_SRC may point there); the guard is read from main unless told otherwise
-SELF_COLLISION_SRC = Path(os.environ.get("SIM2REAL_SELF_COLLISION_SRC", "/home/bam/bam_ws/src"))
+SELF_COLLISION_SRC = Path(os.environ.get("SIM2REAL_SELF_COLLISION_SRC") or _paths.BAM_WS_SRC)
 
 
 # ---------------------------------------------------------------------------------------------------------------- the CAD guard

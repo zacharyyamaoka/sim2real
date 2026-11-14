@@ -54,6 +54,7 @@ from robot_msgs.control import (
 from robot_msgs.sensor import JointState
 from robot_msgs.std import Header
 
+from ... import paths as _paths
 from sim2real.provenance import write_results
 from .bench import compact, expand, git_sha, run_phase
 from .mujoco_plant import BAM_WS_SRC, bam_ws_path
@@ -799,7 +800,7 @@ def run_bench(*, procedures=tuple(PROCEDURES), n_sobol: int = 15, workers: int =
     return {
         "schema": "sim2real_homing_bench/1", "rig": "ur-wrist", "rung": RUNG, "bundle_sha": rig.root.parts[-4], "bundle_root": str(rig.root),
         "hardstops_sha256": hashlib.sha256((rig.root / "hardstops.json").read_bytes()).hexdigest(),
-        "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]), "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
+        "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]), "robot_models_sha": git_sha(_paths.ROBOT_MODELS),
         "bam_ws_sha": git_sha(BAM_WS_SRC.parent), "dt_s": CONTROL_DT, "gate_deg": GATE_DEG, "hidden_gap_arcmin": {j: 0.0 for j in rig.joints},
         "runaway_rad_s": runaway_rad_s, "runaway_deg_s": None if runaway_rad_s is None else math.degrees(runaway_rad_s),
         "plant": {"class": "bam_ur_wrist.plant.KarnoppPlant", "friction_armature": "homing_tview_sim.IT5 (it5)", "masses": "mass_prior.pending_masses",

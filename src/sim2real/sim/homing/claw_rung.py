@@ -33,6 +33,7 @@ from pathlib import Path
 
 from robot_models.homing.metrics import EpisodeRecord, JointOutcome, scorecard
 
+from ... import paths as _paths
 from sim2real.provenance import code_sha, write_results
 from .bench import EPISODE_COLUMNS, compact, expand, git_sha, prior_for, run_episode
 from .geometry import BUNDLE_SHA, C1, J2, ROLE, FivebarGeometry
@@ -47,7 +48,7 @@ from .procedures import HomingRefused
 PASS = "claw"
 ROW = "single_touch+gff"
 CLAW_KG = (0.273365 + 0.029933) * END_GROUP_MASS_SCALE  # bam_ws docs/pick_tracking/claw_payload.py CASES["nominal"]: CAD hand + finger x1.2249
-CLAW_COMP = Path("/home/bam/bam_ws/docs/pick_tracking/data/gravity_params_claw_nominal_2026-11-13.json")
+CLAW_COMP = _paths.BAM_WS / "docs" / "pick_tracking" / "data" / "gravity_params_claw_nominal_2026-11-13.json"
 MASSES = {"claw": 1.0, "claw+22%": END_GROUP_MASS_SCALE}
 MASS_LABEL = {"claw": "claw (plate out)", "claw+22%": "claw, end group +22 %"}
 COMPS = {"plate comp": COMP, "claw comp": None}  # None: --comp (CLAW_COMP)
@@ -242,7 +243,7 @@ def run_bench(comp_path: Path, *, n_starts: int = N_STARTS, workers: int = 6, ca
         "form": "real (real_bench.RealRow: bare, sag_proof, J1 held, J2 kept powered, +gff), the plant's end payload = the crab claw",
         "bundle_sha": BUNDLE_SHA,
         "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]),
-        "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
+        "robot_models_sha": git_sha(_paths.ROBOT_MODELS),
         "bam_ws_sha": code_sha(BAM_WS_SRC.parent, scope=BAM_WS_SCOPE),
         "bam_ws_scope": list(BAM_WS_SCOPE),
         "bam_ws_whole_tree_sha": git_sha(BAM_WS_SRC.parent),

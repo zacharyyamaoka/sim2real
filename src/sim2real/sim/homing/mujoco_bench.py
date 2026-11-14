@@ -34,6 +34,7 @@ from pathlib import Path
 from robot_models.homing.metrics import backlash_gate_deg, scorecard
 from robot_msgs.control import Elapsed, Reached
 
+from ... import paths as _paths
 from sim2real.provenance import write_results
 from .bench import (
     EPISODE_COLUMNS,
@@ -474,7 +475,7 @@ def run_bench(*, procedures, models=MODELS, n_sobol: int = SOBOL_STARTS, workers
         "hardstops_sha256": geometry.hardstops_sha256,
         "loops_sha256": geometry.loops_sha256,
         "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]),
-        "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
+        "robot_models_sha": git_sha(_paths.ROBOT_MODELS),
         "bam_ws_sha": git_sha(BAM_WS_SRC.parent),
         "dt_s": 0.01,
         "physics_dt_s": float(any_plant.rig.model.opt.timestep),

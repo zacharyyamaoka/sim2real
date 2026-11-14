@@ -16,13 +16,15 @@ number exists for it. EQUIPMENT holds what a routine needs beyond the robot's ow
 
 from __future__ import annotations
 
+from .. import paths as _paths
 from . import references as refs
 from .schema import ESTIMATE, CalibrationPackage, CalibrationRoutine, CodeHome, Configures, Equipment, Identifies, Quantity
 
-BAM_WS = "/home/bam/bam_ws"
-IO_DX = "/home/bam/io-diagnostics"
-ROBOTPARTS = "/home/bam/robotparts"
-PIDTUNA = "/home/bam/pidtuna"
+# the sibling repos by their workstation paths, each overridable (sim2real.paths)
+BAM_WS = str(_paths.BAM_WS)
+IO_DX = str(_paths.IO_DIAGNOSTICS)
+ROBOTPARTS = str(_paths.ROBOTPARTS)
+PIDTUNA = str(_paths.PIDTUNA)
 TWIN = "src/dev/bam_rack_twin/bam_rack_twin"
 KINCAL_BRANCH = "claude/kinematic-calibration-multi-arm-4645cc"
 PID_BRANCH = "claude/pid-auto-tuner-stack-e956da"

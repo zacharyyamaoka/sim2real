@@ -35,6 +35,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from ... import paths as _paths
 from typing import Any
 
 import numpy as np
@@ -697,7 +698,7 @@ def main(argv=None) -> int:
     r.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     t0 = time.time()
-    stamps = {"sim2real_sha": git_sha(Path(__file__).resolve().parents[4]), "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
+    stamps = {"sim2real_sha": git_sha(Path(__file__).resolve().parents[4]), "robot_models_sha": git_sha(_paths.ROBOT_MODELS),
               "bam_ws_sha": git_sha(BAM_WS_SRC.parent)}
     if args.command == "dryrun":
         body = run_twin_homing(args.procedure, [s for s in args.starts.split(",") if s], mujoco_json=args.mujoco_json)

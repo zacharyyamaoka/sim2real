@@ -26,12 +26,13 @@ import json
 import sys
 from pathlib import Path
 
+from .. import paths as _paths
 from .homing import _tag
 from .wandb_log import ENTITY, WANDB_DIR, _clean, _save_report, _table_rows, browser_url, retire, run_id
 
 PROJECT = "Homing · bam_fb_v2"
 REPORT_TITLE = "Homing · bam_fb_v2 — routines"
-DATA_RECORDER_SRC = Path("/home/bam/data_recorder/src")
+DATA_RECORDER_SRC = _paths.DATA_RECORDER / "src"
 MEDIA = Path.home() / ".cache" / "sim2real" / "homing_routine" / "wandb_media"
 REGISTRY = Path(__file__).resolve().parent / "homing_fullarm_views.json"  # the report's URL, so a rebuild updates it in place
 STARTS_COLUMNS = ("start", "five_bar", "W1_deg", "W2_deg", "W3_deg", "claw_deg", "J1_deg", "outcome", "covered", "time_s",

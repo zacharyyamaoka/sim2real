@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from .. import paths as _paths
 from . import coverage as cov
 from . import schema
 from .schema import (DRIFT_MESSAGE, DRIFT_THRESHOLD, ESTIMATE, KINDS, OUT_OF_COVERAGE, ROLES, ROUTINE_KINDS, ROUTINE_SETTINGS,  # noqa: F401
@@ -48,10 +49,10 @@ from .schema import (DRIFT_MESSAGE, DRIFT_THRESHOLD, ESTIMATE, KINDS, OUT_OF_COV
                      Rung, RungScore, TestType, Wear, coverage_flag, drift_check, mlp_weights, usage_remaining, wear_usage_at, wear_value)
 
 REPO = Path(__file__).resolve().parents[3]  # src/sim2real/cards/ -> the repo (moved 2026-11-10)
-ROBOTDX_REPO = Path("/home/bam/io-diagnostics")
+ROBOTDX_REPO = _paths.IO_DIAGNOSTICS
 ROBOTDX_COMMIT = "58644fb"  # io-diagnostics main, 2026-11-04: the catalog every metric id is checked against
-ROBOTPARTS_REPO = Path("/home/bam/robotparts")  # main 06795ab: models/actuator/*, lab/models/actuator/twin (robotparts/2.5)
-DATA_UI_REPO = Path("/home/bam/data-ui")
+ROBOTPARTS_REPO = _paths.ROBOTPARTS  # main 06795ab: models/actuator/*, lab/models/actuator/twin (robotparts/2.5)
+DATA_UI_REPO = _paths.DATA_UI
 RACK_TWIN = "bam_ws main b5600075, src/dev/bam_rack_twin"
 
 

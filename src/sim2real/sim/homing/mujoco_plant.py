@@ -38,7 +38,6 @@ W&B side loads bam_trackio.bbo by file (``tracking.rigs.load_bbo``).
 from __future__ import annotations
 
 import math
-import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -48,11 +47,12 @@ from robot_msgs.control import ServoCommand
 from robot_msgs.sensor import JointState
 from robot_msgs.std import Header
 
+from ... import paths as _paths
 from .geometry import C1, DRIVES, EXPORT, J1, J2, MIRROR
 from .plant import HIDDEN_GAP_ARCMIN, PlantTrip, Start, hidden_backlash
 from .real_plant import DRIVE_JOINTS, RUNAWAY_RAD_S
 
-BAM_WS_SRC = Path(os.environ.get("SIM2REAL_BAM_WS_SRC", "/home/bam/bam_ws/src"))
+BAM_WS_SRC = _paths.BAM_WS_SRC  # $SIM2REAL_BAM_WS_SRC, else $SIM2REAL_BAM_WS/src (sim2real.paths)
 BAM_WS_PATHS = (
     "dev/bam_fb_test_rig",
     "dev/bam_fivebar",

@@ -20,12 +20,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/, so sim2real imports when run by path
 
+from .. import paths as _paths
 from sim2real.cards import coverage as cov  # noqa: E402
 from sim2real.cards import registry as reg  # noqa: E402
 
 NOTE = Path("/home/bam/zach_brain/Projects/BAM Robotics/Notes/Sim2Real Type Cards — Metrics, Models, Coverage and Views per Part Type (2026-11-04).md")
 NOTE_V2 = NOTE.with_name("Sim2Real Type Cards v2 — Model Rungs, Diagnostics, Test Types and Calibration Packages (2026-11-05).md")
-SCHEDULE = Path("/archive/datasets/bam_rig/schedules/one-dof-test-rack/can11/schedule.json")
+SCHEDULE = _paths.SCHEDULES / "one-dof-test-rack" / "can11" / "schedule.json"
 MODEL = "Claude Code · Opus 5.5 (`claude-opus-5-5`)"
 CATALOG_NOTE = "Stock Diagnostics per Robot Part Type — Catalog and Library (2026-10-28)"
 SCHEDULE_NOTE = "Servo Test Schedule — Prior Art and a Recommended v1 (2026-10-29)"

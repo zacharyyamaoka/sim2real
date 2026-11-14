@@ -44,6 +44,7 @@ from robot_models.homing.protocols import Phase
 from robot_models.homing.types import BacklashModel, BacklashTable, HomingResult, JointBacklash
 from robot_msgs.control import Elapsed, JointCommand, JointCommandSequence
 
+from ... import paths as _paths
 from . import procedures as five
 from .fullarm_plant import C1, CLAW, FIVEBAR, J1, J2, JOINTS, ROLE, W1, W2, W3, WRIST, ArmPrior
 from .fullarm_procedures import (
@@ -529,7 +530,7 @@ def make_row(name: str, **overrides):
 
 # ------------------------------------------------------------------------------------------------------------------------ the rack's plan
 
-RACK_HOMED_TRUSTED = Path("/archive/datasets/bam_rig/full_arm/homed/homed_2026-11-13T182448Z.json")  # the ArUco-checked 11:24 home
+RACK_HOMED_TRUSTED = _paths.RIG_DATA / "full_arm" / "homed" / "homed_2026-11-13T182448Z.json"  # the ArUco-checked 11:24 home
 RACK_WITNESS_TOL_DEG = 0.5
 
 

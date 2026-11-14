@@ -35,13 +35,14 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import paths as _paths
 from . import curriculum
 from .wandb_log import ENTITY, REPO, browser_url, code_version, push, records, retire, run_id
 
 # WHY loaded by file, not imported or copied: bbo.py is the house template (bam_ws main) and imports only the standard library at
 # module level (weave lazily); importing the bam_trackio package would pull trackio, the pick ladder and the trajgen bench, and a
 # copy would be the parallel template the coordinator ruled out. BAM_TRACKIO_BBO points elsewhere (a worktree, a test).
-BBO = Path(os.environ.get("BAM_TRACKIO_BBO", "/home/bam/bam_ws/src/dev/bam_trackio/bam_trackio/bbo.py"))
+BBO = Path(os.environ.get("BAM_TRACKIO_BBO") or _paths.BAM_WS_SRC / "dev" / "bam_trackio" / "bam_trackio" / "bbo.py")
 HUB = "Sim2Real"   # the one-project layout (proposal B, built first): it now holds the reports that span both rigs
 REGISTRY = Path(__file__).resolve().parent / "wandb_rig_views.json"
 

@@ -50,15 +50,16 @@ from pathlib import Path
 
 import numpy as np
 
+from ... import paths as _paths
 from .home_button import CONTROL_DT, Reading
 from .mujoco_plant import BAM_WS_SRC, END_GROUP_MASS_SCALE, bam_ws_path, cogging_terms, real_boards
 
 # ---------------------------------------------------------------------------------------------------------------------- the bundle
 
-CAD_EXPORTER = Path("/home/bam/cad-exporter")
+CAD_EXPORTER = _paths.CAD_EXPORTER
 V2_REF = "09374d7"  # cad-exporter origin/claude/bam-fb-v2: "fixtures: bam_fb_v2, the full arm ..., stops.json all-pass"
 V2_SUBDIR = "fixtures/cad2robot/bam_fb_v2"
-V2_CACHE = Path.home() / ".cache" / "cad2robot-build" / "bundles"
+V2_CACHE = _paths.BUNDLE_CACHE  # $CAD2ROBOT_BUNDLE_CACHE: a cloud job carries the bundle pre-extracted here
 # CAN id -> role. The five-bar's are bam_fb_test_rig's (PEP 0019); the wrist's are the bundle's own (revolute_11 / 14 / 17 = CAN 14 / 15 / 16).
 # The claw's finger (revolute_5) has no CAN id in the bundle (CAN 17 is the working assumption, power_on_check.EXPECTED): it stays passive.
 ROLES = {11: "J1", 12: "J2", 13: "C1", 14: "W1", 15: "W2", 16: "W3"}

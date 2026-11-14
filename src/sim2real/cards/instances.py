@@ -27,13 +27,14 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+from .. import paths as _paths
 from . import domain as dm
 from . import registry as reg
 
 REPO = Path(__file__).resolve().parents[3]  # src/sim2real/cards/ -> the repo (moved 2026-11-10)
 RESULTS = REPO / "sysid" / "results"
 REGISTRY = REPO / "app" / "registry.json"
-SCHEDULES = Path(os.environ.get("SIM2REAL_SCHEDULES") or "/archive/datasets/bam_rig/schedules")
+SCHEDULES = _paths.SCHEDULES  # $SIM2REAL_SCHEDULES (sim2real.paths)
 EXAMPLES = ("pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell")  # site/landing.py's
 # WHY the scenarios are deployments too (the v3 audit, 2026-11-07, finding 5): sysid's noise-ladder scenarios (sysid/oracle.py SCENARIOS) are
 # oracle worlds graded by the ladder only; left out, ur5e_backlash's joint gaps reached no page. Their values are their ladder entries, their

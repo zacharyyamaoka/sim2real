@@ -29,6 +29,7 @@ from robot_models.homing.metrics import EpisodeRecord, JointOutcome, StallCheck,
 from robot_models.homing.protocols import Phase, Prior
 from robot_msgs.control import JointCommandSequenceController
 
+from ... import paths as _paths
 from sim2real.provenance import write_results
 from .geometry import BUNDLE_SHA, C1, DRIVES, EXPORT, J1, J2, MIRROR, ROLE, FivebarGeometry
 from .plant import HIDDEN_GAP_ARCMIN, KinematicStopPlant, PlantTrip, Start, hidden_backlash
@@ -397,7 +398,7 @@ def run_bench(*, procedures=tuple(PROCEDURES), models=MODELS, n_sobol: int = SOB
         "hardstops_sha256": geometry.hardstops_sha256,
         "loops_sha256": geometry.loops_sha256,
         "sim2real_sha": git_sha(Path(__file__).resolve().parents[4]),
-        "robot_models_sha": git_sha(Path("/home/bam/robot_models")),
+        "robot_models_sha": git_sha(_paths.ROBOT_MODELS),
         "dt_s": DT,
         "gate_deg": GATE_DEG,
         "hidden_gap_arcmin": HIDDEN_GAP_ARCMIN,
