@@ -571,7 +571,13 @@ def grid_scope(run: list[dict]) -> str:
             per_twin.setdefault(e["environment"], set()).add(e.get("start"))
     counts = sorted({len(v) for v in per_twin.values()}) or [0]
     perturbed = f"{counts[0]}" if len(counts) == 1 else f"{counts[0]}-{counts[-1]}"
-    text = (f"The nominal grid ran every row on {', '.join(poses)} ({36 * len(poses)} cells)"
+    every_row = {(e.get("cell") or {}).get("fivebar") for e in run if e.get("environment") == ruler.NOMINAL
+                 and e.get("row") == "multi x2 (3D-printer) @ READY"}
+    first = [p for p in ruler.FIVEBAR_LEVELS if p in every_row] or poses[:1]
+    later = [p for p in poses if p not in first]
+    text = (f"The nominal grid ran every row on {', '.join(first)} ({36 * len(first)} cells)"
+            + (f", and V1's and park_first's paths (the recommended routine's two) on {', '.join(later)} too ({36 * len(poses)} cells)"
+               if later else "")
             + (f"; {', '.join(missing)} were not run - the sweep was paused while the rack homed and the host was starved, and the "
                f"remaining cells are one command away (routine_check --plan light --workers 2, the cache skips what ran)" if missing else "")
             + f". The perturbed twins ran {perturbed} of the 24 subset cells each.")
