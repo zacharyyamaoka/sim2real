@@ -181,13 +181,15 @@ def procedure_for(row: str):
 
 def plan_jobs(plan: str = "all") -> list[dict]:
     """One job per (cell, environment): the rows to run there. ``plan``: all, nominal (the grid and the subset rows), perturbed, smoke,
-    light (module comment), j1 (``J1_ROWS`` on every nominal cell and every twin's subset)."""
+    light (module comment), j1 (``J1_ROWS`` on every nominal cell and every twin's subset), j1_ready (j1 on READY's cells only)."""
     cells = ruler.grid_cells()
     subset = {c["name"] for c in ruler.subset_cells()}
     jobs = []
     first = next(iter(ruler.FIVEBAR_LEVELS))
     for index, cell in enumerate(cells):
-        if plan == "j1":
+        if plan == "j1_ready" and cell["family"] != first:
+            continue
+        if plan in ("j1", "j1_ready"):
             jobs.append({"cell_index": index, "cell": cell, "environment": ruler.NOMINAL, "rows": list(J1_ROWS)})
             if cell["name"] in subset:
                 jobs += [{"cell_index": index, "cell": cell, "environment": environment, "rows": list(J1_ROWS)}
@@ -216,7 +218,7 @@ def plan_jobs(plan: str = "all") -> list[dict]:
     # perturbed subset - a run stopped early still answers. (Until the rack's pause at 18:15 the perturbed subset ran second; READY's six
     # subset cells per twin had all run by then.)
     first = next(iter(ruler.FIVEBAR_LEVELS))
-    if plan == "j1":
+    if plan in ("j1", "j1_ready"):
         # WHY READY's cells first, the twins' included (2026-11-13 night, a machine at load 25-30): J1's home starts at READY whatever
         # the start, so READY's 36 nominal cells and every twin's 6 READY cells answer "does J1 home, and what does it cost the wrist";
         # the other poses add phase 0, which J1's home does not change
@@ -684,7 +686,7 @@ def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--plan", default="all", choices=("all", "nominal", "perturbed", "smoke", "light", "j1"))
+    parser.add_argument("--plan", default="all", choices=("all", "nominal", "perturbed", "smoke", "light", "j1", "j1_ready"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--workers", type=int, default=8)
