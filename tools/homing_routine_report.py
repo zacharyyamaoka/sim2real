@@ -781,8 +781,11 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
                   "trust (none after a power-up until the stall defines it), walks J1 back to its start when the seek is refused, and writes "
                   "J1's zero only through <code>zero_writer</code> (whose commit is <code>homed_history.write_latest</code>): a stall within "
                   "0.1° of the map confirms it, a sub-turn shift is written, whole rotor turns only after a power-up, never off the stop's "
-                  "rotor phase (0.5° of the 05:41Z / 05:56Z stalls). PID tuna's measured-mass gravity (bam_fb_v2_masses_2026-11-14.json, on "
-                  "bam_ws main) is not wired into arm-hold / fullarm_stops yet, so J1's feed-forward stays j1_gains' READY curve until it is.</p>"
+                  "rotor phase (0.5° of the 05:41Z / 05:56Z stalls). J1's feed-forward is still j1_gains' READY curve: PnP is landing "
+                  "<code>MeasuredWristFF</code> (PID tuna's measured masses) in <code>bam_rack_twin.hardware.wrist_gains</code>, and arm-hold / "
+                  "fullarm_stops rebase onto it; once it is on bam_ws main, j1_rack's feed-forward imports it from wrist_gains, never from "
+                  "j1_gains' curve (<code>j1_rack.j1_gravity_source</code> is the one place, marked TODO). It was not on main at sim2real "
+                  "cbfca46.</p>"
                   if "+J1" in base else ""))
     decisions = """<ul>
 <li><b>Decided for you</b> (each a default in code; undo in one line):

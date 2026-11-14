@@ -463,6 +463,20 @@ class Rack:
         self.zero_writer, self.fs, self.home = zero_writer, fs, home
 
 
+def j1_gravity_source(rack) -> Callable[[float], float]:
+    """J1's holding torque (N.m) at the curve's board-frame angle (``q_joint + FIT_ZERO_BOARD_RAD``): the ONE place the real run takes its
+    feed-forward from.
+
+    TODO(measured-mass FF, the dispatcher 2026-11-14): PnP is landing ``MeasuredWristFF`` in bam_rack_twin.hardware.wrist_gains (PID tuna's
+    measured masses, data/bam_fb_v2_masses_2026-11-14.json), and arm-hold / fullarm_stops rebase onto it. Once it is on bam_ws main, J1's
+    feed-forward comes from THAT module - import it from wrist_gains, never from j1_gains' READY curve, which is pose-blind and over-compensates
+    at the stop (the mass fit puts the twin's 32 settled wrist poses at 2.1-3.5 N.m there, the curve at 5.2). Not on main at sim2real cbfca46
+    / bam_ws cc9ca44b3, so the curve stays. The switch is here alone (the real run and ``--twin``'s loop both take it; the stand-in J1's own
+    gravity stays the curve), with the frame rule (``frame_known``) unchanged - a measured model needs the pose, so pass the bus's last
+    reading through when it lands."""
+    return rack.j1_gains.j1_gravity_nm
+
+
 def real_command(rack):
     """J1's command on the real bus: PID tuna's gains (j1_gains), no integrator, the host's setpoint (no board trajectory), its FF and cap."""
 
@@ -543,7 +557,7 @@ def run_twin(arguments, *, rack) -> dict[str, Any]:
                     board_offset_rad=math.radians(TURN_DEG * arguments.twin_turns + arguments.twin_offset_deg),
                     gravity_scale=arguments.twin_gravity_scale, obstacle_joint_rad=None if arguments.twin_obstacle_deg is None
                     else math.radians(arguments.twin_obstacle_deg))
-    record = home_j1(bus, j1map, make_command=twin_command(gains), gravity_nm=gains.j1_gravity_nm, frame_known=not since)
+    record = home_j1(bus, j1map, make_command=twin_command(gains), gravity_nm=j1_gravity_source(rack), frame_known=not since)
     result = {"mode": "twin", "homed_dir_copy": str(copy_root / "homed"), **record}
     result["zero"] = decide_and_write(record, check, rack=rack, homed_dir=copy_root / "homed", out=out, write=not arguments.no_write)
     result["homed_stamp"] = _stamp_after(result["zero"], record, homed_dir=copy_root / "homed", out=out, rack=rack, write=not arguments.no_write)
@@ -662,7 +676,7 @@ def real_run(arguments, check: Mapping[str, Any], *, rack, say) -> int:
             start_q[J1] = here.get(J1, start_q.get(J1, 0.0))  # J1 is not routed: its frame is what this run establishes
             result["route"] = fs.route_to_start(bus, frames, geometry, start_q, tolerance_deg=arguments.start_tolerance_deg, say=say)
             bus.stage = "J1 home"
-            record = home_j1(bus, check["_j1map"], make_command=real_command(rack), gravity_nm=rack.j1_gains.j1_gravity_nm,
+            record = home_j1(bus, check["_j1map"], make_command=real_command(rack), gravity_nm=j1_gravity_source(rack),
                              frame_known=check["powered_up_since_j1_home"] is False, say=say)
             result.update(record)
             _write_rows(out, result)
