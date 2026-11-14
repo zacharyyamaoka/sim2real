@@ -78,7 +78,8 @@ def render_frames(plant_model, trace: dict, *, every: int = 1, azimuth: float = 
     wrist = model.body("hard_stop").id
     option = mujoco.MjvOption()
     for group in range(6):
-        option.geomgroup[group] = 1 if group in (0, 1) else 0
+        # group 2 is bam_fb_test_rig's belt, rails and floor (drawn only when the model was built with them)
+        option.geomgroup[group] = 1 if group in (0, 1) or (belt and group == 2) else 0
     frames = []
     with mujoco.Renderer(model, PANEL, PANEL) as renderer:
         for k in range(0, len(trace["t"]), every):

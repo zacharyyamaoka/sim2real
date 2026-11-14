@@ -84,7 +84,8 @@ def film(item: dict, out_dir: Path) -> dict:
     report, model = traced(item["row"], item["environment"], int(item["cell_index"]), every=every)
     out_dir.mkdir(parents=True, exist_ok=True)
     mp4 = out_dir / f"{item['name']}.mp4"
-    frames = render_frames(model, report["trace"], belt=True)
+    # WHY this camera (still_test, 2026-11-13): the default frames the shoulder; with the belt drawn the whole arm and the belt fit here
+    frames = render_frames(model, report["trace"], belt=True, azimuth=120.0, elevation=-14.0, distance=1.55, lookat=(0.28, 0.0, 0.28))
     files = encode(frames, mp4)
     still = mp4.with_suffix(".jpg")
     at = item.get("still_s")
