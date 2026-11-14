@@ -596,3 +596,36 @@ def test_the_racks_homes_repeat_their_seek_stop_phase_and_a_stall_off_the_stop_s
     assert rack_phase_spread(paths[:2])["W3"]["spread_deg"] == pytest.approx(0.002, abs=1e-6)
     assert out["W1"]["spread_deg"] == pytest.approx(0.02, abs=1e-6)
     assert "W2" not in out
+
+
+def test_the_report_ranks_routines_on_readys_cells_like_for_like_and_subset_only_rows_last():
+    """tools/homing_routine_report.overall: after the rack's pause only V1's and park_first's paths ran PICK, LIFT and UP, so the ranking
+    reads READY's cards (every row ran them) and shows the whole grid beside; a row run on six subset cells ranks after the full rows
+    whatever its percentage (4 of 6 is not 22 of 33)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("homing_routine_report", Path(__file__).parents[1] / "tools" / "homing_routine_report.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def start(family, k):
+        return {"family": family, "start": f"{family} W1 {k}"}
+
+    episodes = ([report(procedure="full", row="full", **start("READY", 0), finished=False, outcome="refused: tight witness {'W1': 4.4}")]
+                + [report(procedure="full", row="full", **start("READY", k)) for k in range(1, 6)]
+                + [report(procedure="full", row="full", **start("PICK", k), finished=False, outcome="tripped: runaway", outcome_class="tripped")
+                   for k in range(6)]
+                + [report(procedure="subset", row="subset", **start("READY", k)) for k in range(2)])
+    for e in episodes:
+        e.setdefault("outcome_class", ruler.outcome_class(e))
+    assert {e["start"].split(" ")[0] for e in module.ready_only(episodes)} == {"READY"}
+    whole = ruler.score(episodes)
+    ready = ruler.score(module.ready_only(episodes))
+    for environment in ("B1", "B2", "friction", "claw_heavy", "phase_draw_2"):  # the full row ran the twins too
+        ready[f"full | {environment}"] = whole[f"full | {environment}"] = ready["full | nominal"]
+    ranked = module.overall(ready, whole=whole)
+    assert [name for name, _ in ranked] == ["full", "subset"]
+    full = dict(ranked)["full"]
+    assert full["coverage"] == pytest.approx(500 / 6, abs=0.01) and full["grid_coverage"] == pytest.approx(500 / 12, abs=0.01)
+    assert full["grid_feasible"] == 12
+    assert "grid_coverage" not in dict(ranked)["subset"]

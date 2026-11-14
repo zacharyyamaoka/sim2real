@@ -249,9 +249,19 @@ def sequence_table(plans: dict, row: str, phases: tuple = (0, 1)) -> str:
 TIGHT = " · witness 0.5° (stall-calibrated)"
 
 
-def overall(cards: dict) -> list[tuple[str, dict]]:
+def ready_only(episodes: list[dict]) -> list[dict]:
+    """The episodes on READY's cells - the like-for-like set every row ran (after the rack's pause only V1's and park_first's paths ran
+    the other five-bar poses)."""
+    first = next(iter(ruler.FIVEBAR_LEVELS))
+    return [e for e in episodes if (e.get("family") or str(e.get("start", "")).split(" ")[0]) == first]
+
+
+def overall(cards: dict, whole: dict | None = None) -> list[tuple[str, dict]]:
     """Every routine ranked across the twins (the ruler's order, per routine): silent wrong summed over every twin, then nominal coverage,
-    then the worst perturbed twin's coverage, then nominal zero p95, then nominal median time."""
+    then the worst perturbed twin's coverage, then nominal zero p95, then nominal median time. ``cards`` are READY's (like for like);
+    ``whole`` adds each routine's coverage over every five-bar pose it ran, where that is more than READY.
+    WHY rank on READY (2026-11-13): the light plan ran PICK, LIFT and UP for the recommended routine's two paths only, so a whole-grid
+    number beside a READY-only one would rank rows on different start sets."""
     routines = sorted({k.split(" | ")[0] for k in cards})
     out = []
     for routine in routines:
@@ -271,18 +281,26 @@ def overall(cards: dict) -> list[tuple[str, dict]]:
                    "zero_p95": nominal["zero_error_p95_deg"], "time": nominal["time_to_home_median_s"], "card": nominal,
                    "stale": None if stale is None else stale["coverage_pct"],
                    "stale_silent": None if stale is None else stale["silent_wrong"]}
+        grid = (whole or {}).get(f"{routine} | {ruler.NOMINAL}")
+        if grid and (grid.get("cells") or 0) > (nominal.get("cells") or 0):
+            summary.update(grid_coverage=grid["coverage_pct"], grid_feasible=grid["feasible"], grid_cells=grid["cells"],
+                           grid_silent=sum(c["silent_wrong"] for k, c in (whole or {}).items() if k.split(" | ")[0] == routine))
         out.append((routine, summary))
-    out.sort(key=lambda rs: (rs[1]["silent_wrong_all"], -(rs[1]["coverage"] or 0.0),
+    # WHY the rows run on the six subset cells only (fast single, multi x3, PEP 0047) rank after the full ones: 4 of 6 is not 22 of 33
+    out.sort(key=lambda rs: (rs[1]["environments"] < 5, rs[1]["silent_wrong_all"], -(rs[1]["coverage"] or 0.0),
                              -(rs[1]["worst_perturbed"] if rs[1]["worst_perturbed"] is not None else -1.0),
                              rs[1]["zero_p95"] if rs[1]["zero_p95"] is not None else 9e9, rs[1]["time"] if rs[1]["time"] is not None else 9e9))
     return out
 
 
 def overall_table(ranked: list[tuple[str, dict]]) -> str:
-    head = ("<tr><th>rank · routine</th><th>silent wrong, every twin</th><th>coverage nominal %</th><th>worst physical twin %</th>"
+    head = ("<tr><th>rank · routine</th><th>silent wrong, every twin</th><th>coverage nominal % (READY)</th>"
+            "<th>whole grid % (holdable starts; silent wrong)</th><th>worst physical twin %</th>"
             "<th>stale calibration % (silent wrong)</th><th>twins run</th><th>zero p95 °</th><th>median s</th></tr>")
     body = "".join(f"<tr><td>{k + 1}. <b>{esc(routine)}</b></td><td class='{'pass' if r['silent_wrong_all'] == 0 else 'fail'}'>"
-                   f"{r['silent_wrong_all']}</td><td>{fmt(r['coverage'], 1)}</td><td>{fmt(r['worst_perturbed'], 1)}</td>"
+                   f"{r['silent_wrong_all']}</td><td>{fmt(r['coverage'], 1)}</td>"
+                   f"<td>{fmt(r['grid_coverage'], 1) + ' (' + str(r['grid_feasible']) + '; ' + str(r['grid_silent']) + ')' if r.get('grid_coverage') is not None else '—'}</td>"
+                   f"<td>{fmt(r['worst_perturbed'], 1)}</td>"
                    f"<td>{fmt(r['stale'], 0)} ({fmt(r['stale_silent'], 0)})</td>"
                    f"<td>{r['environments']}</td><td>{fmt(r['zero_p95'], 3)}</td><td>{fmt(r['time'], 1)}</td></tr>"
                    for k, (routine, r) in enumerate(ranked))
@@ -411,9 +429,15 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
 
     order = ("Zach’s V1 order, falling back to PEP 0047’s parking path when W1’s first stall is refused" if "on a W1 refusal" in base
              else "Zach’s V1 order" if base.startswith("zach_v1") else "PEP 0047’s park_first order")
+    rec_ready = _c(ruler.score(ready_only(episodes)), recommended)
+    if (rec.get("cells") or 0) > (rec_ready.get("cells") or 0):
+        reach = (f"{fmt(rec.get('coverage_pct'), 0)} % of the {rec.get('feasible')} holdable starts of the nominal grid "
+                 f"({fmt(rec_ready.get('coverage_pct'), 0)} % at READY)")
+    else:
+        reach = f"{fmt(rec.get('coverage_pct'), 0)} % of the nominal start grid"
     verdict = (f"Home the wrist at READY in {order}, with a "
                f"tight rotor-phase witness (0.5° on a trusted home’s own stall, the five-bar’s drives included) and the stored backlash table: "
-               f"0 silent wrong in every twin, {fmt(rec.get('coverage_pct'), 0)} % of the nominal start grid, zeros p95 "
+               f"0 silent wrong in every twin, {reach}, zeros p95 "
                f"{fmt(rec.get('zero_error_p95_deg'), 3)}°, {fmt(rec.get('time_to_home_median_s'), 0)} s median.")
     qualification = (f"Every start it lost was lost in the five-bar’s phase 0, not the wrist: the wrist phase homed all {split['homed']} "
                      f"starts it was handed over the nominal grid and the five physical twins" if not split["wrist_lost"] else
@@ -551,7 +575,7 @@ def grid_scope(run: list[dict]) -> str:
 def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Path | None, recommended: str, notes: dict) -> str:
     episodes, calibrations = load(results_path)
     cards = ruler.score(episodes)
-    ranked = overall(cards)
+    ranked = overall(ruler.score(ready_only(episodes)), whole=cards)
     media_ = json.loads(media_index.read_text()) if media_index.is_file() else {}
     wb_ = json.loads(wandb_summary.read_text()) if wandb_summary and wandb_summary.is_file() else {}
     notes = {**auto_notes(cards, ranked, episodes, calibrations, media_, wb_), **notes}
@@ -590,7 +614,7 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "<p class='sub'>Rank: silent wrong, then coverage, then zero error, then time — time never buys accuracy. A start is the pose "
              "the arm was in when the power went (4 five-bar poses × W1 × W2, W3 / claw / J1 balanced); the twin lets the whole arm fall "
              "onto the belt, its stops or itself before power-on, so hanging on the belt is where most starts begin, as on the rack.</p>",
-             "<h2>Overall, across every twin</h2><p class='sub'>Ranked by the ruler's order per routine: silent wrong summed over "
+             "<h2>Overall, across every twin</h2><p class='sub'>Ranked on READY's cells, which every row ran, by the ruler's order per routine: silent wrong summed over "
              "every twin, then nominal coverage, then the worst physical twin's coverage (B1, B2, friction, the heavy claw, another "
              "power-up frame), then zero error, then time. The stale-calibration twin is shown apart: there a tight witness is meant to "
              "refuse everything (re-take the calibration), a loose one passes it. Rows ending “witness 0.5°” are the same runs re-judged by "
