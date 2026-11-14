@@ -63,8 +63,14 @@ def pose_mapper(plant_model, view_model):
     return pairs
 
 
-def render_frames(plant_model, trace: dict, *, every: int = 1, azimuth: float = 110.0, elevation: float = -12.0, distance: float = 1.7,
-                  lookat=(0.08, 0.0, 0.42), captions: bool = True, belt: bool = False) -> list[np.ndarray]:
+def render_frames(plant_model, trace: dict, **kwargs) -> list[np.ndarray]:
+    return list(iter_frames(plant_model, trace, **kwargs))
+
+
+def iter_frames(plant_model, trace: dict, *, every: int = 1, azimuth: float = 110.0, elevation: float = -12.0, distance: float = 1.7,
+                lookat=(0.08, 0.0, 0.42), captions: bool = True, belt: bool = False):
+    """The frames one at a time. WHY a generator (the homing routine's videos, 2026-11-13): 700 frames of 960 x 480 held in a list are
+    ~1 GB, which made the renderer the largest process on a full machine - the one its memory guard kills first."""
     import mujoco  # noqa: PLC0415
 
     rig, data = visual_model(belt)
@@ -80,7 +86,6 @@ def render_frames(plant_model, trace: dict, *, every: int = 1, azimuth: float = 
     for group in range(6):
         # group 2 is bam_fb_test_rig's belt, rails and floor (drawn only when the model was built with them)
         option.geomgroup[group] = 1 if group in (0, 1) or (belt and group == 2) else 0
-    frames = []
     with mujoco.Renderer(model, PANEL, PANEL) as renderer:
         for k in range(0, len(trace["t"]), every):
             q = trace["qpos"][k]
@@ -98,8 +103,7 @@ def render_frames(plant_model, trace: dict, *, every: int = 1, azimuth: float = 
                 touching = list(trace["self_contact"][k]) + list((trace.get("belt") or [[]] * len(trace["t"]))[k])
                 image = caption(image, f"t {trace['t'][k]:5.1f} s   {trace['step'][k][:70]}",
                                 "CONTACT " + ", ".join(touching) if touching else "")
-            frames.append(image)
-    return frames
+            yield image
 
 
 def caption(image: np.ndarray, text: str, alert: str = "") -> np.ndarray:
@@ -115,12 +119,14 @@ def caption(image: np.ndarray, text: str, alert: str = "") -> np.ndarray:
     return np.asarray(picture)
 
 
-def encode(frames: list[np.ndarray], out_mp4: Path, *, fps: int = FPS, gif: bool = True) -> dict:
-    """H.264 mp4 (yuv420p, faststart) and a half-size GIF beside it."""
+def encode(frames, out_mp4: Path, *, fps: int = FPS, gif: bool = True) -> dict:
+    """H.264 mp4 (yuv420p, faststart) and a half-size GIF beside it. ``frames``: any iterable (a generator streams to disk)."""
     out_mp4.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         raw = Path(tmp) / "frames.rgb"
-        raw.write_bytes(b"".join(f.astype(np.uint8).tobytes() for f in frames))
+        with raw.open("wb") as handle:
+            for f in frames:
+                handle.write(f.astype(np.uint8).tobytes())
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(fps),
                         "-i", str(raw), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-movflags", "+faststart", str(out_mp4)], check=True)
     out = {"mp4": str(out_mp4), "mp4_bytes": out_mp4.stat().st_size}

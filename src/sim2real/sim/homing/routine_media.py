@@ -78,22 +78,32 @@ def write_rrd(report: dict, model, path: Path) -> Path | None:
 def film(item: dict, out_dir: Path) -> dict:
     from PIL import Image  # noqa: PLC0415
 
-    from .fullarm_media import encode, render_frames  # noqa: PLC0415
+    from .fullarm_media import encode, iter_frames  # noqa: PLC0415
 
     every = max(1, round(SPEEDUP / (FPS * 0.01)))
     report, model = traced(item["row"], item["environment"], int(item["cell_index"]), every=every)
     out_dir.mkdir(parents=True, exist_ok=True)
     mp4 = out_dir / f"{item['name']}.mp4"
     # WHY this camera (still_test, 2026-11-13): the default frames the shoulder; with the belt drawn the whole arm and the belt fit here
-    frames = render_frames(model, report["trace"], belt=True, azimuth=120.0, elevation=-14.0, distance=1.55, lookat=(0.28, 0.0, 0.28))
-    files = encode(frames, mp4)
-    still = mp4.with_suffix(".jpg")
+    times = report["trace"]["t"]
     at = item.get("still_s")
-    pick = len(frames) // 2 if at is None else min(range(len(frames)), key=lambda k: abs(report["trace"]["t"][k] - at))
-    Image.fromarray(frames[pick]).save(still, quality=85)
+    pick = len(times) // 2 if at is None else min(range(len(times)), key=lambda k: abs(times[k] - at))
+    still = mp4.with_suffix(".jpg")
+    count = 0
+
+    def frames():
+        nonlocal count
+        for k, frame in enumerate(iter_frames(model, report["trace"], belt=True, azimuth=120.0, elevation=-14.0, distance=1.55,
+                                              lookat=(0.28, 0.0, 0.28))):
+            if k == pick:
+                Image.fromarray(frame).save(still, quality=85)
+            count += 1
+            yield frame
+
+    files = encode(frames(), mp4)
     rrd = write_rrd(report, model, mp4.with_suffix(".rrd"))
     report.pop("trace", None)
-    return {**item, **files, "still": str(still), "rrd": None if rrd is None else str(rrd), "frames": len(frames), "speedup": SPEEDUP,
+    return {**item, **files, "still": str(still), "rrd": None if rrd is None else str(rrd), "frames": count, "speedup": SPEEDUP,
             "report": {k: report.get(k) for k in ("outcome", "outcome_class", "covered", "time_s", "zero_error_deg", "belt_drag_s",
                                                    "belt_after_liftoff_ticks", "self_contact_pairs", "witness_deg", "notes", "start")}}
 

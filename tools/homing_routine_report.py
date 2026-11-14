@@ -23,7 +23,7 @@ from sim2real.sim.homing.routine_figures import coverage_svg
 DATA = Path(__file__).resolve().parents[1] / "src" / "sim2real" / "data"
 RESULTS = DATA / "homing_routine_2026-11-13.json"
 CACHE = Path.home() / ".cache" / "sim2real" / "homing_routine" / "episodes_2026-11-13.jsonl"
-CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_2026-11-13.json"
+CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_tight_2026-11-13.json"
 PLANS = Path.home() / ".cache" / "sim2real" / "homing_routine_plans.pkl"
 MEDIA_REL = "media/homing-routine-2026-11-13"
 ROLES = ("J2", "C1", "W1", "W2", "W3", "CLAW")
@@ -82,6 +82,9 @@ def load(results_path: Path) -> tuple[list[dict], dict]:
             if "error" not in row:
                 episodes.append(row)
     calibrations = json.loads(CALIBRATIONS.read_text()) if CALIBRATIONS.is_file() else {}
+    from sim2real.sim.homing.routine_check import tight_witness  # noqa: PLC0415
+
+    episodes = [e for e in episodes if not e.get("derived_from")] + tight_witness(episodes, calibrations)
     return episodes, calibrations
 
 
@@ -91,13 +94,18 @@ def rank_key(card: dict):
             card["time_to_home_median_s"] if card["time_to_home_median_s"] is not None else 9e9)
 
 
+SHORT = {"silent_wrong": "silent wrong", "coverage_pct": "coverage", "zero_error_p95_deg": "zero p95", "repeatability_deg": "repeat",
+         "time_to_home_median_s": "median time", "time_to_home_p95_s": "p95 time", "belt_after_liftoff": "belt", "tripped": "trips",
+         "peak_speed_ratio": "speed"}
+
+
 def verdict_chips(card: dict) -> str:
-    out = []
-    for name, passed in card["verdict"].items():
-        if name == "pass" or passed is None:
-            continue
-        out.append(f'<span class="chip {"pass" if passed else "fail"}">{"✓" if passed else "✗"} {esc(name.replace("_", " "))}</span>')
-    return "".join(out)
+    """How many targets pass, and the names of those that fail."""
+    measured = {k: v for k, v in card["verdict"].items() if k != "pass" and v is not None}
+    passed = sum(1 for v in measured.values() if v)
+    failing = ", ".join(SHORT.get(k, k) for k, v in measured.items() if not v)
+    return (f"<span class='{'pass' if passed == len(measured) else ''}'>{passed}/{len(measured)}</span>"
+            + (f"<br><span class='sub'>✗ {esc(failing)}</span>" if failing else ""))
 
 
 def scoreboard(cards: dict, environment: str = ruler.NOMINAL) -> str:
@@ -202,9 +210,44 @@ def sequence_table(plans: dict, row: str) -> str:
     return "".join(out)
 
 
+TIGHT = " · witness 0.5° (stall-calibrated)"
+
+
+def overall(cards: dict) -> list[tuple[str, dict]]:
+    """Every routine ranked across the twins (the ruler's order, per routine): silent wrong summed over every twin, then nominal coverage,
+    then the worst perturbed twin's coverage, then nominal zero p95, then nominal median time."""
+    routines = sorted({k.split(" | ")[0] for k in cards})
+    out = []
+    for routine in routines:
+        mine = {k.split(" | ")[1]: c for k, c in cards.items() if k.split(" | ")[0] == routine}
+        nominal = mine.get(ruler.NOMINAL)
+        if nominal is None:
+            continue
+        perturbed = [c["coverage_pct"] for e, c in mine.items() if e != ruler.NOMINAL and c["coverage_pct"] is not None]
+        summary = {"silent_wrong_all": sum(c["silent_wrong"] for c in mine.values()), "coverage": nominal["coverage_pct"],
+                   "worst_perturbed": min(perturbed) if perturbed else None, "environments": len(mine),
+                   "zero_p95": nominal["zero_error_p95_deg"], "time": nominal["time_to_home_median_s"], "card": nominal}
+        out.append((routine, summary))
+    out.sort(key=lambda rs: (rs[1]["silent_wrong_all"], -(rs[1]["coverage"] or 0.0),
+                             -(rs[1]["worst_perturbed"] if rs[1]["worst_perturbed"] is not None else -1.0),
+                             rs[1]["zero_p95"] if rs[1]["zero_p95"] is not None else 9e9, rs[1]["time"] if rs[1]["time"] is not None else 9e9))
+    return out
+
+
+def overall_table(ranked: list[tuple[str, dict]]) -> str:
+    head = ("<tr><th>rank · routine</th><th>silent wrong, every twin</th><th>coverage nominal %</th><th>worst perturbed twin %</th>"
+            "<th>twins run</th><th>zero p95 °</th><th>median s</th></tr>")
+    body = "".join(f"<tr><td>{k + 1}. <b>{esc(routine)}</b></td><td class='{'pass' if r['silent_wrong_all'] == 0 else 'fail'}'>"
+                   f"{r['silent_wrong_all']}</td><td>{fmt(r['coverage'], 1)}</td><td>{fmt(r['worst_perturbed'], 1)}</td>"
+                   f"<td>{r['environments']}</td><td>{fmt(r['zero_p95'], 3)}</td><td>{fmt(r['time'], 1)}</td></tr>"
+                   for k, (routine, r) in enumerate(ranked))
+    return f"<div class='scroll'><table>{head}{body}</table></div>"
+
+
 def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Path | None, recommended: str, notes: dict) -> str:
     episodes, calibrations = load(results_path)
     cards = ruler.score(episodes)
+    ranked = overall(cards)
     media = json.loads(media_index.read_text()) if media_index.is_file() else {}
     plans = pickle.loads(PLANS.read_bytes()) if PLANS.is_file() else {}
     wb = json.loads(wandb_summary.read_text()) if wandb_summary and wandb_summary.is_file() else {}
@@ -229,6 +272,9 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "<p class='sub'>Rank: silent wrong, then coverage, then zero error, then time — time never buys accuracy. A start is the pose "
              "the arm was in when the power went (4 five-bar poses × W1 × W2, W3 / claw / J1 balanced); the twin lets the whole arm fall "
              "onto the belt, its stops or itself before power-on, so hanging on the belt is where most starts begin, as on the rack.</p>",
+             "<h2>Overall, across every twin</h2><p class='sub'>Ranked by the ruler's order per routine: silent wrong summed over "
+             "every twin, then nominal coverage, then the worst perturbed twin's coverage, then zero error, then time. Rows ending “witness "
+             "0.5°” are the same runs re-judged by the tight witness (it never moves the arm).</p>", overall_table(ranked),
              "<h2>Scoreboard, nominal twin</h2>", scoreboard(cards),
              "<h2>Coverage maps (nominal)</h2><p class='sub'>Rows W1, columns W2 (°), one panel per five-bar pose; hover a cell for its start "
              "and outcome.</p>", maps,
