@@ -527,16 +527,36 @@ def rack_plan(row: str, homed: Path = RACK_HOMED_TRUSTED, *, witness_tol_deg: fl
             "table": "apply the stored identify_backlash table (wrist B2 rows) in observe; none = B0 (zeros 0.46-0.50 deg off on a geared joint)"}
 
 
+RECOMMENDED = "V1+table, park_first on a W1 refusal @ READY"
+
+
+def rack_plan_fallback(homed: Path = RACK_HOMED_TRUSTED, *, witness_tol_deg: float = RACK_WITNESS_TOL_DEG) -> dict:
+    """The recommended routine for the rack: V1's order, and park_first's path when the witness refuses W1's first stall (routine_check's
+    FALLBACK: the two share every step up to and including that seek). Both continuations, the branch rule, the witness, the stops."""
+    v1 = rack_plan("zach_v1+table @ READY", homed, witness_tol_deg=witness_tol_deg)
+    park = rack_plan("park_first+witness+table @ READY", homed, witness_tol_deg=witness_tol_deg)
+    shared = [s["name"] for s in v1["sequence"]["steps"]][:4]
+    if shared[-1] != "W1 seeks" or [s["name"] for s in park["sequence"]["steps"]][3] != "W1 park touch":
+        raise RuntimeError("V1's W1 seek and park_first's park touch are no longer the fourth step of their sequences")
+    return {**v1, "row": RECOMMENDED, "sequence_park_first": park["sequence"], "evidence_plan_park_first": park["evidence_plan"],
+            "branch": {"after_step": "W1 seeks (V1) == W1 park touch (park_first): the same command and stall",
+                       "rule": "witness W1's stall as that step ends: within tolerance -> carry on with V1's sequence ('W1 to 0', W2, W3, TD4); "
+                               "past it -> carry on with park_first's from 'W1 parks back 135 deg' (W2, W1 again, W3, TD4) and do NOT assign "
+                               "the refused stall",
+                       "shared_steps": shared}}
+
+
 def main(argv=None) -> int:
     import argparse  # noqa: PLC0415
     import json  # noqa: PLC0415
 
     parser = argparse.ArgumentParser(description="the rack's homing plan for one routine row (JSON)")
-    parser.add_argument("--row", required=True)
+    parser.add_argument("--row", default=RECOMMENDED, help=f"a row of ROWS, or {RECOMMENDED!r} (the default: both paths and the branch)")
     parser.add_argument("--homed", type=Path, default=RACK_HOMED_TRUSTED)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
-    args.out.write_text(json.dumps(rack_plan(args.row, args.homed), indent=1, default=str))
+    plan = rack_plan_fallback(args.homed) if args.row == RECOMMENDED else rack_plan(args.row, args.homed)
+    args.out.write_text(json.dumps(plan, indent=1, default=str))
     print(args.out)
     return 0
 
@@ -546,4 +566,4 @@ if __name__ == "__main__":
 
 
 __all__ = ["CRAIG_OFFSET_DEG", "READY_CRAIG_DEG", "READY_TD4_WRIST_DEG", "ROWS", "FullArmRoutine", "SingleTouchReady", "craig_to_cad",
-           "fivebar_hold_at", "make_row", "rack_plan", "ready_cad", "rotor_phase_from_homed"]
+           "fivebar_hold_at", "make_row", "rack_plan", "rack_plan_fallback", "ready_cad", "rotor_phase_from_homed", "RECOMMENDED"]

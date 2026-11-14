@@ -288,7 +288,9 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     def pct(k, total):
         return f"{100.0 * k / total:.0f} %" if total else "—"
 
-    verdict = (f"Home the wrist at READY in {'Zach’s V1 order' if base.startswith('zach_v1') else 'PEP 0047’s park_first order'}, with a "
+    order = ("Zach’s V1 order, falling back to PEP 0047’s parking path when W1’s first stall is refused" if "on a W1 refusal" in base
+             else "Zach’s V1 order" if base.startswith("zach_v1") else "PEP 0047’s park_first order")
+    verdict = (f"Home the wrist at READY in {order}, with a "
                f"tight rotor-phase witness (0.5° on a trusted home’s own stall, the five-bar’s drives included) and the stored backlash table: "
                f"0 silent wrong in every twin, {fmt(rec.get('coverage_pct'), 0)} % of the nominal start grid, zeros p95 "
                f"{fmt(rec.get('zero_error_p95_deg'), 3)}°, {fmt(rec.get('time_to_home_median_s'), 0)} s median.")
@@ -376,7 +378,7 @@ of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
                                   ("fivebar_trip_from_the_belt", "the five-bar's lift-off from a belt rest trips J2's runaway stop"),
                                   ("pep0047_wrist_at_the_bowl", "PEP 0047 as landed: the walk to the five-bar's home drives the claw into the belt"))
               if k in media]
-    hero = "zach_v1_ready_belt_rest" if base.startswith("zach_v1") else "park_first_ready_belt_rest"
+    hero = "zach_v1_ready_belt_rest" if (base.startswith("zach_v1") or base.startswith("V1")) else "park_first_ready_belt_rest"
     return {"recommended": base, "verdict": verdict, "qualification": qualification, "findings": findings, "handoff": handoff,
             "decisions": decisions, "videos": videos, "hero": hero,
             "hero_caption": "the recommended motion from a power cut at READY: the arm lands on the belt, the five-bar homes and walks to READY, the claw closes, W1 / W2 / W3 touch their stops, TD4",

@@ -30,7 +30,9 @@ REPORT = Path("/home/bam/bam_ws/reports/homing-routine-2026-11-13.html")
 TYPICAL = {"zach_v1 @ READY": "zach_v1_ready_belt_rest", "park_first+witness @ READY": "park_first_ready_belt_rest",
            "park_first+witness+table @ READY": "park_first_ready_belt_rest", "multi x2 (3D-printer) @ READY": "multi_x2_ready_belt_rest",
            "press_reverse (backlash every home) @ READY": "press_reverse_ready_belt_rest",
-           "PEP 0047 (wrist at the five-bar's home)": "pep0047_wrist_at_the_bowl", "zach_v1+table @ READY": "zach_v1_ready_belt_rest"}
+           "PEP 0047 (wrist at the five-bar's home)": "pep0047_wrist_at_the_bowl", "zach_v1+table @ READY": "zach_v1_ready_belt_rest",
+           "V1, park_first on a W1 refusal @ READY": "zach_v1_ready_belt_rest",
+           "V1+table, park_first on a W1 refusal @ READY": "zach_v1_ready_belt_rest"}
 
 
 def final_results() -> dict:

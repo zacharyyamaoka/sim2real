@@ -468,9 +468,41 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
                     off[role] = round(worst, 3)
             if off:
                 derived.update({"finished": False, "time_s": None, "outcome": f"refused: tight witness {off} deg off the trusted home's stall"})
+            derived["tight_off"] = off
         derived["outcome_class"] = ruler.outcome_class(derived)
         derived["covered"] = ruler.covered(derived)
         out.append(derived)
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------- V1, parking on a refusal
+
+# WHY exact from two rows' runs (the routine's analysis, 2026-11-13): V1's first wrist move - the claw closes, then W1 seeks +1 at 1 N.m and
+# 36 deg/s - IS park_first's (its park touch is that same seek); they differ only in what they do with W1's stall: V1 assigns it, park_first
+# never trusts it and parks back 135 deg. So "V1, and park_first's path when the tight witness refuses W1's stall" moves exactly as V1 when
+# the witness passes and exactly as park_first when it does not, decided by a reading the rack has at that tick.
+FALLBACK = {"zach_v1 @ READY": ("park_first+witness @ READY", "V1, park_first on a W1 refusal @ READY"),
+            "zach_v1+table @ READY": ("park_first+witness+table @ READY", "V1+table, park_first on a W1 refusal @ READY")}
+
+
+def fallback_derived(episodes: list[dict]) -> list[dict]:
+    """The FALLBACK rows (comment above), from the tight-witness rows: per (twin, start), V1's episode unless its tight witness refused W1,
+    else park_first's."""
+    index = {(e.get("row"), e.get("environment"), e.get("start")): e for e in episodes}
+    out = []
+    for (v1_row, (park_row, name)) in FALLBACK.items():
+        for (row, environment, start), v1 in list(index.items()):
+            if row != v1_row + TIGHT_SUFFIX:
+                continue
+            park = index.get((park_row + TIGHT_SUFFIX, environment, start))
+            if park is None:
+                continue
+            refused_w1 = "W1" in (v1.get("tight_off") or {})
+            chosen = park if refused_w1 else v1
+            derived = {**chosen, "row": name + TIGHT_SUFFIX, "procedure": name + TIGHT_SUFFIX, "derived_from": f"{v1_row} / {park_row}",
+                       "branch": "park_first (W1 refused)" if refused_w1 else "V1",
+                       "key": f"{name}{TIGHT_SUFFIX} | {environment} | {start}"}
+            out.append(derived)
     return out
 
 
@@ -546,6 +578,7 @@ def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
     clean = clean + table_derived(clean, calibrations)
     if any(c.get("stall_witness_deg") for c in calibrations.values()):
         clean = clean + tight_witness(clean, calibrations)
+        clean = clean + fallback_derived(clean)
     return {"schema": "sim2real.homing_routine/1", "ruler": "sim2real.sim.homing.routine_ruler (frozen 2026-11-13, amendment 1)",
             "grid_rows": list(GRID_ROWS), "subset_rows": list(SUBSET_ROWS), "perturbed_rows": list(PERTURBED_ROWS),
             "environments": {k: v["why"] for k, v in ruler.ENVIRONMENTS.items()}, "targets": {k: list(v) for k, v in ruler.TARGETS.items()},

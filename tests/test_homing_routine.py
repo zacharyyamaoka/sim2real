@@ -520,3 +520,15 @@ def test_a_stored_table_moves_each_defining_stalls_zero_by_its_motor_past_link()
     assert out["zero_error_deg"]["W1"] == pytest.approx(-0.46 + shift)
     assert out["zero_error_deg"]["W2"] == pytest.approx(0.48 - shift)
     assert out["zero_error_deg"]["W3"] == episode["zero_error_deg"]["W3"]
+
+
+def test_v1_and_park_first_move_identically_until_w1s_first_stall(plans):
+    """routine_check.FALLBACK's premise: up to and including W1's first seek (V1's 'W1 seeks', park_first's 'W1 park touch') the two
+    sequences command the same, so 'V1, park_first on a W1 refusal' is exactly V1 or exactly park_first, decided at that stall."""
+    v1, park = plans["zach_v1 @ READY"]["sequences"], plans["park_first+witness @ READY"]["sequences"]
+    assert v1[0].to_dict() == park[0].to_dict()  # phase 0, the five-bar
+    a, b = v1[1].steps[:4], park[1].steps[:4]
+    assert [s.name for s in a][-1] == "W1 seeks" and [s.name for s in b][-1] == "W1 park touch"
+    for x, y in zip(a, b, strict=True):
+        assert [c.to_dict() for c in x.commands] == [c.to_dict() for c in y.commands]
+        assert [d.to_dict() for d in x.done_when] == [d.to_dict() for d in y.done_when]
