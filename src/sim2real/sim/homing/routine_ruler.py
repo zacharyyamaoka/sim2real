@@ -66,6 +66,9 @@ special family - it is where most cells land, as on the rack.
 
 4 x 36 = 144 cells. The perturbation environments run on ``subset_cells`` (24: one W1 / W2 diagonal per five-bar pose).
 
+*Amendment 4 (2026-11-13, a labelling bug):* the controller reports a step that never finished as "aborted: step ... was not done
+within", which the first ``outcome_class`` counted as a trip; it is a timeout, as the table above defines. Coverage is unchanged.
+
 *Amendment 3 (2026-11-13, a sampling bug, found in the first perturbed results):* the subset was "every 6th cell", which on a grid ordered
 (pose, W1, W2) with 6 W2 levels is every cell with W2 at -150 deg - the folded wrist only, V1's worst case. It is now the diagonal
 (W1 index + W2 index + pose index) mod 6 == 0: every W1 and every W2 level once per pose. The folded-wrist cells already run stay in the
@@ -227,6 +230,8 @@ def outcome_class(report: dict) -> str:
     outcome = report["outcome"]
     if outcome.startswith("refused"):
         return "refused"
+    if "was not done within" in outcome or "bench limit" in outcome:
+        return "timeout"  # amendment 4: the controller's step timeout reads "aborted: step ... was not done within"; it is no trip
     if outcome.startswith("tripped") or outcome.startswith("aborted"):
         return "tripped"
     return "timeout"

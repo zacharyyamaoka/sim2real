@@ -126,6 +126,9 @@ def test_refused_tripped_timeout_and_infeasible():
     assert ruler.outcome_class(report(finished=False, outcome="refused: rotor-phase witness")) == "refused"
     assert ruler.outcome_class(report(finished=False, outcome="tripped: runaway: J2 at 90 deg/s")) == "tripped"
     assert ruler.outcome_class(report(finished=False, outcome="timeout: step 'W1 seeks'")) == "timeout"
+    # amendment 4: the controller's own words for a step that never finished
+    assert ruler.outcome_class(report(finished=False, outcome="aborted: step 'W1 walks across' was not done within 40.0 s")) == "timeout"
+    assert ruler.outcome_class(report(finished=False, outcome="aborted: bench limit 400.0 s")) == "timeout"
     assert ruler.outcome_class({"refused_start": "through the belt"}) == "infeasible"
 
 
