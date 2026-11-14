@@ -225,12 +225,17 @@ def overall(cards: dict) -> list[tuple[str, dict]]:
         if nominal is None:
             continue
         # the folded-wrist cells (amendment 3) count for safety - a silent wrong there is one - but not in a twin's coverage
-        perturbed = [c["coverage_pct"] for e, c in mine.items() if e != ruler.NOMINAL and not e.endswith(" · folded wrist")
-                     and c["coverage_pct"] is not None]
+        # WHY phase_cal_error apart: it is the stale-calibration case (the witness's calibration 1.5 deg off), where a tight witness is
+        # MEANT to refuse everything - an operating rule (re-take the calibration), not a start the routine should cover
+        perturbed = [c["coverage_pct"] for e, c in mine.items() if e not in (ruler.NOMINAL, "phase_cal_error")
+                     and not e.endswith(" · folded wrist") and c["coverage_pct"] is not None]
+        stale = mine.get("phase_cal_error")
         summary = {"silent_wrong_all": sum(c["silent_wrong"] for c in mine.values()), "coverage": nominal["coverage_pct"],
                    "worst_perturbed": min(perturbed) if perturbed else None,
                    "environments": sum(1 for e in mine if not e.endswith(" · folded wrist")),
-                   "zero_p95": nominal["zero_error_p95_deg"], "time": nominal["time_to_home_median_s"], "card": nominal}
+                   "zero_p95": nominal["zero_error_p95_deg"], "time": nominal["time_to_home_median_s"], "card": nominal,
+                   "stale": None if stale is None else stale["coverage_pct"],
+                   "stale_silent": None if stale is None else stale["silent_wrong"]}
         out.append((routine, summary))
     out.sort(key=lambda rs: (rs[1]["silent_wrong_all"], -(rs[1]["coverage"] or 0.0),
                              -(rs[1]["worst_perturbed"] if rs[1]["worst_perturbed"] is not None else -1.0),
@@ -239,10 +244,11 @@ def overall(cards: dict) -> list[tuple[str, dict]]:
 
 
 def overall_table(ranked: list[tuple[str, dict]]) -> str:
-    head = ("<tr><th>rank · routine</th><th>silent wrong, every twin</th><th>coverage nominal %</th><th>worst perturbed twin %</th>"
-            "<th>twins run</th><th>zero p95 °</th><th>median s</th></tr>")
+    head = ("<tr><th>rank · routine</th><th>silent wrong, every twin</th><th>coverage nominal %</th><th>worst physical twin %</th>"
+            "<th>stale calibration % (silent wrong)</th><th>twins run</th><th>zero p95 °</th><th>median s</th></tr>")
     body = "".join(f"<tr><td>{k + 1}. <b>{esc(routine)}</b></td><td class='{'pass' if r['silent_wrong_all'] == 0 else 'fail'}'>"
                    f"{r['silent_wrong_all']}</td><td>{fmt(r['coverage'], 1)}</td><td>{fmt(r['worst_perturbed'], 1)}</td>"
+                   f"<td>{fmt(r['stale'], 0)} ({fmt(r['stale_silent'], 0)})</td>"
                    f"<td>{r['environments']}</td><td>{fmt(r['zero_p95'], 3)}</td><td>{fmt(r['time'], 1)}</td></tr>"
                    for k, (routine, r) in enumerate(ranked))
     return f"<div class='scroll'><table>{head}{body}</table></div>"
@@ -385,7 +391,7 @@ of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
     return {"recommended": base, "verdict": verdict, "qualification": qualification, "findings": findings, "handoff": handoff,
             "decisions": decisions, "videos": videos, "hero": hero,
             "hero_caption": "the recommended motion from a power cut at READY: the arm lands on the belt, the five-bar homes and walks to READY, the claw closes, W1 / W2 / W3 touch their stops, TD4",
-            "ruler_commit": "sim2real 7806abf (frozen), amendments 1-2"}
+            "ruler_commit": "sim2real 7806abf (frozen), amendments 1-4"}
 
 
 def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Path | None, recommended: str, notes: dict) -> str:
@@ -421,8 +427,11 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "the arm was in when the power went (4 five-bar poses × W1 × W2, W3 / claw / J1 balanced); the twin lets the whole arm fall "
              "onto the belt, its stops or itself before power-on, so hanging on the belt is where most starts begin, as on the rack.</p>",
              "<h2>Overall, across every twin</h2><p class='sub'>Ranked by the ruler's order per routine: silent wrong summed over "
-             "every twin, then nominal coverage, then the worst perturbed twin's coverage, then zero error, then time. Rows ending “witness "
-             "0.5°” are the same runs re-judged by the tight witness (it never moves the arm).</p>", overall_table(ranked),
+             "every twin, then nominal coverage, then the worst physical twin's coverage (B1, B2, friction, the heavy claw, another "
+             "power-up frame), then zero error, then time. The stale-calibration twin is shown apart: there a tight witness is meant to "
+             "refuse everything (re-take the calibration), a loose one passes it. Rows ending “witness 0.5°” are the same runs re-judged by "
+             "the tight witness, and the “V1 …, park_first on a W1 refusal” rows are exact from V1's and park_first's runs (they move the "
+             "same up to W1's first stall); neither moves the arm differently.</p>", overall_table(ranked),
              "<h2>Scoreboard, nominal twin</h2>", scoreboard(cards),
              "<h2>Coverage maps (nominal)</h2><p class='sub'>Rows W1, columns W2 (°), one panel per five-bar pose; hover a cell for its start "
              "and outcome.</p>", maps,
