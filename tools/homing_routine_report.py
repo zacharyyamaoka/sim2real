@@ -447,6 +447,11 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     if (rec.get("cells") or 0) > (rec_ready.get("cells") or 0):
         reach = (f"{fmt(rec.get('coverage_pct'), 0)} % of the {rec.get('feasible')} holdable starts of the nominal grid "
                  f"({fmt(rec_ready.get('coverage_pct'), 0)} % at READY)")
+    elif "+J1" in base:
+        without = _c(cards, recommended.replace("+J1", ""))
+        reach = (f"{fmt(rec.get('coverage_pct'), 0)} % of READY's {rec.get('feasible')} holdable starts (J1's rows ran READY's cells, "
+                 f"where J1's home starts whatever the pose; the routine without J1 covers {fmt(without.get('coverage_pct'), 0)} % of the "
+                 f"whole grid's {without.get('feasible')})")
     else:
         reach = f"{fmt(rec.get('coverage_pct'), 0)} % of the nominal start grid"
     verdict = (f"Home the wrist at READY in {order}, with a "
@@ -459,9 +464,10 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     qualification = ((f"Every start it lost was lost in the five-bar’s phase 0{', or in J1’s home' if split['j1_lost'] else ''}, not the "
                       f"wrist{j1_note}: the wrist phase homed all {handed} starts it was handed over the nominal grid and the five "
                       f"physical twins") if not split["wrist_lost"] else f"The wrist phase lost {split['wrist_lost']} of the {handed} starts it was handed")
-    qualification += (f". On {len(trips)} of {n} nominal starts ({pct(len(trips), n)}) the twin’s five-bar home from a belt rest trips J2’s or "
-                      "C1’s 86°/s runaway stop or times out, the same for every routine; the rack runs its own staged five-bar home, "
-                      "which the twin does not model yet. Time (78 s median) and speed miss their targets everywhere. Sim only; the "
+    qualification += (f". On {len(trips)} of {n} nominal starts over the whole grid ({pct(len(trips), n)}) the twin’s five-bar home from a belt "
+                      "rest trips J2’s or C1’s 86°/s runaway stop or times out, the same for every routine; the rack runs its own staged "
+                      f"five-bar home, which the twin does not model yet. Time ({fmt(rec.get('time_to_home_median_s'), 0)} s median) and "
+                      "speed miss their targets everywhere. Sim only; the "
                       "twin’s wrist gaps, claw mass and belt friction are assumptions, and on the rack the five-bar’s zeros carry the "
                       "camera’s J2 +0.8° / C1 −3.8° until its stall angles are re-anchored (the witness checks the same stop, not the angle).")
     j1_text = ""
@@ -485,9 +491,10 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                    f"the stop it presses ~3.1 N·m. Over the nominal grid and the physical twins J1's zero is "
                    f"{fmt(max(j1_errors) if j1_errors else None, 3)}° at worst ({len(j1_errors)} finished homes) and "
                    f"{len(j1_lost)} starts were lost in a J1 step. At READY the routine covers {fmt(with_j1.get('coverage_pct'), 1)} % with J1 "
-                   f"against {fmt(without.get('coverage_pct'), 1)} % without (whole grid {fmt(whole_with.get('coverage_pct'), 1)} / "
-                   f"{fmt(whole_without.get('coverage_pct'), 1)} %), median {fmt(whole_with.get('time_to_home_median_s'), 0)} s against "
-                   f"{fmt(whole_without.get('time_to_home_median_s'), 0)} s; J1 peaks at {fmt(max(j1_peak) if j1_peak else None, 1)}°/s. "
+                   f"against {fmt(without.get('coverage_pct'), 1)} % without - the difference is phase 0's knife edge (the same plan on the "
+                   f"same plant came out differently on 3 of 63 starts between runs), not J1 - and the routine without J1 covers "
+                   f"{fmt(whole_without.get('coverage_pct'), 1)} % of the whole grid; median {fmt(with_j1.get('time_to_home_median_s'), 0)} s "
+                   f"against {fmt(without.get('time_to_home_median_s'), 0)} s; J1 peaks at {fmt(max(j1_peak) if j1_peak else None, 1)}°/s. "
                    f"Along the −90 sweep (twin statics, 1° steps, five-bar at READY, all 36 hanging wrist poses) nothing touches itself or "
                    f"the belt - J1 moves the arm rigidly - and the arm sweeps y −0.43…+0.27 m, z 0.18…0.80 m; the rack's rails and the "
                    f"D435 are not in the twin. On the rack J1's first stall has no trusted reference: check it within 3.5° of the gravity "
@@ -503,10 +510,13 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                      f"{fmt(good.get('W3', {}).get('spread_deg'), 3)}° (W3 without 10:24) and {fmt(every.get('CLAW', {}).get('spread_deg'), 3)}° "
                      f"(the claw's closed stop); 10:24's early W3 stall sits {fmt(every.get('W3', {}).get('spread_deg'), 2)}° off. 0.5° leaves "
                      f"room for the real spread and refuses that home.")
+    wrist_title = ("The wrist phase homes every start it is handed; the coverage that is missing is the five-bar's." if not split["wrist_lost"]
+                   else f"The wrist phase homed {split['homed'] + split['belt']} of the {split['homed'] + split['belt'] + split['wrist_lost']} "
+                        f"starts it was handed; the rest of the missing coverage is the five-bar's.")
     findings = f"""
 <ol>
 {j1_text}
-<li><b>The wrist phase homes every start it is handed; the coverage that is missing is the five-bar's.</b> Over the nominal grid and the
+<li><b>{wrist_title}</b> Over the nominal grid and the
 five physical twins the recommended routine homed {split['homed']} starts cleanly and lost {sum(lost.values()) + split['belt']}:
 {split['wrist_lost']} in the wrist phase, and in phase 0 {phase0.get('tripped', 0)} J2/C1 runaway trips, {phase0.get('timeout', 0)}
 walk-home timeouts, {phase0.get('refused', 0)} C1 stalls on the claw jammed against the base that the witness refused (one wrist pose,
@@ -677,7 +687,8 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
     done = sum(1 for e in run if e.get("environment") == ruler.NOMINAL)
     from sim2real.sim.homing.routine_check import plan_jobs  # noqa: PLC0415
 
-    planned = sum(len(j["rows"]) for j in plan_jobs("light") if j["environment"] == ruler.NOMINAL)
+    planned = (sum(len(j["rows"]) for j in plan_jobs("light") if j["environment"] == ruler.NOMINAL)
+               + sum(len(j["rows"]) for j in plan_jobs("j1_ready") if j["environment"] == ruler.NOMINAL))
     calib = "".join(f"<li><b>{esc(env)}</b>: {esc(c.get('outcome'))}; gap error vs hidden (′): {esc(c.get('gap_error_arcmin'))}</li>"
                     for env, c in calibrations.items())
     wandb_line = (f"<p>W&amp;B: <a href='{esc(url_safe(wb.get('project_url', '')))}'>project {esc(wb.get('project', 'Homing · bam_fb_v2'))}</a>"
@@ -687,9 +698,11 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              f"<title>Homing routine bam_fb_v2</title><style>{CSS}</style></head><body>",
              "<h1>A better homing routine for the full arm (bam_fb_v2) — sim only</h1>",
              f"<p class='verdict'>{notes.get('verdict', '')}</p><p class='sub'>{notes.get('qualification', '')}</p>",
-             f"<p class='sub'>Episodes run: {done} of {planned} planned on the nominal twin + {len(run) - done} in the perturbed twins "
+             f"<p class='sub'>Episodes run: {done} of {planned} planned on the nominal twin (the J1 rows' {sum(1 for e in run if e.get('homes_j1') and e.get('environment') == ruler.NOMINAL)} "
+             f"on READY's cells included) + {len(run) - done} in the perturbed twins "
              f"(+ {len(episodes) - len(run)} derived or folded-wrist rows). {grid_scope(run)} "
-             f"Ruler frozen before any routine ran (<code>sim2real.sim.homing.routine_ruler</code>, {esc(notes.get('ruler_commit', ''))}). "
+             + ("J1's rows (V1+J1, park_first+J1) ran READY's 36 cells and every twin's 6 READY cells. " if any(e.get("homes_j1") for e in run) else "")
+             + f"Ruler frozen before any routine ran (<code>sim2real.sim.homing.routine_ruler</code>, {esc(notes.get('ruler_commit', ''))}). "
              f"Twin: MuJoCo, bam_fb_v2 @ cad-exporter 09374d7, the rack's belt as a contact.</p>", wandb_line,
              video(media, notes.get("hero", ""), notes.get("hero_caption", "")),
              "<h2>What good looks like (frozen first)</h2>", targets_table(),
