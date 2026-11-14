@@ -130,9 +130,10 @@ def scoreboard(cards: dict, environment: str = ruler.NOMINAL) -> str:
     return f"<div class='scroll'><table>{head}{''.join(body)}</table></div>"
 
 
-def perturbed(cards: dict) -> str:
-    environments = [e for e in ruler.ENVIRONMENTS if e != ruler.NOMINAL]
-    routines = sorted({k.split(" | ")[0] for k in cards if k.split(" | ")[1] != ruler.NOMINAL})
+def perturbed(cards: dict, suffix: str = "") -> str:
+    environments = [e + suffix for e in ruler.ENVIRONMENTS if e != ruler.NOMINAL or suffix]
+    environments = [e for e in environments if any(k.endswith(f" | {e}") for k in cards)]
+    routines = sorted({k.split(" | ")[0] for k in cards if k.split(" | ")[1] in environments})
     head = "<tr><th>routine</th>" + "".join(f"<th>{esc(e)}</th>" for e in environments) + "</tr>"
     body = []
     for routine in routines:
@@ -147,7 +148,7 @@ def perturbed(cards: dict) -> str:
                          f"<span class='{'fail' if sw else 'sub'}'>sw {sw}</span> · <span class='sub'>p95 {fmt(card['zero_error_p95_deg'], 3)}°"
                          f"</span><br><span class='sub'>{card['feasible']} cells · t {fmt(card['time_to_home_median_s'], 0)} s</span></td>")
         body.append(f"<tr><td><b>{esc(routine)}</b></td>{''.join(cells)}</tr>")
-    why = "".join(f"<li><b>{esc(k)}</b>: {esc(v['why'])}</li>" for k, v in ruler.ENVIRONMENTS.items())
+    why = "".join(f"<li><b>{esc(k)}</b>: {esc(v['why'])}</li>" for k, v in ruler.ENVIRONMENTS.items()) if not suffix else ""
     return (f"<div class='scroll'><table>{head}{''.join(body)}</table></div><p class='sub'>Each cell: coverage, silent wrong, zero p95, "
             f"feasible cells, median time.</p><ul class='sub'>{why}</ul>")
 
@@ -223,9 +224,12 @@ def overall(cards: dict) -> list[tuple[str, dict]]:
         nominal = mine.get(ruler.NOMINAL)
         if nominal is None:
             continue
-        perturbed = [c["coverage_pct"] for e, c in mine.items() if e != ruler.NOMINAL and c["coverage_pct"] is not None]
+        # the folded-wrist cells (amendment 3) count for safety - a silent wrong there is one - but not in a twin's coverage
+        perturbed = [c["coverage_pct"] for e, c in mine.items() if e != ruler.NOMINAL and not e.endswith(" · folded wrist")
+                     and c["coverage_pct"] is not None]
         summary = {"silent_wrong_all": sum(c["silent_wrong"] for c in mine.values()), "coverage": nominal["coverage_pct"],
-                   "worst_perturbed": min(perturbed) if perturbed else None, "environments": len(mine),
+                   "worst_perturbed": min(perturbed) if perturbed else None,
+                   "environments": sum(1 for e in mine if not e.endswith(" · folded wrist")),
                    "zero_p95": nominal["zero_error_p95_deg"], "time": nominal["time_to_home_median_s"], "card": nominal}
         out.append((routine, summary))
     out.sort(key=lambda rs: (rs[1]["silent_wrong_all"], -(rs[1]["coverage"] or 0.0),
@@ -410,7 +414,10 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "<h2>Scoreboard, nominal twin</h2>", scoreboard(cards),
              "<h2>Coverage maps (nominal)</h2><p class='sub'>Rows W1, columns W2 (°), one panel per five-bar pose; hover a cell for its start "
              "and outcome.</p>", maps,
-             "<h2>Perturbed twins (every 6th cell)</h2>", perturbed(cards),
+             "<h2>Perturbed twins (one W1 / W2 diagonal per five-bar pose, 24 cells)</h2>", perturbed(cards),
+             "<h3>The folded-wrist cells (W2 at −150°), run before amendment 3</h3><p class='sub'>The first perturbed subset was every 6th "
+             "cell - on this grid every cell with W2 at −150°, the folded wrist. Kept as a stress test, never mixed into the cards above.</p>",
+             perturbed(cards, " · folded wrist"),
              f"<h3>The stored tables (identify_backlash once per twin)</h3><ul class='sub'>{calib}</ul>",
              "<h2>What we found</h2>", notes.get("findings", ""),
              "<h2>Videos</h2>", "".join(video(media, name, caption) for name, caption in notes.get("videos", [])),
