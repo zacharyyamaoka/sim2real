@@ -189,7 +189,10 @@ def build_report(results: dict, *, entity: str = ENTITY, project: str = PROJECT)
             "every zero within 0.1° and nothing pressing the belt after lift-off; zero error p95 ≤ 0.1°; repeatability ≤ 0.02°; median time "
             "≤ 60 s (p95 ≤ 90 s); peak speed ≤ 0.8 × each joint's ceiling. Rank by silent wrong, then coverage, then zero error, then time. "
             "The grid: 4 five-bar poses × W1 × W2 (6 × 6) with W3, the claw and J1 balanced over it - where the arm was when the power went; "
-            "the twin lets it fall onto the belt first. Sim only (MuJoCo, bam_fb_v2 bundle @ cad-exporter 09374d7).")),
+            "the twin lets it fall onto the belt first. Sim only (MuJoCo, bam_fb_v2 bundle @ cad-exporter 09374d7). Runs named "
+            "'· witness 0.5° (stall-calibrated)', '+table' (where not run) and 'V1…, park_first on a W1 refusal' are derived exactly from "
+            "the runs of the same motion: a witness and a stored table only read a run's stalls, and V1 and park_first command the same "
+            "up to W1's first stall. **Recommended: V1+table, park_first on a W1 refusal, witness 0.5°.**")),
         wr.PanelGrid(hide_run_sets=False, runsets=[nominal],
                      panels=[wr.ParallelCoordinatesPlot(title="Every routine against every target (nominal twin)", columns=columns,
                                                         layout=L(x=0, y=0, w=24, h=10)),
