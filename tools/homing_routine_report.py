@@ -772,7 +772,18 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
                   "gripper on the forearm, a folded wrist), do not assign it - carry on with park_first's path (W1 back 135°, W2, W1 again, "
                   "W3). " if "on a W1 refusal" in base else "")
                + f"The stored table corrects each zero for its gap and wind-up. <code>python -m sim2real.sim.homing.fullarm_routine "
-               f"--out plan.json</code> writes both paths and the branch rule as JSON.</p>")
+               f"--out plan.json</code> writes both paths and the branch rule as JSON.</p>"
+               + ("<p><b>J1 on the rack runs this home itself:</b> <code>python -m sim2real.sim.homing.j1_rack</code> (in the deployment venv, "
+                  "~/bam_ws-armhold/src/dev/bam_rack_twin; <code>--dry-run</code> reads the files and opens nothing, <code>--twin</code> runs the "
+                  "same loop on a stand-in J1, <code>--allow-motion --out</code> under powered_launch is the real run). It sends "
+                  "<code>j1_home</code>'s two steps - the bytes the twin ran, pinned equal by a test - in one process over fullarm_stops' bus "
+                  "(the fast take-over from arm-hold, every HeldBus guard), J1's gravity fed forward at its joint angle only in a frame it can "
+                  "trust (none after a power-up until the stall defines it), walks J1 back to its start when the seek is refused, and writes "
+                  "J1's zero only through <code>zero_writer</code> (whose commit is <code>homed_history.write_latest</code>): a stall within "
+                  "0.1° of the map confirms it, a sub-turn shift is written, whole rotor turns only after a power-up, never off the stop's "
+                  "rotor phase (0.5° of the 05:41Z / 05:56Z stalls). PID tuna's measured-mass gravity (bam_fb_v2_masses_2026-11-14.json, on "
+                  "bam_ws main) is not wired into arm-hold / fullarm_stops yet, so J1's feed-forward stays j1_gains' READY curve until it is.</p>"
+                  if "+J1" in base else ""))
     decisions = """<ul>
 <li><b>Decided for you</b> (each a default in code; undo in one line):
  <ul><li>J1 homes as the rack homed it - one 11 N·m seek to its −89.97° stop on the rack's j1_gains, done on robot_msgs'

@@ -807,3 +807,22 @@ def test_a_filmed_j1_home_reports_where_j1_went_from_its_seek_on():
     assert path == {"seek_from_deg": 5.0, "lowest_deg": -89.97, "highest_after_return_deg": -12.4, "peak_effort_nm": 10.2, "seek_t_s": 1.0,
                     "back_t_s": 3.0}
     assert j1_path({**trace, "step": ["phase 0"] * 6}) is None
+
+
+def test_the_rack_entry_point_runs_the_twins_j1_steps_byte_for_byte(plans):
+    """j1_rack sends j1_home_sequence's steps; the twin's J1 rows plan the same J1 commands, done-whens, defines, timeouts and names (each twin
+    step also holds the other six joints, which on the rack the bus holds), under the same sequence guard - one J1 home, two runners."""
+    from sim2real.sim.homing.fullarm_plant import J1
+    from sim2real.sim.homing.j1_home import J1_HOME_STEPS, j1_home_sequence
+
+    twin = plans["zach_v1+J1 @ READY"]["sequences"][1]
+    steps = {s.name: s for s in twin.steps if s.name in J1_HOME_STEPS}
+    seek_ff = next(c for c in steps[J1_HOME_STEPS[0]].commands if c.joint == J1).feedforward_effort
+    stop = steps[J1_HOME_STEPS[0]].define_position[J1]
+    rack = j1_home_sequence(stop, feedforward_nm=seek_ff)
+    assert rack.max_speed == twin.max_speed
+    for mine in rack.steps:
+        theirs = steps[mine.name]
+        assert [c.to_dict() for c in mine.commands] == [c.to_dict() for c in theirs.commands if c.joint == J1]
+        assert [d.to_dict() for d in mine.done_when] == [d.to_dict() for d in theirs.done_when]
+        assert dict(mine.define_position) == dict(theirs.define_position) and mine.timeout == theirs.timeout
