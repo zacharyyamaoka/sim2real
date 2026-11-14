@@ -448,3 +448,32 @@ def test_the_witness_calibrated_on_the_racks_1124_home_accepts_its_own_stalls_an
             side = +1 if joint in ("revolute_11", "revolute_17") else -1
             assert abs(math.degrees(witness_error(prior, joint, side, stall))) < 0.01, joint
     assert abs(math.degrees(witness_error(prior, W3, +1, 4.5906))) > 8.0  # 10:24's early stall
+
+
+# ---------------------------------------------------------------------------------------------------------------- W&B records (no network)
+
+
+def test_the_wandb_records_are_one_run_per_routine_and_environment_with_the_map_and_the_starts(tmp_path, monkeypatch):
+    from sim2real.tracking import homing_fullarm as hf
+
+    monkeypatch.setattr(hf, "MEDIA", tmp_path)
+    cell = ruler.grid_cells()[22]
+    episodes = []
+    for row in ("park_first+witness @ READY", "zach_v1 @ READY"):
+        for environment in ("nominal", "B2"):
+            r = report(procedure=row, environment=environment, start=cell["name"])
+            r.update({"row": row, "cell": cell["cell"], "key": f"{row} | {environment} | {cell['name']}", "outcome_class": "homed", "covered": True})
+            episodes.append(r)
+    episodes.append({"refused_start": "self-contact", "procedure": "zach_v1 @ READY", "row": "zach_v1 @ READY", "environment": "nominal",
+                     "cell": ruler.grid_cells()[0]["cell"], "start": ruler.grid_cells()[0]["name"], "key": "x", "outcome_class": "infeasible"})
+    results = {"cards": ruler.score(episodes), "episodes": episodes, "environments": {k: v["why"] for k, v in ruler.ENVIRONMENTS.items()},
+               "plant": {}, "ruler": "test", "targets": {}, "sim2real_sha": "abc", "bam_ws_sha": "def", "bundle": "b"}
+    batch = hf.records(results)
+    assert len(batch) == 4
+    assert len({b["id"] for b in batch}) == 4
+    for b in batch:
+        assert all(len(t.encode()) <= 64 for t in b["tags"])
+        assert "coverage_pct" in b["summary"] and "target/silent_wrong" in b["summary"]
+        assert Path(b["images"]["coverage_map"]).is_file()
+        assert b["tables"]["starts"] and b["tables"]["starts"][0]["W1_deg"] == cell["wrist_deg"][0]
+    assert hf.records(results)[0]["id"] == batch[0]["id"]  # the same numbers map to the same run

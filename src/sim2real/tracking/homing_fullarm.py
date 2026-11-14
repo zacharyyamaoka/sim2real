@@ -27,12 +27,13 @@ import sys
 from pathlib import Path
 
 from .homing import _tag
-from .wandb_log import ENTITY, WANDB_DIR, _clean, _table_rows, browser_url, retire, run_id
+from .wandb_log import ENTITY, WANDB_DIR, _clean, _save_report, _table_rows, browser_url, retire, run_id
 
 PROJECT = "Homing · bam_fb_v2"
 REPORT_TITLE = "Homing · bam_fb_v2 — routines"
 DATA_RECORDER_SRC = Path("/home/bam/data_recorder/src")
 MEDIA = Path.home() / ".cache" / "sim2real" / "homing_routine" / "wandb_media"
+REGISTRY = Path(__file__).resolve().parent / "homing_fullarm_views.json"  # the report's URL, so a rebuild updates it in place
 STARTS_COLUMNS = ("start", "five_bar", "W1_deg", "W2_deg", "W3_deg", "claw_deg", "J1_deg", "outcome", "covered", "time_s",
                   "zero_J2_deg", "zero_C1_deg", "zero_W1_deg", "zero_W2_deg", "zero_W3_deg", "zero_CLAW_deg", "belt_drag_s",
                   "belt_after_liftoff_ticks", "self_contact_ticks", "witness_deg", "detail")
@@ -209,10 +210,11 @@ def build_report(results: dict, *, entity: str = ENTITY, project: str = PROJECT)
                                         groupby_aggfunc="mean", groupby_rangefunc="minmax", orientation="v", max_bars_to_show=20,
                                         layout=L(x=0, y=10, w=24, h=9))]),
     ]
-    report = wr.Report(entity=entity, project=project, title=REPORT_TITLE,
-                       description="The full arm's homing routines, scored on the twin by the frozen ruler (sim only).", blocks=blocks)
-    report.save()
-    return browser_url(report.url)
+    registry = json.loads(REGISTRY.read_text()) if REGISTRY.is_file() else {}
+    url = _save_report(wr, entity, project, registry.get("report"), REPORT_TITLE,
+                       "The full arm's homing routines, scored on the twin by the frozen ruler (sim only).", blocks)
+    REGISTRY.write_text(json.dumps({**registry, "report": url}, indent=1) + "\n")
+    return url
 
 
 def log(results: dict, *, replays: dict | None = None, report: bool = True) -> dict:
