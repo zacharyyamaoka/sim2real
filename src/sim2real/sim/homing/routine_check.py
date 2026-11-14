@@ -334,6 +334,9 @@ def partition(episodes: list[dict]) -> list[dict]:
         subset_only = environment != ruler.NOMINAL or e.get("row", "").removesuffix(TIGHT_SUFFIX) in SUBSET_ROWS
         if subset_only and e.get("start") not in balanced and not str(environment).endswith(FOLDED):
             e = {**e, "environment": f"{environment}{FOLDED}"}
+        # the class as the ruler reads it now (amendment 4 relabelled step timeouts), not as the episode was stamped when it ran
+        e = {**e, "outcome_class": ruler.outcome_class(e)}
+        e["covered"] = ruler.covered(e) if "refused_start" not in e else False
         out.append(e)
     return out
 

@@ -35,7 +35,7 @@ INK, MUTED, SURFACE, HAIR = "#0b0b0b", "#5f5e5a", "#fcfcfb", "#e1e0d9"
 def display_class(report: dict | None) -> str:
     if report is None:
         return "missing"
-    cls = report.get("outcome_class") or ruler.outcome_class(report)
+    cls = ruler.outcome_class(report)
     if cls == "homed" and not ruler.clean(report):
         return "homed_belt"
     return cls
