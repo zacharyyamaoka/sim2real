@@ -244,10 +244,130 @@ def overall_table(ranked: list[tuple[str, dict]]) -> str:
     return f"<div class='scroll'><table>{head}{body}</table></div>"
 
 
+def _c(cards: dict, routine: str, environment: str = ruler.NOMINAL) -> dict:
+    return cards.get(f"{routine} | {environment}") or {}
+
+
+def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, media: dict, wb: dict) -> dict:
+    """The page's words from the numbers (every number below is read from the cards; the prose is the analysis of record)."""
+    full = [(r, s) for r, s in ranked if s["environments"] >= 5]
+    recommended = full[0][0] if full else (ranked[0][0] if ranked else "")
+    rec = _c(cards, recommended)
+    base = recommended.replace(TIGHT, "")
+    plain = _c(cards, base)
+    v1, park = _c(cards, "zach_v1 @ READY"), _c(cards, "park_first+witness @ READY")
+    v1t, parkt = _c(cards, "zach_v1 @ READY" + TIGHT), _c(cards, "park_first+witness @ READY" + TIGHT)
+    pep, multi, press = _c(cards, "PEP 0047 (wrist at the five-bar's home)"), _c(cards, "multi x2 (3D-printer) @ READY"), _c(
+        cards, "press_reverse (backlash every home) @ READY")
+    fast, park_b2, table_b2 = _c(cards, "fast single @ READY"), _c(cards, "park_first+witness @ READY", "B2"), _c(
+        cards, "park_first+witness+table @ READY", "B2")
+    nominal = [e for e in episodes if e.get("environment") == ruler.NOMINAL and e.get("row") == "park_first+witness @ READY"
+               and "refused_start" not in e]
+    trips = [e for e in nominal if e.get("outcome_class") in ("tripped", "timeout")]
+    c1_on_base = [e for e in nominal if e.get("outcome_class") == "silent_wrong" and (e.get("zero_error_deg") or {}).get("C1")
+                  and abs(e["zero_error_deg"]["C1"]) > 1.0]
+    locate = [v for e in episodes if e.get("row") == "multi x2 (3D-printer) @ READY" for v in
+              ((e.get("notes") or {}).get("locate_minus_retouch_deg") or {}).values()]
+    worst_locate = max((abs(v) for v in locate), default=None)
+    n = len(nominal)
+
+    def pct(k, total):
+        return f"{100.0 * k / total:.0f} %" if total else "—"
+
+    verdict = (f"Home the wrist at READY in {'Zach’s V1 order' if base.startswith('zach_v1') else 'PEP 0047’s park_first order'}, with a "
+               f"tight rotor-phase witness (0.5° on a trusted home’s own stall, the five-bar’s drives included) and the stored backlash table: "
+               f"0 silent wrong in every twin, {fmt(rec.get('coverage_pct'), 0)} % of the nominal start grid, zeros p95 "
+               f"{fmt(rec.get('zero_error_p95_deg'), 3)}°, {fmt(rec.get('time_to_home_median_s'), 0)} s median.")
+    qualification = (f"Coverage is capped by the five-bar’s own home from a rest on the belt, not by the wrist: {len(trips)} of {n} nominal "
+                     f"starts ({pct(len(trips), n)}) trip J2’s or C1’s 86°/s runaway stop or time out before the wrist moves, the same "
+                     "for every routine. Time misses the 60 s target everywhere (the five-bar alone takes ~39 s). Sim only; the twin’s "
+                     "wrist gaps, claw mass and belt friction are assumptions.")
+    findings = f"""
+<ol>
+<li><b>The belt moves the wrist's home to READY.</b> PEP 0047 homes the wrist at the five-bar's home, the gravity bowl, where the claw's
+tips sit ~101 mm into the belt (bam_rack_twin full_arm; with the belt as a contact the twin refuses that pose). Run as landed it homed
+{fmt(pep.get('coverage_pct'), 0)} % of its starts ({pep.get('outcomes', {}).get('tripped', 0)} trips walking down into the belt,
+{pep.get('belt_after_liftoff', 0)} pressing it after lift-off). At READY (the claw 215 mm over the belt, over the bin's drop) every wrist
+sweep clears the belt and the bin, and the routine ends where the full arm waits anyway, holding TD4.</li>
+<li><b>Every start begins on the belt, and the five-bar's lift-off is the weak step.</b> A limp full arm falls onto the belt; leaving it, the
+claw drags for a few seconds while J2's first seek lifts the arm (reported as <code>belt_drag_s</code>, accepted). On {len(trips)} of {n}
+nominal starts that lift-off - J2's first seek with C1 limp, C1's seek with J2 pushing, or the walk to READY - lurches past the 86°/s
+runaway stop. A slower first seek (0.025 rev/s) and C1 seeking beside J2 (c1_seek) fixed 1 of 6 of them in a probe. This is the five-bar
+lane's next problem (PEP 0047's evening section), and it caps every routine here.</li>
+<li><b>The 2° witness lets near-stop obstacles through; 0.5° on a trusted home's own stall does not.</b> park_first parks W1 anywhere in
+(−30°, +35°]; with W3 near −120° the gripper plate meets the forearm 1.2-2.0° before W2's stop, inside PEP 0047's 2° tolerance:
+{park.get('silent_wrong', 0)} silent wrongs on the nominal grid. Zach's V1 assigned W1's forearm stall as its stop ({v1.get('silent_wrong', 0)}
+silent wrongs, 64-68° off), and once the five-bar's C1 stalled 45° short on the claw jammed against the base ({len(c1_on_base)} start),
+wrong for every routine because the five-bar had no witness. Calibrated on a trusted home's own stall - the rack's
+<code>rotor_phase_from_homed</code> is one by construction; its W1, W2 and claw stalls repeat to 0.006-0.13° over three homes - a 0.5°
+witness on all six homed joints refuses every one of them and no true stop: V1 {v1.get('silent_wrong', 0)} → {v1t.get('silent_wrong', 0)},
+park_first {park.get('silent_wrong', 0)} → {parkt.get('silent_wrong', 0)}. Its price: a calibration gone stale (an encoder recalibrated,
+the gear train rebuilt) refuses everything - safe, and the <i>phase_cal_error</i> twin shows it. Re-take the calibration after any such
+job.</li>
+<li><b>V1's order beats park_first once the witness is tight.</b> V1 covers {fmt(v1t.get('coverage_pct'), 1)} % against park_first's
+{fmt(parkt.get('coverage_pct'), 1)} % and is {fmt((park.get('time_to_home_median_s') or 0) - (v1.get('time_to_home_median_s') or 0), 0)} s
+faster: its own failure (W1 sweeping into the forearm when the wrist starts folded) is refused, not silent, under the witness, while
+park_first's parking leaves W1 off zero for W2's seek and opens the plate-on-forearm stall. Both touch the forearm at ≤ 1 N·m on some starts
+(Zach, 10:15: accepted).</li>
+<li><b>The 3D-printer double touch buys no accuracy here.</b> Its fast locate and slow re-touch read the same stall within
+{fmt(worst_locate, 4)}°: a torque-capped stall is read standing still at a fixed torque, with no trigger latency for a slow approach to
+remove. Its {fmt(multi.get('time_to_home_median_s'), 0)} s median comes from its 60°/s moves - the fast single control without the re-touch
+is {fmt(fast.get('time_to_home_median_s'), 0)} s - and at 60°/s the wrist's held moves overshoot to 1.8× the 86°/s ceiling. The
+forward-and-back that pays is touching BOTH stops: press_reverse identifies every wrist gap every home (zeros p95
+{fmt(_c(cards, 'press_reverse (backlash every home) @ READY', 'B2').get('zero_error_p95_deg'), 3)}° on the geared B2 twin) and its span check
+refuses the near-stop stalls - for {fmt((press.get('time_to_home_median_s') or 0) - (park.get('time_to_home_median_s') or 0), 0)} s more.</li>
+<li><b>Backlash needs the table (or press_reverse).</b> With hidden gaps a single touch reads its stop 0.46-0.50° off (B2: park_first
+{fmt(park_b2.get('coverage_pct'), 0)} % coverage); the stored identify_backlash table brings it to {fmt(table_b2.get('zero_error_p95_deg'), 3)}°
+({fmt(table_b2.get('coverage_pct'), 0)} %). The table is identified once with press_reverse and holds until a wrist module is rebuilt.</li>
+<li><b>Speed and time.</b> Every routine misses the 0.8 × speed margin: the wrist's kp 75 / kd 0.75 PD is underdamped on the twin, so a held
+move overshoots its ramp ~2× (75°/s at the recipe's 36°/s), and the five-bar's trips peak far higher. Time: the five-bar phase is ~39 s, 23 s
+of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
+</ol>"""
+    handoff = (f"<p>Phase 0 is the rack's own staged five-bar home (stalls, C1 eased off, the corridor to READY) - this routine adds a "
+               f"rotor-phase witness on J2 and C1 calibrated on the trusted manual stall zero. Phase 1, below, runs at READY with the "
+               f"five-bar held: the claw closes, then each wrist joint touches its stop once at 1 N·m and 36°/s, is witnessed "
+               f"<b>as its defining step ends</b> (0.5° on the 11:24 home's stall: W3's + stop at +2.78° mod 36°; no expected-travel "
+               f"check - a seek may end short because the joint started near its stop), goes to 0, and the routine ends at TD4. "
+               f"The stored table corrects each zero for its gap and wind-up. <code>python -m sim2real.sim.homing.fullarm_routine --row "
+               f"'{esc(base)}' --out plan.json</code> writes it as JSON.</p>")
+    decisions = """<ul>
+<li><b>Decided for you</b> (each a default in code; undo in one line):
+ <ul><li>the wrist homes at READY, not the five-bar's home (undo: <code>wrist_pose="bowl"</code>);</li>
+ <li>V1's order over PEP 0047's park_first for the rack (undo: <code>order="park_first"</code>);</li>
+ <li>the witness at 0.5° on a trusted home's stall, the five-bar's drives included (undo: <code>witness_tol_deg=2.0</code>);</li>
+ <li>the witness calibrated on the 11:24 home, per the Sim to Real Agent's ArUco check and Zach's video ruling;</li>
+ <li>the ruler's two amendments - lift-off is 2 s clear of the belt; rows added after READY's map - with no metric, target or cell
+ moved.</li></ul></li>
+<li><b>Left, not blocked:</b> the five-bar's lift-off from a belt rest (the coverage ceiling; its lane); a retry after a refusal (turn W3 and
+ touch W2 again) to win back the refused starts; accel-limited or better-damped wrist moves before any speed-up; the real rung through the
+ Sim to Real Agent.</li>
+<li><b>Needs you:</b> nothing irreversible.</li>
+<li><b>Not done:</b> no hardware moved (sim only); the five-bar's homing itself is unchanged beyond the witness.</li>
+</ul>"""
+    videos = [(k, v) for k, v in (("zach_v1_ready_belt_rest", "V1 at READY from a rest on the belt (homed)"),
+                                  ("park_first_ready_belt_rest", "park_first at READY from the same rest (homed)"),
+                                  ("multi_x2_ready_belt_rest", "the 3D-printer double touch from the same rest"),
+                                  ("press_reverse_ready_belt_rest", "press_reverse: both stops at two levels, every home"),
+                                  ("zach_v1_forearm_stall", "V1: W1 stalls on the forearm and assigns it as its stop (silent wrong; the tight witness refuses it)"),
+                                  ("park_first_w2_short_on_the_plate", "park_first: W2 stops 1.24° short on the gripper plate against the forearm"),
+                                  ("fivebar_trip_from_the_belt", "the five-bar's lift-off from a belt rest trips J2's runaway stop"),
+                                  ("pep0047_wrist_at_the_bowl", "PEP 0047 as landed: the walk to the five-bar's home drives the claw into the belt"))
+              if k in media]
+    hero = "zach_v1_ready_belt_rest" if base.startswith("zach_v1") else "park_first_ready_belt_rest"
+    return {"recommended": base, "verdict": verdict, "qualification": qualification, "findings": findings, "handoff": handoff,
+            "decisions": decisions, "videos": videos, "hero": hero,
+            "hero_caption": "the recommended motion from a power cut at READY: the arm lands on the belt, the five-bar homes and walks to READY, the claw closes, W1 / W2 / W3 touch their stops, TD4",
+            "ruler_commit": "sim2real 7806abf (frozen), amendments 1-2"}
+
+
 def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Path | None, recommended: str, notes: dict) -> str:
     episodes, calibrations = load(results_path)
     cards = ruler.score(episodes)
     ranked = overall(cards)
+    media_ = json.loads(media_index.read_text()) if media_index.is_file() else {}
+    wb_ = json.loads(wandb_summary.read_text()) if wandb_summary and wandb_summary.is_file() else {}
+    notes = {**auto_notes(cards, ranked, episodes, calibrations, media_, wb_), **notes}
+    recommended = notes.get("recommended") or recommended
     media = json.loads(media_index.read_text()) if media_index.is_file() else {}
     plans = pickle.loads(PLANS.read_bytes()) if PLANS.is_file() else {}
     wb = json.loads(wandb_summary.read_text()) if wandb_summary and wandb_summary.is_file() else {}

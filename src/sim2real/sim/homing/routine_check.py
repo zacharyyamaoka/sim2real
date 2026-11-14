@@ -318,6 +318,58 @@ def stall_witness(prior, evidence) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------------------------------------------- the stored table, derived
+
+# WHY derived too (ruler amendment 2): a stored table, like a witness, only reads a run's stalls - fit() adds each defining stall's
+# motor_past_link (side x (gap / 2 + compliance x torque)) to its zero - so "<order> + table" moves exactly as "<order>". A table row is
+# derived from its plain row wherever it was not run (V1 + table on the nominal grid; both orders in the twins whose gaps are B0, with the
+# nominal twin's table); routine_check's own "+table" episodes, where they exist, check the derivation (test_homing_routine).
+TABLE_OF = {"zach_v1 @ READY": "zach_v1+table @ READY", "park_first+witness @ READY": "park_first+witness+table @ READY"}
+SEEK_SIDE_ROLE = {"W1": +1, "W2": -1, "W3": +1, "CLAW": -1}
+STALL_TORQUE_NM = {"W1": 1.0, "W2": 1.0, "W3": 1.0, "CLAW": 0.3}  # a stall is read saturated at its seek's cap (Stall's lead > cap / kp)
+
+
+def with_table(episode: dict, table: list[dict]) -> dict:
+    """``episode`` (a plain single-touch run) re-zeroed with ``table`` (table_to_json rows): each scored wrist / claw zero moves by its
+    defining stall's motor_past_link."""
+    from .fullarm_plant import ROLE  # noqa: PLC0415
+
+    zero = dict(episode["zero_error_deg"])
+    gaps = dict(episode.get("gap_identified_deg") or {})
+    for row in table:
+        role = ROLE.get(row["joint"])
+        if role not in SEEK_SIDE_ROLE or zero.get(role) is None:
+            continue
+        past = SEEK_SIDE_ROLE[role] * (0.5 * row["gap_rad"] + row["compliance_rad_per_nm"] * STALL_TORQUE_NM[role])
+        zero[role] = zero[role] + math.degrees(past)
+    out = {**episode, "zero_error_deg": zero, "gap_identified_deg": gaps}
+    out["outcome_class"] = ruler.outcome_class(out)
+    out["covered"] = ruler.covered(out)
+    return out
+
+
+def table_derived(episodes: list[dict], calibrations: dict) -> list[dict]:
+    """The "+table" rows wherever only their plain row ran (module comment above)."""
+    have = {(e.get("row"), e.get("environment"), e.get("start")) for e in episodes}
+    out = []
+    for episode in episodes:
+        target = TABLE_OF.get(episode.get("row"))
+        if target is None or "error" in episode or (target, episode.get("environment"), episode.get("start")) in have:
+            continue
+        environment = episode["environment"]
+        source = environment if (calibrations.get(environment) or {}).get("table") and environment in TABLE_ENVIRONMENTS else ruler.NOMINAL
+        table = (calibrations.get(source) or {}).get("table")
+        if not table:
+            continue
+        derived = with_table(episode, table) if "refused_start" not in episode and episode.get("finished") else dict(episode)
+        derived.update({"row": target, "procedure": target, "key": episode["key"].replace(episode["row"], target, 1),
+                        "derived_from": episode["row"], "table_from": source})
+        derived["outcome_class"] = ruler.outcome_class(derived)
+        derived["covered"] = ruler.covered(derived) if "refused_start" not in derived else False
+        out.append(derived)
+    return out
+
+
 # ---------------------------------------------------------------------------------------------------------------- the tight witness
 
 TIGHT_WITNESS_DEG = 0.5
@@ -466,7 +518,8 @@ def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
 
     from .mujoco_plant import BAM_WS_SRC  # noqa: PLC0415
 
-    clean = [r for r in reports if "error" not in r]
+    clean = [r for r in reports if "error" not in r and not r.get("derived_from")]
+    clean = clean + table_derived(clean, calibrations)
     if any(c.get("stall_witness_deg") for c in calibrations.values()):
         clean = clean + tight_witness(clean, calibrations)
     return {"schema": "sim2real.homing_routine/1", "ruler": "sim2real.sim.homing.routine_ruler (frozen 2026-11-13, amendment 1)",

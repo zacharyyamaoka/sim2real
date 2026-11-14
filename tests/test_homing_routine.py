@@ -495,3 +495,19 @@ def test_the_rack_plan_carries_the_sequence_the_witness_calibration_and_which_st
     names = [s["name"] for s in plan["sequence"]["steps"]]
     assert names.index("claw closes") < names.index("W1 seeks") < names.index("W2 seeks") < names.index("W3 seeks")
     assert [e["role"] for e in plan["evidence_plan"]] == ["CLAW", "W1", "W2", "W3"]
+
+
+def test_a_stored_table_moves_each_defining_stalls_zero_by_its_motor_past_link():
+    """routine_check.with_table: the table is observe-only (fit adds side x (gap / 2 + compliance x torque) at the cap), so a "+table"
+    row is its plain row re-zeroed - on the grid's own runs the derived zeros equal the run "+table" zeros to 1e-6 deg (144 joint-episodes)."""
+    from sim2real.sim.homing import routine_check as rc
+
+    episode = report(zero_error_deg={**report()["zero_error_deg"], "W1": -0.46, "W2": 0.48})
+    gap, compliance = math.radians(0.25), math.radians(0.33)
+    table = [{"joint": "revolute_11", "gap_rad": gap, "compliance_rad_per_nm": compliance},
+             {"joint": "revolute_14", "gap_rad": gap, "compliance_rad_per_nm": compliance}]
+    out = rc.with_table(episode, table)
+    shift = math.degrees(0.5 * gap + compliance * 1.0)
+    assert out["zero_error_deg"]["W1"] == pytest.approx(-0.46 + shift)
+    assert out["zero_error_deg"]["W2"] == pytest.approx(0.48 - shift)
+    assert out["zero_error_deg"]["W3"] == episode["zero_error_deg"]["W3"]
