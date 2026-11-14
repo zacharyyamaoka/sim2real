@@ -170,7 +170,7 @@ def push(batch: list[dict], *, entity: str = ENTITY, project: str = PROJECT) -> 
 def build_report(results: dict, *, entity: str = ENTITY, project: str = PROJECT) -> str:
     """The project's report: the runs table, parallel coordinates over the targets, coverage and time bars, the coverage maps."""
     import wandb_workspaces.reports.v2 as wr  # noqa: PLC0415
-    from wandb_workspaces.reports.v2 import expr  # noqa: PLC0415
+    from wandb_workspaces import expr  # noqa: PLC0415
 
     L = wr.Layout  # noqa: N806
 
