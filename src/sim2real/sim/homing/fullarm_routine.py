@@ -645,7 +645,26 @@ def rack_plan(row: str, homed: Path = RACK_HOMED_TRUSTED, *, witness_tol_deg: fl
     sequence = procedure.plan(prior, [None])
     stops = {ROLE[j]: {"upper_deg": math.degrees(prior.stops.q_rad(j, +1)), "lower_deg": math.degrees(prior.stops.q_rad(j, -1)),
                        "seek_side": int(prior.seek_side[j])} for j in (*WRIST, CLAW)}
-    return {"schema": "sim2real.homing_rack_plan/1", "row": row, "phase": "1 (claw + wrist at READY)",
+    j1 = {}
+    if getattr(procedure, "home_j1", False):
+        stops["J1"] = {"upper_deg": math.degrees(prior.stops.q_rad(J1, +1)), "lower_deg": math.degrees(prior.stops.q_rad(J1, -1)),
+                       "seek_side": J1_STOP_SIDE}
+        j1 = {"j1": {
+            "order": "after the five-bar's home at READY, before the claw: tilt by -55 deg, seek the -89.972 deg stop, back to 0 in two parts",
+            "side": "-1: the lower end swings away from the D435 (deployment.json can11 board -); both stops lift the hanging arm to horizontal",
+            "cap_nm": procedure.j1_cap_nm, "seek_speed_rev_s": J1_SEEK_SPEED / TAU, "return_speed_rev_s": J1_RETURN_SPEED / TAU,
+            "kp_nm_per_rad": J1_KP_NM_PER_RAD, "integrator": "off: PD + gravity feed-forward (Zach, 2026-11-13 night)",
+            "gravity_hold_nm_at_ready": {str(k): v for k, v in J1_GRAVITY_AT_READY_NM.items()},
+            "sizing": f"cap {procedure.j1_cap_nm:.1f} N.m - 1.15 x {J1_GRAVITY_WORST_NM} N.m (worst gravity on the sweep, every hanging wrist pose) "
+                      f"= {procedure.j1_cap_nm - 1.15 * J1_GRAVITY_WORST_NM:.2f} N.m > {J1_FRICTION_MAX_NM} N.m JMC breakaway: no stall short on friction",
+            "witness": {"first_home": "no trusted J1 stall yet: expected board reading = zero_board + sign x stop from the current J1 frame "
+                                      "(latest.json revolute_3, the gravity 'vertical' rest, +-3 deg level uncertainty) - accept within "
+                                      "3.5 deg and confirm with the ArUco CAD check; that stall's reading mod 36 is J1's reference after",
+                        "later_homes": f"wrap36(reading - the reference stall's reading), refuse past {witness_tol_deg} deg",
+                        "blind_spot": "the two stops are 179.95 deg apart = 5 rotor turns within 0.05 deg: the witness cannot tell them "
+                                      "apart, so a sign error or a seek the wrong way passes it - check the direction from the motion"}}}
+    return {"schema": "sim2real.homing_rack_plan/1", "row": row,
+            "phase": "1 (J1, then claw + wrist at READY)" if j1 else "1 (claw + wrist at READY)", **j1,
             "sequence": sequence.to_dict(), "evidence_plan": [{"step": step, "joint": joint, "role": ROLE[joint], "side": side, "use": use}
                                                               for step, joint, side, use in procedure.evidence_plan],
             "witness": {"tolerance_deg": witness_tol_deg, "rotor_phase_deg": {ROLE[j]: v for j, v in phases.items()},
@@ -655,17 +674,20 @@ def rack_plan(row: str, homed: Path = RACK_HOMED_TRUSTED, *, witness_tol_deg: fl
             "table": "apply the stored identify_backlash table (wrist B2 rows) in observe; none = B0 (zeros 0.46-0.50 deg off on a geared joint)"}
 
 
-RECOMMENDED = "V1+table, park_first on a W1 refusal @ READY"
+RECOMMENDED = "V1+table+J1, park_first on a W1 refusal @ READY"
+RECOMMENDED_NO_J1 = "V1+table, park_first on a W1 refusal @ READY"  # the routine before Zach's J1 ask (2026-11-13 night)
 
 
 def rack_plan_fallback(homed: Path = RACK_HOMED_TRUSTED, *, witness_tol_deg: float = RACK_WITNESS_TOL_DEG) -> dict:
     """The recommended routine for the rack: V1's order, and park_first's path when the witness refuses W1's first stall (routine_check's
     FALLBACK: the two share every step up to and including that seek). Both continuations, the branch rule, the witness, the stops."""
-    v1 = rack_plan("zach_v1+table @ READY", homed, witness_tol_deg=witness_tol_deg)
-    park = rack_plan("park_first+witness+table @ READY", homed, witness_tol_deg=witness_tol_deg)
-    shared = [s["name"] for s in v1["sequence"]["steps"]][:4]
-    if shared[-1] != "W1 seeks" or [s["name"] for s in park["sequence"]["steps"]][3] != "W1 park touch":
-        raise RuntimeError("V1's W1 seek and park_first's park touch are no longer the fourth step of their sequences")
+    v1 = rack_plan("zach_v1+table+J1 @ READY", homed, witness_tol_deg=witness_tol_deg)
+    park = rack_plan("park_first+witness+table+J1 @ READY", homed, witness_tol_deg=witness_tol_deg)
+    v1_names, park_names = [s["name"] for s in v1["sequence"]["steps"]], [s["name"] for s in park["sequence"]["steps"]]
+    at = v1_names.index("W1 seeks")
+    shared = v1_names[:at + 1]
+    if park_names[at] != "W1 park touch" or park_names[:at] != v1_names[:at]:
+        raise RuntimeError("V1's W1 seek and park_first's park touch no longer follow the same steps")
     return {**v1, "row": RECOMMENDED, "sequence_park_first": park["sequence"], "evidence_plan_park_first": park["evidence_plan"],
             "branch": {"after_step": "W1 seeks (V1) == W1 park touch (park_first): the same command and stall",
                        "rule": "witness W1's stall as that step ends: within tolerance -> carry on with V1's sequence ('W1 to 0', W2, W3, TD4); "

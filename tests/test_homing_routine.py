@@ -237,7 +237,7 @@ def test_two_plants_on_one_cached_rig_each_get_their_own_contacts_back():
 import os  # noqa: E402
 
 RECOMMENDED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
-                    "zach_v1 @ READY", "zach_v1+J1 @ READY")
+                    "zach_v1 @ READY", "zach_v1+J1 @ READY", "park_first+witness+J1 @ READY")
 slow = pytest.mark.skipif(not os.environ.get("SIM2REAL_SLOW"), reason="episode tests run with SIM2REAL_SLOW=1 (~2-5 min each)")
 
 
@@ -522,12 +522,16 @@ def test_a_stored_table_moves_each_defining_stalls_zero_by_its_motor_past_link()
     assert out["zero_error_deg"]["W3"] == episode["zero_error_deg"]["W3"]
 
 
-def test_v1_and_park_first_move_identically_until_w1s_first_stall(plans):
+@pytest.mark.parametrize("v1_row, park_row", [("zach_v1 @ READY", "park_first+witness @ READY"),
+                                               ("zach_v1+J1 @ READY", "park_first+witness+J1 @ READY")])
+def test_v1_and_park_first_move_identically_until_w1s_first_stall(plans, v1_row, park_row):
     """routine_check.FALLBACK's premise: up to and including W1's first seek (V1's 'W1 seeks', park_first's 'W1 park touch') the two
-    sequences command the same, so 'V1, park_first on a W1 refusal' is exactly V1 or exactly park_first, decided at that stall."""
-    v1, park = plans["zach_v1 @ READY"]["sequences"], plans["park_first+witness @ READY"]["sequences"]
+    sequences command the same, so 'V1, park_first on a W1 refusal' is exactly V1 or exactly park_first, decided at that stall - with
+    J1's home in front of the claw too."""
+    v1, park = plans[v1_row]["sequences"], plans[park_row]["sequences"]
     assert v1[0].to_dict() == park[0].to_dict()  # phase 0, the five-bar
-    a, b = v1[1].steps[:4], park[1].steps[:4]
+    at = [s.name for s in v1[1].steps].index("W1 seeks")
+    a, b = v1[1].steps[:at + 1], park[1].steps[:at + 1]
     assert [s.name for s in a][-1] == "W1 seeks" and [s.name for s in b][-1] == "W1 park touch"
     for x, y in zip(a, b, strict=True):
         assert [c.to_dict() for c in x.commands] == [c.to_dict() for c in y.commands]
@@ -712,3 +716,24 @@ def test_the_plant_runs_j1_without_its_integrator_when_asked():
         boards[integrator] = {d.role: d.config for d in plant.sim.drives}
     assert boards[True]["J1"].ki > 0.0 and boards[False]["J1"].ki == 0.0 and boards[False]["J1"].ilimit == 0.0
     assert boards[False]["J2"].ki == boards[True]["J2"].ki  # only J1's loop changes
+
+
+def test_the_recommended_rack_plan_homes_j1_first_and_says_how_to_witness_its_first_stall(tmp_path):
+    """The default CLI (the recommended routine, both paths and the branch): J1's seek, its define and its back-to-0 come before the claw in
+    both paths, the stops carry J1's side -1, and the plan says J1's first stall has no trusted reference yet (3.5 deg from the frame, then
+    the camera) and that the witness cannot tell J1's two stops apart."""
+    import sys
+
+    out = tmp_path / "plan.json"
+    done = subprocess.run([sys.executable, "-m", "sim2real.sim.homing.fullarm_routine", "--out", str(out)],
+                          capture_output=True, text=True, timeout=900, env={**os.environ, "OPENBLAS_NUM_THREADS": "1"})
+    assert done.returncode == 0, done.stderr[-500:]
+    plan = json.loads(out.read_text())
+    assert plan["row"] == "V1+table+J1, park_first on a W1 refusal @ READY"
+    for sequence in (plan["sequence"], plan["sequence_park_first"]):
+        names = [s["name"] for s in sequence["steps"]]
+        assert names.index("J1 seeks its stop") < names.index("J1 back to its working angle") < names.index("claw closes")
+    assert plan["stops"]["J1"]["seek_side"] == -1 and plan["stops"]["J1"]["lower_deg"] == pytest.approx(-89.972, abs=0.01)
+    assert plan["evidence_plan"][0]["role"] == "J1" and plan["j1"]["cap_nm"] == pytest.approx(7.0)
+    assert "3.5 deg" in plan["j1"]["witness"]["first_home"] and "5 rotor turns" in plan["j1"]["witness"]["blind_spot"]
+    assert plan["branch"]["shared_steps"][-1] == "W1 seeks" and "J1 seeks its stop" in plan["branch"]["shared_steps"]
