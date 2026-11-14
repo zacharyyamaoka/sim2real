@@ -61,7 +61,13 @@ def test_no_wrist_level_is_tied_to_one_w3_claw_or_j1_level():
 
 
 def test_the_subset_and_the_tuning_starts():
-    assert len(ruler.subset_cells()) == 24
+    subset = ruler.subset_cells()
+    assert len(subset) == 24
+    # amendment 3: every W1 and every W2 level in each pose's subset - "every 6th cell" had been W2 -150 only
+    for level in ruler.FIVEBAR_LEVELS:
+        mine = [c for c in subset if c["family"] == level]
+        assert sorted(c["cell"]["i"] for c in mine) == list(range(6)) and sorted(c["cell"]["j"] for c in mine) == list(range(6))
+    assert {c["wrist_deg"][1] for c in ruler.folded_subset_cells()} == {-150.0}
     names = {c["name"] for c in ruler.grid_cells()}
     assert not names & {c["name"] for c in ruler.tuning_cells()}
 

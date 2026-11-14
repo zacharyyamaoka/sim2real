@@ -64,7 +64,12 @@ special family - it is where most cells land, as on the rack.
 * the wrist W1 x W2: ``WRIST_LEVELS_DEG`` (6 x 6, 60 deg apart; |W2| 150 is the forearm band);
 * W3, the claw and J1 cycle over the 36 wrist cells in a balanced pattern (``_latin``): every level appears equally often.
 
-4 x 36 = 144 cells. The perturbation environments run on ``subset_cells`` (every 6th cell, 24).
+4 x 36 = 144 cells. The perturbation environments run on ``subset_cells`` (24: one W1 / W2 diagonal per five-bar pose).
+
+*Amendment 3 (2026-11-13, a sampling bug, found in the first perturbed results):* the subset was "every 6th cell", which on a grid ordered
+(pose, W1, W2) with 6 W2 levels is every cell with W2 at -150 deg - the folded wrist only, V1's worst case. It is now the diagonal
+(W1 index + W2 index + pose index) mod 6 == 0: every W1 and every W2 level once per pose. The folded-wrist cells already run stay in the
+cache as ``folded_subset_cells`` and are reported apart, never mixed into a perturbed card.
 
 **The environments** (``ENVIRONMENTS``): the hidden truths a routine never sees - backlash B0 / B1 / B2 (fullarm_plant's gaps), the wrist's
 breakaway friction for its sliding one, the 0.50 kg claw, a 1.5 deg error in the rotor-phase calibration the witness uses, and a second
@@ -144,7 +149,13 @@ def grid_cells() -> list[dict]:
 
 
 def subset_cells() -> list[dict]:
-    """Every ``SUBSET_EVERY``-th grid cell (24): the perturbation environments' starts."""
+    """The perturbation environments' starts (24): per five-bar pose, the W1 / W2 diagonal (i + j + pose) mod 6 == 0 (amendment 3)."""
+    levels = list(FIVEBAR_LEVELS)
+    return [c for c in grid_cells() if (c["cell"]["i"] + c["cell"]["j"] + levels.index(c["cell"]["fivebar"])) % len(WRIST_LEVELS_DEG) == 0]
+
+
+def folded_subset_cells() -> list[dict]:
+    """Amendment 3's old subset - every 6th cell, i.e. W2 at -150 deg throughout (the folded wrist): reported apart."""
     return grid_cells()[::SUBSET_EVERY]
 
 
@@ -313,6 +324,6 @@ def verdict(card_: dict, environment: str = NOMINAL) -> dict:
     return out
 
 
-__all__ = ["CLAW_LEVELS_DEG", "ENVIRONMENTS", "FIVEBAR_LEVELS", "GATE_DEG", "J1_LEVELS_DEG", "NOMINAL", "OUTCOMES", "SCORED_ROLES", "TARGETS",
+__all__ = ["CLAW_LEVELS_DEG", "ENVIRONMENTS", "FIVEBAR_LEVELS", "GATE_DEG", "folded_subset_cells", "J1_LEVELS_DEG", "NOMINAL", "OUTCOMES", "SCORED_ROLES", "TARGETS",
            "W3_LEVELS_DEG", "WRIST_LEVELS_DEG", "WRONG_STOP_DEG", "card", "clean", "covered", "grid_cells", "outcome_class", "score",
            "subset_cells", "tuning_cells", "verdict", "wrong_stop"]

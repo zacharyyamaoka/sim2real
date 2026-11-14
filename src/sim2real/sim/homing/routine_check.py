@@ -318,6 +318,26 @@ def stall_witness(prior, evidence) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------------------------------------------- the folded-wrist cells
+
+FOLDED = " · folded wrist"
+
+
+def partition(episodes: list[dict]) -> list[dict]:
+    """Ruler amendment 3: perturbed-twin episodes (and the subset rows' nominal ones) on the old "every 6th cell" subset - W2 at -150 only -
+    that the balanced subset does not hold are re-labelled "<twin> · folded wrist", so they make cards of their own and never mix into
+    the perturbed cards."""
+    balanced = {c["name"] for c in ruler.subset_cells()}
+    out = []
+    for e in episodes:
+        environment = e.get("environment")
+        subset_only = environment != ruler.NOMINAL or e.get("row", "").removesuffix(TIGHT_SUFFIX) in SUBSET_ROWS
+        if subset_only and e.get("start") not in balanced and not str(environment).endswith(FOLDED):
+            e = {**e, "environment": f"{environment}{FOLDED}"}
+        out.append(e)
+    return out
+
+
 # ---------------------------------------------------------------------------------------------------------------- the stored table, derived
 
 # WHY derived too (ruler amendment 2): a stored table, like a witness, only reads a run's stalls - fit() adds each defining stall's
@@ -356,7 +376,7 @@ def table_derived(episodes: list[dict], calibrations: dict) -> list[dict]:
         target = TABLE_OF.get(episode.get("row"))
         if target is None or "error" in episode or (target, episode.get("environment"), episode.get("start")) in have:
             continue
-        environment = episode["environment"]
+        environment = episode["environment"].removesuffix(FOLDED)
         source = environment if (calibrations.get(environment) or {}).get("table") and environment in TABLE_ENVIRONMENTS else ruler.NOMINAL
         table = (calibrations.get(source) or {}).get("table")
         if not table:
@@ -395,7 +415,8 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
 
     references = {}
     for environment in {e.get("environment") for e in episodes}:
-        source = STALE_CALIBRATION.get(environment, environment)
+        base = str(environment).removesuffix(FOLDED)
+        source = STALE_CALIBRATION.get(base, base)
         reference = (calibrations.get(source) or {}).get("stall_witness_deg")
         if not reference:
             # WHY a fallback (2026-11-13: press_reverse's calibration timed out walking W1 across under the wrist's breakaway friction and
@@ -518,7 +539,7 @@ def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
 
     from .mujoco_plant import BAM_WS_SRC  # noqa: PLC0415
 
-    clean = [r for r in reports if "error" not in r and not r.get("derived_from")]
+    clean = partition([r for r in reports if "error" not in r and not r.get("derived_from")])
     clean = clean + table_derived(clean, calibrations)
     if any(c.get("stall_witness_deg") for c in calibrations.values()):
         clean = clean + tight_witness(clean, calibrations)
