@@ -248,6 +248,16 @@ def _c(cards: dict, routine: str, environment: str = ruler.NOMINAL) -> dict:
     return cards.get(f"{routine} | {environment}") or {}
 
 
+def wrist_p95(card: dict) -> float | None:
+    values = [v for k, v in (card.get("zero_error_p95_deg_by_joint") or {}).items() if k in ("W1", "W2", "W3") and v is not None]
+    return max(values) if values else None
+
+
+def fivebar_p95(card: dict) -> float | None:
+    values = [v for k, v in (card.get("zero_error_p95_deg_by_joint") or {}).items() if k in ("J2", "C1") and v is not None]
+    return max(values) if values else None
+
+
 def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, media: dict, wb: dict) -> dict:
     """The page's words from the numbers (every number below is read from the cards; the prose is the analysis of record)."""
     full = [(r, s) for r, s in ranked if s["environments"] >= 5]
@@ -313,12 +323,14 @@ park_first's parking leaves W1 off zero for W2's seek and opens the plate-on-for
 {fmt(worst_locate, 4)}°: a torque-capped stall is read standing still at a fixed torque, with no trigger latency for a slow approach to
 remove. Its {fmt(multi.get('time_to_home_median_s'), 0)} s median comes from its 60°/s moves - the fast single control without the re-touch
 is {fmt(fast.get('time_to_home_median_s'), 0)} s - and at 60°/s the wrist's held moves overshoot to 1.8× the 86°/s ceiling. The
-forward-and-back that pays is touching BOTH stops: press_reverse identifies every wrist gap every home (zeros p95
-{fmt(_c(cards, 'press_reverse (backlash every home) @ READY', 'B2').get('zero_error_p95_deg'), 3)}° on the geared B2 twin) and its span check
-refuses the near-stop stalls - for {fmt((press.get('time_to_home_median_s') or 0) - (park.get('time_to_home_median_s') or 0), 0)} s more.</li>
-<li><b>Backlash needs the table (or press_reverse).</b> With hidden gaps a single touch reads its stop 0.46-0.50° off (B2: park_first
-{fmt(park_b2.get('coverage_pct'), 0)} % coverage); the stored identify_backlash table brings it to {fmt(table_b2.get('zero_error_p95_deg'), 3)}°
-({fmt(table_b2.get('coverage_pct'), 0)} %). The table is identified once with press_reverse and holds until a wrist module is rebuilt.</li>
+forward-and-back that pays is touching BOTH stops: press_reverse identifies every wrist gap every home (wrist zeros p95
+{fmt(wrist_p95(_c(cards, 'press_reverse (backlash every home) @ READY', 'B2')), 3)}° on the geared B2 twin) and its span check refuses the
+near-stop stalls - for {fmt((press.get('time_to_home_median_s') or 0) - (park.get('time_to_home_median_s') or 0), 0)} s more.</li>
+<li><b>Backlash needs the table (or press_reverse).</b> With hidden gaps a single touch reads each wrist stop 0.46-0.50° off (B2: park_first
+{fmt(park_b2.get('coverage_pct'), 0)} % coverage, wrist p95 {fmt(wrist_p95(park_b2), 3)}°); the stored identify_backlash table brings the
+wrist to {fmt(wrist_p95(table_b2), 3)}° ({fmt(table_b2.get('coverage_pct'), 0)} %; the five-bar's own zeros sit at
+{fmt(fivebar_p95(table_b2), 3)}° on that twin - its gaps are not in the wrist table). The table is identified once with press_reverse and
+holds until a wrist module is rebuilt; it is exact to apply - derived from a plain run it equals the run "+table" zeros to 1e-6°.</li>
 <li><b>Speed and time.</b> Every routine misses the 0.8 × speed margin: the wrist's kp 75 / kd 0.75 PD is underdamped on the twin, so a held
 move overshoots its ramp ~2× (75°/s at the recipe's 36°/s), and the five-bar's trips peak far higher. Time: the five-bar phase is ~39 s, 23 s
 of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>

@@ -15,14 +15,14 @@ from pathlib import Path
 from . import routine_ruler as ruler
 
 STYLE = {  # display class -> (fill, ink, glyph, label)
-    "homed": ("#0ca30c", "#ffffff", "✓", "homed (zeros within 0.1°)"),
-    "homed_belt": ("#fab219", "#0b0b0b", "b", "homed, but pressed the belt after lift-off"),
-    "inaccurate": ("#fab219", "#0b0b0b", "~", "right stops, a zero 0.1-1° off"),
-    "refused": ("#8d8c86", "#ffffff", "R", "refused by its own check (safe stop)"),
-    "timeout": ("#ec835a", "#0b0b0b", "T", "a step never finished"),
-    "tripped": ("#ec835a", "#0b0b0b", "X", "tripped (runaway / guard)"),
-    "silent_wrong": ("#d03b3b", "#ffffff", "!", "SILENT WRONG: claimed a home, a zero > 1° off"),
-    "infeasible": ("none", "#8d8c86", "·", "start the arm cannot be in (self-contact / through the belt)"),
+    "homed": ("#0ca30c", "#ffffff", "✓", "homed (zeros ≤ 0.1°)"),
+    "homed_belt": ("#fab219", "#0b0b0b", "b", "homed, pressed the belt"),
+    "inaccurate": ("#fab219", "#0b0b0b", "~", "right stops, 0.1-1° off"),
+    "refused": ("#8d8c86", "#ffffff", "R", "refused (safe stop)"),
+    "timeout": ("#ec835a", "#0b0b0b", "T", "a step never ended"),
+    "tripped": ("#ec835a", "#0b0b0b", "X", "tripped (runaway)"),
+    "silent_wrong": ("#d03b3b", "#ffffff", "!", "SILENT WRONG (> 1° off)"),
+    "infeasible": ("none", "#8d8c86", "·", "start not possible"),
     "missing": ("none", "#c3c2b7", "", "not run"),
 }
 ORDER = ("homed", "homed_belt", "inaccurate", "refused", "timeout", "tripped", "silent_wrong", "infeasible", "missing")
