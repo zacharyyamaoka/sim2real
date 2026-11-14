@@ -495,5 +495,55 @@ def make_row(name: str, **overrides):
     return FullArmRoutine(name=name, **spec)
 
 
+# ------------------------------------------------------------------------------------------------------------------------ the rack's plan
+
+RACK_HOMED_TRUSTED = Path("/archive/datasets/bam_rig/full_arm/homed/homed_2026-11-13T182448Z.json")  # the ArUco-checked 11:24 home
+RACK_WITNESS_TOL_DEG = 0.5
+
+
+def rack_plan(row: str, homed: Path = RACK_HOMED_TRUSTED, *, witness_tol_deg: float = RACK_WITNESS_TOL_DEG) -> dict:
+    """What the Sim to Real Agent runs on the rack for ``row``, as JSON: phase 1's robot_msgs JointCommandSequence (the claw and the wrist at
+    READY; phase 0, the five-bar, is the rack's own staged home), the witness's calibration and tolerance, and which step's stall defines
+    which joint. Every angle in the sequence is SI (rad), in the URDF joint frame.
+
+    The witness is checked ONLINE: after each step that defines a joint, read that joint's power-up reading at the step's end and refuse
+    (hold everything, end the run) when ``witness_error`` is past the tolerance - before the zero moves anything."""
+    from .fullarm_plant import ROLE, arm_prior  # noqa: PLC0415
+
+    procedure = make_row(row)
+    procedure.witness, procedure.witness_tol_deg = True, witness_tol_deg  # the rack always runs the witness, whichever order
+    phases = rotor_phase_from_homed(homed)
+    prior = arm_prior(rotor_phase_deg=phases)
+    sequence = procedure.plan(prior, [None])
+    stops = {ROLE[j]: {"upper_deg": math.degrees(prior.stops.q_rad(j, +1)), "lower_deg": math.degrees(prior.stops.q_rad(j, -1)),
+                       "seek_side": int(prior.seek_side[j])} for j in (*WRIST, CLAW)}
+    return {"schema": "sim2real.homing_rack_plan/1", "row": row, "phase": "1 (claw + wrist at READY)",
+            "sequence": sequence.to_dict(), "evidence_plan": [{"step": step, "joint": joint, "role": ROLE[joint], "side": side, "use": use}
+                                                              for step, joint, side, use in procedure.evidence_plan],
+            "witness": {"tolerance_deg": witness_tol_deg, "rotor_phase_deg": {ROLE[j]: v for j, v in phases.items()},
+                        "calibrated_from": str(homed), "turn_deg": 36.0,
+                        "rule": "error = wrap36(reading - stop - phase); refuse when |error| > tolerance, checked as each defining step ends"},
+            "stops": stops, "ready_craig_deg": list(READY_CRAIG_DEG), "td4_wrist_deg": list(READY_TD4_WRIST_DEG),
+            "table": "apply the stored identify_backlash table (wrist B2 rows) in observe; none = B0 (zeros 0.46-0.50 deg off on a geared joint)"}
+
+
+def main(argv=None) -> int:
+    import argparse  # noqa: PLC0415
+    import json  # noqa: PLC0415
+
+    parser = argparse.ArgumentParser(description="the rack's homing plan for one routine row (JSON)")
+    parser.add_argument("--row", required=True)
+    parser.add_argument("--homed", type=Path, default=RACK_HOMED_TRUSTED)
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args(argv)
+    args.out.write_text(json.dumps(rack_plan(args.row, args.homed), indent=1, default=str))
+    print(args.out)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+
 __all__ = ["CRAIG_OFFSET_DEG", "READY_CRAIG_DEG", "READY_TD4_WRIST_DEG", "ROWS", "FullArmRoutine", "SingleTouchReady", "craig_to_cad",
-           "fivebar_hold_at", "make_row", "ready_cad", "rotor_phase_from_homed"]
+           "fivebar_hold_at", "make_row", "rack_plan", "ready_cad", "rotor_phase_from_homed"]

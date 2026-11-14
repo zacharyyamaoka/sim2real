@@ -477,3 +477,21 @@ def test_the_wandb_records_are_one_run_per_routine_and_environment_with_the_map_
         assert Path(b["images"]["coverage_map"]).is_file()
         assert b["tables"]["starts"] and b["tables"]["starts"][0]["W1_deg"] == cell["wrist_deg"][0]
     assert hf.records(results)[0]["id"] == batch[0]["id"]  # the same numbers map to the same run
+
+
+@pytest.mark.skipif(not RACK_HOMED_1124.is_file(), reason="the rack's 11:24 homed file is not here")
+@needs_twin
+def test_the_rack_plan_carries_the_sequence_the_witness_calibration_and_which_steps_define(tmp_path):
+    """fullarm_routine's CLI (run in its own process: planning builds the comp's model) writes what the Sim to Real Agent runs."""
+    import sys
+
+    out = tmp_path / "plan.json"
+    done = subprocess.run([sys.executable, "-m", "sim2real.sim.homing.fullarm_routine", "--row", "zach_v1+table @ READY", "--out", str(out)],
+                          capture_output=True, text=True, timeout=900, env={**os.environ, "OPENBLAS_NUM_THREADS": "1"})
+    assert done.returncode == 0, done.stderr[-500:]
+    plan = json.loads(out.read_text())
+    assert plan["witness"]["tolerance_deg"] == 0.5
+    assert plan["witness"]["rotor_phase_deg"]["W3"] == pytest.approx(12.926, abs=0.01)
+    names = [s["name"] for s in plan["sequence"]["steps"]]
+    assert names.index("claw closes") < names.index("W1 seeks") < names.index("W2 seeks") < names.index("W3 seeks")
+    assert [e["role"] for e in plan["evidence_plan"]] == ["CLAW", "W1", "W2", "W3"]
