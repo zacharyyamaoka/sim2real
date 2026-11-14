@@ -427,6 +427,14 @@ TIGHT_SUFFIX = " · witness 0.5° (stall-calibrated)"
 STALE_CALIBRATION = {"phase_cal_error": "nominal"}
 
 
+def trusted_homes(episodes: list[dict], environment: str) -> list[dict]:
+    """The plain park_first runs in ``environment`` that ended on their right stops - homed, or inaccurate only by an uncorrected gap
+    (B1 / B2 without a table). WHY not "homed" alone (2026-11-13): on the geared twins no table-less run is homed, so the five-bar's
+    reference came out empty and its witness skipped C1 stalling 44 deg short on the claw jammed against the base."""
+    return [e for e in episodes if e.get("environment") == environment and e.get("row") == "park_first+witness @ READY"
+            and ruler.outcome_class(e) in ("homed", "inaccurate")]
+
+
 def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = TIGHT_WITNESS_DEG) -> list[dict]:
     """Derived episodes: each TIGHT_ROWS episode re-judged by a witness tolerance ``tol_deg`` on the trusted home's stall readings
     (``calibrations[environment]["stall_witness_deg"]``). Finished episodes past the tolerance become refusals; the rest are unchanged."""
@@ -441,8 +449,7 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
             # WHY a fallback (2026-11-13: press_reverse's calibration timed out walking W1 across under the wrist's breakaway friction and
             # under the 0.5 kg claw): the trusted home is then the plain routine's own homed, clean episodes in that twin - the median of
             # each joint's defining-stall reading, which is the true stop's (most of them are on it)
-            homed = [e for e in episodes if e.get("environment") == source and e.get("row") == "park_first+witness @ READY"
-                     and e.get("outcome_class") == "homed" and e.get("covered")]
+            homed = trusted_homes(episodes, source)
             values: dict = {}
             for e in homed:
                 for role, readings in (e.get("witness_deg") or {}).items():
@@ -451,8 +458,7 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
         # the five-bar's boards boot mod one rotor turn too (10:1, 36 deg; the rack's sub-turn offsets, PEP 0017's whole-turn re-latch): its
         # witness reads a stall's distance from where a trusted home's stall read, mod 36 - here each drive's zero error against the
         # median of the plain routine's homed, clean episodes in the source twin (a home in that twin you trust)
-        homed = [e for e in episodes if e.get("environment") == source and e.get("row") == "park_first+witness @ READY"
-                 and e.get("outcome_class") == "homed" and e.get("covered")]
+        homed = trusted_homes(episodes, source)
         fivebar = {role: statistics.median([e["zero_error_deg"][role] for e in homed if e["zero_error_deg"].get(role) is not None])
                    for role in FIVEBAR_ROLES if any(e["zero_error_deg"].get(role) is not None for e in homed)}
         references[environment] = ({**(reference or {}), **{f"fivebar:{k}": v for k, v in fivebar.items()}} or None)

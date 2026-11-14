@@ -532,3 +532,20 @@ def test_v1_and_park_first_move_identically_until_w1s_first_stall(plans):
     for x, y in zip(a, b, strict=True):
         assert [c.to_dict() for c in x.commands] == [c.to_dict() for c in y.commands]
         assert [d.to_dict() for d in x.done_when] == [d.to_dict() for d in y.done_when]
+
+
+def test_the_five_bars_tight_witness_is_calibrated_on_a_geared_twin_too():
+    """routine_check.trusted_homes: on B1 / B2 no table-less run is 'homed' (its wrist zeros sit 0.5 deg off), yet its five-bar stalls are
+    the true ones - the five-bar's reference must come from them, or the witness skips C1 stalling 44 deg short (found 2026-11-13)."""
+    from sim2real.sim.homing import routine_check as rc
+
+    def run(start, c1, w1=0.48):
+        r = report(environment="B2", start=start, zero_error_deg={**report()["zero_error_deg"], "C1": c1, "W1": w1})
+        r.update({"row": "park_first+witness @ READY", "key": f"park_first+witness @ READY | B2 | {start}", "witness_deg": {}})
+        return r
+
+    episodes = [run(f"s{k}", 0.05) for k in range(4)] + [run("jammed", 43.95)]
+    derived = rc.tight_witness(episodes, {"B2": {"stall_witness_deg": {"W1": 0.48}}})
+    jammed = next(d for d in derived if d["start"] == "jammed")
+    assert jammed["outcome_class"] == "refused" and "C1" in jammed["tight_off"]
+    assert all(d["outcome_class"] != "refused" for d in derived if d["start"] != "jammed")
