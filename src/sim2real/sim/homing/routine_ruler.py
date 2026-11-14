@@ -70,6 +70,11 @@ special family - it is where most cells land, as on the rack.
 breakaway friction for its sliding one, the 0.50 kg claw, a 1.5 deg error in the rotor-phase calibration the witness uses, and a second
 draw of the boards' sub-turn phases (another power-up frame).
 
+*Amendment 2 (2026-11-13, after READY's nominal map; no metric, target or cell moved):* rows added - Zach's V1 order in the perturbed
+twins and V1 with the stored table (V1 covered the most of READY); and every single-touch row re-judged by a tight witness (0.5 deg on a
+trusted home's own stall reading, the five-bar's drives included), derived from that row's own episodes because a witness never moves the
+arm (``routine_check.tight_witness``).
+
 **The routines compared** (``fullarm_routine.ROWS``; tuning is allowed only on ``tuning_cells``, never on the grid): Zach's V1 wrist order;
 PEP 0047 as landed (park_first + rotor-phase witness, the wrist homed at the five-bar's home); park_first at READY; a single fast touch;
 the 3D-printer double and triple touch (fast locate, back off, slow re-touch); press_reverse (both stops at two levels: the backlash every

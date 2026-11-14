@@ -436,6 +436,9 @@ ROWS = {
     "press_reverse (backlash every home) @ READY": {"order": "park_first", "touch": "press_reverse"},
     # option B: one touch, the wrist's gaps and compliance from a stored identify_backlash table (``needs_table``)
     "park_first+witness+table @ READY": {"order": "park_first", "touch": "single", "needs_table": True},
+    # added after READY's nominal map (ruler amendment 2): V1's order with the stored table - V1 covered the most of READY, and the table
+    # is what a single touch needs on a geared joint
+    "zach_v1+table @ READY": {"order": "zach_v1", "witness": False, "touch": "single", "needs_table": True},
 }
 
 

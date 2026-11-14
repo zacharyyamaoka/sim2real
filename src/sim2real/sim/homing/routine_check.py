@@ -46,7 +46,7 @@ GRID_ROWS = ("zach_v1 @ READY", "park_first+witness @ READY", "multi x2 (3D-prin
              "park_first+witness+table @ READY")
 SUBSET_ROWS = ("PEP 0047 (wrist at the five-bar's home)", "fast single @ READY", "multi x3 (3D-printer) @ READY")
 PERTURBED_ROWS = ("park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
-                  "park_first+witness+table @ READY")
+                  "park_first+witness+table @ READY", "zach_v1 @ READY", "zach_v1+table @ READY")
 TABLE_ENVIRONMENTS = ("B1", "B2")  # where a stored table can differ from B0's (B0: every gap 0)
 CALIBRATION_START = {"name": "calibration: power lost at READY, claw plumb", "j2_deg": ruler.FIVEBAR_LEVELS["READY"][0],
                      "c1_deg": ruler.FIVEBAR_LEVELS["READY"][1], "wrist_deg": (1.167, 90.0, 0.0), "claw_deg": 30.0, "knee": -1,
@@ -324,7 +324,12 @@ TIGHT_WITNESS_DEG = 0.5
 # WHY derived offline (the witness only reads a run's stalls; it never moves the arm): a row with the tight witness moves exactly as its
 # plain row, so its episodes are the plain row's with each defining stall re-judged against the trusted home's own reading of that stall
 TIGHT_ROWS = ("park_first+witness @ READY", "park_first+witness+table @ READY", "multi x2 (3D-printer) @ READY",
-              "multi x3 (3D-printer) @ READY", "fast single @ READY", "zach_v1 @ READY")
+              "multi x3 (3D-printer) @ READY", "fast single @ READY", "zach_v1 @ READY", "press_reverse (backlash every home) @ READY",
+              "zach_v1+table @ READY")
+# WHY press_reverse gets only the five-bar's: its wrist stalls are pressed at two levels on both sides, so they read the gap and the wind-up
+# a one-touch reference does not; its span witness already guards the wrist
+FIVEBAR_ONLY_TIGHT = ("press_reverse (backlash every home) @ READY",)
+FIVEBAR_ROLES = ("J2", "C1")
 TIGHT_SUFFIX = " · witness 0.5° (stall-calibrated)"
 # phase_cal_error's witness is calibrated on the NOMINAL twin's trusted home: a calibration gone stale by 1.5 deg (an encoder recalibrated
 # after the home it was taken from) - the case a tight witness must refuse, never accept
@@ -351,7 +356,14 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
                 for role, readings in (e.get("witness_deg") or {}).items():
                     values.setdefault(role, []).extend(readings)
             reference = {role: statistics.median(v) for role, v in values.items() if v} or None
-        references[environment] = reference
+        # the five-bar's boards boot mod one rotor turn too (10:1, 36 deg; the rack's sub-turn offsets, PEP 0017's whole-turn re-latch): its
+        # witness reads a stall's distance from where a trusted home's stall read, mod 36 - here each drive's zero error against the
+        # median of the plain routine's homed, clean episodes in the source twin (a home in that twin you trust)
+        homed = [e for e in episodes if e.get("environment") == source and e.get("row") == "park_first+witness @ READY"
+                 and e.get("outcome_class") == "homed" and e.get("covered")]
+        fivebar = {role: statistics.median([e["zero_error_deg"][role] for e in homed if e["zero_error_deg"].get(role) is not None])
+                   for role in FIVEBAR_ROLES if any(e["zero_error_deg"].get(role) is not None for e in homed)}
+        references[environment] = ({**(reference or {}), **{f"fivebar:{k}": v for k, v in fivebar.items()}} or None)
     out = []
     for episode in episodes:
         if episode.get("row") not in TIGHT_ROWS or "error" in episode:
@@ -364,10 +376,18 @@ def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = 
                    "key": episode["key"].replace(episode["row"], episode["row"] + TIGHT_SUFFIX, 1), "derived_from": episode["row"]}
         if episode.get("finished"):
             off = {}
-            for role, values in (episode.get("witness_deg") or {}).items():
-                if role not in reference:
+            if episode["row"] not in FIVEBAR_ONLY_TIGHT:
+                for role, values in (episode.get("witness_deg") or {}).items():
+                    if role not in reference:
+                        continue
+                    worst = max((abs((v - reference[role] + 18.0) % 36.0 - 18.0) for v in values), default=0.0)
+                    if worst > tol_deg:
+                        off[role] = round(worst, 3)
+            for role in FIVEBAR_ROLES:
+                value, ref = episode["zero_error_deg"].get(role), reference.get(f"fivebar:{role}")
+                if value is None or ref is None:
                     continue
-                worst = max((abs((v - reference[role] + 18.0) % 36.0 - 18.0) for v in values), default=0.0)
+                worst = abs((value - ref + 18.0) % 36.0 - 18.0)
                 if worst > tol_deg:
                     off[role] = round(worst, 3)
             if off:
