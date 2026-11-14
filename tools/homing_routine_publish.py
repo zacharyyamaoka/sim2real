@@ -37,7 +37,10 @@ TYPICAL = {"zach_v1 @ READY": "zach_v1_ready_belt_rest", "park_first+witness @ R
            "press_reverse (backlash every home) @ READY": "press_reverse_ready_belt_rest",
            "PEP 0047 (wrist at the five-bar's home)": "pep0047_wrist_at_the_bowl", "zach_v1+table @ READY": "zach_v1_ready_belt_rest",
            "V1, park_first on a W1 refusal @ READY": "zach_v1_ready_belt_rest",
-           "V1+table, park_first on a W1 refusal @ READY": "zach_v1_ready_belt_rest"}
+           "V1+table, park_first on a W1 refusal @ READY": "zach_v1_ready_belt_rest",
+           "zach_v1+J1 @ READY": "zach_v1_j1_ready_belt_rest", "zach_v1+table+J1 @ READY": "zach_v1_j1_ready_belt_rest",
+           "V1+J1, park_first on a W1 refusal @ READY": "zach_v1_j1_ready_belt_rest",
+           "V1+table+J1, park_first on a W1 refusal @ READY": "zach_v1_j1_ready_belt_rest"}
 
 
 def final_results() -> dict:

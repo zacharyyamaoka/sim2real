@@ -97,12 +97,6 @@ def homes_j1(row: str) -> bool:
     return bool((ROWS.get(row.removesuffix(TIGHT_SUFFIX)) or {}).get("home_j1"))
 
 
-def j1_overrides(rows) -> dict:
-    """The plant a job's rows need: J1 PD-only where they home J1 (fullarm_plant's j1_integrator WHY). A job never mixes the two."""
-    homing = {homes_j1(row) for row in rows}
-    if len(homing) > 1:
-        raise ValueError(f"a job's rows must all home J1 or all hold it: {list(rows)}")
-    return {"j1_integrator": False} if homing == {True} else {}
 
 
 def episode_key(row: str, environment: str, cell_name: str) -> str:
@@ -222,6 +216,12 @@ def plan_jobs(plan: str = "all") -> list[dict]:
     # perturbed subset - a run stopped early still answers. (Until the rack's pause at 18:15 the perturbed subset ran second; READY's six
     # subset cells per twin had all run by then.)
     first = next(iter(ruler.FIVEBAR_LEVELS))
+    if plan == "j1":
+        # WHY READY's cells first, the twins' included (2026-11-13 night, a machine at load 25-30): J1's home starts at READY whatever
+        # the start, so READY's 36 nominal cells and every twin's 6 READY cells answer "does J1 home, and what does it cost the wrist";
+        # the other poses add phase 0, which J1's home does not change
+        jobs.sort(key=lambda j: (j["cell"]["family"] != first, j["environment"] != ruler.NOMINAL, j["cell_index"]))
+        return jobs
     jobs.sort(key=lambda j: (0 if (j["environment"] == ruler.NOMINAL and j["cell"]["family"] == first) else
                              1 if j["environment"] == ruler.NOMINAL else 2, j["cell_index"]))
     return jobs
@@ -270,7 +270,7 @@ def run_job(job: dict, *, tables: dict | None = None, branch: bool = True, trace
 
     environment, cell = job["environment"], job["cell"]
     start = ArmStart(**{k: v for k, v in cell.items() if k != "cell"})
-    plant = FullArmHomingPlant(**{**plant_kwargs(environment), **j1_overrides(job["rows"]), **(plant_overrides or {})})
+    plant = FullArmHomingPlant(**{**plant_kwargs(environment), **(plant_overrides or {})})
     table_rows = (tables or {}).get(environment)
     try:
         plant.place(start)
@@ -399,6 +399,8 @@ STALL_TORQUE_NM = {"W1": 1.0, "W2": 1.0, "W3": 1.0, "CLAW": 0.3}  # a stall is r
 
 
 _FIVEBAR_ROLES = {"J1", "J2", "C1"}
+# the steps of J1's home in phase 1 (fullarm_routine.FullArmRoutine._j1_home): their losses are J1's, not the five-bar's phase 0
+J1_HOME_STEPS = ("J1 tilts toward its stop", "J1 seeks its stop", "J1 back toward its working angle", "J1 back to its working angle")
 
 
 def ended_in(episode: dict) -> str | None:
@@ -413,13 +415,17 @@ def ended_in(episode: dict) -> str | None:
         return None
     outcome = str(episode.get("outcome") or "")
     step = re.search(r"step '([^']+)'", outcome)
+    if step and step.group(1).startswith(J1_HOME_STEPS):
+        return "J1 home"
     if step:
         names = set(re.findall(r"\b(J1|J2|C1|W1|W2|W3|claw|CLAW)\b", step.group(1)))
         return "phase 0" if names and {n.upper() for n in names} <= _FIVEBAR_ROLES else "wrist"
     refused = re.search(r"\{([^}]*)\}", outcome) if outcome_class == "refused" else None
     if refused:
         joints = set(re.findall(r"'([A-Z0-9]+)'", refused.group(1)))
-        return "phase 0" if joints & _FIVEBAR_ROLES else "wrist"
+        if joints & {"J2", "C1"}:
+            return "phase 0"
+        return "J1 home" if "J1" in joints else "wrist"
     errors = {role: abs(v) for role, v in (episode.get("zero_error_deg") or {}).items() if v is not None}
     if errors:
         return "phase 0" if max(errors, key=errors.get) in _FIVEBAR_ROLES else "wrist"

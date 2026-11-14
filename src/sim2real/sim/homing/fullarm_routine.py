@@ -100,7 +100,8 @@ TOUCHES = ("single", "multi", "press_reverse")
 WRIST_POSES = ("ready", "bowl")
 
 # -- J1's home (Zach, 2026-11-13 night: "J2/C1 -> READY -> tilt J1 UPWARD to its top hard stop (stall seek) -> then the wrists"; J1 is
-# PD + gravity feed-forward, no integrator) ---------------------------------------------------------------------------------------------
+# PD + gravity feed-forward, no integrator - as every commanded step already runs in the twin: fullarm_plant.tick sends ilimit_scale 0,
+# the rack runner's adapter's way) -------------------------------------------------------------------------------------------------------
 # WHY side -1: J1 rolls the five-bar plane about the arm's spine (the twin's +x at z 0.615 m); at 0 the arm hangs and BOTH stops lift its
 # lower end to horizontal (the claw from z 0.32 to 0.61 m at -88, 0.60 m at +88 deg, READY), so "up" picks no side. -89.972 deg (stops.json
 # revolute_3 side -1) swings the lower end away from the D435 (deployment.json can11: board - = away; Zach 2026-11-10's "horizontal",
@@ -115,11 +116,14 @@ J1_GRAVITY_AT_READY_NM = {-90: -3.875, -85: -4.022, -80: -4.142, -75: -4.23, -70
                           50: 1.75, 55: 2.087, 60: 2.408, 65: 2.71, 70: 2.992, 75: 3.251, 80: 3.485, 85: 3.693, 90: 3.869}
 # WHY 4.57: the worst |gravity| on the -90 sweep over every hanging wrist pose of READY's 36 grid cells (twin statics, 1 deg steps)
 J1_GRAVITY_WORST_NM = 4.57
+J1_GRAVITY_WORST_HEAVY_CLAW_NM = 5.11  # the same with the claw_heavy twin's 0.50 kg claw
 # WHY 1.5: the JMC drive's breakaway, upper bound (0.74 N.m Coulomb identified on CAN 12, a 60ASM200 + 10:1; July's crank broke away at
 # 1-1.5 N.m: bam_fivebar.description.JMC)
 J1_FRICTION_MAX_NM = 1.5
 # WHY 7.0 (= J1's hold cap): 7.0 - 1.15 x 4.57 = 1.74 N.m > the 1.5 breakaway, so a seek with gravity 15 % heavier than the twin's cannot
-# stall short on friction; on its stop J1 presses ~7.0 - 3.9 = 3.1 N.m (~45 N on the stop's 68 mm lever)
+# stall short on friction; on its stop J1 presses ~7.0 - 3.9 = 3.1 N.m (~45 N on the stop's 68 mm lever). With the claw_heavy twin's
+# 0.50 kg claw the worst gravity is 5.11 N.m (twin statics, every hanging wrist pose): 7.0 - 5.11 = 1.89 N.m, still over the breakaway -
+# but not with another 15 % on top, so a heavier tool than that wants the cap re-sized
 J1_SEEK_CAP_NM = J1_HOLD_CAP_NM
 J1_SEEK_SPEED = 0.02 * TAU  # 7.2 deg/s: C1's ease speed; the sweep's 90 deg in ~13 s
 J1_RETURN_SPEED = 0.03 * TAU
@@ -144,10 +148,17 @@ def j1_gravity_nm(j1_rad: float) -> float:
     return (1.0 - a) * J1_GRAVITY_AT_READY_NM[int(low)] + a * J1_GRAVITY_AT_READY_NM[int(high)]
 
 
+# WHY 1.5 N.m of feed-forward error in J1's reach tolerance (the twin, 2026-11-13 night): with the claw_heavy twin's 0.50 kg claw the tilt's
+# feed-forward (the nominal claw's gravity) is ~1.3 N.m light and J1 rested 3.8 deg short - past a friction-only tolerance (3.2 deg) the
+# step timed out on 3 of 6 starts. The tilt's end is only a waypoint; the stall, not this tolerance, defines J1
+J1_FF_ERROR_NM = 1.5
+
+
 def _reached_j1() -> list:
     """J1's move done-when: within 0.5 deg, or arrived and still within what friction and the feed-forward's error can sag it."""
     return [Reached(joints=(J1,), tolerance=math.radians(0.5)),
-            Reached(joints=(J1,), tolerance=math.radians(0.5) + J1_FRICTION_MAX_NM / J1_KP_NM_PER_RAD, speed=0.02, dwell=0.3)]
+            Reached(joints=(J1,), tolerance=math.radians(0.5) + (J1_FRICTION_MAX_NM + J1_FF_ERROR_NM) / J1_KP_NM_PER_RAD, speed=0.02,
+                    dwell=0.3)]
 
 
 def craig_to_cad(joint: str, craig_deg: float) -> float:

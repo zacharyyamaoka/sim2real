@@ -567,6 +567,10 @@ def test_a_lost_start_is_placed_in_phase_0_or_the_wrist_by_the_step_or_joint_it_
                          "tripped")) == "phase 0"
     assert ended_in(lost("aborted: step 'J2 + C1 home (to READY) (waypoint 11 of 54)' was not done within 40.0 s", "timeout")) == "phase 0"
     assert ended_in(lost("aborted: step 'W1 walks across' was not done within 40.0 s", "timeout")) == "wrist"
+    # J1's home is its own place: a J1 step's timeout or a J1 refusal is neither the five-bar's phase 0 nor the wrist
+    assert ended_in(lost("aborted: step 'J1 tilts toward its stop' was not done within 40.0 s", "timeout")) == "J1 home"
+    assert ended_in(lost("refused: tight witness {'J1': 3.1} deg off the trusted home's stall", "refused")) == "J1 home"
+    assert ended_in(lost("aborted: step 'J1 to home' was not done within 40.0 s", "timeout")) == "phase 0"  # the five-bar's own J1 hold
     assert ended_in(lost("refused: tight witness {'C1': 9.262} deg off the trusted home's stall", "refused")) == "phase 0"
     assert ended_in(lost("refused: rotor-phase witness: {'W2': [2.033]} deg off the stop's phase (tolerance 2.0)", "refused")) == "wrist"
     # a stale calibration refuses the wrist; a five-bar stall in the same refusal was seen first, in phase 0
@@ -684,6 +688,9 @@ def test_the_j1_cap_beats_its_gravity_and_friction_over_the_whole_sweep():
     sweep = [abs(v) for deg, v in J1_GRAVITY_AT_READY_NM.items() if deg <= 0]
     assert max(sweep) <= J1_GRAVITY_WORST_NM
     assert J1_SEEK_CAP_NM - 1.15 * J1_GRAVITY_WORST_NM > J1_FRICTION_MAX_NM >= 1.5
+    from sim2real.sim.homing.fullarm_routine import J1_GRAVITY_WORST_HEAVY_CLAW_NM
+
+    assert J1_SEEK_CAP_NM - J1_GRAVITY_WORST_HEAVY_CLAW_NM > J1_FRICTION_MAX_NM  # the 0.50 kg claw twin: margin left, no 15 % on top
     assert j1_gravity_nm(math.radians(-65.0)) == pytest.approx(J1_GRAVITY_AT_READY_NM[-65]) and j1_gravity_nm(0.0) < 0.0
     assert j1_gravity_nm(math.radians(-62.5)) == pytest.approx(0.5 * (J1_GRAVITY_AT_READY_NM[-65] + J1_GRAVITY_AT_READY_NM[-60]))
 
@@ -700,22 +707,6 @@ def test_the_ruler_scores_j1_only_for_rows_that_home_it():
     assert ruler.outcome_class(unzeroed) == "silent_wrong"
     assert "J1" in ruler.card([{**good, "homes_j1": True}])["zero_error_p95_deg_by_joint"]
 
-
-def test_the_plant_runs_j1_without_its_integrator_when_asked():
-    if not twin_available():
-        pytest.skip("bam_ws's twin is not here")
-    from sim2real.sim.homing.fullarm_plant import ArmStart, FullArmHomingPlant
-    from sim2real.sim.homing.routine_ruler import FIVEBAR_LEVELS
-
-    j2, c1 = FIVEBAR_LEVELS["READY"]
-    start = ArmStart("j1 board", j2, c1, (1.167, 90.0, 0.0), 30.0)
-    boards = {}
-    for integrator in (True, False):
-        plant = FullArmHomingPlant("B0", belt_top_m=0.0, j1_integrator=integrator)
-        plant.reset(start)
-        boards[integrator] = {d.role: d.config for d in plant.sim.drives}
-    assert boards[True]["J1"].ki > 0.0 and boards[False]["J1"].ki == 0.0 and boards[False]["J1"].ilimit == 0.0
-    assert boards[False]["J2"].ki == boards[True]["J2"].ki  # only J1's loop changes
 
 
 def test_the_recommended_rack_plan_homes_j1_first_and_says_how_to_witness_its_first_stall(tmp_path):

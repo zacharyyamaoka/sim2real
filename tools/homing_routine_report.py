@@ -25,6 +25,7 @@ RESULTS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "results_2026
 CACHE = Path.home() / ".cache" / "sim2real" / "homing_routine" / "episodes_2026-11-13.jsonl"
 CALIBRATIONS = Path.home() / ".cache" / "sim2real" / "homing_routine" / "calibrations_tight_2026-11-13.json"
 PLANS = Path.home() / ".cache" / "sim2real" / "homing_routine_plans.pkl"
+PLANS_J1 = Path.home() / ".cache" / "sim2real" / "homing_routine_plans_j1.pkl"  # the J1 rows' plans (routine_check --plan j1)
 MEDIA_REL = "media/homing-routine-2026-11-13"
 # the rack's wrist homes of 2026-11-13 (10:24, 10:50, 11:24 and the cold one after the 18:05 power-up); 10:24's W3 stalled early
 RACK_HOMED = Path("/archive/datasets/bam_rig/full_arm/homed")
@@ -217,7 +218,8 @@ def video(media: dict, name: str, caption: str, *, poster: bool = True) -> str:
 
 
 def sequence_table(plans: dict, row: str, phases: tuple = (0, 1)) -> str:
-    plan = plans.get(row)
+    # WHY the plain row's plan for a "+table" row: the stored table only re-zeroes in observe - the two command the same
+    plan = plans.get(row) or plans.get(row.replace("+table", ""))
     if not plan:
         return "<p class='sub'>(the plan is not cached)</p>"
     out = []
@@ -341,7 +343,7 @@ def lost_split(episodes: list, routine: str) -> dict:
             continue
         lost[(where, e.get("outcome_class"))] += 1
     return {"homed": homed, "lost": lost, "wrist_lost": sum(v for (w, _), v in lost.items() if w == "wrist"), "belt": len(belt_s),
-            "belt_last_s": max(belt_s) if belt_s else None}
+            "belt_last_s": max(belt_s) if belt_s else None, "j1_lost": sum(v for (w, _), v in lost.items() if w == "J1 home")}
 
 
 def wrong_range(episodes: list, rows: tuple, role: str) -> tuple[float, float] | None:
@@ -384,7 +386,12 @@ def rack_check() -> dict | None:
 def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, media: dict, wb: dict) -> dict:
     """The page's words from the numbers (every number below is read from the cards; the prose is the analysis of record)."""
     full = [(r, s) for r, s in ranked if s["environments"] >= 5]
-    recommended = full[0][0] if full else (ranked[0][0] if ranked else "")
+    # WHY pinned to the J1 routine when it ran (Zach, 2026-11-13 night): a routine that leaves J1 unhomed does not home the arm, however
+    # it ranks on the joints it does home (rows that hold J1 are scored without it - ruler amendment 5)
+    from sim2real.sim.homing.fullarm_routine import RECOMMENDED  # noqa: PLC0415
+
+    recommended = (RECOMMENDED + TIGHT if f"{RECOMMENDED + TIGHT} | {ruler.NOMINAL}" in cards else
+                   full[0][0] if full else (ranked[0][0] if ranked else ""))
     rec = _c(cards, recommended)
     base = recommended.replace(TIGHT, "")
     plain = _c(cards, base)
@@ -433,6 +440,9 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
 
     order = ("Zach’s V1 order, falling back to PEP 0047’s parking path when W1’s first stall is refused" if "on a W1 refusal" in base
              else "Zach’s V1 order" if base.startswith("zach_v1") else "PEP 0047’s park_first order")
+    if "+J1" in base:
+        order += (" - after J1 is homed: from READY it tilts to its −89.97° stop under a 7 N·m cap with gravity feed-forward, is "
+                  "defined there and comes back to 0 before the claw")
     rec_ready = _c(ruler.score(ready_only(episodes)), recommended)
     if (rec.get("cells") or 0) > (rec_ready.get("cells") or 0):
         reach = (f"{fmt(rec.get('coverage_pct'), 0)} % of the {rec.get('feasible')} holdable starts of the nominal grid "
@@ -444,14 +454,46 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                f"0 silent wrong in every twin, {reach}, zeros p95 "
                f"{fmt(rec.get('zero_error_p95_deg'), 3)}°, {fmt(rec.get('time_to_home_median_s'), 0)} s median.")
     handed = split["homed"] + split["belt"] + split["wrist_lost"]
-    qualification = (f"Every start it lost was lost in the five-bar’s phase 0, not the wrist: the wrist phase homed all {handed} "
-                     f"starts it was handed over the nominal grid and the five physical twins" if not split["wrist_lost"] else
-                     f"The wrist phase lost {split['wrist_lost']} of the {handed} starts it was handed")
+    j1_note = (f" (J1’s home lost {split['j1_lost']}: the starts where C1 had stalled on the claw jammed against the base, which the "
+               f"C1 witness refuses before J1 moves on the rack, or the 0.50 kg claw)" if split["j1_lost"] else "")
+    qualification = ((f"Every start it lost was lost in the five-bar’s phase 0{', or in J1’s home' if split['j1_lost'] else ''}, not the "
+                      f"wrist{j1_note}: the wrist phase homed all {handed} starts it was handed over the nominal grid and the five "
+                      f"physical twins") if not split["wrist_lost"] else f"The wrist phase lost {split['wrist_lost']} of the {handed} starts it was handed")
     qualification += (f". On {len(trips)} of {n} nominal starts ({pct(len(trips), n)}) the twin’s five-bar home from a belt rest trips J2’s or "
                       "C1’s 86°/s runaway stop or times out, the same for every routine; the rack runs its own staged five-bar home, "
                       "which the twin does not model yet. Time (78 s median) and speed miss their targets everywhere. Sim only; the "
                       "twin’s wrist gaps, claw mass and belt friction are assumptions, and on the rack the five-bar’s zeros carry the "
                       "camera’s J2 +0.8° / C1 −3.8° until its stall angles are re-anchored (the witness checks the same stop, not the angle).")
+    j1_text = ""
+    if "+J1" in base:
+        j1_eps = [e for e in episodes if e.get("row") == recommended and e.get("environment") in PHYSICAL]
+        j1_errors = [abs(e["zero_error_deg"]["J1"]) for e in j1_eps if e.get("finished") and (e.get("zero_error_deg") or {}).get("J1") is not None]
+        from sim2real.sim.homing.routine_check import ended_in  # noqa: PLC0415
+
+        j1_lost = [e for e in j1_eps if ended_in(e) == "J1 home"]
+        no_j1_rows = recommended.replace("+J1", "")
+        ready_cards = ruler.score(ready_only(episodes))
+        with_j1, without = _c(ready_cards, recommended), _c(ready_cards, no_j1_rows)
+        whole_with, whole_without = _c(cards, recommended), _c(cards, no_j1_rows)
+        j1_peak = [e["peak_speed_deg_s"].get("J1") for e in j1_eps if (e.get("peak_speed_deg_s") or {}).get("J1") is not None]
+        j1_text = (f"<li><b>J1 is homed now (Zach: J2/C1 → READY → J1 to its top stop → the wrist).</b> J1 rolls the five-bar plane about "
+                   f"the arm's spine; at 0 the arm hangs and both stops lift it to horizontal, so the seek takes the −89.97° stop, the side "
+                   f"that swings away from the D435 (Zach's 11-10 'horizontal'). From READY it tilts by −55°, seeks at 7.2°/s under 7 N·m "
+                   f"with J1's gravity as feed-forward (PD only, no integrator) and J2/C1 held on their comp at the tilt, and its stall "
+                   f"defines J1; it comes back to 0 in two parts before the claw. 7 N·m − 1.15 × 4.57 N·m (the worst gravity on the sweep "
+                   f"over every hanging wrist pose) = 1.74 N·m > the JMC's 1.5 N·m breakaway, so it cannot stall short on friction; on "
+                   f"the stop it presses ~3.1 N·m. Over the nominal grid and the physical twins J1's zero is "
+                   f"{fmt(max(j1_errors) if j1_errors else None, 3)}° at worst ({len(j1_errors)} finished homes) and "
+                   f"{len(j1_lost)} starts were lost in a J1 step. At READY the routine covers {fmt(with_j1.get('coverage_pct'), 1)} % with J1 "
+                   f"against {fmt(without.get('coverage_pct'), 1)} % without (whole grid {fmt(whole_with.get('coverage_pct'), 1)} / "
+                   f"{fmt(whole_without.get('coverage_pct'), 1)} %), median {fmt(whole_with.get('time_to_home_median_s'), 0)} s against "
+                   f"{fmt(whole_without.get('time_to_home_median_s'), 0)} s; J1 peaks at {fmt(max(j1_peak) if j1_peak else None, 1)}°/s. "
+                   f"Along the −90 sweep (twin statics, 1° steps, five-bar at READY, all 36 hanging wrist poses) nothing touches itself or "
+                   f"the belt - J1 moves the arm rigidly - and the arm sweeps y −0.43…+0.27 m, z 0.18…0.80 m; the rack's rails and the "
+                   f"D435 are not in the twin. On the rack J1's first stall has no trusted reference: check it within 3.5° of the gravity "
+                   f"rest's frame and confirm with the ArUco check, then witness every later home at 0.5° on it - and note the witness "
+                   f"cannot tell J1's two stops apart (179.95° = 5 rotor turns within 0.05°), so check the seek's direction from the "
+                   f"motion.</li>")
     rack_text = ""
     if rack:
         good, every = rack["good"], rack["all"]
@@ -463,6 +505,7 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                      f"room for the real spread and refuses that home.")
     findings = f"""
 <ol>
+{j1_text}
 <li><b>The wrist phase homes every start it is handed; the coverage that is missing is the five-bar's.</b> Over the nominal grid and the
 five physical twins the recommended routine homed {split['homed']} starts cleanly and lost {sum(lost.values()) + split['belt']}:
 {split['wrist_lost']} in the wrist phase, and in phase 0 {phase0.get('tripped', 0)} J2/C1 runaway trips, {phase0.get('timeout', 0)}
@@ -531,7 +574,10 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
 </ol>"""
     handoff = (f"<p>Phase 0 is the rack's own staged five-bar home (stalls, C1 eased off, the corridor to READY) - this routine adds a "
                f"rotor-phase witness on J2 and C1 calibrated on the trusted manual stall zero. Phase 1, below, runs at READY with the "
-               f"five-bar held: the claw closes, then each wrist joint touches its stop once at 1 N·m and 36°/s, is witnessed "
+               f"five-bar held: "
+               + ("J1 tilts by −55°, seeks its −89.97° stop at 0.02 rev/s under 7 N·m with gravity feed-forward (PD only), is defined "
+                  "at the stall and comes back to 0 in two parts; then " if "+J1" in base else "")
+               + f"the claw closes, then each wrist joint touches its stop once at 1 N·m and 36°/s, is witnessed "
                f"<b>as its defining step ends</b> (0.5° on the 11:24 home's stall: W3's + stop at +2.78° mod 36°; no expected-travel "
                f"check - a seek may end short because the joint started near its stop), goes to 0, and the routine ends at TD4. "
                + ("<b>The branch:</b> W1's first seek is the same move in V1 and park_first; if the witness refuses its stall (the "
@@ -541,7 +587,10 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
                f"--out plan.json</code> writes both paths and the branch rule as JSON.</p>")
     decisions = """<ul>
 <li><b>Decided for you</b> (each a default in code; undo in one line):
- <ul><li>the wrist homes at READY, not the five-bar's home (undo: <code>wrist_pose="bowl"</code>);</li>
+ <ul><li>J1 seeks its −89.97° stop (away from the D435; both stops lift the hanging arm to horizontal) under 7 N·m with gravity
+ feed-forward and no integrator, from READY before the claw, and the ruler scores J1 for rows that home it (amendment 5)
+ (undo: <code>home_j1=False</code>);</li>
+ <li>the wrist homes at READY, not the five-bar's home (undo: <code>wrist_pose="bowl"</code>);</li>
  <li>V1's order over PEP 0047's park_first for the rack (undo: <code>order="park_first"</code>);</li>
  <li>the witness at 0.5° on a trusted home's stall, the five-bar's drives included (undo: <code>witness_tol_deg=2.0</code>);</li>
  <li>the witness calibrated on the 11:24 home, per the Sim to Real Agent's ArUco check and Zach's video ruling;</li>
@@ -556,7 +605,9 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
 <li><b>Needs you:</b> nothing irreversible.</li>
 <li><b>Not done:</b> no hardware moved (sim only); the five-bar's homing itself is unchanged beyond the witness.</li>
 </ul>"""
-    videos = [(k, v) for k, v in (("zach_v1_ready_belt_rest", "V1 at READY from a rest on the belt (homed)"),
+    videos = [(k, v) for k, v in (("zach_v1_j1_ready_belt_rest", "J1 first: V1+J1 from the same rest - the five-bar to READY, J1 tilts to its "
+                                                                  "−89.97° stop and back, then the claw and the wrist (homed)"),
+                                  ("zach_v1_ready_belt_rest", "V1 at READY from a rest on the belt (homed)"),
                                   ("park_first_ready_belt_rest", "park_first at READY from the same rest (homed)"),
                                   ("multi_x2_ready_belt_rest", "the 3D-printer double touch from the same rest"),
                                   ("press_reverse_ready_belt_rest", "press_reverse: both stops at two levels, every home"),
@@ -566,10 +617,16 @@ the recommended routine's median is {fmt(rec.get('time_to_home_median_s'), 0)} s
                                   ("pep0047_wrist_at_the_bowl", "PEP 0047 as landed: the walk to the five-bar's home drives the claw into the belt"))
               if k in media]
     hero = "zach_v1_ready_belt_rest" if (base.startswith("zach_v1") or base.startswith("V1")) else "park_first_ready_belt_rest"
+    hero_caption = ("the recommended motion from a power cut at READY: the arm lands on the belt, the five-bar homes and walks to READY, "
+                    "the claw closes, W1 / W2 / W3 touch their stops, TD4")
+    if "+J1" in base and "zach_v1_j1_ready_belt_rest" in media:
+        hero = "zach_v1_j1_ready_belt_rest"
+        hero_caption = ("the recommended motion from a power cut at READY: the arm lands on the belt, the five-bar homes and walks to "
+                        "READY, J1 tilts the plane to its −89.97° stop and comes back to 0, the claw closes, W1 / W2 / W3 touch their stops, TD4")
     return {"recommended": base, "verdict": verdict, "qualification": qualification, "findings": findings, "handoff": handoff,
             "decisions": decisions, "videos": videos, "hero": hero,
-            "hero_caption": "the recommended motion from a power cut at READY: the arm lands on the belt, the five-bar homes and walks to READY, the claw closes, W1 / W2 / W3 touch their stops, TD4",
-            "ruler_commit": "sim2real 7806abf (frozen), amendments 1-4"}
+            "hero_caption": hero_caption,
+            "ruler_commit": "sim2real 7806abf (frozen), amendments 1-5"}
 
 
 def grid_scope(run: list[dict]) -> str:
@@ -605,7 +662,8 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
     notes = {**auto_notes(cards, ranked, episodes, calibrations, media_, wb_), **notes}
     recommended = notes.get("recommended") or recommended
     media = json.loads(media_index.read_text()) if media_index.is_file() else {}
-    plans = pickle.loads(PLANS.read_bytes()) if PLANS.is_file() else {}
+    plans = {**(pickle.loads(PLANS.read_bytes()) if PLANS.is_file() else {}),
+             **(pickle.loads(PLANS_J1.read_bytes()) if PLANS_J1.is_file() else {})}
     wb = json.loads(wandb_summary.read_text()) if wandb_summary and wandb_summary.is_file() else {}
     nominal_rows = sorted({k.split(" | ")[0] for k in cards if k.endswith(" | nominal")},
                           key=lambda r: rank_key(cards[f"{r} | nominal"]))
@@ -656,8 +714,11 @@ def build(out: Path, *, results_path: Path, media_index: Path, wandb_summary: Pa
              "<h2>What we found</h2>", notes.get("findings", ""),
              "<h2>Videos</h2>", "".join(video(media, name, caption) for name, caption in notes.get("videos", [])),
              f"<h2>The sequence for the rack: {esc(recommended)}</h2>", notes.get("handoff", ""),
-             *(("<h3>Path 1: V1 (W1's first stall passes the witness)</h3>", sequence_table(plans, "zach_v1+table @ READY", phases=(1,)),
-                "<h3>Path 2: park_first (W1's first stall refused)</h3>", sequence_table(plans, "park_first+witness+table @ READY", phases=(1,)))
+             *(("<h3>Path 1: V1 (W1's first stall passes the witness)</h3>",
+                sequence_table(plans, "zach_v1+table+J1 @ READY" if "+J1" in recommended else "zach_v1+table @ READY", phases=(1,)),
+                "<h3>Path 2: park_first (W1's first stall refused)</h3>",
+                sequence_table(plans, "park_first+witness+table+J1 @ READY" if "+J1" in recommended else "park_first+witness+table @ READY",
+                               phases=(1,)))
                if "on a W1 refusal" in recommended else (sequence_table(plans, recommended),)),
              "<h2>Decisions and what is left</h2>", notes.get("decisions", ""),
              "<h2>Provenance</h2>", notes.get("provenance", ""), "</body></html>"]
