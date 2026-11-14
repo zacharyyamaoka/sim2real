@@ -328,16 +328,20 @@ def lost_split(episodes: list, routine: str) -> dict:
 
     from sim2real.sim.homing.routine_check import ended_in  # noqa: PLC0415
 
-    homed, lost = 0, Counter()
+    homed, lost, belt_s = 0, Counter(), []
     for e in episodes:
         if e.get("row") != routine or e.get("environment") not in PHYSICAL:
             continue
         where = ended_in(e)
         if where is None:
-            homed += e.get("outcome_class") == "homed"
+            if e.get("outcome_class") == "homed" and e.get("covered"):
+                homed += 1
+            elif e.get("outcome_class") == "homed":  # homed, but on the belt after lift-off: not clean, so not covered
+                belt_s.append(e.get("belt_last_s") or 0.0)
             continue
         lost[(where, e.get("outcome_class"))] += 1
-    return {"homed": homed, "lost": lost, "wrist_lost": sum(v for (w, _), v in lost.items() if w == "wrist")}
+    return {"homed": homed, "lost": lost, "wrist_lost": sum(v for (w, _), v in lost.items() if w == "wrist"), "belt": len(belt_s),
+            "belt_last_s": max(belt_s) if belt_s else None}
 
 
 def wrong_range(episodes: list, rows: tuple, role: str) -> tuple[float, float] | None:
@@ -439,9 +443,10 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
                f"tight rotor-phase witness (0.5° on a trusted home’s own stall, the five-bar’s drives included) and the stored backlash table: "
                f"0 silent wrong in every twin, {reach}, zeros p95 "
                f"{fmt(rec.get('zero_error_p95_deg'), 3)}°, {fmt(rec.get('time_to_home_median_s'), 0)} s median.")
-    qualification = (f"Every start it lost was lost in the five-bar’s phase 0, not the wrist: the wrist phase homed all {split['homed']} "
+    handed = split["homed"] + split["belt"] + split["wrist_lost"]
+    qualification = (f"Every start it lost was lost in the five-bar’s phase 0, not the wrist: the wrist phase homed all {handed} "
                      f"starts it was handed over the nominal grid and the five physical twins" if not split["wrist_lost"] else
-                     f"The wrist phase lost {split['wrist_lost']} of the {split['homed'] + split['wrist_lost']} starts it was handed")
+                     f"The wrist phase lost {split['wrist_lost']} of the {handed} starts it was handed")
     qualification += (f". On {len(trips)} of {n} nominal starts ({pct(len(trips), n)}) the twin’s five-bar home from a belt rest trips J2’s or "
                       "C1’s 86°/s runaway stop or times out, the same for every routine; the rack runs its own staged five-bar home, "
                       "which the twin does not model yet. Time (78 s median) and speed miss their targets everywhere. Sim only; the "
@@ -458,10 +463,11 @@ def auto_notes(cards: dict, ranked: list, episodes: list, calibrations: dict, me
     findings = f"""
 <ol>
 <li><b>The wrist phase homes every start it is handed; the coverage that is missing is the five-bar's.</b> Over the nominal grid and the
-five physical twins the recommended routine homed {split['homed']} starts and lost {sum(lost.values())}: {split['wrist_lost']} in the wrist
-phase, and in phase 0 {phase0.get('tripped', 0)} J2/C1 runaway trips, {phase0.get('timeout', 0)} walk-home timeouts and
-{phase0.get('refused', 0)} C1 stalls on the claw jammed against the base that the witness refused (one start, in every twin). Phase 0
-here is the twin's <code>single_touch_ready+gff</code>; on the rack the Sim to Real Agent's staged five-bar home replaces it.</li>
+five physical twins the recommended routine homed {split['homed']} starts cleanly and lost {sum(lost.values()) + split['belt']}:
+{split['wrist_lost']} in the wrist phase, and in phase 0 {phase0.get('tripped', 0)} J2/C1 runaway trips, {phase0.get('timeout', 0)}
+walk-home timeouts, {phase0.get('refused', 0)} C1 stalls on the claw jammed against the base that the witness refused (one wrist pose,
+W1 +150 / W2 −90 / W3 −120, in every five-bar pose and twin){f" and {split['belt']} homes that brushed the belt with W3's stop block in their first {fmt(split['belt_last_s'], 1)} s" if split['belt'] else ""}.
+Phase 0 here is the twin's <code>single_touch_ready+gff</code>; on the rack the Sim to Real Agent's staged five-bar home replaces it.</li>
 <li><b>The belt moves the wrist's home to READY.</b> PEP 0047 homes the wrist at the five-bar's home, the gravity bowl, where the claw's
 tips sit ~101 mm into the belt (bam_rack_twin full_arm; with the belt as a contact the twin refuses that pose). Run as landed it homed
 {fmt(pep.get('coverage_pct'), 0)} % of its starts ({pep.get('outcomes', {}).get('tripped', 0)} trips walking down into the belt,
