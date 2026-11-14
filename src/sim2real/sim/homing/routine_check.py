@@ -294,7 +294,88 @@ def calibrate(environment: str) -> dict:
     rows = [r for r in table_to_json(result.backlash) if r["joint"] in (*WRIST, CLAW)]
     return {"environment": environment, "table": rows, "outcome": "done", "time_s": plant.time,
             "gap_error_arcmin": {ROLE[r["joint"]]: round((r["gap_rad"] - truth[r["joint"]].gap_rad) * 60.0 * 180.0 / math.pi, 3)
-                                 for r in rows if r["gap_observable"]}}
+                                 for r in rows if r["gap_observable"]},
+            "stall_witness_deg": stall_witness(prior, result.evidence)}
+
+
+def stall_witness(prior, evidence) -> dict:
+    """Role -> the rotor-phase witness's reading (deg) on this trusted home's defining stall of each joint: the claw's close, each wrist
+    joint's full-cap press on its seek side. A routine's stall on the same stop, same side, same cap reads the same (the gap and the
+    wind-up are systematic), so a witness calibrated on it can be tight (``tight_witness``)."""
+    from .fullarm_plant import CLAW, ROLE, WRIST  # noqa: PLC0415
+    from .fullarm_procedures import witness_error  # noqa: PLC0415
+
+    out = {}
+    for joint in (*WRIST, CLAW):
+        side = int(prior.seek_side[joint])
+        stalls = [s for s in evidence if s.joint == joint and s.side == side]
+        if not stalls:
+            continue
+        defining = max(stalls, key=lambda s: s.torque_nm)
+        error = witness_error(prior, joint, side, defining.motor_raw_rad)
+        if error is not None:
+            out[ROLE[joint]] = math.degrees(error)
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------- the tight witness
+
+TIGHT_WITNESS_DEG = 0.5
+# WHY derived offline (the witness only reads a run's stalls; it never moves the arm): a row with the tight witness moves exactly as its
+# plain row, so its episodes are the plain row's with each defining stall re-judged against the trusted home's own reading of that stall
+TIGHT_ROWS = ("park_first+witness @ READY", "park_first+witness+table @ READY", "multi x2 (3D-printer) @ READY",
+              "multi x3 (3D-printer) @ READY", "fast single @ READY", "zach_v1 @ READY")
+TIGHT_SUFFIX = " · witness 0.5° (stall-calibrated)"
+# phase_cal_error's witness is calibrated on the NOMINAL twin's trusted home: a calibration gone stale by 1.5 deg (an encoder recalibrated
+# after the home it was taken from) - the case a tight witness must refuse, never accept
+STALE_CALIBRATION = {"phase_cal_error": "nominal"}
+
+
+def tight_witness(episodes: list[dict], calibrations: dict, *, tol_deg: float = TIGHT_WITNESS_DEG) -> list[dict]:
+    """Derived episodes: each TIGHT_ROWS episode re-judged by a witness tolerance ``tol_deg`` on the trusted home's stall readings
+    (``calibrations[environment]["stall_witness_deg"]``). Finished episodes past the tolerance become refusals; the rest are unchanged."""
+    import statistics  # noqa: PLC0415
+
+    references = {}
+    for environment in {e.get("environment") for e in episodes}:
+        source = STALE_CALIBRATION.get(environment, environment)
+        reference = (calibrations.get(source) or {}).get("stall_witness_deg")
+        if not reference:
+            # WHY a fallback (2026-11-13: press_reverse's calibration timed out walking W1 across under the wrist's breakaway friction and
+            # under the 0.5 kg claw): the trusted home is then the plain routine's own homed, clean episodes in that twin - the median of
+            # each joint's defining-stall reading, which is the true stop's (most of them are on it)
+            homed = [e for e in episodes if e.get("environment") == source and e.get("row") == "park_first+witness @ READY"
+                     and e.get("outcome_class") == "homed" and e.get("covered")]
+            values: dict = {}
+            for e in homed:
+                for role, readings in (e.get("witness_deg") or {}).items():
+                    values.setdefault(role, []).extend(readings)
+            reference = {role: statistics.median(v) for role, v in values.items() if v} or None
+        references[environment] = reference
+    out = []
+    for episode in episodes:
+        if episode.get("row") not in TIGHT_ROWS or "error" in episode:
+            continue
+        environment = episode.get("environment")
+        reference = references.get(environment)
+        if not reference:
+            continue
+        derived = {**episode, "row": episode["row"] + TIGHT_SUFFIX, "procedure": episode["row"] + TIGHT_SUFFIX,
+                   "key": episode["key"].replace(episode["row"], episode["row"] + TIGHT_SUFFIX, 1), "derived_from": episode["row"]}
+        if episode.get("finished"):
+            off = {}
+            for role, values in (episode.get("witness_deg") or {}).items():
+                if role not in reference:
+                    continue
+                worst = max((abs((v - reference[role] + 18.0) % 36.0 - 18.0) for v in values), default=0.0)
+                if worst > tol_deg:
+                    off[role] = round(worst, 3)
+            if off:
+                derived.update({"finished": False, "time_s": None, "outcome": f"refused: tight witness {off} deg off the trusted home's stall"})
+        derived["outcome_class"] = ruler.outcome_class(derived)
+        derived["covered"] = ruler.covered(derived)
+        out.append(derived)
+    return out
 
 
 # ---------------------------------------------------------------------------------------------------------------- the pool, the cache
@@ -366,6 +447,8 @@ def results(reports: list[dict], tables: dict, calibrations: dict) -> dict:
     from .mujoco_plant import BAM_WS_SRC  # noqa: PLC0415
 
     clean = [r for r in reports if "error" not in r]
+    if any(c.get("stall_witness_deg") for c in calibrations.values()):
+        clean = clean + tight_witness(clean, calibrations)
     return {"schema": "sim2real.homing_routine/1", "ruler": "sim2real.sim.homing.routine_ruler (frozen 2026-11-13, amendment 1)",
             "grid_rows": list(GRID_ROWS), "subset_rows": list(SUBSET_ROWS), "perturbed_rows": list(PERTURBED_ROWS),
             "environments": {k: v["why"] for k, v in ruler.ENVIRONMENTS.items()}, "targets": {k: list(v) for k, v in ruler.TARGETS.items()},

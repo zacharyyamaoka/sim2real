@@ -130,6 +130,33 @@ class SingleTouchReady(five.SingleTouch):
 five.PROCEDURES.setdefault(SingleTouchReady().name, SingleTouchReady)
 
 
+def _c1seek_ready_class():
+    """c1_seek's SingleTouchC1Seek (C1 seeking beside J2 in J2's first seek, the crank never let go once powered) walking to READY."""
+    from .c1_seek import VARIANTS, SingleTouchC1Seek  # noqa: PLC0415
+
+    @dataclass
+    class SingleTouchC1SeekReady(SingleTouchC1Seek):
+        name: str = "single_touch_c1seek_ready"
+
+        def plan(self, prior, so_far):
+            sequence = super().plan(prior, so_far)
+            if sequence is None:
+                return None
+            steps = list(sequence.steps)
+            if steps[-1].name != "J2 + C1 home":
+                raise RuntimeError(f"the last step is {steps[-1].name!r}, not the walk home this retargets")
+            target = ready_cad()
+            cad = {j: prior.stops.q_rad(j, +1) for j in five.DRIVES}
+            steps[-1] = five._diagonal({J2: target[J2], C1: target[C1]}, cad, "J2 + C1 home (to READY)", others=(J1,))
+            return replace(sequence, steps=tuple(steps), name=sequence.name + ", to READY")
+
+    VARIANTS.setdefault(SingleTouchC1SeekReady().name, SingleTouchC1SeekReady)
+    return SingleTouchC1SeekReady
+
+
+_c1seek_ready_class()
+
+
 def fivebar_hold_at(target: dict, comp: str = DEFAULT_COMP, ff_scale: float = 1.0) -> dict:
     """The five-bar held at ``target`` (CAD rad) on the comp's gravity there, J1 held: what phase 1 sends J1 / J2 / C1 every step."""
     gravity = arm_comp(comp, ff_scale).torque({J1: 0.0, J2: target[J2], C1: target[C1]}) or {J2: 0.0, C1: 0.0}
@@ -157,6 +184,10 @@ class FullArmRoutine(FullArmHome):
     span_tol_deg: float = SPAN_TOL_DEG
     end: str = "td4"
     use_table: bool = True
+    # WHY a knob (the routine's grid, 2026-11-13): at PEP 0047's 2 deg the witness passed W2 stalling 1.24 deg short of its stop, the gripper
+    # plate on the forearm (W1 parked at +33, W3 at -119): a silent wrong. Calibrated on a trusted home's own stall (the rack's
+    # rotor_phase_from_homed is), the same stop reads the same to ~0.1 deg (the rack's W1 / W2 / claw over three homes), so 0.5 deg holds.
+    witness_tol_deg: float = math.degrees(WITNESS_TOL_RAD)
     evidence_plan: list = field(default_factory=list)
 
     def __post_init__(self):
@@ -345,10 +376,10 @@ class FullArmRoutine(FullArmHome):
                 witness.setdefault(ROLE[joint], []).append(round(math.degrees(error), 3))
         self.notes["witness_deg"] = witness
         if self.witness:
-            bad = {role: errors for role, errors in witness.items() if any(abs(e) > math.degrees(WITNESS_TOL_RAD) for e in errors)}
+            bad = {role: errors for role, errors in witness.items() if any(abs(e) > self.witness_tol_deg for e in errors)}
             if bad:
                 self.notes["witness_refused"] = bad
-                raise HomingRefused(f"rotor-phase witness: {bad} deg off the stop's phase (tolerance {math.degrees(WITNESS_TOL_RAD):.1f})")
+                raise HomingRefused(f"rotor-phase witness: {bad} deg off the stop's phase (tolerance {self.witness_tol_deg:.1f})")
 
     def _consistency(self, evidence: list, locates: dict) -> None:
         bad = {}
@@ -440,9 +471,20 @@ def rotor_phase_from_homed(path) -> dict:
     return out
 
 
+# Phase-0 variants tried on the grid's five-bar trips (routine_check's probe, not the ruler's rows): J2's first seek slower, and C1 seeking
+# beside J2 (c1_seek) so the crank is never limp while L1 lifts the arm off the belt
+EXPERIMENTAL_ROWS = {
+    "park_first+witness @ READY, J2 first seek 0.025": {"order": "park_first", "touch": "single", "j2_first_seek_rev_s": 0.025},
+    "park_first+witness @ READY, C1 seeks beside J2": {"order": "park_first", "touch": "single",
+                                                       "fivebar_name": "single_touch_c1seek_ready+gff"},
+    "park_first+witness @ READY, C1 beside J2, 0.025": {"order": "park_first", "touch": "single",
+                                                        "fivebar_name": "single_touch_c1seek_ready+gff", "j2_first_seek_rev_s": 0.025},
+}
+
+
 def make_row(name: str, **overrides):
-    """The procedure for row ``name`` (``ROWS``), ``overrides`` replacing its spec (tuning)."""
-    spec = {**ROWS[name], **overrides}
+    """The procedure for row ``name`` (``ROWS``, or ``EXPERIMENTAL_ROWS``), ``overrides`` replacing its spec (tuning)."""
+    spec = {**(ROWS.get(name) or EXPERIMENTAL_ROWS[name]), **overrides}
     spec.pop("needs_table", None)
     cls = spec.pop("class", "FullArmRoutine")
     if cls == "FullArmHome":
