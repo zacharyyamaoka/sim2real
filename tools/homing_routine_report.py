@@ -335,6 +335,12 @@ near-stop stalls - for {fmt((press.get('time_to_home_median_s') or 0) - (park.ge
 wrist to {fmt(wrist_p95(table_b2), 3)}° ({fmt(table_b2.get('coverage_pct'), 0)} %; the five-bar's own zeros sit at
 {fmt(fivebar_p95(table_b2), 3)}° on that twin - its gaps are not in the wrist table). The table is identified once with press_reverse and
 holds until a wrist module is rebuilt; it is exact to apply - derived from a plain run it equals the run "+table" zeros to 1e-6°.</li>
+<li><b>press_reverse is not yet a dependable cold fallback.</b> Its walk across the whole span (W1 from one stop to 3° short of the
+other at the hold cap) timed out on {_c(cards, 'press_reverse (backlash every home) @ READY', 'friction').get('outcomes', {}).get('timeout', 0)}
+of {_c(cards, 'press_reverse (backlash every home) @ READY', 'friction').get('feasible', 0)} starts with the wrist's breakaway friction and
+{_c(cards, 'press_reverse (backlash every home) @ READY', 'claw_heavy').get('outcomes', {}).get('timeout', 0)} of
+{_c(cards, 'press_reverse (backlash every home) @ READY', 'claw_heavy').get('feasible', 0)} with the 0.50 kg claw; identify_backlash (PEP 0047)
+walks the same way, so take the table's calibration on a light, warm wrist and fix that step before leaning on it.</li>
 <li><b>Speed and time.</b> Every routine misses the 0.8 × speed margin: the wrist's kp 75 / kd 0.75 PD is underdamped on the twin, so a held
 move overshoots its ramp ~2× (75°/s at the recipe's 36°/s), and the five-bar's trips peak far higher. Time: the five-bar phase is ~39 s, 23 s
 of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
@@ -352,8 +358,9 @@ of it the gravity-fed walk to READY; the wrist phase is 38-90 s by routine.</li>
  <li>V1's order over PEP 0047's park_first for the rack (undo: <code>order="park_first"</code>);</li>
  <li>the witness at 0.5° on a trusted home's stall, the five-bar's drives included (undo: <code>witness_tol_deg=2.0</code>);</li>
  <li>the witness calibrated on the 11:24 home, per the Sim to Real Agent's ArUco check and Zach's video ruling;</li>
- <li>the ruler's two amendments - lift-off is 2 s clear of the belt; rows added after READY's map - with no metric, target or cell
- moved.</li></ul></li>
+ <li>the ruler's four amendments, none moving a metric or target: lift-off is 2 s clear of the belt; rows added after READY's
+ map (V1 in the perturbed twins, the tight witness and the table as derived rows); the perturbation subset made a W1 / W2 diagonal (it had
+ been W2 −150 only, a sampling bug - the folded-wrist runs are shown apart); step timeouts labelled timeouts, not trips.</li></ul></li>
 <li><b>Left, not blocked:</b> the five-bar's lift-off from a belt rest (the coverage ceiling; its lane); a retry after a refusal (turn W3 and
  touch W2 again) to win back the refused starts; accel-limited or better-damped wrist moves before any speed-up; the real rung through the
  Sim to Real Agent.</li>
