@@ -67,7 +67,7 @@ REPORTS = [
      "rig stops. The ruler a real calibrate() will be graded by.", None, 2),
     ("2026-11-12", "bam_ws/reports/sim2real-morning-2026-11-12.html", "Sim2real morning: wrist + five-bar",
      "Both real rigs put the tool within 1 mm at their stops (wrist 98/98, worst 0.86 mm); neither twin is twinned yet "
-     "(wrist CAN 15 at 2.98× its floor). It asked you two rulings — see Open questions.", None, 3),
+     "(wrist CAN 15 at 2.98× its floor). It asked you two rulings — defaults taken, see Open questions.", None, 3),
     ("2026-11-12", "sim2real/reports/fivebar-one-click-2026-11-12.html", "Five-bar on the one-click seam",
      "calibrate(on=\"sim\") on the five-bar's sealed world, with a hero video of each routine. Values recovered, but the tool "
      "gate fails; the lane is still unmerged.", None, 4),
@@ -649,7 +649,7 @@ def build() -> str:
     decisions = "".join(f'<div class="w">{esc(w)}</div><div>{text}</div>' for w, text in DECISIONS)
 
     questions = "".join(
-        f'<div class="q"><b>{esc(q)}</b><div class="ctx">{esc(ctx)}</div><div class="def">My default: {esc(default)}</div></div>'
+        f'<div class="q"><b>{esc(q)}</b><div class="ctx">{esc(ctx)}</div><div class="def">Taken: {esc(default)}</div></div>'
         for q, ctx, default in OPEN_QUESTIONS)
 
     status_label = {"real": "real rack", "sim": "sim only", "none": "not built"}
@@ -688,7 +688,7 @@ def build() -> str:
 <code>calibrate()</code>. The real tool already stops within 1 mm (wrist 98/98, READY 14/14); the real <i>twins</i> don't pass yet (wrist CAN 15 at 2.98× its floor).</li>
 <li><b>You haven't opened {n_unseen} of the {n_all} reports on this</b> — the six that matter most are first below.</li>
 </ul>
-<nav class="toc"><a href="#first">Read first</a><a href="#mock-h">The mock</a><a href="#words">Your thinking</a><a href="#decided">Decided</a><a href="#open">Open questions</a><a href="#stack">The stack</a><a href="#gap">The gap</a><a href="#why">Why real is hard</a><a href="#all">All reports</a></nav>
+<nav class="toc"><a href="#first">Read first</a><a href="#mock-h">The mock</a><a href="#words">Your thinking</a><a href="#decided">Decided</a><a href="#open">Defaults taken</a><a href="#stack">The stack</a><a href="#gap">The gap</a><a href="#why">Why real is hard</a><a href="#all">All reports</a></nav>
 
 <h2 id="first">Read these first — not opened yet</h2>
 <p class="lede">Ranked by how much they change the picture of one-click calibration.</p>
@@ -713,8 +713,8 @@ The fuller AI digest from Nov 4 is <a href="obsidian://open?vault=zach_brain&amp
 <h2 id="decided">What you've decided</h2>
 <div class="dec">{decisions}</div>
 
-<h2 id="open">Open questions you haven't ruled on</h2>
-<p class="lede">Each has a default I'd take if you say nothing.</p>
+<h2 id="open">Open questions — defaults taken</h2>
+<p class="lede">You never ruled on these, so I took the default on each (Zach 2026-11-04: go with the default on easy-to-reverse things). Say the word and any one flips.</p>
 {questions}
 
 <h2 id="stack">The one-click chain today</h2>
