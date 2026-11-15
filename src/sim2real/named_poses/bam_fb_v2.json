@@ -1,0 +1,73 @@
+{
+ "schema": "robot_msgs/named-poses/1",
+ "robot": "bam_fb_v2",
+ "source": "bam_cad_descriptions/descriptions/bam_fb_v2.py",
+ "poses": [
+  {
+   "name": "ready",
+   "group": "arm",
+   "kind": "joint",
+   "digest": "51a91ae8c099e0de",
+   "pose": {
+    "_type": "manipulation/NamedPose",
+    "name": "ready",
+    "group": "arm",
+    "joint_names": [
+     "revolute_3",
+     "revolute_6",
+     "revolute_7",
+     "revolute_11",
+     "revolute_14",
+     "revolute_17"
+    ],
+    "positions": {
+     "dtype": "<f8",
+     "shape": [
+      6
+     ],
+     "data": [
+      -0.22165681500327983,
+      -0.4320388030386764,
+      -0.2559982295008571,
+      0.020367992370773826,
+      1.5707963267948966,
+      0.0
+     ]
+    },
+    "tolerance": null,
+    "tool_pose": null,
+    "tip_link": "",
+    "why": "Where the full arm starts and ends every session and waits between picks (READY to READY, never released; the five-bar's own home would hang the claw 101 mm into the belt). These are the numbers every copy had on 2026-11-15: the claw's TCP 40 mm over the bin's drop (bam_rack_twin full_arm.ready_motors, TCP (0.565, 0.400) m in the bench plane) with the claw plumb (TD4: W1 = L2's angle, W2 +90, W3 0); the five-bar as sim2real's homing ruler had it (Craig 65.246 / 122.791, ready_motors' IK to 0.0005 deg); J1 -12.7 because J1 0 touched the side-table clutter at homed -7 deg (2026-11-14 07:11Z, envelope J1 <= -9 deg; the clutter was cleared 2026-11-15 09:38Z). The rack realises it per power-up as a board record (ready_record.json, which carries this pose's digest). Zach 2026-11-15: a more compact READY that costs less to hold is being chosen in sim."
+   }
+  },
+  {
+   "name": "home",
+   "group": "fivebar",
+   "kind": "joint",
+   "digest": "ae34e6fac2cf9dbf",
+   "pose": {
+    "_type": "manipulation/NamedPose",
+    "name": "home",
+    "group": "fivebar",
+    "joint_names": [
+     "revolute_6",
+     "revolute_7"
+    ],
+    "positions": {
+     "dtype": "<f8",
+     "shape": [
+      2
+     ],
+     "data": [
+      0.017627825445142818,
+      1.6773204362257819
+     ]
+    },
+    "tolerance": null,
+    "tool_pose": null,
+    "tip_link": "",
+    "why": "The five-bar's home in its homed map of record (homed_083647, 2026-11-10: home_joint_rad, Craig 91.01 / -126.438): where fivebar_home ends and the homing routines start their walks (sim2real gff_rung / fullarm_check / fullarm_home HOME_CRAIG_DEG, bam_rack_twin fullarm_comp's 'home'). The full arm never waits here in a session: the claw would hang 101 mm into the belt."
+   }
+  }
+ ]
+}

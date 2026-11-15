@@ -11,6 +11,8 @@ import math
 
 from robot_msgs.control import EffortStall, JointCommand, JointCommandSequence, JointCommandStep, Reached
 
+from ...named_poses import named_pose
+
 TAU = 2.0 * math.pi
 J1 = "revolute_3"  # fullarm_plant.J1 / geometry.J1 (the URDF name): J1 rolls the five-bar plane about the arm's spine
 
@@ -39,8 +41,10 @@ J1_SEEK_SPEED = 0.02 * TAU  # 7.2 deg/s (the rack's seeks: 77.7 deg in 12.4 s)
 J1_RETURN_SPEED = 0.03 * TAU
 # WHY READY's J1 is -12.7 deg, not 0 (2026-11-14 07:11Z): at READY J1 = 0 is blocked - contact at homed -7 deg in the side-table clutter
 # (full_arm/obstacles/j1_contact_20261114T0711Z.json, envelope J1 <= -9 deg); READY is the board record with J1 at -12.7
-# (full_arm/ready_20261114T073916Z). J1 goes back there before the wrist homes.
-J1_READY_RAD = math.radians(-12.7)
+# (full_arm/ready_20261114T073916Z). J1 goes back there before the wrist homes. The angle is the description's named pose "ready"
+# (sim2real.named_poses, bam_ws PEP 0056), never a copy: READY moves here when it moves there. The envelope below is the side table's,
+# not READY's - a READY with J1 above -9 deg (the compact one's J1 0) is refused until it is retired (the clutter was cleared 11-15).
+J1_READY_RAD = named_pose("ready").position_of(J1)
 J1_ENVELOPE_MAX_RAD = math.radians(-9.0)
 # WHY one seek from wherever J1 hangs, relative: before its stall J1 reads only its board's frame. 110 deg covers the grid's highest start
 # (+6 deg, a few sagged) to the stop with room for the stall to build

@@ -40,6 +40,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
+from ...named_poses import named_pose, wrist_deg
 from . import routine_ruler as ruler
 
 GRID_ROWS = ("zach_v1 @ READY", "park_first+witness @ READY", "multi x2 (3D-printer) @ READY", "press_reverse (backlash every home) @ READY",
@@ -70,8 +71,10 @@ def j1_plant(rows) -> dict:
         raise ValueError(f"a job's rows must share one plant: {list(rows)}")
     return dict(next(iter(configs))) if configs else {}
 TABLE_ENVIRONMENTS = ("B1", "B2")  # where a stored table can differ from B0's (B0: every gap 0)
+# READY's five-bar and wrist from the description's named pose "ready" (bam_ws PEP 0056); J1 stays at the grid's 0 (the twin's plane),
+# not READY's -12.7 - the calibration start was scored there
 CALIBRATION_START = {"name": "calibration: power lost at READY, claw plumb", "j2_deg": ruler.FIVEBAR_LEVELS["READY"][0],
-                     "c1_deg": ruler.FIVEBAR_LEVELS["READY"][1], "wrist_deg": (1.167, 90.0, 0.0), "claw_deg": 30.0, "knee": -1,
+                     "c1_deg": ruler.FIVEBAR_LEVELS["READY"][1], "wrist_deg": wrist_deg(named_pose("ready")), "claw_deg": 30.0, "knee": -1,
                      "j1_deg": 0.0, "family": "calibration"}
 CACHE_FIELDS = ("key", "row", "environment", "cell_index")
 
