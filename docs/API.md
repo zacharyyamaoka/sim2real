@@ -89,7 +89,7 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 - **Never:** writes anything or touches hardware.
 - **Not built yet:** a rig's twin (`RigRunner` has no `simulate`).
 
-### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None, config=None, data=None) -> RobotTwin`
+### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None, config=None, data=None, transport=None) -> RobotTwin`
 
 - **What it does:** returns a NEW, fitted twin. It plays the routines on the simulator against a hidden truth that the fit never sees, in the order their declarations give (`sim2real.calibration.plan`; docs/CALIBRATE.md).
 - **The learned values end in `_`** (scikit-learn's convention): `values_`, `intervals_`, `rungs_` and `calibration_`. `fitted.parameters` carries them as Values.
@@ -98,10 +98,11 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 - **`data=collect(twin)`:** fits recorded runs and never calls the backend's measure. This is the deployment path: collect in the field, fit anywhere.
 - **`move_truth={key: value}`:** moves hidden values for one run while the ruler stays put. It's the mutation test: a moved truth must turn red.
 - **`noise`:** rigs only. `None` is the rig's measured 1×, a number scales every term, or pass a `sim2real.rig.NoiseModel`.
-- **Never:** writes anything. It doesn't touch hardware unless `on="real"`, and that isn't built yet.
+- **`on="real", transport=...`** (the pendulum tracer, `sim2real.real`): plans the same schedule plus its five floor repeats, writes them as a rack submission, lets the transport play it, reads the runs back through `tools/run_files.py` and fits them with the same `identify()`, sealed. `RackTransport(out)` is a dry run that raises `RunsPending` with the session command; `RackTransport(out, execute=True, adapter=...)` starts the rack's session runner only when every refusal check passes; `TwinTransport()` plays it on the rack twin at the sealed hidden truth. The record is `backend: "real"`; on hardware its rows are ungraded and eval's gates (T1 floor, T2 twinned, held-out fidelity) judge the twin. See docs/CALIBRATE.md, "on='real'".
+- **Never:** writes anything on `on="sim"`. On `on="real"` it writes only the submission its transport is given a folder for, and it never touches hardware itself: a transport plays (`RackTransport` hands the plan to the rack's own session runner, and only with `execute=True`).
 - **Raises:**
   - `ValueError` for an unknown `on` or for `truth` other than `"sealed"`;
-  - `NotImplementedError` for `on="real"` (it names the rack path);
+  - `TypeError` for `on="real"` without a transport (it names `RackTransport` and `TwinTransport`); `RunsPending`, `RackRefused` and `IngestError` from `sim2real.real` on the rack path;
   - `NotImplementedError` for `noise=` on the tracer;
   - `KeyError` for a `move_truth` key the world doesn't have;
   - `ValueError` for noise given both as `noise=` and in `config.noise`;

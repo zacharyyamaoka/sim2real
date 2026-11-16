@@ -7,6 +7,7 @@
     fitted = twin.calibrate(on="sim", truth="sealed")    # the type's routine schedule on a hidden truth; a NEW, fitted twin
     fitted.eval().summary()                              # held-out runs only: error / floor, the gates
     fitted.parameters                                    # {instance: {name: Value}}: the calibrated values replace the priors
+    twin.calibrate(on="real", transport=sim2real.real.RackTransport(out))   # the same schedule on the rack (sim2real.real; a dry run by default)
 
 Zach: "So you start with a robotDescription. Honestly it should just be like .calibrate() and .eval_twin()... so you set the model, you
 calibrate it and then you eval it", plus .simulate(). Each verb is a thin call over a runner (SimRunner: plan, measure, identify, score),
@@ -206,10 +207,13 @@ class Calibration:
 
     @property
     def passed(self) -> bool:
-        return bool(self.rows) and not self.failing
+        # WHY at least one graded (docs/CALIBRATE.md's `passed`; 2026-11-15, the real backend): a run on hardware has no hidden truth, so
+        # its rows are not graded (pass None) and nothing has passed; on the sim every row is graded, so this is what it always was
+        return any(r["pass"] is True for r in self.rows) and not self.failing
 
     def summary(self) -> str:
-        head = (f"calibrate(on={self.backend!r}, truth='sealed'): {self.plan['train_runs']} train runs fitted rungs {', '.join(self.rungs)}; "
+        how = f"transport={self.plan['transport']!r}" if self.plan.get("transport") else "truth='sealed'"
+        head = (f"calibrate(on={self.backend!r}, {how}): {self.plan['train_runs']} train runs fitted rungs {', '.join(self.rungs)}; "
                 f"the fitted twin runs {self.model} ({self.rung}); {self.seconds:.0f} s")
         if self.truth_moved:
             head += f"\n  the hidden truth MOVED for this run: {self.truth_moved} (the ruler stays world.json's)"
@@ -218,8 +222,12 @@ class Calibration:
             err = None if r["recovered"] is None or r["true"] is None else r["recovered"] - r["true"]
             tol = r["tolerance"]
             tol_text = "—" if tol is None else (f"{tol['value'] * 100:g} %" if tol["kind"] == "rel" else f"{tol['value']:g}")
-            table.append(f"  {r['key']:36s} {_g(r['nominal']):>11s} {_g(r['true']):>11s} {_g(r['recovered']):>11s} {_g(err):>9s} {tol_text:>9s}  "
-                         f"{'pass' if r['pass'] else 'FAIL'}")
+            word = "not graded" if r["pass"] is None else "pass" if r["pass"] else "FAIL"
+            table.append(f"  {r['key']:36s} {_g(r['nominal']):>11s} {_g(r['true']):>11s} {_g(r['recovered']):>11s} {_g(err):>9s} {tol_text:>9s}  {word}")
+        graded = sum(r["pass"] is not None for r in self.rows)
+        if self.rows and not graded:
+            verdict = "  => NOT GRADED: real hardware has no hidden truth; eval() judges the twin on held-out runs over the rack's own floor"
+            return "\n".join([head, *table, verdict])
         verdict = f"  => {'PASS' if self.passed else 'FAIL'}: {sum(r['pass'] is True for r in self.rows)}/{len(self.rows)} within tolerance of the hidden truth"
         return "\n".join([head, *table, verdict + (f" (failing: {', '.join(self.failing)})" if self.failing else "")])
 
@@ -481,9 +489,11 @@ class RobotTwin:
         return self.runner.simulate(**options)
 
     def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None, noise=None, config=None,
-                  data=None) -> RobotTwin:
+                  data=None, transport=None) -> RobotTwin:
         """A NEW twin, fitted: the type's routine schedule played `on` the simulator at the hidden truth (`truth="sealed"`: the fit never
-        sees it) or on the real hardware. `move_truth` moves named hidden values for one run, the ruler unchanged (its mutation test).
+        sees it) or on the real hardware through `transport` (sim2real.real: RackTransport, the One Dof Test Rack's session runner, a dry
+        run unless it is told to execute; TwinTransport, the rack twin at a sealed hidden truth; docs/CALIBRATE.md "on='real'"). `move_truth`
+        moves named hidden values for one run, the ruler unchanged (its mutation test; on the real backend it is the transport's).
         `noise` (a rig on the one-click seam only): None = the rig's measured 1x, a number = every term at that level, or a
         sim2real.rig.NoiseModel. `config` (a sim2real.calibration.CalibrationConfig) steers the run: models, known values, exclusions, an
         order, the budget, per-routine options, injected routines (PEP 0001 §6). `data` (sim2real.calibration.collect(twin)) fits recorded
@@ -491,14 +501,12 @@ class RobotTwin:
         the run as record_ (sim2real.calibration/1, docs/CALIBRATE.md)."""
         if on not in BACKENDS:
             raise ValueError(f"on must be one of {BACKENDS}, not {on!r}")
-        if on == "real":
-            raise NotImplementedError(
-                "on='real' is next: the rack path. CAN 11 plays the same schedule on the One Dof Test Rack (bam_rack_twin.schedule replay "
-                "through bam_rack_twin.hardware, its torque cap and stops as the runner's guards), its runs come back through "
-                "tools/run_files.py as robot_msgs JointTrajectory, and the same identify fits them; held-out score against the rack's own "
-                "floor (gate T1). Not wired in this lane.")
         if truth != "sealed":
-            raise ValueError(f"on='sim' fits against a sealed hidden truth (truth='sealed'), not {truth!r}")
+            raise ValueError(f"calibrate fits against a sealed hidden truth (truth='sealed'), not {truth!r}")
+        if on == "real":
+            return self._calibrate_real(transport, move_truth=move_truth, noise=noise, config=config, data=data)
+        if transport is not None:
+            raise ValueError("transport= is the real backend's (on='real'); on='sim' plays the simulator itself")
         if _is_rig(self.runner):
             from .rig import RigRunner  # noqa: PLC0415
 
@@ -549,6 +557,27 @@ class RobotTwin:
                                                       runs=len(state["measured"].train), noise=state["noise"], twin=self.description.id,
                                                       description=self.description)
         return fitted
+
+    def _calibrate_real(self, transport, *, move_truth=None, noise=None, config=None, data=None) -> RobotTwin:
+        """on='real' (sim2real.real.calibrate): plan, emit the rack submission, play it through `transport`, ingest the runs as
+        JointTrajectory, fit them with the tracer's own identify(). WHY each refusal names the way through: the real backend is the
+        pendulum tracer's pipeline on recorded runs, so what steers a rig (config, data, noise) has no meaning here yet, and the truth to
+        move is the transport's world, never the backend's."""
+        if _is_rig(self.runner):
+            raise NotImplementedError(f"on='real' runs the pendulum tracer's pipeline on the rack (sim2real.real); {self.description.id}'s rig "
+                                      "on the one-click seam has no rack transport yet")
+        if transport is None:
+            raise TypeError("calibrate(on='real') plays the schedule through a transport: sim2real.real.RackTransport(out) for the One Dof "
+                            "Test Rack (writes the rack submission and dry-runs it; only RackTransport(out, execute=True, adapter=...) starts "
+                            "the rack's session runner), or sim2real.real.TwinTransport() for the rack twin at a sealed hidden truth")
+        if move_truth:
+            raise ValueError("on='real' has no truth to move: the world is the transport's (sim2real.real.TwinTransport(move_truth=...))")
+        if config is not None or data is not None or noise is not None:
+            raise NotImplementedError("config=, data= and noise= steer a rig on the one-click seam; the real backend plays the tracer's "
+                                      "schedule (its noise is the hardware's: eval()'s floor measures it)")
+        from . import real  # noqa: PLC0415
+
+        return real.calibrate(self, transport)
 
     def noise(self):
         """The rig's measured 1x noise model (sim2real.rig.NoiseModel): .at(level) and .with_terms(...) make a stress lane's sweep."""

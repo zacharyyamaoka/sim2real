@@ -192,6 +192,90 @@ a row, and `CalibrationRecord.from_dict(record.to_dict())` gives back the same r
 planned routines; `CalibrationRecord.from_sysid(...)` records it in the same schema, its plan (`sysid_plan`) one fit step per model rung
 `identify()` actually fitted, never a catalog routine that did not run.
 
+## on='real': the rack path
+
+`calibrate(on="real", transport=...)` plays the same schedule on hardware through a transport, reads the runs back as robot_msgs
+`JointTrajectory` through `tools/run_files.py` (the one door to the rack's run files) and fits them with the same `identify()` the sim
+backend runs, sealed. First station: CAN 11 on the One Dof Test Rack, the pendulum tracer (`sim2real.examples.pendulum_can11()`). Code:
+`src/sim2real/real.py`; acceptance: `tests/test_real_backend.py`.
+
+```python
+import sim2real
+from sim2real.real import RackTransport, TwinTransport
+twin = sim2real.examples.pendulum_can11(workers=2)
+fitted = twin.calibrate(on="real", transport=TwinTransport())        # the rack twin at a sealed hidden truth: no hardware anywhere
+fitted.record_.to_dict()                                              # sim2real.calibration/1, backend "real"
+fitted.eval().summary()                                               # held-out runs replayed on their own commands, over T1's floor
+twin.calibrate(on="real", transport=RackTransport(out))              # the rack: writes the submission, dry-runs it, raises RunsPending
+```
+
+The four steps, each a function in `sim2real.real`:
+
+| step | what | from |
+|---|---|---|
+| plan | the sim backend's own plan (every FB run of the train and held-out splits) plus the schedule's five floor repeats (T1) | `sysid/examples/pendulum_can11/pipeline.py` `plan()` |
+| emit | `submission.json` (`sim2real.real.submission/1`), `schedule.json`, `plans/<station>_<mode>.json`: the rack runner's session plans over exactly the planned runs, each step stamped with its schedule run | `bam_rack_twin.schedule.session_plans` |
+| play | `transport.play(submission)` returns a `Recording` (session folders), or raises `RunsPending` | the transport |
+| ingest + fit | each `runs/<name>.npz` + `.json` read as a JointTrajectory, keyed by its schedule stamp, judged and put in the output frame, paired with its link angle; then `identify()` inside `sysid.world.sealed()` | `tools/run_files.py`, `bam_rack_twin.evidence` |
+
+**What a transport returns.** A session folder in the rack runner's own files: `runs/<name>.npz` + `runs/<name>.json`
+(`bam_rack_twin.hardware.board.save`: its FIELDS, the run meta with its `schedule` stamp {digest, run, split, mode}) and, per run,
+`runs/link_camera/<name>.npz`: the link angle a camera saw (a robot_msgs JointTrajectory, output frame, on the wall clock), which `identify()`
+reads for the gear gap (M4) and the rows where the gear is in contact. A run the producer's rules refuse (`bam_rack_twin.evidence.judge`:
+an abort, a latched watchdog, a hard fault, a setpoint not followed) came back, so it is kept out of the fit and eval and named on
+`fitted.runs_.refused`, never fatal: bam_rack_twin's own convention, and a re-run meets the same physics (on the twin's world CAN 11's
+multisine at kp × 0.25 sticks in its stiction band, 5 mrad of a 100 mrad command, so 45 of the 46 train runs fit). A real fault still shows,
+as the runs the session then skipped. A planned run that did not come back and a train or held-out run without a usable link camera are
+named in an `IngestError`; `calibrate(..., strict=False)` (`sim2real.real.calibrate`, the CLI's `--partial`) fits what came back, keeping
+those out. A run recorded twice, or logged by another board, is always refused.
+
+**The transports.**
+
+- `TwinTransport(root=, move_truth=, workers=2)` plays every step of every session plan as the oracle plays a schedule run (the run's
+  sampled target, position mode, the twin of record at world.json's truth) and measures it with the oracle's own noise model and seeded
+  streams, then writes each run with `board.save` (ticked: row k is the tape's sample k) and its link angle. The runs read back are the
+  oracle's in-memory measurement bit for bit (`tests/test_real_backend.py`), so `on="real"` over the twin fits exactly what `on="sim"`
+  fits. `move_truth` moves the world for the ruler's red run; `ruler()` stays world.json's and is asked for only after the fit.
+- `RackTransport(out, execute=False, adapter=None)` hands the submission to the rack's own session runner. Without `execute` it writes the
+  submission and `dry_run.json` (the rack runner's offline checks: every step's limits and the proven window, nothing opened) and raises
+  `RunsPending` with one command per session; once the sessions' runs are in `out/sessions/`, the same call fits them. With `execute=True`
+  it starts `python -m bam_rack_twin.hardware session --plan P --out O` (the interpreter running it, so plan, session and fit are one
+  bam_rack_twin tree) in a `systemd-run --user --scope -p CPUWeight=2000` scope, and only when none of these refusals holds: a device-free
+  lane (`BAM_LANE_NO_DEVICES`), no `adapter`, the record putting the station on another adapter, the record retiring the station, a tree
+  without the rack's own bus lock, or `BAM_RACK_BUS_LOCK` not set to `rack_bus_lock(adapter)`. On bam_ws main's record (2026-11-15) CAN 11
+  is retired on 0607623A, the full arm's adapter, where CAN 11 is the five-bar's J1 board, so an execute from main's tree is refused.
+
+**The record on hardware.** No hidden truth, so no parameter is graded: each row's `pass` is null with its `why_not`, `true` null, and
+`passed` is false (nothing graded; `failing` stays empty). The verdict is eval's: `floor` (T1, the floor tape's five identical repeats
+agree as the same input, motor encoder), `twinned` (T2, the twin's held-out motor-encoder error over that floor, at most
+`cards.servo_gates.FIDELITY_TAPES`) and `held_out_fidelity` (nominal over calibrated held-out error, at least acceptance.json's factor). The
+link camera's ratio over its own floor is reported beside them as a flag, never a gate (Zach, 2026-11-11: gates from the joint readings).
+Eval replays each recorded run from its measured start, the board's real commands on the board's real stamps. On the twin's world that
+makes `twinned` unpassable by construction (a twin at the exact truth read 11x on the shortest held-out run): the measured start is 20 µrad of encoder noise off the
+command, CAN 11's stick-slip under ki 16000 amplifies it, and the world's floor repeats all start exactly on the command, so its floor is
+the encoder's noise alone. The rack's repeats start where the joint really rests, so its T1 floor carries that spread and T2 is its gate.
+Measured on the twin (2026-11-15, `tests/test_real_backend.py` green): floor 0.0276 mrad from the floor tape's 5 repeats, the fitted M4
+18.8x it (FAIL, as above), held-out fidelity 13.9x (pass, >= 4x), and the link camera's flag 1.39x its own 0.435 mrad floor (the sim
+oracle's link gate read 1.34x).
+
+**One command.** `python -m sim2real.real` (dry run unless `--execute`; `--transport twin` plays the whole path on the twin). It runs
+under bam_rack_twin's venv, the pendulum's runtime: sim2real's own env cannot carry bam_rack_twin, which depends on sim2real, and
+`pendulum_can11()` there says so with this command.
+
+    env -u VIRTUAL_ENV /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m sim2real.real --transport twin --out /tmp/pendulum-real-twin
+
+**Queued for the rack owner (2026-11-15; not run).** From the 1-DOF campaign's tree, whose record puts CAN 11 on 272813EF and whose board
+module has the per-adapter `BAM_RACK_BUS_LOCK` (bam_ws `claude/1dof-rack-sim-to-real-435fc0`, not on main yet). A dry run as written; the
+same line with `--execute` plays the 80 runs (about 25 min), and the same line again afterwards fits them and writes `calibration.json`
+and `eval.json` into `--out`:
+
+    env -u VIRTUAL_ENV BAM_RACK_BUS_LOCK=/home/bam/.cache/rack-commissioning/bus.272813EF.lock /home/bam/bam_ws/.claude/worktrees/1dof-rack-sim-to-real-435fc0/src/dev/bam_rack_twin/.venv/bin/python -m sim2real.real --adapter 272813EF --out /archive/datasets/bam_rig/sim2real_real/pendulum_can11-20261116
+
+Before `--execute`, three things the dry run cannot settle: the fit needs `runs/link_camera/<name>.npz` for every train and held-out run
+(the link angle on tags 8-12; the rack's session records the D405 clips, nothing turns them into this file yet); the schedule and the twin
+of record are built from that tree's record, so its board knobs must be CAN 11's live ones (the campaign raised max_current to 19.4 A and
+recorded kp 400 / kd 8 on 11-15); and the session's own config and frame checks still run before anything moves.
+
 ## Errors
 
 - `CalibrationCycleError` (a `ValueError`): the declarations' hard edges form a cycle.
@@ -200,3 +284,7 @@ planned routines; `CalibrationRecord.from_sysid(...)` records it in the same sch
 - `KeyError`: an option a routine does not have.
 - `ValueError`: noise given both to `calibrate(noise=)` and in `CalibrationConfig.noise`.
 - `NotImplementedError`: `config=` or `data=` on the pendulum tracer, which runs sysid's pipeline rather than planned routines.
+- `TypeError`: `calibrate(on="real")` without a transport (it names `RackTransport` and `TwinTransport`).
+- `RunsPending` (`sim2real.real`): the submission is written and dry-run, nothing has come back to fit; it carries the session commands.
+- `RackRefused` (`sim2real.real`): `RackTransport(execute=True)` refused before starting anything; `.refusals` says why.
+- `IngestError` (a `ValueError`, `sim2real.real`): the runs that came back cannot be fitted as planned, each problem named.

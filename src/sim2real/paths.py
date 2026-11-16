@@ -9,9 +9,11 @@ Plain constants: nothing is read, created or checked at import.
 |---|---|---|
 | ``SIM2REAL_BAM_WS`` | /home/bam/bam_ws | the bam_ws checkout (its packages, docs and reports) |
 | ``SIM2REAL_BAM_WS_SRC`` | $SIM2REAL_BAM_WS/src | the bam_ws ``src`` the twins load by path (mujoco_plant's WHY) |
+| ``SIM2REAL_RACK_TWIN`` | $SIM2REAL_BAM_WS_SRC/dev/bam_rack_twin | bam_rack_twin, whose venv is the pendulum tracer's runtime (sysid's) |
 | ``SIM2REAL_RIG_DATA`` | /archive/datasets/bam_rig | the rig's recorded runs (39 GB; never leaves the workstation) |
 | ``SIM2REAL_RACK_DIR`` | $SIM2REAL_RIG_DATA/rack_2026-11-10 | the One Dof Test Rack's session folder |
 | ``SIM2REAL_SCHEDULES`` | $SIM2REAL_RIG_DATA/schedules | the frozen schedules |
+| ``SIM2REAL_REAL_RUNS`` | $SIM2REAL_RIG_DATA/sim2real_real | where ``calibrate(on="real")``'s rack submissions and their sessions go (sim2real.real) |
 | ``CAD2ROBOT_BUNDLE_CACHE`` | ~/.cache/cad2robot-build/bundles | git-archived cad2robot/1 bundles, ``<ref>/<subdir>`` (shared with bam_ws) |
 | ``SIM2REAL_CAD_EXPORTER`` | /home/bam/cad-exporter | the clone the bundles are archived from when the cache lacks one |
 | ``SIM2REAL_ROBOT_MODELS`` / ``_IO_DIAGNOSTICS`` / ``_ROBOTPARTS`` / ``_PIDTUNA`` / ``_DATA_UI`` / ``_DATA_RECORDER`` | /home/bam/<repo> | sibling repos |
@@ -31,9 +33,11 @@ def env_path(name: str, default) -> Path:
 
 BAM_WS = env_path("SIM2REAL_BAM_WS", "/home/bam/bam_ws")
 BAM_WS_SRC = env_path("SIM2REAL_BAM_WS_SRC", BAM_WS / "src")
+RACK_TWIN = env_path("SIM2REAL_RACK_TWIN", BAM_WS_SRC / "dev" / "bam_rack_twin")
 RIG_DATA = env_path("SIM2REAL_RIG_DATA", "/archive/datasets/bam_rig")
 RACK_DIR = env_path("SIM2REAL_RACK_DIR", RIG_DATA / "rack_2026-11-10")
 SCHEDULES = env_path("SIM2REAL_SCHEDULES", RIG_DATA / "schedules")
+REAL_RUNS = env_path("SIM2REAL_REAL_RUNS", RIG_DATA / "sim2real_real")
 BUNDLE_CACHE = env_path("CAD2ROBOT_BUNDLE_CACHE", Path.home() / ".cache" / "cad2robot-build" / "bundles")
 CAD_EXPORTER = env_path("SIM2REAL_CAD_EXPORTER", "/home/bam/cad-exporter")
 ROBOT_MODELS = env_path("SIM2REAL_ROBOT_MODELS", "/home/bam/robot_models")

@@ -249,9 +249,12 @@ class Fit:
     stock: dict = field(default_factory=dict)
 
 
-def identify(description, measurements: dict[str, RunData]) -> Fit:
+def identify(description, measurements: dict[str, RunData], *, workers: int = 8) -> Fit:
     """M2 and M3 by one inverse-dynamics regression over every train run on the stock smoother's grid, M4 by the gap between the
-    motor encoder and the link camera; 95 % intervals by the stock moving-block bootstrap (0.5 s blocks, every run its own share)."""
+    motor encoder and the link camera; 95 % intervals by the stock moving-block bootstrap (0.5 s blocks, every run its own share).
+    `workers`: the replay pool of the friction polish (refine_friction). WHY a keyword with the old 8 as its default (2026-11-15, the
+    real backend): each replay is one deterministic (twin, run) job, so the pool's size moves no number; a lane beside the powered rack
+    caps it at 2 (sim2real.real), and every existing caller keeps its 8."""
     from bam_rack_twin import identify as rack_identify  # noqa: PLC0415
 
     board = _rack()[1]  # the twin of record's board knobs: the description's known configuration (description.known)
@@ -345,7 +348,7 @@ def identify(description, measurements: dict[str, RunData]) -> Fit:
               "M2": {**dict(zip(names2, map(float, est2))), "friction_stribeck_drop_nm": 0.0, "friction_stribeck_speed_rad_s": None, "backlash_rad": 0.0},
               "M3": {**dict(zip(names3, map(float, est3))), "backlash_rad": 0.0}}
     values["M4"] = {**dict(zip(names3, map(float, est4))), "backlash_rad": float(gap_hat)}
-    refined, evaluations, cost = refine_friction(measurements, values["M4"])
+    refined, evaluations, cost = refine_friction(measurements, values["M4"], workers=workers)
     values["M4"].update(refined)
     intervals = {"M0": {n: ci(boot0, i) for i, n in enumerate(names0)},
                  "M2": {n: ci(boot2, i) for i, n in enumerate(names2)}, "M3": {n: ci(boot3, i) for i, n in enumerate(names3)},
@@ -368,7 +371,7 @@ def identify(description, measurements: dict[str, RunData]) -> Fit:
 REFINE_FAMILIES = ("pickplace", "cycle", "jog", "sweep", "plateaus")
 
 
-def refine_friction(measurements: dict[str, RunData], start: dict) -> tuple[dict, int, float]:
+def refine_friction(measurements: dict[str, RunData], start: dict, *, workers: int = 8) -> tuple[dict, int, float]:
     """The friction constraint's static level and the Stribeck drop, polished by output error on the train operate runs.
 
     WHY (measured 2026-11-05, held-out sensitivity of the replay to each parameter at the truth): under CAN 11's ki 16000 a joint
@@ -390,7 +393,7 @@ def refine_friction(measurements: dict[str, RunData], start: dict) -> tuple[dict
             return 1.0
         count[0] += 1
         values = {**start, "frictionloss_nm": fs, "friction_stribeck_drop_nm": drop}
-        replays = replay(runs, {"probe": twin(values, f"refine-{count[0]}")}, workers=8)
+        replays = replay(runs, {"probe": twin(values, f"refine-{count[0]}")}, workers=workers)
         err = np.concatenate([replays[("probe", n)].q - measured[n] for n in names])
         return float(np.sqrt(np.mean(err ** 2)))
 

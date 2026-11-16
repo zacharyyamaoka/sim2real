@@ -123,8 +123,11 @@ def test_the_types_name_the_parameters_they_hold(robot):
 
 
 def test_the_real_backend_names_the_rack_path(robot):
-    with pytest.raises(NotImplementedError, match="rack"):
+    # WHY a TypeError now (2026-11-15, sim2real.real): on='real' is wired; without a transport it names the two that play it, the rack's
+    # (RackTransport: a dry run unless told to execute) and the twin's (tests/test_real_backend.py holds the backend itself)
+    with pytest.raises(TypeError, match="RackTransport") as caught:
         robot.calibrate(on="real")
+    assert "Test Rack" in str(caught.value) and "TwinTransport" in str(caught.value)
 
 
 def test_an_unknown_backend_or_an_unsealed_truth_is_refused(robot):

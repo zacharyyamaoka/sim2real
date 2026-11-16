@@ -112,7 +112,7 @@ def test_the_checker_catches_a_planted_violation(tmp_path, layer, source, caught
 # sim2real.twin composes every layer (cards' types, metrics' gates, the oracle's fit), so it may import any of them, and none may import
 # it, or the stable end would load the whole package. sim2real/__init__.py reaches it only inside a function (a module __getattr__) (`import sim2real` loads no
 # layer, held by tests/test_one_click.py).
-FRONT = ("twin",)
+FRONT = ("twin", "real")
 
 
 def front_door_imports(root: Path) -> list[str]:
