@@ -66,6 +66,7 @@ from robot_msgs.control import JointCommand, JointCommandSequence, JointCommandS
 from robot_msgs.sensor import JointState
 from robot_msgs.std import Header
 
+from ... import paths as _paths
 from .j1_home import (
     J1,
     J1_JOINT_CAP_NM,
@@ -95,7 +96,8 @@ RECOVER_TIMEOUT_S = 40.0
 START_TOLERANCE_DEG = 8.0  # fullarm_stops' runs (its default is 5; a hand-over droops C1 a few deg)
 USB_QUIET_S = 30.0
 DEPLOYMENT = Path.home() / "bam_ws-armhold" / "src" / "dev" / "bam_rack_twin"
-HOMED_DIR = Path("/archive/datasets/bam_rig/full_arm/homed")
+# WHY through sim2real.paths (tests/test_paths.py): the same /archive/datasets/bam_rig/full_arm/homed on the workstation, a copy's on a VM
+HOMED_DIR = _paths.RIG_DATA / "full_arm" / "homed"
 
 
 # ---------------------------------------------------------------------------------------------------------------- J1's map and its zero
