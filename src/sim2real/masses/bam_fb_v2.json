@@ -1,0 +1,650 @@
+{
+ "schema": "bam-description/mass-overrides/1",
+ "robot": "bam_fb_v2 (five-bar + UR wrist + crab claw v2.1), the sim2real build_rig('cad') bundle's body names",
+ "fitted": "2026-11-15 by PID tuna's reasoner: the 14b fit's five-bar transfer rows unchanged (11 real re-pick runs, 15304 moving J2 / C1 samples, docs/mass_refit's samples.npz) + 193 friction-cancelled W1 / W2 moving cells from 43 fullarm_stops runs (2026-11-14 01:24Z - 11-15 06:49Z, one power-up: the READY <-> READY-8 legs of the stops runs, run_042103's W1 READY..READY+15, run_044713's swung wrist, the hand-eye multi-stop sweeps W1 / W3 over +-140 deg at kp 75 and kp x4). No hold is a row.",
+ "method": "one linear gravity model for both: theta = (m at the body origin, h = m c in the body frame) of l1, l2, c1, c2 and of the four wrist bodies (separately - no subtree scale), by weighted ridge least squares around the CAD (sigma 30 % of a body's mass, 20 mm x its mass per first moment). Five-bar rows: board torque - inertial (MuJoCo RNE, measured accelerations) = cos J1 x G + friction_j(v), friction odd in v (piecewise-linear in |v|), row sigma 1 N.m (docs/mass_refit's estimator verbatim). Wrist rows: per posture group (one gain class, the other joints within 5 / 10 deg) the + / - legs paired at matched angle and speed (docs/w1_offset/arithmetic.matched_half_sum); y = the half-sum of board torque - inertial, X = the per-body regressor half-summed over the same samples (so friction cancels and a posture mismatch inside a cell is in X as in y); sigma = the cell's standard error (+) a floor 0.01 N.m (0.02 for the +-140 deg sweeps: their cross-joint inconsistency). W3's cells are not rows (not gravity, below). The regressor is MeasuredWristFF's own posing (W1-W3) and MeasuredFivebarComp's (J2 / C1), equal to their MuJoCo RNE to 1e-14 N.m. Shoulder: the 14b file's (only J1 sees it; J1's holds are checks).",
+ "why": "docs/w1_offset (twin_ring/w1_offset_2026-11-15.json): MeasuredWristFF over-fed W1 by ~0.08 N.m at READY <-> READY-8 because the 14b file's one wrist + claw subtree scale (x1.2208) came from W1 / W2 HOLDS, 13 of 15 resting from below on W1's static friction; its verifier showed W2's own moving half-sum is right at x1.22 (so the wrist is not one uniform scale) and that MeasuredFivebarComp runs on MeasuredWristFF's model (a naive x0.835 moves C1's READY FF +0.59 N.m). This file fits the wrist bodies on the wrist's own moving rows and the five-bar on its own, on ONE model, so the W1-W3 FF, the five-bar comp and the twin agree.",
+ "bodies": {
+  "shoulder": {
+   "mass_kg": 8.657599999999999,
+   "com_m": [
+    -0.09311750000000003,
+    5.510036725609024e-05,
+    0.004953176533939249
+   ],
+   "cad_mass_kg": 8.6576,
+   "cad_com_m": [
+    -0.0931175,
+    0.0319874,
+    -0.0009347079999999999
+   ]
+  },
+  "l1": {
+   "mass_kg": 0.293712,
+   "com_m": [
+    -0.010362186227942261,
+    -0.04554939999999857,
+    -0.0942076096692195
+   ],
+   "cad_mass_kg": 0.293712,
+   "cad_com_m": [
+    0.000376408,
+    -0.0455494,
+    -0.0905464
+   ],
+   "parts": "the five-bar's L1 (J2's link)",
+   "posterior_over_prior": {
+    "m": 1.0,
+    "hx": 0.523,
+    "hy": 1.0,
+    "hz": 0.986
+   }
+  },
+  "l2": {
+   "mass_kg": 0.6099907553823711,
+   "com_m": [
+    -0.13829421443970333,
+    0.018609301711933247,
+    -0.02424914037221899
+   ],
+   "cad_mass_kg": 0.464658,
+   "cad_com_m": [
+    -0.18288,
+    0.0244298,
+    -0.0048343299999999995
+   ],
+   "parts": "the UR forearm on the five-bar's elbow, W1's servo (GIM4305-10 + its moteus c1) included",
+   "posterior_over_prior": {
+    "m": 0.296,
+    "hx": 0.955,
+    "hy": 1.0,
+    "hz": 0.402
+   }
+  },
+  "c1": {
+   "mass_kg": 0.07031250000000024,
+   "com_m": [
+    0.024406341371387252,
+    -0.0029515800000026945,
+    -0.04246860044217475
+   ],
+   "cad_mass_kg": 0.0703125,
+   "cad_com_m": [
+    0.0345742,
+    -0.00295158,
+    -0.0317273
+   ],
+   "parts": "the five-bar's C1 crank",
+   "posterior_over_prior": {
+    "m": 1.0,
+    "hx": 0.978,
+    "hy": 1.0,
+    "hz": 0.966
+   }
+  },
+  "c2": {
+   "mass_kg": 0.1211581171857967,
+   "com_m": [
+    -0.041936307788872036,
+    -0.0032649951845413116,
+    -0.1289593348225022
+   ],
+   "cad_mass_kg": 0.122478,
+   "cad_com_m": [
+    -0.045281,
+    -0.00322981,
+    -0.121859
+   ],
+   "parts": "the five-bar's C2 link",
+   "posterior_over_prior": {
+    "m": 0.841,
+    "hx": 0.941,
+    "hy": 1.0,
+    "hz": 0.991
+   }
+  },
+  "hard_stop": {
+   "mass_kg": 0.33449788789816937,
+   "com_m": [
+    0.001249760831932654,
+    0.038611884260180966,
+    -0.0063672985388569395
+   ],
+   "cad_mass_kg": 0.293227,
+   "cad_com_m": [
+    -0.000112894,
+    0.0440464,
+    7.03586e-05
+   ],
+   "parts": "revolute_11's child, W1's own link: the W2 servo (GIM4305-10, moteus c1, driver plate / cover, cable, sense magnet), the GIM4305-to-forearm hard stop, a wrist plate + cover",
+   "posterior_over_prior": {
+    "m": 0.787,
+    "hx": 0.799,
+    "hy": 1.0,
+    "hz": 0.105
+   }
+  },
+  "hard_stop_2": {
+   "mass_kg": 0.3330518958509225,
+   "com_m": [
+    -0.03742494175977089,
+    0.0037231386399890006,
+    0.004228988985600384
+   ],
+   "cad_mass_kg": 0.293227,
+   "cad_com_m": [
+    -0.0440464,
+    0.000112894,
+    2.37143e-05
+   ],
+   "parts": "revolute_14's child, W2's link: the W3 servo (GIM4305-10, moteus c1, driver plate / cover, cable), a wrist plate + cover + hard stop",
+   "posterior_over_prior": {
+    "m": 0.818,
+    "hx": 0.799,
+    "hy": 0.73,
+    "hz": 0.087
+   }
+  },
+  "hard_stop_3": {
+   "mass_kg": 0.34190886957301225,
+   "com_m": [
+    0.0049161735832972415,
+    0.04753782594474319,
+    -0.004319565600040584
+   ],
+   "cad_mass_kg": 0.30206,
+   "cad_com_m": [
+    -0.00152052,
+    0.0495693,
+    -0.00204235
+   ],
+   "parts": "revolute_17's child, W3's link = the claw body: the fixed finger plate, the claw's own servo (Wrist Servo Small v2: GIM4305-V2 + moteus c1 + adapter + cover), the GIM43 ArUco circle marker, W3's wrist-plate hard stop",
+   "posterior_over_prior": {
+    "m": 0.704,
+    "hx": 0.193,
+    "hy": 0.71,
+    "hz": 0.184
+   }
+  },
+  "moving_finger": {
+   "mass_kg": 0.03740493518549115,
+   "com_m": [
+    -0.008963403971612938,
+    0.03184506266304674,
+    0.01714079061988812
+   ],
+   "cad_mass_kg": 0.0357022,
+   "cad_com_m": [
+    -0.0110334,
+    0.0433066,
+    0.0161187
+   ],
+   "parts": "revolute_5's child: the claw's moving finger (rotating finger plate + spacer)",
+   "posterior_over_prior": {
+    "m": 0.987,
+    "hx": 0.987,
+    "hy": 0.98,
+    "hz": 0.985
+   }
+  }
+ },
+ "wrist_subtree_mass_kg": {
+  "cad": 0.9242162,
+  "14b": 1.1282525263313918,
+  "15c": 1.0468635885075952
+ },
+ "wrist_moving_residual_nm": {
+  "W1|ready8": {
+   "cad": {
+    "rms_nm": 0.013153138308082075,
+    "mean_nm": 0.0056743878476244675
+   },
+   "14b": {
+    "rms_nm": 0.08075605693217416,
+    "mean_nm": -0.07992932830164261
+   },
+   "15c": {
+    "rms_nm": 0.012235497811274863,
+    "mean_nm": 0.004279846634150145
+   },
+   "n_cells": 28,
+   "fitted": true
+  },
+  "W1|run_025151": {
+   "cad": {
+    "rms_nm": 0.027368751269297498,
+    "mean_nm": 0.027368751269297498
+   },
+   "14b": {
+    "rms_nm": 0.058231659777218336,
+    "mean_nm": -0.058231659777218336
+   },
+   "15c": {
+    "rms_nm": 0.02566418106741286,
+    "mean_nm": 0.02566418106741286
+   },
+   "n_cells": 1,
+   "fitted": true
+  },
+  "W1|run_042103": {
+   "cad": {
+    "rms_nm": 0.013171162395574842,
+    "mean_nm": 0.004057545912334996
+   },
+   "14b": {
+    "rms_nm": 0.09184065328668473,
+    "mean_nm": -0.09100271648668529
+   },
+   "15c": {
+    "rms_nm": 0.01431562543681124,
+    "mean_nm": -0.006967815268978565
+   },
+   "n_cells": 15,
+   "fitted": true
+  },
+  "W1|run_044713": {
+   "cad": {
+    "rms_nm": 0.009960291440916199,
+    "mean_nm": 0.0036733344821538233
+   },
+   "14b": {
+    "rms_nm": 0.0900399603818256,
+    "mean_nm": -0.08952978778515483
+   },
+   "15c": {
+    "rms_nm": 0.012852687415842641,
+    "mean_nm": -0.007755600640793515
+   },
+   "n_cells": 18,
+   "fitted": true
+  },
+  "W1|wide": {
+   "cad": {
+    "rms_nm": 0.022610717836553263,
+    "mean_nm": -0.00715773416175292
+   },
+   "14b": {
+    "rms_nm": 0.06699887557896111,
+    "mean_nm": 0.045487193781524084
+   },
+   "15c": {
+    "rms_nm": 0.02459187250135251,
+    "mean_nm": -1.7084990096559377e-05
+   },
+   "n_cells": 38,
+   "fitted": true
+  },
+  "W2|ready8": {
+   "cad": {
+    "rms_nm": 0.01960410558942165,
+    "mean_nm": -0.017649250151072743
+   },
+   "14b": {
+    "rms_nm": 0.009125381695394022,
+    "mean_nm": -0.0031729188589840404
+   },
+   "15c": {
+    "rms_nm": 0.009421784158074384,
+    "mean_nm": -0.004094614374818857
+   },
+   "n_cells": 36,
+   "fitted": true
+  },
+  "W2|run_025151": {
+   "cad": {
+    "rms_nm": 0.00661059906039151,
+    "mean_nm": -0.006415172687876336
+   },
+   "14b": {
+    "rms_nm": 0.007396216228540697,
+    "mean_nm": 0.00663796380974014
+   },
+   "15c": {
+    "rms_nm": 0.005739055079053897,
+    "mean_nm": 0.00518274320899886
+   },
+   "n_cells": 2,
+   "fitted": true
+  },
+  "W2|run_044713": {
+   "cad": {
+    "rms_nm": 0.03902905444120418,
+    "mean_nm": 0.01749834288178896
+   },
+   "14b": {
+    "rms_nm": 0.03416578957496621,
+    "mean_nm": 0.016754992067238895
+   },
+   "15c": {
+    "rms_nm": 0.03927877710002206,
+    "mean_nm": 0.02300365949944849
+   },
+   "n_cells": 11,
+   "fitted": true
+  },
+  "W2|wide": {
+   "cad": {
+    "rms_nm": 0.027605529396468532,
+    "mean_nm": 0.015189925743560671
+   },
+   "14b": {
+    "rms_nm": 0.008986270390322928,
+    "mean_nm": 0.0028700585701812377
+   },
+   "15c": {
+    "rms_nm": 0.014417358582043146,
+    "mean_nm": 0.0075344914940563175
+   },
+   "n_cells": 44,
+   "fitted": true
+  },
+  "W3|ready8": {
+   "cad": {
+    "rms_nm": 0.03245382425074686,
+    "mean_nm": -0.003818969253443341
+   },
+   "14b": {
+    "rms_nm": 0.032487802661772786,
+    "mean_nm": -0.004109657920383691
+   },
+   "15c": {
+    "rms_nm": 0.03262287409495907,
+    "mean_nm": 0.004848507911615517
+   },
+   "n_cells": 29,
+   "fitted": false
+  },
+  "W3|run_031212": {
+   "cad": {
+    "rms_nm": 0.021767725125333606,
+    "mean_nm": 0.021767725125333606
+   },
+   "14b": {
+    "rms_nm": 0.021481548645397572,
+    "mean_nm": 0.021481548645397572
+   },
+   "15c": {
+    "rms_nm": 0.030094361598267512,
+    "mean_nm": 0.030094361598267512
+   },
+   "n_cells": 1,
+   "fitted": false
+  },
+  "W3|wide": {
+   "cad": {
+    "rms_nm": 0.037525971399052914,
+    "mean_nm": -0.004859855409610573
+   },
+   "14b": {
+    "rms_nm": 0.03737421369555304,
+    "mean_nm": -0.004944070481540362
+   },
+   "15c": {
+    "rms_nm": 0.043829849950978446,
+    "mean_nm": -0.004270755307939684
+   },
+   "n_cells": 276,
+   "fitted": false
+  }
+ },
+ "fivebar_held_out_nm": {
+  "what": "friction-cancelled (speed-matched up / down) J2 / C1 gravity error on HELD-OUT data, RMS over folds - docs/mass_refit's folds with this fit's estimator (the wrist cells in every fold); 14b = that file's own table",
+  "leave_one_item_out": {
+   "cap hover|J2": {
+    "15c": 0.01055581032271054,
+    "14b": 0.001,
+    "folds": 1
+   },
+   "READY|J2": {
+    "15c": 0.011008297350554929,
+    "14b": 0.009,
+    "folds": 3
+   },
+   "park|J2": {
+    "15c": 0.0616637852735265,
+    "14b": 0.058,
+    "folds": 3
+   },
+   "mid|J2": {
+    "15c": 0.041234503725515785,
+    "14b": 0.039,
+    "folds": 3
+   },
+   "cap hover|C1": {
+    "15c": 0.004819039286343808,
+    "14b": 0.006,
+    "folds": 1
+   },
+   "READY|C1": {
+    "15c": 0.1643687296600593,
+    "14b": 0.141,
+    "folds": 3
+   },
+   "park|C1": {
+    "15c": 0.12797661745041994,
+    "14b": 0.152,
+    "folds": 2
+   },
+   "mid|C1": {
+    "15c": 0.02546840232283841,
+    "14b": 0.022,
+    "folds": 3
+   },
+   "amber hover|J2": {
+    "15c": 0.010364338816628207,
+    "14b": 0.005,
+    "folds": 1
+   },
+   "amber hover|C1": {
+    "15c": 0.0311153406310231,
+    "14b": 0.026,
+    "folds": 1
+   },
+   "vial hover (+1)|J2": {
+    "15c": 0.05849699277591326,
+    "14b": 0.04,
+    "folds": 1
+   },
+   "vial hover swung (-1)|J2": {
+    "15c": 0.08750974455105459,
+    "14b": 0.156,
+    "folds": 1
+   },
+   "vial hover (+1)|C1": {
+    "15c": 0.02846708364180182,
+    "14b": 0.001,
+    "folds": 1
+   }
+  },
+  "hovers_unseen": {
+   "cap hover|J2": {
+    "15c": 0.024306869097804693,
+    "14b": 0.019,
+    "folds": 1
+   },
+   "READY|J2": {
+    "15c": 0.010875653783464358,
+    "14b": 0.009,
+    "folds": 3
+   },
+   "park|J2": {
+    "15c": 0.060131730381947274,
+    "14b": 0.059,
+    "folds": 3
+   },
+   "mid|J2": {
+    "15c": 0.04626120719962142,
+    "14b": 0.044,
+    "folds": 3
+   },
+   "cap hover|C1": {
+    "15c": 0.011743566556204432,
+    "14b": 0.003,
+    "folds": 1
+   },
+   "READY|C1": {
+    "15c": 0.14900087740457033,
+    "14b": 0.127,
+    "folds": 3
+   },
+   "park|C1": {
+    "15c": 0.1390644751961755,
+    "14b": 0.162,
+    "folds": 2
+   },
+   "mid|C1": {
+    "15c": 0.02745914642097511,
+    "14b": 0.027,
+    "folds": 3
+   },
+   "amber hover|J2": {
+    "15c": 0.03142824409381109,
+    "14b": 0.028,
+    "folds": 1
+   },
+   "amber hover|C1": {
+    "15c": 0.07839872123944516,
+    "14b": 0.069,
+    "folds": 1
+   },
+   "vial hover (+1)|J2": {
+    "15c": 0.052155971878982875,
+    "14b": 0.035,
+    "folds": 1
+   },
+   "vial hover swung (-1)|J2": {
+    "15c": 0.0885755427712327,
+    "14b": 0.155,
+    "folds": 1
+   },
+   "vial hover (+1)|C1": {
+    "15c": 0.016409376317554562,
+    "14b": 0.039,
+    "folds": 1
+   }
+  },
+  "leave_one_run_out": {
+   "amber hover|J2": {
+    "15c": 0.014843750783673473,
+    "14b": 0.011,
+    "folds": 2
+   },
+   "READY|J2": {
+    "15c": 0.013101790940930065,
+    "14b": 0.012,
+    "folds": 11
+   },
+   "park|J2": {
+    "15c": 0.06791365875389233,
+    "14b": 0.065,
+    "folds": 11
+   },
+   "mid|J2": {
+    "15c": 0.031661734705184796,
+    "14b": 0.031,
+    "folds": 11
+   },
+   "amber hover|C1": {
+    "15c": 0.03300275156966851,
+    "14b": 0.028,
+    "folds": 2
+   },
+   "READY|C1": {
+    "15c": 0.1254855407298433,
+    "14b": 0.108,
+    "folds": 9
+   },
+   "mid|C1": {
+    "15c": 0.017027084450129508,
+    "14b": 0.017,
+    "folds": 11
+   },
+   "cap hover|J2": {
+    "15c": 0.01388710028634686,
+    "14b": 0.016,
+    "folds": 7
+   },
+   "cap hover|C1": {
+    "15c": 0.01133521316928956,
+    "14b": 0.009,
+    "folds": 7
+   },
+   "park|C1": {
+    "15c": 0.1385778612185447,
+    "14b": 0.158,
+    "folds": 2
+   },
+   "vial hover (+1)|J2": {
+    "15c": 0.05704839862633803,
+    "14b": 0.044,
+    "folds": 2
+   },
+   "vial hover swung (-1)|J2": {
+    "15c": 0.08812696331697194,
+    "14b": 0.154,
+    "folds": 2
+   },
+   "vial hover (+1)|C1": {
+    "15c": 0.02251632869160487,
+    "14b": 0.008,
+    "folds": 2
+   }
+  }
+ },
+ "holds_as_inequalities": {
+  "W1": {
+   "n": 15,
+   "f_15c_median_nm": -0.1160215651475085,
+   "f_14b_median_nm": -0.03151509564834576,
+   "f_15c_range_nm": [
+    -0.12040334063895586,
+    0.12502668877413098
+   ],
+   "rms_14b_nm": 0.07379439866740546,
+   "rms_15c_nm": 0.10935063213952835,
+   "sides_15c": {
+    "from_above (f > 0)": 2,
+    "from_below (f < 0)": 13
+   },
+   "inside_W1_edge_0.12": 12
+  },
+  "W2": {
+   "n": 15,
+   "f_15c_median_nm": 0.02564940264740711,
+   "f_14b_median_nm": 0.028382840804649874,
+   "f_15c_range_nm": [
+    -0.09639469225146326,
+    0.1051236547977049
+   ],
+   "rms_14b_nm": 0.04490963934157202,
+   "rms_15c_nm": 0.04536936531216104,
+   "sides_15c": {
+    "from_above (f > 0)": 12,
+    "from_below (f < 0)": 3
+   },
+   "inside_W1_edge_0.12": null
+  },
+  "J1": {
+   "n": 46,
+   "f_15c_median_nm": 0.0813435574405712,
+   "f_14b_median_nm": 0.026807510442071497,
+   "f_15c_range_nm": [
+    -0.7178029992673631,
+    0.9850143829795077
+   ],
+   "rms_14b_nm": 0.3434472437875283,
+   "rms_15c_nm": 0.35100200080313304,
+   "sides_15c": {
+    "from_above (f > 0)": 28,
+    "from_below (f < 0)": 18
+   },
+   "inside_W1_edge_0.12": null
+  }
+ },
+ "identified": "all rows on all 32 parameters, singular values per prior sigma [85.563, 49.021, 38.35, 20.464, 14.545, 12.876, 10.273, 6.223, 4.103, 2.945, 0.482, 0.265, 0.133]: 10 combinations pinned, 3 weak, 19 left to the prior. The wrist cells alone pin 6 wrist combinations (condition number 12.9 over them): (1) the subtree's horizontal first moment about W1 with the claw hanging (hard_stop_3's mass on its 74 mm lever with the bodies' x offsets) - W1 at READY; (2)-(3) the W2 subtree's two first-moment components across W2's axis - W2's legs and W1's gamma slope; (4)-(6) hard_stop's own and hard_stop_3's offsets across W1 as the +-140 deg sweeps rotate them. The five-bar rows pin 4 five-bar combinations (as in 14b: L2's mass at the elbow, L2's first moment toward W1, L1's along L1 with C2's mass, L2's cross term) and see the wrist as its total mass at W1's axis (with L2 free, that trade is flat: not_identified) plus the first moment W1 also sees",
+ "not_identified": "the wrist + claw subtree's TOTAL mass: profiled from 0.92 to 1.24 kg the five-bar chi^2 moves 1.60 (of 566) and the wrist cells' not at all - L2's mass and COM trade with it (L2 0.733 -> 0.423 kg along that line) - so 1.047 kg is the CAD prior's choice (CAD 0.924, 14b 1.128); along the line READY's C1 FF moves -14.1 mN.m per 0.1 kg. Also each wrist body's own mass (only their sum's levers show), every COM component along its own joint axis (hard_stop's along W1, hard_stop_3's along W3: only J1 would see them), the finger's COM (posterior / prior >= 0.98), the shoulder, inertias (scaled with mass)",
+ "known_residual": "W3: its moving half-sums (-0.08..+0.04 N.m) are not gravity (the CAD puts W3's subtree COM 2.5 mm off its axis; a W3-only fit leaves 0.036 of 0.038 N.m rms; kp x4 and kp 75 disagree at one posture) - cable / detent, not in this file. W2's swung legs (run_044713, W2 91-126 deg): every model reads them low (truth - model, mean: CAD +0.017, 14b +0.017, 15c +0.023 N.m; the slope over the leg is ~1.5x any model's). The +-140 deg sweeps: W1 0.025 / W2 0.014 N.m rms (each joint alone fits its own to ~0.01; no one rigid-body model fits both better - an even-in-v share that is not gravity). The vial's SWUNG approach J2 residual is now +0.09 (14b +0.15)",
+ "targets": "bam_fb_v2_guard_rows_2026-11-15c.json",
+ "supersedes": "bam_fb_v2_masses_2026-11-14b.json (kept): same five-bar rows; its wrist scale is replaced by the four wrist bodies",
+ "generator": "bam_pid_tunning docs/mass_refit_14c/ (paths.py lists the steps; caches outside git; the scripts land in the commit that adds this file), run by PID tuna's reasoner (Claude Opus 5.5) 2026-11-15; the guard rows file is guard_rows.py's"
+}

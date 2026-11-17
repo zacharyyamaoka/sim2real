@@ -50,6 +50,7 @@ from robot_msgs.control import ServoCommand
 from robot_msgs.sensor import JointState
 from robot_msgs.std import Header
 
+from ... import masses as _masses
 from . import fullarm_home as fh
 from .mujoco_plant import BAM_WS_SRC, bam_ws_path, cogging_terms, real_boards
 from .plant import PlantTrip
@@ -220,10 +221,12 @@ def _wrist_backlash(kind: str) -> dict:
 _RIGS: dict = {}
 
 
-def build_rig(kind: str = "B0", truth: str = "cad", *, wrist_friction: str = "sliding"):
+def build_rig(kind: str = "B0", truth: str = "cad", *, wrist_friction: str = "sliding", masses: str | None = None):
     """The bam_fb_v2 twin with self-contact (``contact_scene``), the hidden gaps of ``kind`` and the masses of ``truth``
-    (``fullarm_home.TRUTHS``). Cached per process."""
-    key = (kind, truth, wrist_friction)
+    (``fullarm_home.TRUTHS``) on the base ``masses`` (None: sim2real.masses.DEFAULT, "measured"; "cad" the opt-out: fullarm_home.apply_truth's
+    WHY). Cached per process."""
+    masses = masses or _masses.DEFAULT
+    key = (kind, truth, wrist_friction, masses)
     if key not in _RIGS:
         bam_ws_path()
         from bam_fb_test_rig.model import STIFF, build_model  # noqa: PLC0415
@@ -241,7 +244,7 @@ def build_rig(kind: str = "B0", truth: str = "cad", *, wrist_friction: str = "sl
         rig = build_model(bundle, STIFF, mount=fh.v2_mount(), conveyor=None, frictionloss=friction, **kwargs)
         claw = rig.model.joint(CLAW)
         rig.model.dof_frictionloss[rig.model.jnt_dofadr[claw.id]] = fh.CLAW_FRICTION_NM
-        rig.truth = fh.apply_truth(rig, truth)
+        rig.truth = fh.apply_truth(rig, truth, masses)
         _RIGS[key] = rig
     return _RIGS[key]
 
@@ -340,12 +343,13 @@ class FullArmHomingPlant:
                  limp_brakes: bool = True, wrist_gains: tuple[float, float] = WRIST_GAINS_NOW, belt_top_m: float | None = None,
                  contact_timeconst_s: float | None = None, settle_all: bool = False, belt_solref: tuple[float, float] | None = None,
                  rotor_phase_deg: Mapping[str, float] | None = None, contact_timeconst_scope: str = "all", log_qpos: bool = True,
-                 j1_rack: bool = False, j1_ff: bool = True):
+                 j1_rack: bool = False, j1_ff: bool = True, masses: str | None = None):
         bam_ws_path()
         from bam_fb_test_rig.rig import board_signs  # noqa: PLC0415
 
         self.kind, self.truth_name = kind, truth
-        self.rig = build_rig(kind, truth, wrist_friction=wrist_friction)
+        self.masses = masses or _masses.DEFAULT  # the base masses: "measured" (default) or "cad" (build_rig's WHY)
+        self.rig = build_rig(kind, truth, wrist_friction=wrist_friction, masses=self.masses)
         self.signs = {**{r: board_signs(self.rig.bundle, self.rig)[r] for r in ("J1", "J2", "C1")}, "W1": 1.0, "W2": 1.0, "W3": 1.0}
         self.backlash = hidden_backlash(kind)
         self.cogging_on = cogging
@@ -583,7 +587,7 @@ class FullArmHomingPlant:
     def _expand(self, q: np.ndarray) -> np.ndarray:
         """A B0 pose (the unwrapped joint layout) into the wrapped model's qpos (gear joints at zero twist): by joint name."""
         model = self.rig.model
-        b0 = build_rig("B0", self.truth_name).model
+        b0 = build_rig("B0", self.truth_name, masses=self.masses).model
         out = model.qpos0.copy()
         for j in range(b0.njnt):
             name = b0.joint(j).name
@@ -593,7 +597,7 @@ class FullArmHomingPlant:
     # -- physics hooks --------------------------------------------------------------------------------------------------------------
 
     def j1_gravity_hold_nm(self, data, *, shoulder_only: bool = False) -> float:
-        """J1's gravity hold torque on the twin's CAD masses (N.m, URDF frame, MuJoCo's qfrc_bias convention at rest): from the subtree
+        """J1's gravity hold torque on the twin's masses (N.m, URDF frame, MuJoCo's qfrc_bias convention at rest): from the subtree
         J1 carries, or only the shoulder body's own mass."""
         model = self.rig.model
         shoulder = model.body("shoulder").id

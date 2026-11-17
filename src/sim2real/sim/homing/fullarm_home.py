@@ -50,6 +50,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ... import masses as _masses
 from ... import paths as _paths
 from .home_button import CONTROL_DT, Reading
 from .mujoco_plant import BAM_WS_SRC, END_GROUP_MASS_SCALE, bam_ws_path, cogging_terms, real_boards
@@ -185,8 +186,13 @@ CLAW_BRACKET_KG = {"nominal": 0.371, "high": 0.50, "light": 0.25}  # the brief's
 # unseen cases are the LIGHTER ones - the end group x0.85 and a 0.25 kg claw (below the CAD's 0.3127 kg). Only the ``heldout`` sweep runs them.
 END_GROUP_LIGHT_SCALE = 0.85
 TRUTHS = ("cad", "claw_nominal", "claw_high", "end+22%", "end-15%", "claw_light")
+# WHY the truths are EDITS on a base set of masses (``masses``: "measured" by default, "cad" the opt-out - bam_ws PEP 0060 addendum): the
+# claw / end-group truths were defined 2026-11-13 on the CAD's masses ("cad" = no edit); on the measured base they are the same edits on the
+# measured bodies. Every sweep result committed before 2026-11-17 (src/sim2real/data/fullarm_*_2026-11-13.json) was made on the CAD; a re-run
+# now runs on the measured base unless it passes masses="cad", and each episode records which (``out["masses"]``).
 TRUTH_WHY = {
-    "cad": "bam_fb_v2's masses as exported (end group 1.389 kg, the wrist + claw 0.924 kg beyond W1)",
+    "cad": "no edit: the base masses as they are (masses='measured': the description's measured file; masses='cad': bam_fb_v2 as exported, "
+           "end group 1.389 kg, the wrist + claw 0.924 kg beyond W1)",
     "claw_nominal": f"the claw assembly at 0.371 kg (CAD {CLAW_CAD_KG:.3f} kg): +{0.371 - CLAW_CAD_KG:.3f} kg on the gripper body",
     "claw_high": f"the claw assembly at 0.50 kg: +{0.50 - CLAW_CAD_KG:.3f} kg on the gripper body",
     "end+22%": "every end body (UR forearm, wrist, claw) x1.2249 at its own CoM: the plate rig's mass-ID CAD -> real ratio",
@@ -201,12 +207,21 @@ def _scale_body(model, body: str, scale: float) -> None:
     model.body_inertia[index] = model.body_inertia[index] * scale
 
 
-def apply_truth(rig, truth: str) -> dict:
-    """Edit the compiled twin's masses for ``truth`` (``TRUTH_WHY``) at each body's own CoM, then MuJoCo's mass constants. Returns the end
-    group's mass before / after (kg)."""
+def apply_truth(rig, truth: str, masses: str | None = None) -> dict:
+    """Set the compiled twin's base ``masses`` ("measured": sim2real.masses' copy of the file bam_fb_v2's description names, over the
+    bundle's inertials; "cad": the bundle's as exported), edit them for ``truth`` (``TRUTH_WHY``) at each body's own CoM, then MuJoCo's
+    mass constants. Returns the masses, what they changed and the end group's mass before / after the truth (kg).
+
+    WHY measured by default (bam_ws PEP 0060 addendum, 2026-11-17): the CAD's shoulder COM sits 32 mm across J1's plane - 42 sigma from
+    the 29 real J1 rests - so on the CAD every twin hangs J1 at URDF +24 deg where the arm hangs at -11.2 (a 36 deg phase error in J1's
+    gravity); the measured file hangs it at -11.3. Undo: ``masses="cad"`` per call, or ``sim2real.masses.DEFAULT = "cad"``."""
     import mujoco  # noqa: PLC0415
 
     model = rig.model
+    masses = masses or _masses.DEFAULT  # read at call time: setting sim2real.masses.DEFAULT is the global undo
+    if masses not in _masses.MASSES:
+        raise ValueError(f"masses must be one of {_masses.MASSES}, not {masses!r}")
+    changed = _masses.apply(model) if masses == "measured" else {}
     before = float(sum(model.body_mass[model.body(b).id] for b in END_BODIES))
     if truth in ("claw_nominal", "claw_high", "claw_light"):
         added = CLAW_BRACKET_KG[truth.removeprefix("claw_")] - CLAW_CAD_KG
@@ -218,7 +233,9 @@ def apply_truth(rig, truth: str) -> dict:
     elif truth != "cad":
         raise ValueError(f"truth must be one of {TRUTHS}, not {truth!r}")
     mujoco.mj_setConst(model, mujoco.MjData(model))
-    return {"truth": truth, "end_group_kg": before, "end_group_truth_kg": float(sum(model.body_mass[model.body(b).id] for b in END_BODIES))}
+    return {"truth": truth, "masses": masses, "masses_source": dict(_masses.SOURCE) if masses == "measured" else "bundle as exported",
+            "masses_changed": sorted(changed), "end_group_kg": before,
+            "end_group_truth_kg": float(sum(model.body_mass[model.body(b).id] for b in END_BODIES))}
 
 
 _RIGS: dict = {}
@@ -247,10 +264,12 @@ def build_baseline_rig(truth: str = "plate"):
     return _RIGS[key]
 
 
-def build_rig(truth: str = "cad", *, wrist_friction: str = "sliding", scene: str = "scene.xml"):
-    """The bam_fb_v2 twin for ``truth`` (cached per process: building one takes ~1-2 s). No hidden backlash (B0): the five-bar's gaps were
-    the homing rung's question, not this one's; the friction and the stops are the parts a home's outcome turns on."""
-    key = (truth, wrist_friction, scene)
+def build_rig(truth: str = "cad", *, wrist_friction: str = "sliding", scene: str = "scene.xml", masses: str | None = None):
+    """The bam_fb_v2 twin for ``truth`` on ``masses`` (None: ``sim2real.masses.DEFAULT``, "measured"; "cad" the opt-out - ``apply_truth``)
+    (cached per process: building one takes ~1-2 s). No hidden backlash (B0): the five-bar's gaps were the homing rung's question, not
+    this one's; the friction and the stops are the parts a home's outcome turns on."""
+    masses = masses or _masses.DEFAULT
+    key = (truth, wrist_friction, scene, masses)
     if key not in _RIGS:
         bam_ws_path()
         from bam_fb_test_rig.model import STIFF, build_model  # noqa: PLC0415
@@ -261,7 +280,7 @@ def build_rig(truth: str = "cad", *, wrist_friction: str = "sliding", scene: str
         rig = build_model(load_v2_bundle(scene), STIFF, mount=v2_mount(), conveyor=None, frictionloss=friction, backlash=None)
         claw = rig.model.joint(CLAW_JOINT)
         rig.model.dof_frictionloss[rig.model.jnt_dofadr[claw.id]] = CLAW_FRICTION_NM
-        rig.truth = apply_truth(rig, truth)
+        rig.truth = apply_truth(rig, truth, masses)
         _RIGS[key] = rig
     return _RIGS[key]
 
@@ -725,6 +744,7 @@ def run_episode(config: EpisodeConfig) -> dict:
                  "j1_start_tilt_deg": start.j1_deg}
     try:
         rig = build_baseline_rig(config.truth) if config.truth in BASELINE_TRUTHS else build_rig(config.truth, wrist_friction=config.wrist_friction)
+        out["masses"] = rig.truth.get("masses", "plate rig")  # WHY recorded: results before 2026-11-17 were all on the CAD's masses
         q, depth = place(rig, start)
         out["placed_penetration_mm"] = round(depth * 1e3, 3)
         if start.wrist_deg is None:

@@ -70,3 +70,32 @@ def test_the_default_twin_hangs_j1_within_a_degree_of_the_arm():
     assert abs(hang - MEASURED_HANG_DEG) <= 1.0, (hang, amplitude)
     low, high = RESTS["measured_pose_blind"]["A_95_nm"]
     assert low <= amplitude <= high, amplitude
+
+
+@needs_twin
+def test_every_builder_defaults_to_the_measured_masses():
+    """fullarm_plant's contact twin and its FullArmHomingPlant take the same default as fullarm_home.build_rig."""
+
+    from sim2real import masses
+    from sim2real.sim.homing import fullarm_plant as fp
+
+    hang, _ = j1_hang(fp.build_rig("B0").model)
+    assert abs(hang - MEASURED_HANG_DEG) <= 1.0, hang
+    assert masses.DEFAULT == "measured" and fh.build_rig().truth["masses"] == "measured"
+    assert fh.build_rig().truth["masses_source"]["sha256"] == masses.SOURCE["sha256"]
+
+
+@needs_twin
+def test_the_cad_opt_out_still_hangs_where_the_bundle_does():
+    """``masses="cad"`` is the bundle as exported, unchanged by the default's move: J1 at +24.02 deg / 4.731 N.m at the rests (the golden,
+    measured on main 2749c82 before the change), the shoulder at the CAD's 8.6576 kg / 32.0 mm across J1's plane."""
+
+    from sim2real.sim.homing import fullarm_plant as fp
+
+    for model in (fh.build_rig(masses="cad").model, fp.build_rig("B0", masses="cad").model):
+        hang, amplitude = j1_hang(model)
+        assert hang == pytest.approx(24.0157, abs=0.01) and amplitude == pytest.approx(4.7308, abs=0.001), (hang, amplitude)
+        shoulder = model.body("shoulder").id
+        assert model.body_mass[shoulder] == pytest.approx(8.6576, abs=1e-6) and model.body_ipos[shoulder][1] == pytest.approx(0.0319874, abs=1e-7)
+    with pytest.raises(ValueError, match="masses must be one of"):
+        fh.build_rig(masses="as_built")

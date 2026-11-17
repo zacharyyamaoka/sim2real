@@ -208,10 +208,11 @@ def test_power_lost_at_ready_lands_the_claw_on_the_belt_and_it_stays_there():
 @needs_twin
 def test_on_the_default_soft_belt_the_limp_arm_creeps_and_never_settles():
     """The WHY of ``belt_solref``: MuJoCo's default 0.02 s contact lets the arm creep along the belt (~0.6 deg/s), so a whole-arm settle
-    runs out its 10 s; the stiff belt holds it (the test above)."""
+    runs out its 10 s; the stiff belt holds it (the test above). WHY masses="cad" (2026-11-17, bam_ws PEP 0060 addendum): the finding was
+    made on the CAD twin; on the measured twin (the default since) the same creep settles at 9.4 s, just inside the budget."""
     from sim2real.sim.homing.fullarm_plant import ArmStart, FullArmHomingPlant
 
-    plant = FullArmHomingPlant("B0", belt_top_m=0.0, settle_all=True)
+    plant = FullArmHomingPlant("B0", belt_top_m=0.0, settle_all=True, masses="cad")
     plant.reset(ArmStart("READY TD4", *ruler.FIVEBAR_LEVELS["READY"], (1.17, 90.0, 0.0), 30.0))
     assert plant.start_belt
     assert plant.settle_waited_s >= 9.9

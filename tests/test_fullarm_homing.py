@@ -160,16 +160,25 @@ def test_the_replay_matches_the_racks_w2_and_w3_seek_travel():
 @needs_twin
 def test_resting_on_the_belt_a_0_1_rev_s_first_seek_lurches_and_the_0_05_default_does_not():
     """The rack's power-up rest (2026-11-13 15:50: hanging, the claw on the belt): J2's first seek at single_touch's 0.1 rev/s sticks on the
-    belt, then slips past the 86 deg/s runaway stop; FullArmHome's default first seek (0.05 rev/s) does not (PEP 0047)."""
+    belt, then slips past the 86 deg/s runaway stop; FullArmHome's default first seek (0.05 rev/s) does not (PEP 0047).
+
+    WHY the trip is asserted on masses="cad" (2026-11-17, bam_ws PEP 0060 addendum: the twin's default became the measured masses): the
+    15:50 reproduction was made on the CAD twin, where the old seek peaks at 86.1 deg/s and trips; on the measured twin it peaks at 83.3
+    and finishes - 3 deg/s under the stop, the same lurch - so the trip itself is a CAD-twin fact. The default seek's claim holds on both
+    (57.9 / 54.3 deg/s, done), and on the measured twin the old seek still lurches ~30 deg/s past the default's."""
     from sim2real.sim.homing.fullarm_check import run_episode
     from sim2real.sim.homing.fullarm_plant import FullArmHomingPlant, arm_prior, hanging_start
     from sim2real.sim.homing.fullarm_procedures import FullArmHome
 
     outcomes = {}
-    for label, speed in (("old", None), ("default", 0.05)):
-        plant = FullArmHomingPlant("B0", settle_s=3.0, belt_top_m=0.0, contact_timeconst_s=0.01)
-        start = hanging_start(plant)
-        report = run_episode(FullArmHome(fivebar_only=True, wrist_during_fivebar="brake", j2_first_seek_rev_s=speed), plant, start, arm_prior())
-        outcomes[label] = (report.outcome, report.peak_speed_deg_s["J2"], any(plant.log["belt_contact"]))
-    assert outcomes["old"][0].startswith("tripped: runaway: J2") and "J2 seeks" in outcomes["old"][0] and outcomes["old"][2]
-    assert outcomes["default"][0] == "done" and outcomes["default"][1] < 86.0
+    for masses in ("cad", "measured"):
+        for label, speed in (("old", None), ("default", 0.05)):
+            plant = FullArmHomingPlant("B0", settle_s=3.0, belt_top_m=0.0, contact_timeconst_s=0.01, masses=masses)
+            start = hanging_start(plant)
+            report = run_episode(FullArmHome(fivebar_only=True, wrist_during_fivebar="brake", j2_first_seek_rev_s=speed), plant, start, arm_prior())
+            outcomes[masses, label] = (report.outcome, report.peak_speed_deg_s["J2"], any(plant.log["belt_contact"]))
+    old = outcomes["cad", "old"]
+    assert old[0].startswith("tripped: runaway: J2") and "J2 seeks" in old[0] and old[2]
+    for masses in ("cad", "measured"):
+        assert outcomes[masses, "default"][0] == "done" and outcomes[masses, "default"][1] < 86.0, (masses, outcomes[masses, "default"])
+    assert outcomes["measured", "old"][1] > outcomes["measured", "default"][1] + 15.0 and outcomes["measured", "old"][2]
