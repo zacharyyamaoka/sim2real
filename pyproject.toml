@@ -25,12 +25,12 @@ vision = ["opencv-python-headless==4.11.0.86"]
 tracking = ["wandb==0.31.0", "wandb-workspaces==0.4.13", "weave==0.54.1"]
 # WHY its own extra (2026-11-12, the homing bench): the kinematic homing rung runs on robot_models' stop core (coal + trimesh through
 # its contact extra) and draws its starts with scipy's Sobol; sim2real's stable folders never import it.
-homing = ["robot-model-ladders[contact]", "scipy>=1.11"]
-test = ["pytest>=8", "robot-model-ladders[contact]", "scipy>=1.11"]
+homing = ["robot-models-lib[contact]", "scipy>=1.11"]
+test = ["pytest>=8", "robot-models-lib[contact]", "scipy>=1.11"]
 
 [tool.uv.sources]
 robot-msgs = { path = "/home/bam/robot_msgs", editable = true }
-robot-model-ladders = { path = "/home/bam/robot_models", editable = true }
+robot-models-lib = { path = "/home/bam/robot_models", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sim2real"]

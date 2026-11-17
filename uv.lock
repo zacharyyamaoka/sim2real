@@ -2166,7 +2166,7 @@ wheels = [
 ]
 
 [[package]]
-name = "robot-model-ladders"
+name = "robot-models-lib"
 version = "0.2.0"
 source = { editable = "/home/bam/robot_models" }
 dependencies = [
@@ -2533,7 +2533,7 @@ dependencies = [
 
 [package.optional-dependencies]
 homing = [
-    { name = "robot-model-ladders", extra = ["contact"] },
+    { name = "robot-models-lib", extra = ["contact"] },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
@@ -2542,7 +2542,7 @@ sim = [
 ]
 test = [
     { name = "pytest" },
-    { name = "robot-model-ladders", extra = ["contact"] },
+    { name = "robot-models-lib", extra = ["contact"] },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
@@ -2560,8 +2560,8 @@ requires-dist = [
     { name = "mujoco", marker = "extra == 'sim'", specifier = "==3.11.0" },
     { name = "opencv-python-headless", marker = "extra == 'vision'", specifier = "==4.11.0.86" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
-    { name = "robot-model-ladders", extras = ["contact"], marker = "extra == 'homing'", editable = "/home/bam/robot_models" },
-    { name = "robot-model-ladders", extras = ["contact"], marker = "extra == 'test'", editable = "/home/bam/robot_models" },
+    { name = "robot-models-lib", extras = ["contact"], marker = "extra == 'homing'", editable = "/home/bam/robot_models" },
+    { name = "robot-models-lib", extras = ["contact"], marker = "extra == 'test'", editable = "/home/bam/robot_models" },
     { name = "robot-msgs", editable = "/home/bam/robot_msgs" },
     { name = "scipy", marker = "extra == 'homing'", specifier = ">=1.11" },
     { name = "scipy", marker = "extra == 'test'", specifier = ">=1.11" },
