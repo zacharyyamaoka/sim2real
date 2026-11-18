@@ -30,7 +30,9 @@ the sidebar 300 px, collapsed and reopened, its width and its state remembered; 
 performance in place, CAN 11 clicked in 3D, the time bar to round 0) -> Sheet (CAN 11 and round 0 carried; performance round 0 · now ·
 change first, fidelity beside it, the 3D and inspector docked) -> Workbench (CAN 11's page, as found) -> Runs (CAN 11 still selected,
 its 42 runs one click away; a tree pick filters); the servo pulled apart in the Scene, motor and gearbox "not observable on this rack";
-the right inspector folds and the 3D takes the room.
+the right inspector folds and the 3D takes the room. And in the Scene every station's label is readable at the default camera (opened
+from the Workbench and loaded fresh) and after an orbit: all six shown and inside the 3D panel, no two boxes intersecting, none under the
+chips, the ViewCube or the time bar, nothing drawn over it (2026-11-18: CAN 15's went missing, CAN 14's and 15's sat on each other).
 
 Serves OUT with `python3 -m http.server` on a free port in 4711-4799 and stops it by the PID it started. Exits 1 on any FAIL.
 """
@@ -211,6 +213,32 @@ def wandb_backdoor(page, base: str, ready) -> None:
         rep = [b for b in bar if b["kind"] == "report"]
         check(all(b["href"].startswith(RACK_WANDB.removesuffix("/workspace") + "/reports/") and b["target"] == "_blank" for b in rep),
               f"the rack's {view} view: its W&B report link, when it has one, is in the same project ({[b['href'][-40:] for b in rep]})")
+
+
+STATION_IDS = ["can1", "can11", "can12", "can13", "can14", "can15"]
+
+
+def station_labels(page) -> dict:
+    """The Scene's station labels, measured with getBoundingClientRect (2026-11-18: CAN 15's went missing and CAN 14's and 15's sat on each
+    other): the ones shown, the ones wholly inside the 3D panel, every pair whose boxes intersect, the ones that clear the chips, the
+    ViewCube and the time bar, the ones on top at their middle and both ends (elementFromPoint: nothing drawn over them), and the ones
+    whose text is not cut."""
+    return page.evaluate("""(() => { const st = document.getElementById('dw-stage').getBoundingClientRect();
+      const ls = [...document.querySelectorAll('#dw-stage .s-label:not(.s-plabel)')].filter((l) => !l.hidden && l.style.display !== 'none' && l.getBoundingClientRect().width > 0);
+      const bs = ls.map((l) => { const r = l.getBoundingClientRect(); return {id: l.dataset.id, l: r.left, t: r.top, r: r.right, b: r.bottom}; });
+      const meet = (a, c) => a.l < c.r && c.l < a.r && a.t < c.b && c.t < a.b;
+      const pairs = []; for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) if (meet(bs[i], bs[j])) pairs.push(bs[i].id + '+' + bs[j].id);
+      const over = ['#dw-stage .s-chips', '#dw-stage .viewcube', '#dw-timebar'].map((s) => document.querySelector(s)).filter(Boolean).map((e) => { const r = e.getBoundingClientRect(); return {l: r.left, t: r.top, r: r.right, b: r.bottom}; });
+      return {shown: bs.map((b) => b.id).sort(), inside: bs.filter((b) => b.l >= st.left && b.r <= st.right && b.t >= st.top && b.b <= st.bottom).map((b) => b.id).sort(), pairs,
+              clear: bs.filter((b) => !over.some((o) => meet(b, o))).map((b) => b.id).sort(),
+              top: ls.filter((l) => { const r = l.getBoundingClientRect(), y = (r.top + r.bottom) / 2;
+                return [r.left + 6, (r.left + r.right) / 2, r.right - 6].every((x) => { const e = document.elementFromPoint(x, y); return e && l.contains(e); }); }).map((l) => l.dataset.id).sort(),
+              whole: ls.filter((l) => l.scrollWidth <= l.clientWidth + 1).map((l) => l.dataset.id).sort(),
+              boxes: Object.fromEntries(bs.map((b) => [b.id, [b.l, b.t, b.r, b.b].map(Math.round)]))}; })()""")
+
+
+def labels_clear(m: dict) -> bool:
+    return all(m[k] == STATION_IDS for k in ("shown", "inside", "clear", "top", "whole")) and not m["pairs"]
 
 
 def run(base: str, record: Path | None, labels_only: bool = False) -> None:
@@ -529,6 +557,8 @@ def run(base: str, record: Path | None, labels_only: bool = False) -> None:
               f"Scene: the ribbon's Scene icon renders it, the 3D filling the page ({sc['cw']:.0f} x {sc['ch']:.0f} of {sc['sw']:.0f} x {sc['sh']:.0f}), a time bar under it")
         check(len(sc["labels"]) == 6 and all("pass" in c and inside for _i, c, inside in sc["labels"]),
               f"Scene: all 6 stations wear their performance in place, inside the view (now all pass: {[(i, c.split()[-1]) for i, c, _x in sc['labels']]})")
+        # the station labels as the Scene opens from the Workbench (measured here, checked with the fresh load and the orbit at the end)
+        lab_flow = station_labels(page)
         pt = page.evaluate("window.__dwRack.screenOf('can11')")
         page.mouse.click(pt["x"], pt["y"] + 2)
         page.wait_for_function("new URLSearchParams(location.search).get('n') === 'can11'", timeout=5000)
@@ -624,6 +654,35 @@ def run(base: str, record: Path | None, labels_only: bool = False) -> None:
         page.wait_for_selector("#dw-table:not([hidden]) table.dw-tt")
         check(home_ok == [True, True, "home"] and "d=one-dof-test-rack" in page.url and "view=sheet" in page.url,
               f"Deployments: no tree to show, so no sidebar and no toggle; its Sheet icon opens the rack in the Sheet ({home_ok}, {page.url[-40:]})")
+
+        # every station's label readable in the Scene at the default camera (opened from the Workbench, above, and loaded fresh) and after
+        # an orbit: shown, inside the 3D panel, no two boxes intersect, none under the chips, the ViewCube or the time bar, nothing drawn
+        # over it, its text not cut (2026-11-18: CAN 15's went missing; CAN 14's and 15's sat on each other). Its own load, so the orbit
+        # moves no camera a later step measures.
+        page.goto(base + DEP + "&view=scene")
+        ready()
+        page.wait_for_selector("#dw-scene:not([hidden]) #dw-stage canvas")
+        page.wait_for_timeout(1200)
+        lab_fresh = station_labels(page)
+        still("s16-scene-labels")
+        free = page.evaluate("""(() => { const cv = document.querySelector('#dw-stage canvas'), r = cv.getBoundingClientRect();
+          for (let y = r.bottom - 150; y > r.top + 120; y -= 20) for (let x = r.left + 30; x < r.left + r.width / 3; x += 20) if (document.elementFromPoint(x, y) === cv) return [x, y];
+          return null; })()""")
+        before = page.evaluate("window.__dwRack.screenOf('can15')")
+        if free:
+            page.mouse.move(free[0], free[1])
+            page.mouse.down()
+            page.mouse.move(free[0] + 110, free[1] + 30, steps=8)
+            page.mouse.up()
+        page.wait_for_timeout(1500)
+        after = page.evaluate("window.__dwRack.screenOf('can15')")
+        lab_orbit = station_labels(page)
+        still("s17-scene-labels-orbit")
+        orbited = abs(after["x"] - before["x"]) + abs(after["y"] - before["y"]) > 20
+        brief = lambda m: f"shown {m['shown']}, inside {m['inside']}, intersecting {m['pairs']}, clear {m['clear']}, on top {m['top']}"  # noqa: E731
+        check(labels_clear(lab_flow) and labels_clear(lab_fresh) and orbited and labels_clear(lab_orbit),
+              f"Scene: all 6 station labels readable at the default camera and after an orbit, inside the 3D panel, no two intersecting, none "
+              f"covered (from the Workbench: {brief(lab_flow)}; loaded: {brief(lab_fresh)}; the orbit moved CAN 15: {orbited}; after it: {brief(lab_orbit)})")
 
         # and every Now label names the round the data holds (round 8 here, the click-through's pinned round)
         now_labels(page, base, ready)
