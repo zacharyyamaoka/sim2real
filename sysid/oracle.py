@@ -13,6 +13,7 @@ Every example's pipeline module (sysid/examples/<id>/pipeline.py) provides
 from __future__ import annotations
 
 import importlib
+import inspect
 import time
 
 from . import describe, result, world
@@ -40,7 +41,9 @@ def run(example: str, *, workers: int = 6, write: bool = False) -> dict:
     real = module.RealWorld(description, workers=workers)
     measured = real.measure(plan)
     with world.sealed():
-        fit = module.identify(description, measured.train)
+        # WHY by signature (2026-11-17): only the pendulum's identify() opens a pool (its friction polish, default 8); hand it the caller's cap
+        options = {"workers": workers} if "workers" in inspect.signature(module.identify).parameters else {}
+        fit = module.identify(description, measured.train, **options)
     LAST_FIT[example] = fit
     scores = module.score(description, plan, fit, measured, workers=workers)
     doc = module.assemble(description, plan, fit, scores, truth=real.truth)

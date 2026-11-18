@@ -305,7 +305,7 @@ def _pendulum(level: str, plan, description, workers: int, wear: bool) -> dict:
         gap, gap_error = _guarded(lambda: P.backlash_from_gaps([run.output.q - run.q_link for run in measured.train.values()]))
         stock, stock_error = _guarded(lambda: P.stock_fit(measured.train))
         t10, t10_error = _guarded(lambda: _t10(plan, measured))
-        fit, fit_error = _guarded(lambda: P.identify(description, measured.train))
+        fit, fit_error = _guarded(lambda: P.identify(description, measured.train, workers=workers))  # the caller's cap, not identify's 8
     gap_ci = {} if fit_error else {"can11.backlash_rad": tuple(fit.ci95["M4"]["backlash_rad"])}
     gap_interval = ("a bootstrap over runs of the same two-level fit (inside pipeline.identify)" if not fit_error else
                     "none at this level: its bootstrap runs inside pipeline.identify, which raised")

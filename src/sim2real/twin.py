@@ -344,7 +344,9 @@ class SimRunner:
                  "sources": {name: f"sysid/examples/{self.description.id}/world.json noise block x{scale:g} (sysid.hidden.load)" for name in real.noise}}
         measured = real.measure(plan)
         with hidden.sealed():
-            fit = module.identify(d, measured.train)
+            # WHY workers passed (2026-11-17): without it the pendulum's identify() polishes friction on its default 8-worker pool, which
+            # opened 8 processes beside the powered arm at host load 35; the runner's workers caps every pool it opens (tests/test_workers_cap.py)
+            fit = module.identify(d, measured.train, workers=self.workers)
         ruler = json.loads(hidden.path(self.description.id).read_text(encoding="utf-8"))["truth"]  # world.json as committed: the ruler
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
                                               "method": fit.methods[rung]} for name, value in fit.values[rung].items()}

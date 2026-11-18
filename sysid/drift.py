@@ -116,7 +116,7 @@ def run_backlash(*, workers: int = 6, write: bool = False, commissioned_values: 
         else:
             measured = real.measure(plan)
             with hidden.sealed():
-                commissioned_values = P.identify(description, measured.train).values["M4"]
+                commissioned_values = P.identify(description, measured.train, workers=workers).values["M4"]  # the caller's cap, not identify's 8
     commissioned = None if commissioned_values is None else P.twin(commissioned_values, "commissioned")
     gap0 = float(commissioned_values["backlash_rad"]) if commissioned_values is not None else float(commissioned_gap)
     runs = P.synthetic_runs(description, plan, plan.check)
