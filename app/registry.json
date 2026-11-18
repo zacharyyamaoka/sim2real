@@ -15,9 +15,9 @@
    "wandb": {
     "project": "Sim2Real \u00b7 1-DOF rack",
     "url": "https://forge.coreweave.com/wandb/zach-yamaoka-independent/Sim2Real%20%C2%B7%201-DOF%20rack/workspace",
-    "report": "https://forge.coreweave.com/wandb/zach-yamaoka-independent/Sim2Real%20%C2%B7%201-DOF%20rack/reports/Sim2Real-1-DOF-rack-pendulum-campaign-default--VmlldzoxODMxMjMzNg",
-    "report_title": "Sim2Real \u00b7 1-DOF rack \u00b7 pendulum campaign (default)",
-    "note": "The W&B backdoor (Zach, Daily Note 2026-11-18: \"Each deployment in the sim2real app should have a button to open within weights and biases\"): the Deployments page's \"Open in W&B\" opens url. The project bam_ws registered for this rack's campaigns (tools/wandb_trackers/trackers/sim2real_1_dof_rack.py); url and report are the web URLs the W&B API gives (wandb.Api().projects / .reports, 2026-11-18), percent-encoded. A deployment with no project has no wandb block, and shows no button."
+    "report": "https://forge.coreweave.com/wandb/zach-yamaoka-independent/Sim2Real%20%C2%B7%201-DOF%20rack/reports/1-DOF-rack-where-we-stand--VmlldzoxODMzMDU1Mg==",
+    "report_title": "1-DOF rack \u00b7 where we stand",
+    "note": "The W&B backdoor (Zach, Daily Note 2026-11-18: \"Each deployment in the sim2real app should have a button to open within weights and biases\"): the Deployments page's \"Open in W&B\" opens url. The project bam_ws registered for this rack's campaigns (tools/wandb_trackers/trackers/sim2real_1_dof_rack.py); url is the web URL the W&B API gives (wandb.Api().projects, 2026-11-18), percent-encoded; report is the summary across runs tools/deployments_wandb.py writes, whose id it keeps so this link never changes (its state file ~/.local/state/sim2real/deployments-wandb.json). A deployment with no project has no wandb block, and shows no button."
    },
    "record": "/home/bam/bam_ws/src/dev/bam_rack_twin/records/one-dof-test-rack/deployment.json",
    "archive": [
