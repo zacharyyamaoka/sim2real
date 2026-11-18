@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-variant="index">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment page · five proposals</title>
+<link rel="stylesheet" href="shared/base.css">
+<style>
+  body { overflow: auto; }
+  main { max-width: 980px; margin: 0 auto; padding: 28px 20px 40px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p.lede { color: var(--ink2); margin: 0 0 18px; }
+  a.v { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: center; padding: 12px; border: 1px solid var(--rule); border-radius: 10px; margin-bottom: 10px; text-decoration: none; color: var(--ink); }
+  a.v:hover { border-color: var(--ink3); }
+  a.v img { width: 260px; height: 162px; object-fit: cover; object-position: left top; border-radius: 6px; background: var(--bg3); }
+  a.v b { font-size: 16px; } a.v span { display: block; color: var(--ink2); font-size: 13.5px; margin-top: 4px; }
+  .g { display: inline-block; margin: 4px 0 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sim2Real deployment page · five proposals</h1>
+  <p class="lede">The same fixture in each: the pendulum campaign's round 0 (as found, 11-15) and round 8 (now, 11-17). Open one, click the rack, click CAN 11.
+    The comparison and the AI's view are in <a href="../../../reports/deployment-page-proposals-2026-11-17.html">the gallery</a>.</p>
+  <a class="v" href="v1/index.html#/d/one-dof-test-rack?n=can11"><img src="../../../reports/media/deployment-page-proposals-2026-11-17/v1/s2.png" alt=""><div><b>V1 · Workbench</b><span>RobotDx's frame on the typed tree: tree, entity page with tabs, Table view. Backend: metrics nested on the ModelFamily.</span></div></a>
+  <a class="v" href="v2/index.html#/d/one-dof-test-rack?n=can11&amp;q=twin"><img src="../../../reports/media/deployment-page-proposals-2026-11-17/v2/s2.png" alt=""><div><b>V2 · Sheet</b><span>The nested table is the page; round 0 and now as columns; 3D and inspector docked. Backend: a robot_models/metrics/ folder + values ledger.</span></div></a>
+  <a class="v" href="v3/index.html#/d/one-dof-test-rack?n=can11"><img src="../../../reports/media/deployment-page-proposals-2026-11-17/v3/s2.png" alt=""><div><b>V3 · Scene</b><span>The 3D is the page; stations wear their verdicts; a servo explodes into its parts; a time bar flips the rounds. Backend: the RobotPart type carries .models .metrics .dx.</span></div></a>
+  <a class="v" href="v4/index.html#/d/one-dof-test-rack?n=can11&amp;q=twin"><img src="../../../reports/media/deployment-page-proposals-2026-11-17/v4/s2.png" alt=""><div><b>V4 · Questions</b><span>A question matrix: rows the typed tree, columns Floor → Data → Routines → Twin → Job; one banner names the stop. Backend: sim2real owns the verdict, a card per type.</span></div></a>
+  <a class="v" href="v5/index.html#/d/one-dof-test-rack?n=can11"><img src="../../../reports/media/deployment-page-proposals-2026-11-17/v5/s2.png" alt=""><div><b>V5 · Ladder</b><span>Measurement first: KPIs, a stations × speed-rungs grid, speed-ladder plots with round 0 underneath. Backend: a robot_metrics package of functions.</span></div></a>
+</main>
+</body>
+</html>

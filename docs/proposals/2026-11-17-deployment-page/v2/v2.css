@@ -1,0 +1,61 @@
+/* V2 Sheet: the nested typed table IS the page; both rounds are columns; the 3D and the inspector dock on the right. */
+.v2 { height: calc(100vh - 44px); display: flex; min-height: 0; }
+.home, .dep { flex: 1; min-width: 0; display: flex; min-height: 0; }
+.home[hidden], .dep[hidden] { display: none; }
+.find { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px; color: var(--ink3); width: 220px; }
+.find[hidden] { display: none; }
+.find svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; }
+.find input { border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; flex: 1; min-width: 0; }
+
+.home { flex-direction: column; padding: 18px 22px; overflow: auto; }
+.home h1 { font-size: 20px; margin: 0 0 4px; }
+.home p { color: var(--ink2); margin: 0 0 14px; }
+
+.sheet { flex: 1; min-width: 0; overflow: auto; }
+table.sh { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+table.sh th { position: sticky; z-index: 2; background: var(--bg); text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); padding: 6px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+table.sh thead tr:first-child th { top: 0; height: 24px; border-bottom: 0; padding-bottom: 0; }
+table.sh thead tr:nth-child(2) th { top: 24px; }
+table.sh th.grp { text-align: center; color: var(--ink2); }
+table.sh th.grp span { display: block; border-bottom: 1px solid var(--rule); padding-bottom: 3px; }
+table.sh td { padding: 0 8px; height: 34px; border-bottom: 1px solid var(--rule2); white-space: nowrap; }
+table.sh tbody tr { cursor: pointer; }
+table.sh tbody tr:hover td { background: var(--hover); }
+table.sh tbody tr.sel td { background: var(--accent-bg); }
+table.sh td.c-comp { position: sticky; left: 0; background: var(--bg); z-index: 1; min-width: 210px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+table.sh tbody tr.sel td.c-comp { background: var(--accent-bg); }
+table.sh .nm { display: flex; align-items: center; gap: 6px; }
+table.sh .nm b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+table.sh td.q { min-width: 78px; font-variant-numeric: tabular-nums; }
+table.sh td.q span.cell { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: 5px; }
+table.sh td.q.fail span.cell { background: var(--fail-bg); color: var(--fail); font-weight: 650; }
+table.sh td.q.watch span.cell { background: var(--warn-bg); color: var(--warn); }
+table.sh td.q.none span.cell, table.sh td.q.not_run span.cell, table.sh td.q.observed span.cell, table.sh td.q.not_observable span.cell { color: var(--ink3); }
+table.sh td.q:hover span.cell { box-shadow: inset 0 0 0 1px var(--ink3); }
+table.sh td.v { font-variant-numeric: tabular-nums; text-align: right; }
+table.sh td.was { color: var(--was); }
+table.sh td.vd { font-weight: 650; }
+table.sh td.bl { border-left: 1px solid var(--rule); }
+table.sh .dl { font-size: 12px; }
+.tw { cursor: pointer; }
+
+.dock { flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.dock[hidden] { display: none; }
+.dscene { flex: none; position: relative; }
+.dscene > .scene { width: 100%; height: 100%; }
+.insp { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 24px; }
+.insp h2 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.insp .sub { color: var(--ink3); font-size: 12.5px; margin: 3px 0 10px; }
+.insp h3 { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); margin: 16px 0 6px; }
+.insp .head { display: flex; align-items: flex-start; gap: 8px; }
+.insp .head .grow { min-width: 0; }
+table.bt { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.bt th { text-align: right; font-size: 11px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; padding: 4px 6px; border-bottom: 1px solid var(--rule); font-weight: 600; }
+table.bt th:first-child { text-align: left; }
+table.bt td { padding: 5px 6px; border-bottom: 1px solid var(--rule2); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.bt td:first-child { text-align: left; white-space: normal; }
+table.bt tr.qh td { text-align: left; background: var(--bg2); color: var(--ink3); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+table.bt tr.hl td { background: color-mix(in srgb, var(--warn) 9%, transparent); }
+details.rows { margin-top: 10px; } details.rows summary { cursor: pointer; color: var(--ink2); font-size: 12.5px; }
+details.rows pre { font: 11.5px/1.45 var(--mono); background: var(--bg2); border: 1px solid var(--rule); border-radius: 6px; padding: 8px; overflow: auto; max-height: 260px; margin: 6px 0 0; }
+.dock-empty { color: var(--ink3); padding: 16px; }

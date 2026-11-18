@@ -1,0 +1,64 @@
+/* V3 Scene: the deployment in 3D is the page; the typed tree is a slim outline; the picked node's card on the right; the
+   nested table is a sheet pulled up from the bottom; before vs now is a time bar under the scene. */
+.v3 { height: calc(100vh - 44px); display: flex; min-height: 0; }
+.home, .dep { flex: 1; min-width: 0; display: flex; min-height: 0; }
+.home[hidden], .dep[hidden] { display: none; }
+
+.home { flex-direction: column; overflow: auto; padding: 18px 22px; }
+.home h1 { font-size: 20px; margin: 0 0 4px; }
+.home p.lede { color: var(--ink2); margin: 0 0 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.tile { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--rule); background: var(--bg2); text-decoration: none; color: var(--ink); display: block; }
+.tile.big { grid column: span 2; grid-column: span 2; grid-row: span 2; }
+.tile img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: var(--bg3); }
+.tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 12px; background: linear-gradient(transparent, rgba(8, 9, 10, .88) 40%); color: #f7f8f8; }
+.tile .cap b { font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.tile .cap div { font-size: 12.5px; color: #c9ccd2; }
+.tile.big .cap b { font-size: 19px; }
+.tile .badge { position: absolute; right: 10px; top: 10px; }
+.tile.off { opacity: .66; }
+a.tile:hover { box-shadow: 0 0 0 2px var(--ink3); }
+
+.outline { flex: none; min-width: 170px; overflow: hidden; background: var(--bg); }
+.outline .tree-sec { display: none; }
+.stagecol { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.stage { position: relative; flex: 1; min-height: 160px; }
+.vscene { position: absolute; inset: 0; }
+.vscene > .scene { width: 100%; height: 100%; }
+.timebar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent); box-shadow: 0 0 0 1px var(--rule), 0 6px 18px rgba(0, 0, 0, .25); }
+.timebar span { white-space: nowrap; font-size: 13px; font-weight: 650; text-align: center; line-height: 1.1; }
+.timebar small { display: block; font-weight: 400; font-size: 11px; color: var(--ink3); }
+.timebar input { width: 150px; accent-color: var(--real); cursor: pointer; }
+.timebar .tb-sum { font-weight: 500; color: var(--ink2); text-align: left; border-left: 1px solid var(--rule); padding-left: 12px; min-width: 210px; }
+.timebar .tb-sum b { color: var(--ink); }
+.sheet { flex: none; display: flex; flex-direction: column; min-height: 36px; background: var(--bg); border-top: 1px solid var(--rule); }
+.sheet-handle { flex: none; display: flex; align-items: center; gap: 10px; height: 36px; border: 0; background: var(--bg2); padding: 0 14px; cursor: pointer; text-align: left; }
+.sheet-handle .grip { width: 28px; height: 4px; border-radius: 2px; background: var(--ink3); opacity: .6; }
+.sheet-body { flex: 1; overflow: auto; }
+.sheet:not(.open) .sheet-body { display: none; }
+.sheet:not(.open) { height: 36px !important; }
+.sheet:not(.open) + * {}
+#sashB.off { display: none; }
+table.nt { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.nt th { position: sticky; top: 0; background: var(--bg); text-align: left; font-size: 11px; color: var(--ink3); text-transform: uppercase; letter-spacing: .05em; padding: 6px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+table.nt td { padding: 0 8px; height: 30px; border-bottom: 1px solid var(--rule2); white-space: nowrap; }
+table.nt tbody tr { cursor: pointer; } table.nt tbody tr:hover { background: var(--hover); } table.nt tr.sel { background: var(--accent-bg); }
+table.nt .nm { display: flex; align-items: center; gap: 6px; }
+table.nt td.v { font-variant-numeric: tabular-nums; }
+
+.card { flex: none; min-width: 300px; overflow: auto; background: var(--bg); padding: 14px 16px 28px; }
+.card[hidden] { display: none; }
+.card .kicker { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink3); display: flex; align-items: center; gap: 6px; }
+.card h2 { font-size: 19px; margin: 4px 0 2px; line-height: 1.25; }
+.card .sub { color: var(--ink3); font-size: 12.5px; margin-bottom: 10px; }
+.card h3 { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); margin: 16px 0 6px; }
+.card .fq-row { grid-template-columns: 22px 1fr; }
+.card .fq-row .fq-name small { display: none; }
+.card .fq-row .fq-body { grid-column: 2; }
+.parts { display: grid; gap: 4px; }
+.parts .p { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 7px; cursor: pointer; font-size: 13px; }
+.parts .p:hover { border-color: var(--ink3); }
+.parts .p .l { color: var(--ink3); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.cardbar { display: flex; gap: 6px; margin-bottom: 8px; }
+.foldcard { position: absolute; right: 10px; top: 10px; z-index: 7; }

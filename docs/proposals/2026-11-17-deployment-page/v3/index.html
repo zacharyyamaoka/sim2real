@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" data-variant="v3">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim2real · V3 Scene</title>
+<link rel="stylesheet" href="../shared/base.css">
+<link rel="stylesheet" href="v3.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#/"><i></i>sim2real</a>
+  <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
+  <span class="grow"></span>
+  <span class="proto" title="Babble round 2026-11-17, proposal 3 of 5">Proposal 3 · Scene</span>
+</header>
+<div class="v3">
+  <section id="home" class="home" hidden></section>
+  <section id="dep" class="dep" hidden>
+    <aside id="outline" class="outline"></aside>
+    <div class="sash" id="sashO"></div>
+    <div class="stagecol">
+      <div class="stage" id="stage">
+        <div id="scene" class="vscene"></div>
+        <div class="timebar" id="timebar">
+          <span class="tb-l">As found<small>round 0 · 11-15</small></span>
+          <input id="time" type="range" min="0" max="1" step="1" value="1" aria-label="Round shown: as found or now">
+          <span class="tb-r">Now<small>round 8 · 11-17</small></span>
+          <span class="tb-sum" id="tbsum"></span>
+        </div>
+      </div>
+      <div class="sash h" id="sashB"></div>
+      <div class="sheet" id="sheet">
+        <button class="sheet-handle" id="sheetBtn" aria-expanded="false"><span class="grip"></span><b>Table</b><span id="sheetSum" class="muted"></span></button>
+        <div class="sheet-body" id="sheetBody"></div>
+      </div>
+    </div>
+    <div class="sash" id="sashC"></div>
+    <aside id="card" class="card"></aside>
+  </section>
+</div>
+<script src="../../../../vendor/three/three-orbit-0.186.1.min.js"></script>
+<script src="../fixture/fixture.js"></script>
+<script src="../shared/core.js"></script>
+<script src="../shared/rack3d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

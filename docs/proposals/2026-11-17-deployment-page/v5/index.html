@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-variant="v5">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim2real · V5 Ladder</title>
+<link rel="stylesheet" href="../shared/base.css">
+<link rel="stylesheet" href="v5.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#/"><i></i>sim2real</a>
+  <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
+  <span class="grow"></span>
+  <button class="btn" id="overlay" aria-pressed="true" title="Draw round 0 (as found) under round 8 (now)">Round 0 underneath</button>
+  <span class="proto" title="Babble round 2026-11-17, proposal 5 of 5">Proposal 5 · Ladder</span>
+</header>
+<div class="v5">
+  <section id="home" class="home" hidden></section>
+  <section id="dep" class="dep" hidden>
+    <aside id="left" class="left"></aside>
+    <div class="sash" id="sashL"></div>
+    <main class="page" id="page">
+      <div class="hero">
+        <div id="scene" class="hscene"></div>
+        <div class="sash" id="sashS"></div>
+        <div class="kpis" id="kpis"></div>
+      </div>
+      <div class="body" id="body"></div>
+    </main>
+  </section>
+</div>
+<script src="../../../../vendor/three/three-orbit-0.186.1.min.js"></script>
+<script src="../fixture/fixture.js"></script>
+<script src="../shared/core.js"></script>
+<script src="../shared/rack3d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

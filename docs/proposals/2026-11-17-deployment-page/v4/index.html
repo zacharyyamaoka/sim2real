@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-variant="v4">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim2real · V4 Questions</title>
+<link rel="stylesheet" href="../shared/base.css">
+<link rel="stylesheet" href="v4.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#/"><i></i>sim2real</a>
+  <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
+  <span class="grow"></span>
+  <div class="seg" id="mode" role="group" aria-label="What the cells show">
+    <button data-m="r8" title="Round 8 · 2026-11-17">Now</button>
+    <button data-m="r0" title="Round 0 · 2026-11-15 · before any fit">As found</button>
+    <button data-m="changed" title="Round 0 → round 8, every cell that moved">What changed</button>
+  </div>
+  <span class="proto" title="Babble round 2026-11-17, proposal 4 of 5">Proposal 4 · Questions</span>
+</header>
+<div class="v4">
+  <section id="home" class="home" hidden></section>
+  <section id="dep" class="dep" hidden>
+    <aside id="side" class="side">
+      <div id="scene" class="sscene"></div>
+      <div class="sash h" id="sashS"></div>
+      <div class="rule" id="rule"></div>
+    </aside>
+    <div class="sash" id="sashL"></div>
+    <main class="mid">
+      <button class="cause" id="cause"></button>
+      <div class="matrix" id="matrix"></div>
+    </main>
+    <div class="sash" id="sashR"></div>
+    <aside id="insp" class="insp"></aside>
+  </section>
+</div>
+<script src="../../../../vendor/three/three-orbit-0.186.1.min.js"></script>
+<script src="../fixture/fixture.js"></script>
+<script src="../shared/core.js"></script>
+<script src="../shared/rack3d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

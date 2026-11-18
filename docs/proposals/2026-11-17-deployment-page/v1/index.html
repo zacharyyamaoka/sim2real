@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-variant="v1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim2real · V1 Workbench</title>
+<link rel="stylesheet" href="../shared/base.css">
+<link rel="stylesheet" href="v1.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#/"><i></i>sim2real</a>
+  <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
+  <span class="grow"></span>
+  <div class="seg" id="round" role="group" aria-label="Round shown" hidden>
+    <button data-r="r0" title="Round 0 · 2026-11-15 · before any fit">As found · round 0</button>
+    <button data-r="r8" title="Round 8 · 2026-11-17 · today">Now · round 8</button>
+  </div>
+  <span class="proto" title="Babble round 2026-11-17, proposal 1 of 5">Proposal 1 · Workbench</span>
+</header>
+<div class="v1">
+  <nav class="rail" aria-label="Views">
+    <a class="railbtn" data-v="home" href="#/" title="Deployments"><svg viewBox="0 0 16 16"><path d="M2.5 7.5L8 3l5.5 4.5M4 6.5V13h8V6.5"/></svg></a>
+    <a class="railbtn" data-v="tree" href="#/d/one-dof-test-rack" title="Typed tree + entity page"><svg viewBox="0 0 16 16"><path d="M3 3h4M5 3v9h4M5 7.5h4"/><rect x="9" y="6" width="5" height="3" rx=".8"/><rect x="9" y="10.5" width="5" height="3" rx=".8"/></svg></a>
+    <a class="railbtn" data-v="table" href="#/d/one-dof-test-rack?view=table" title="Table (nested)"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.2"/><path d="M2 6h12M2 9.5h12M6 6v7.5"/></svg></a>
+  </nav>
+  <section id="home" class="home" hidden></section>
+  <section id="dep" class="dep" hidden>
+    <aside id="left" class="left"></aside>
+    <div class="sash" id="sashL"></div>
+    <main id="entity" class="entity"></main>
+  </section>
+  <section id="table" class="tablev" hidden>
+    <div id="tablewrap" class="tablewrap"></div>
+    <div class="sash" id="sashT"></div>
+    <aside id="insp" class="insp"></aside>
+  </section>
+</div>
+<script src="../../../../vendor/three/three-orbit-0.186.1.min.js"></script>
+<script src="../fixture/fixture.js"></script>
+<script src="../shared/core.js"></script>
+<script src="../shared/rack3d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

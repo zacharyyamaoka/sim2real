@@ -1,0 +1,77 @@
+/* V1 Workbench: RobotDx's frame (icon rail, device tree, entity page with tabs, Table view), on the typed tree. */
+.v1 { display: flex; height: calc(100vh - 44px); min-height: 0; }
+.rail { flex: none; width: 48px; border-right: 1px solid var(--rule); display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 8px; background: var(--bg); }
+.railbtn { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--ink3); }
+.railbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.railbtn:hover { background: var(--hover); color: var(--ink); }
+.railbtn[aria-current="page"] { background: var(--accent-bg); color: var(--ink); }
+.home, .dep, .tablev { flex: 1; min-width: 0; display: flex; min-height: 0; }
+.home[hidden], .dep[hidden], .tablev[hidden] { display: none; }
+
+/* the deployments list: RobotDx's ENTITIES list, one row per deployment */
+.home { flex-direction: column; overflow: auto; padding: 18px 26px; }
+.home h1 { font-size: 20px; margin: 0 0 4px; }
+.home .lede { color: var(--ink2); margin: 0 0 16px; max-width: 70ch; }
+.dlist { border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; max-width: 1100px; }
+.dsec { padding: 8px 14px; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); background: var(--bg2); border-bottom: 1px solid var(--rule); }
+.drow { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--rule2); text-decoration: none; color: var(--ink); }
+.drow:last-child { border-bottom: 0; }
+a.drow:hover { background: var(--hover); }
+.drow img { width: 120px; height: 75px; object-fit: cover; border-radius: 6px; background: var(--bg3); }
+.drow .t { font-weight: 650; font-size: 15px; display: flex; gap: 8px; align-items: center; }
+.drow .l { color: var(--ink2); font-size: 13px; }
+.drow .m { color: var(--ink3); font-size: 12px; }
+.drow.off { opacity: .62; }
+.drow .head { text-align: right; font-size: 13px; }
+.drow .head b { display: block; font-size: 15px; }
+
+/* the device tree pane and the entity page */
+.left { flex: none; min-width: 220px; border-right: 0; background: var(--bg); overflow: hidden; }
+.entity { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
+.ent-head { padding: 12px 18px 10px; }
+.ent-crumb { font-size: 12.5px; color: var(--ink3); margin-bottom: 4px; }
+.ent-crumb a { color: var(--ink3); text-decoration: none; } .ent-crumb a:hover { color: var(--ink); text-decoration: underline; }
+.ent-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 21px; font-weight: 700; }
+.ent-title .ic svg { width: 20px; height: 20px; }
+.ent-sub { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 6px 0 10px; color: var(--ink2); font-size: 13px; }
+.ent-grid { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 12px; align-items: stretch; }
+.health { border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--ink2); }
+.health b { display: block; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); margin-bottom: 3px; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 12.5px; color: var(--ink3); }
+.facts span b { color: var(--ink2); font-weight: 550; }
+.scene-wrap { flex: none; margin: 0 18px; border-radius: 10px; overflow: hidden; border: 1px solid var(--rule); position: relative; }
+.scene-wrap > .scene { width: 100%; height: 100%; }
+#sashS { margin: 2px 18px; }
+.tabs { display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--rule); margin-top: 6px; }
+.tabs button { border: 0; background: none; padding: 9px 12px 8px; color: var(--ink2); cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; }
+.tabs button[aria-selected="true"] { color: var(--ink); font-weight: 650; border-bottom-color: var(--ink); }
+.tabs button .n { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--bg3); font-size: 11.5px; color: var(--ink2); }
+.tabbody { padding: 12px 18px 28px; }
+.plots { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 8px; }
+.plots .pc { border: 1px solid var(--rule); border-radius: 8px; padding: 8px; background: var(--bg2); }
+.childs { margin-top: 14px; }
+.childs h3, .tabbody h3 { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); margin: 14px 0 6px; }
+.crow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.crow:hover { background: var(--hover); }
+.crow .cl { color: var(--ink3); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the Table view: RobotDx's nested table, inspector folds */
+.tablewrap { flex: 1; min-width: 0; overflow: auto; }
+table.dx { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.dx th { position: sticky; top: 0; background: var(--bg); z-index: 1; text-align: left; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); padding: 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+table.dx td { padding: 0 8px; height: 32px; border-bottom: 1px solid var(--rule2); white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+table.dx tr { cursor: pointer; } table.dx tbody tr:hover { background: var(--hover); }
+table.dx tr.sel { background: var(--accent-bg); }
+table.dx .nm { display: flex; align-items: center; gap: 6px; }
+table.dx .fqd { display: inline-flex; gap: 5px; }
+table.dx .msg { color: var(--ink2); }
+table.dx .msg b { font-weight: 650; margin-right: 4px; }
+table.dx .msg b.fail { color: var(--fail); } table.dx .msg b.watch { color: var(--warn); } table.dx .msg b.pass { color: var(--pass); }
+table.dx td.v { font-variant-numeric: tabular-nums; }
+.insp { flex: none; overflow: auto; border-left: 0; background: var(--bg); padding: 0 0 20px; }
+.insp[hidden] { display: none; }
+.insp-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--rule); position: sticky; top: 0; background: var(--bg); }
+.insp-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insp-body { padding: 12px; display: grid; gap: 12px; }
+.tablev.folded #sashT { display: none; }
+.foldtab { position: absolute; right: 10px; top: 54px; z-index: 6; }

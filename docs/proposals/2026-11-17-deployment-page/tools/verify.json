@@ -1,0 +1,92 @@
+{
+ "v1": {
+  "row_selects": true,
+  "mesh_pick": true,
+  "viewcube": true,
+  "cad_toggle": true,
+  "sash_drag": true,
+  "sash_persists": true,
+  "sash_reset": true,
+  "sash_px": [
+   330,
+   400,
+   400,
+   330
+  ],
+  "inspector_folds": true,
+  "before_after": true,
+  "console_errors": []
+ },
+ "v2": {
+  "row_selects": true,
+  "mesh_pick": true,
+  "viewcube": true,
+  "cad_toggle": true,
+  "sash_drag": true,
+  "sash_persists": true,
+  "sash_reset": true,
+  "sash_px": [
+   440,
+   510,
+   510,
+   440
+  ],
+  "inspector_folds": true,
+  "before_after": "columns: True",
+  "console_errors": []
+ },
+ "v3": {
+  "row_selects": true,
+  "mesh_pick": true,
+  "viewcube": true,
+  "cad_toggle": true,
+  "sash_drag": true,
+  "sash_persists": true,
+  "sash_reset": true,
+  "sash_px": [
+   230,
+   300,
+   300,
+   230
+  ],
+  "inspector_folds": true,
+  "before_after": true,
+  "console_errors": []
+ },
+ "v4": {
+  "row_selects": true,
+  "mesh_pick": true,
+  "viewcube": true,
+  "cad_toggle": true,
+  "sash_drag": true,
+  "sash_persists": true,
+  "sash_reset": true,
+  "sash_px": [
+   260,
+   330,
+   330,
+   260
+  ],
+  "inspector_folds": true,
+  "before_after": true,
+  "console_errors": []
+ },
+ "v5": {
+  "row_selects": true,
+  "mesh_pick": true,
+  "viewcube": true,
+  "cad_toggle": true,
+  "sash_drag": true,
+  "sash_persists": true,
+  "sash_reset": true,
+  "sash_px": [
+   290,
+   360,
+   360,
+   290
+  ],
+  "inspector_folds": "n/a (no inspector beside a wide view)",
+  "before_after": true,
+  "console_errors": []
+ }
+}

@@ -1,0 +1,908 @@
+{
+ "schemaVersion": 3,
+ "title": "Sim2Real deployment page · five proposals",
+ "kicker": "Babble round · 2026-11-17 · /babble 5",
+ "brief": "Sim2Real opens on Deployments; a deployment shows its 3D and its typed component tree; any node shows the current value of its metrics and gates (the five questions), a nested table like RobotDx's, and before any fit (round 0, 11-15) against now (round 8, 11-17). Each proposal also says where the metric and gate definitions live in the backend.",
+ "count": 5,
+ "defaultId": "v4",
+ "defaultWhy": "Questions leads at 88/100 on the frozen criteria: it answers 'what stops the goal' in one banner, makes the five questions and the parent rule the page's structure, shows every cell before → after, and its backend (sim2real owns the verdict, robot_models stays models-only) is the one that breaks no ruling. Workbench is 2 points behind (86): a fragile lead.",
+ "decisionHinge": "Familiarity against cause-finding. Move 5 points from fr5 (backend fit) to fr2 (RobotDx conventions) and Workbench wins 88 to 86. The backend axis is separable, so the stronger answer is a splice: Workbench's frame with Questions' banner, question columns and What-changed mode in its Table view, on V4's backend with V2's metrics/ folder if he wants `.metrics` beside `.models`.",
+ "invariants": [
+  "The same fixture: round 0 (as found, 11-15) and round 8 (now, 11-17) scorecards of the pendulum campaign, read-only.",
+  "The same 45-node typed tree, the same five questions per node, the same status words and colours (sim2real's tokens).",
+  "1440 × 900, dark theme, every variant runnable from file:// and over http, no build step.",
+  "Schematic 3D from the station facts, labelled simulated; the CAD render one click away."
+ ],
+ "boundary": "Front-end prototypes over the real fixture. The values a backend would compute are precomputed by fixture/build_fixture.py; each backend is a sketch (BACKEND.md), not implemented in any library.",
+ "axes": [
+  {
+   "name": "Mental model",
+   "values": [
+    "tree + entity page, like RobotDx (V1)",
+    "the nested table is the page (V2)",
+    "the 3D scene is the page (V3)",
+    "question matrix (V4)",
+    "measurement ladder (V5)"
+   ]
+  },
+  {
+   "name": "Before vs now",
+   "values": [
+    "round switch + 'was' beside every value (V1)",
+    "Round 0 | Now | Δ columns (V2)",
+    "time bar under the scene (V3)",
+    "What changed: cells before → after (V4)",
+    "round 0 drawn underneath (V5)"
+   ]
+  },
+  {
+   "name": "Where metric definitions live",
+   "values": [
+    "nested on the ModelFamily: IntegratedServo.metrics (V1)",
+    "robot_models/metrics/ folder + values ledger (V2)",
+    "robotparts type: .models .metrics .dx (V3)",
+    "sim2real: verdicts.py once + a card per type (V4)",
+    "robot_metrics package of functions (V5)"
+   ]
+  },
+  {
+   "name": "Role of the 3D",
+   "values": [
+    "strip on every entity page (V1)",
+    "docked over the inspector (V2)",
+    "the stage, parts pulled apart (V3)",
+    "thumbnail beside the matrix (V4)",
+    "hero beside the KPIs (V5)"
+   ]
+  }
+ ],
+ "requirements": [
+  {
+   "id": "fr1",
+   "name": "One answer first on every node",
+   "weight": 25,
+   "why": "He asked for 'the current value of its metrics and gates' on each node, and calm UI is a standing rule: with 6 stations × 5 levels he must not read a table to learn that CAN 11's twin is the one red.",
+   "passCondition": "On the deployment and on any node, the verdict, the first failing question and its metric against the gate read without a click or scroll.",
+   "anchors": {
+    "1": "The verdict needs reading a table or several clicks.",
+    "3": "The verdict is up top, but its cause (which question, which metric) needs a click.",
+    "5": "Verdict, first failing question and its metric vs gate in one line at the top of every node."
+   }
+  },
+  {
+   "id": "fr2",
+   "name": "Typed tree you already know how to drive",
+   "weight": 20,
+   "why": "Reference apps: RobotDx's device tree and Table view, sim2real's Typed tree. Zero relearning; clicking any node shows that level.",
+   "passCondition": "Tree on the left with click, keyboard and search; the picked level on the right; a nested table (tree + columns) of the same typed tree.",
+   "anchors": {
+    "1": "A new navigation model to learn; no nested table.",
+    "3": "A tree and a table, but they drift from RobotDx / Typed tree conventions or lose the selection between them.",
+    "5": "RobotDx's tree and Table conventions (dot, twisty, search, keyboard) with one selection shared by tree, table and 3D."
+   }
+  },
+  {
+   "id": "fr3",
+   "name": "Before fit vs now, legible",
+   "weight": 15,
+   "why": "'Let me run the pendulum as it currently is' = round 0 (2026-11-15, as found) against round 8 (2026-11-17), without losing your place.",
+   "passCondition": "The same metric's round-0 and round-8 values readable together at the node you are on, with the direction of change and the ladder caveat (CAN 11's top speed 2.5 → 5 rad/s).",
+   "anchors": {
+    "1": "One round at a time, no anchor between them.",
+    "3": "A round switch that keeps your place; change seen by flipping.",
+    "5": "Both rounds together at the node, direction marked, the ladder caveat stated where it matters."
+   }
+  },
+  {
+   "id": "fr4",
+   "name": "Stacking and observability told truthfully",
+   "weight": 15,
+   "why": "Settled (MOC Nov 15): Floor → Data → Routines → Twin → Job at every node; a parent passes at its own output and with its children; on this rack motor and gearbox cannot be seen apart from the servo.",
+   "passCondition": "Every node shows the five questions in order; 'not observable here' never reads as a fail; children shown as not gating where the contract says so.",
+   "anchors": {
+    "1": "One blended status; unobservable reads as failure.",
+    "3": "Five questions shown, but the roll-up or the observability rule stays implicit.",
+    "5": "Five questions in order at every level, the roll-up rule visible, 'not observable' and 'shown, not gating' distinct from fail."
+   }
+  },
+  {
+   "id": "fr5",
+   "name": "Backend shape concrete and on the settled layering",
+   "weight": 15,
+   "why": "His follow-up: 'what is going on in the backend?' Fit lives on the Model, health on the unit, the verdict on a composition; robot_models knows ModelFamily → Model → Parameter; he leans to robot_models and 'a folder called metrics'. (Weight inferred.)",
+   "passCondition": "A short code sketch names where definitions, gate numbers and values live, the API, and the page's read path; additive; breaks no ruling.",
+   "anchors": {
+    "1": "Hand-waved ('a metrics layer').",
+    "3": "A location and an API, but it collides with a ruling or adds a package for little reason.",
+    "5": "One concrete home per concern, additive, the read path named, pendulum_goal.py lifted not rewritten."
+   }
+  },
+  {
+   "id": "fr6",
+   "name": "3D grounds the tree",
+   "weight": 10,
+   "why": "'Bring up the 3D viewer of that deployment.' House viewer taste: inline, no logo, a Fusion-style ViewCube. (Weight inferred.)",
+   "passCondition": "A 3D view of the deployment on its page, selection synced both ways with the tree, honest about simulated geometry.",
+   "anchors": {
+    "1": "A static picture with no link to the tree.",
+    "3": "A 3D view, but selection one-way or geometry unexplained.",
+    "5": "Inline 3D, ViewCube, station ↔ tree selection both ways, status on the geometry, 'simulated' labelled."
+   }
+  }
+ ],
+ "hardGates": [
+  {
+   "id": "g1",
+   "name": "Real fixture only",
+   "why": "Every number from round0.json / latest_real.json or sim2real's sysid index; anything simulated or assumed is labelled."
+  },
+  {
+   "id": "g2",
+   "name": "No dead controls",
+   "why": "Every visible control does something; what is not wired is hidden."
+  },
+  {
+   "id": "g3",
+   "name": "Panels resize and remember",
+   "why": "Every panel boundary drags and persists; an inspector folds (Zach's standing rule)."
+  },
+  {
+   "id": "g4",
+   "name": "Degrees and plain names",
+   "why": "Angles in degrees, never rad or mrad; no bare code without its plain name beside it."
+  },
+  {
+   "id": "g5",
+   "name": "Read-only and isolated",
+   "why": "No hardware, bus, camera or network access; writes only to the proposal folder and reports/."
+  }
+ ],
+ "variants": [
+  {
+   "id": "v1",
+   "name": "Workbench",
+   "thesis": "RobotDx's own frame on the typed tree: icon rail, tree on the left, the picked level's entity page (answer, 3D strip, tabs) on the right, and RobotDx's Table view with a foldable inspector.",
+   "accent": "#3987e5",
+   "bestWhen": "You want zero relearning: the same muscle memory as RobotDx, one page per level, depth on tabs (Gates · Metrics · Speed ladder · Definition).",
+   "losesWhen": "You want to compare many nodes at once: a level at a time is slower than a matrix or a sheet for 'where is the red'.",
+   "decisions": [
+    {
+     "label": "Mental model",
+     "value": "tree + entity page, like RobotDx; the Table view is one rail click away"
+    },
+    {
+     "label": "Before vs now",
+     "value": "one round switch in the bar; every value carries the other round beside it ('was 4.27× ▲')"
+    },
+    {
+     "label": "Backend",
+     "value": "metrics nested on the ModelFamily: IntegratedServo.metrics beside IntegratedServo.m3"
+    },
+    {
+     "label": "3D",
+     "value": "a resizable strip on every entity page; a click on a part selects that part"
+    }
+   ],
+   "keepParts": [
+    "entity page header with the one-line answer",
+    "Unit health box apart from the verdict",
+    "Table view + foldable inspector",
+    "Definition tab"
+   ],
+   "proof": [
+    "Walked by real clicks (clip); verify.py: row select, 3D mesh pick, ViewCube, CAD toggle, sash drag + persist + reset, inspector fold (Esc), round switch all pass.",
+    "Prototype: front-end over the real fixture; the backend is a sketch (v1/BACKEND.md)."
+   ],
+   "scores": {
+    "fr1": {
+     "score": 5,
+     "evidence": "Every entity page opens on the one-line answer (verdict, first failing question, metric vs gate); the deployment's names CAN 11 · twin 2.14×.",
+     "confidence": "high"
+    },
+    "fr2": {
+     "score": 5,
+     "evidence": "RobotDx's frame cloned: dot per node, twisty, search, keyboard; Table view with inspector; tree, table and 3D share one selection (verify: row + mesh pick).",
+     "confidence": "high"
+    },
+    "fr3": {
+     "score": 4,
+     "evidence": "Round switch keeps your place and every value shows the other round with ▲/▼; still a flip for the page's main colour, not side by side.",
+     "confidence": "high"
+    },
+    "fr4": {
+     "score": 4,
+     "evidence": "Five questions in order on every node, children listed 'shown, not gating', not-observable hollow; the parent rule itself is not stated on the page.",
+     "confidence": "medium"
+    },
+    "fr5": {
+     "score": 3,
+     "evidence": "Concrete and his lean (`.metrics` beside `.models`), but it adds a new kind of thing to robot_models against the 11-17 'ModelFamily → Model → Parameter only' ruling.",
+     "confidence": "medium"
+    },
+    "fr6": {
+     "score": 4,
+     "evidence": "Inline 3D on every page, ViewCube, labels with verdict, both-way selection incl. part picks; a strip, so secondary to the tabs.",
+     "confidence": "high"
+    }
+   },
+   "gateResults": {
+    "g1": {
+     "pass": true,
+     "evidence": "Every number reads the shared fixture (fixture/build_fixture.py recomputes the scorecards' 82 and 151 gates and holds them); the 3D wears a 'schematic geometry · simulated' chip."
+    },
+    "g2": {
+     "pass": true,
+     "evidence": "tools/verify.py clicked the tree/table row, a 3D station mesh, the ViewCube, the CAD-render toggle and the before/after control: all moved the page; 0 console errors."
+    },
+    "g3": {
+     "pass": true,
+     "evidence": "Main boundary dragged +70 px (330→400), kept 400 px after a reload, double-click restored 330 px; inspector fold: True."
+    },
+    "g4": {
+     "pass": true,
+     "evidence": "Angles print in degrees (0.045°, 2.14× floor); every T-code sits beside its name (T2 Twin ÷ floor at the output)."
+    },
+    "g5": {
+     "pass": true,
+     "evidence": "Static pages over the fixture file; no network, bus or device access; nothing written outside the proposal folder and reports/."
+    }
+   },
+   "previewLabel": "The same five states, captured from the running prototype",
+   "preview": "<style>.dp{width:1440px;max-width:100%}.dp .dp-shot img{display:none;width:100%;height:auto;border-radius:6px;border:1px solid #26282d}.prototype:not([data-story-state]) .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s1\"] .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s2\"] .dp .dp-shot img.st-s2{display:block}.prototype[data-story-state=\"s3\"] .dp .dp-shot img.st-s3{display:block}.prototype[data-story-state=\"s4\"] .dp .dp-shot img.st-s4{display:block}.prototype[data-story-state=\"s5\"] .dp .dp-shot img.st-s5{display:block}.dp-steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.dp-steps button{font:600 13px system-ui,sans-serif;padding:5px 10px;border-radius:7px;border:1px solid #c4c4c4;background:transparent;color:inherit;cursor:pointer}.prototype[data-story-state=\"s1\"] [data-story-to=\"s1\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s2\"] [data-story-to=\"s2\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s3\"] [data-story-to=\"s3\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s4\"] [data-story-to=\"s4\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s5\"] [data-story-to=\"s5\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}</style><div class=\"dp\"><div class=\"dp-shot\"><img class=\"st-s1\" src=\"media/deployment-page-proposals-2026-11-17/v1/s1.png\" alt=\"The rack: 3D + typed tree\" loading=\"eager\"><img class=\"st-s2\" src=\"media/deployment-page-proposals-2026-11-17/v1/s2.png\" alt=\"CAN 11: metrics and gates\" loading=\"eager\"><img class=\"st-s3\" src=\"media/deployment-page-proposals-2026-11-17/v1/s3.png\" alt=\"Nested table\" loading=\"eager\"><img class=\"st-s4\" src=\"media/deployment-page-proposals-2026-11-17/v1/s4.png\" alt=\"Before fit vs now\" loading=\"eager\"><img class=\"st-s5\" src=\"media/deployment-page-proposals-2026-11-17/v1/s5.png\" alt=\"Deployments\" loading=\"eager\"></div><div class=\"dp-steps\"><button type=\"button\" data-story-to=\"s1\">1 · The rack: 3D + typed tree</button><button type=\"button\" data-story-to=\"s2\">2 · CAN 11: metrics and gates</button><button type=\"button\" data-story-to=\"s3\">3 · Nested table</button><button type=\"button\" data-story-to=\"s4\">4 · Before fit vs now</button><button type=\"button\" data-story-to=\"s5\">5 · Deployments</button></div></div>",
+   "story": {
+    "title": "Walk the same five states",
+    "steps": [
+     {
+      "label": "The rack: 3D + typed tree",
+      "caption": "Tree on the left, the deployment's entity page on the right: the answer names CAN 11's twin; the 3D strip wears each station's verdict.",
+      "state": "s1",
+      "target": "[data-story-to=\"s1\"]"
+     },
+     {
+      "label": "CAN 11: metrics and gates",
+      "caption": "CAN 11's page: 'Fails at Twin: twin ÷ floor 2.14×' on top, health apart, the ladder caveat, then the five questions with round 0 beside each value.",
+      "state": "s2",
+      "target": "[data-story-to=\"s2\"]"
+     },
+     {
+      "label": "Nested table",
+      "caption": "RobotDx's Table view: the same typed tree as nested rows, F D R T J dots, the message column, round 0 beside the key metric; the inspector folds.",
+      "state": "s3",
+      "target": "[data-story-to=\"s3\"]"
+     },
+     {
+      "label": "Before fit vs now",
+      "caption": "The round switch on As found: CAN 11 fails first at Floor (1 of 6 rungs had a floor); 'now 0.045°' sits beside every value.",
+      "state": "s4",
+      "target": "[data-story-to=\"s4\"]"
+     },
+     {
+      "label": "Deployments",
+      "caption": "Deployments: physical and virtual in RobotDx's list style; only the rack has round data in this fixture.",
+      "state": "s5",
+      "target": "[data-story-to=\"s5\"]"
+     }
+    ]
+   },
+   "media": [
+    {
+     "label": "Click-through (real clicks, 16 s)",
+     "caption": "Recorded from the running prototype with real clicks only: deployments → the rack → CAN 11 → this variant's own moves. Muted, loops.",
+     "html": "<video src=\"media/deployment-page-proposals-2026-11-17/v1/walk.mp4\" poster=\"media/deployment-page-proposals-2026-11-17/v1/s2.png\" muted loop autoplay playsinline controls width=\"1280\" height=\"800\"></video>"
+    },
+    {
+     "label": "Speed ladder tab",
+     "caption": "CAN 11 up the ladder: round 0 dashed under now, the gate as a band.",
+     "html": "<img src=\"media/deployment-page-proposals-2026-11-17/v1/x_ladder.png\" alt=\"Speed ladder tab\">"
+    },
+    {
+     "label": "Backend: where the metrics live",
+     "caption": "This variant's backend (v1/BACKEND.md): a sketch, not implemented in any library.",
+     "html": "<div style=\"padding:16px;max-width:1100px;font:14px/1.5 system-ui,sans-serif\"><p style=\"margin:0 0 10px\"><b>Thesis.</b> a type&#x27;s metrics sit beside its models, on the same class: <code>IntegratedServo.metrics</code> next to\n<code>IntegratedServo.m3</code>. Zach&#x27;s lean (&quot;they should live at the level of the robot models... that&#x27;s the level at which I\ndescribe all of the basic types&quot;) taken literally.</p><table style=\"border-collapse:collapse;font-size:12.5px;margin:0 0 12px\"><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">metric definition (what, unit, output, which question)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">robot_models, nested on the family</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>IntegratedServo.metrics.t3</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">the five generic questions</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">robot_models <code>metrics.FIVE</code> (a base every family&#x27;s <code>metrics</code> inherits)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>floor, data, routines, twin, job</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">gate number (default target)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">on the Metric; a deployment overrides in sim2real <code>cards/deployments/&lt;dep&gt;.py</code></td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>target=at_most(1.5)</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">current value of a node</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">sim2real <code>evaluate()</code> → <code>app/data/&lt;dep&gt;/values/&lt;round&gt;.json</code></td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>values[&quot;can11&quot;][&quot;twin&quot;]</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">fit (does this model explain this log)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">unchanged: <code>Model.score(log)</code>, <code>ModelFamily.select_best(held_out)</code></td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">health of the physical unit</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">unchanged: RobotDx reads the unit</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr></table><pre style=\"font:12px/1.5 ui-monospace,monospace;background:rgba(127,127,127,.12);padding:12px;border-radius:8px;overflow:auto;white-space:pre\"># robot_models/actuators/servo/integrated_servo_family.py   (beside the models)\nclass IntegratedServo(ModelFamily, id=&quot;integrated_servo&quot;):\n    class m3: ...                                        # models, unchanged\n    class metrics(Metrics, output=&quot;output angle&quot;):       # NEW: model-free, judged at the output\n        floor, data, routines, twin, job = FIVE          # generic, inherited\n        t3 = Metric(&quot;× scatter&quot;, question=&quot;twin&quot;, target=at_most(2.0))     # own to this type\n        t7 = Metric(&quot;%&quot;, question=&quot;twin&quot;, target=within(5.0))\n\n# robot_models/arms/rigid_body_chain/   (Zach: &quot;a robot arm is just a serial rigid chain&quot;; 1 joint = the pendulum)\nclass RigidBodyChain(ModelFamily, id=&quot;rigid_body_chain&quot;):\n    class metrics(Metrics, output=&quot;link tip&quot;):\n        floor, data, routines, twin, job = FIVE\n        tip_stop = Metric(&quot;mm&quot;, question=&quot;job&quot;, target=at_most(1.0))       # bam_rack_twin pendulum_goal.Thresholds\n        speed_ladder = Metric(&quot;of top speed&quot;, question=&quot;job&quot;, target=at_least(0.9))\n\n# sim2real: walk the deployment&#x27;s typed tree, each node asks its type\nvalues = sim2real.evaluate(deployment, round_dir=&quot;.../onedof_2026-11-15/round8&quot;)\nvalues.write(&quot;app/data/one-dof-test-rack/values/r8.json&quot;)        # the page reads only this</pre><p style=\"margin:10px 0 0\">Fits:Zach&#x27;s lean, one place to look per type, <code>.models</code> and <code>.metrics</code> side by side. Strains: the 11-17\nruling &quot;robot_models knows only ModelFamily → Model → Parameter&quot; (a new kind of thing on the family), and robot_models\ngains a metric runtime it must keep dependency-free.</p></div>"
+    },
+    {
+     "label": "Live prototype",
+     "caption": "The real prototype, embedded (drag, click, fold, switch rounds). Open it full size with the serve command in the README.",
+     "html": "<iframe src=\"../docs/proposals/2026-11-17-deployment-page/v1/index.html#/d/one-dof-test-rack?n=can11\" width=\"1440\" height=\"900\" style=\"width:1440px;height:900px;border:1px solid #26282d;border-radius:8px\" title=\"v1 live\"></iframe>"
+    }
+   ]
+  },
+  {
+   "id": "v2",
+   "name": "Sheet",
+   "thesis": "The nested typed table IS the deployment page: every node a row, the five questions as columns, round 0 and now as columns side by side; the 3D and the inspector dock on the right and fold away.",
+   "accent": "#d95926",
+   "bestWhen": "You scan for the odd one out across all 45 nodes and want both rounds visible at once without touching a control.",
+   "losesWhen": "A single node's story matters more than the overview: the why lives in the dock, and 13 columns crowd a laptop width.",
+   "decisions": [
+    {
+     "label": "Mental model",
+     "value": "the table is the page (Typed tree + RobotDx Table merged)"
+    },
+    {
+     "label": "Before vs now",
+     "value": "always both: Round 0 | Now | Δ columns, no switch"
+    },
+    {
+     "label": "Backend",
+     "value": "a flat robot_models/metrics/ folder of records + a values ledger the table reads as is"
+    },
+    {
+     "label": "3D",
+     "value": "docked above the inspector, folds with it (D / Esc)"
+    }
+   ],
+   "keepParts": [
+    "round 0 | now | Δ columns",
+    "five-question cells with their deciding number",
+    "the ledger rows the page reads",
+    "filter box"
+   ],
+   "proof": [
+    "Walked by real clicks (clip); verify.py: row select, mesh pick, ViewCube, CAD toggle, dock drag + persist + reset, dock fold all pass.",
+    "Prototype: front-end over the real fixture; backend sketch in v2/BACKEND.md."
+   ],
+   "scores": {
+    "fr1": {
+     "score": 4,
+     "evidence": "Red cells pop and the dock opens on the answer, but the one-line why needs the dock open; the sheet itself is dense.",
+     "confidence": "medium"
+    },
+    "fr2": {
+     "score": 4,
+     "evidence": "Exactly the nested table he pointed at (Typed tree columns + RobotDx Table) with twisties and a filter; no separate tree pane or keyboard row navigation.",
+     "confidence": "high"
+    },
+    "fr3": {
+     "score": 5,
+     "evidence": "Both rounds always on screen as columns with Δ, per node and per metric; the ladder caveat in the inspector.",
+     "confidence": "high"
+    },
+    "fr4": {
+     "score": 4,
+     "evidence": "The five questions are columns on every row, so stacking reads down the sheet; 'not seen' distinct; the parent rule not stated.",
+     "confidence": "medium"
+    },
+    "fr5": {
+     "score": 4,
+     "evidence": "His 'folder called metrics' literally, cheap to move later, ledger shape like results.json/W&B; still non-models inside robot_models, loose records can drift.",
+     "confidence": "medium"
+    },
+    "fr6": {
+     "score": 4,
+     "evidence": "Docked 3D synced both ways (row ↔ mesh), ViewCube; small beside the sheet, labels only on the picked station.",
+     "confidence": "medium"
+    }
+   },
+   "gateResults": {
+    "g1": {
+     "pass": true,
+     "evidence": "Every number reads the shared fixture (fixture/build_fixture.py recomputes the scorecards' 82 and 151 gates and holds them); the 3D wears a 'schematic geometry · simulated' chip."
+    },
+    "g2": {
+     "pass": true,
+     "evidence": "tools/verify.py clicked the tree/table row, a 3D station mesh, the ViewCube, the CAD-render toggle and the before/after control: all moved the page; 0 console errors."
+    },
+    "g3": {
+     "pass": true,
+     "evidence": "Main boundary dragged +70 px (440→510), kept 510 px after a reload, double-click restored 440 px; inspector fold: True."
+    },
+    "g4": {
+     "pass": true,
+     "evidence": "Angles print in degrees (0.045°, 2.14× floor); every T-code sits beside its name (T2 Twin ÷ floor at the output)."
+    },
+    "g5": {
+     "pass": true,
+     "evidence": "Static pages over the fixture file; no network, bus or device access; nothing written outside the proposal folder and reports/."
+    }
+   },
+   "previewLabel": "The same five states, captured from the running prototype",
+   "preview": "<style>.dp{width:1440px;max-width:100%}.dp .dp-shot img{display:none;width:100%;height:auto;border-radius:6px;border:1px solid #26282d}.prototype:not([data-story-state]) .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s1\"] .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s2\"] .dp .dp-shot img.st-s2{display:block}.prototype[data-story-state=\"s3\"] .dp .dp-shot img.st-s3{display:block}.prototype[data-story-state=\"s4\"] .dp .dp-shot img.st-s4{display:block}.prototype[data-story-state=\"s5\"] .dp .dp-shot img.st-s5{display:block}.dp-steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.dp-steps button{font:600 13px system-ui,sans-serif;padding:5px 10px;border-radius:7px;border:1px solid #c4c4c4;background:transparent;color:inherit;cursor:pointer}.prototype[data-story-state=\"s1\"] [data-story-to=\"s1\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s2\"] [data-story-to=\"s2\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s3\"] [data-story-to=\"s3\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s4\"] [data-story-to=\"s4\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s5\"] [data-story-to=\"s5\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}</style><div class=\"dp\"><div class=\"dp-shot\"><img class=\"st-s1\" src=\"media/deployment-page-proposals-2026-11-17/v2/s1.png\" alt=\"The rack: 3D + typed tree\" loading=\"eager\"><img class=\"st-s2\" src=\"media/deployment-page-proposals-2026-11-17/v2/s2.png\" alt=\"CAN 11: metrics and gates\" loading=\"eager\"><img class=\"st-s3\" src=\"media/deployment-page-proposals-2026-11-17/v2/s3.png\" alt=\"Nested table\" loading=\"eager\"><img class=\"st-s4\" src=\"media/deployment-page-proposals-2026-11-17/v2/s4.png\" alt=\"Before fit vs now\" loading=\"eager\"><img class=\"st-s5\" src=\"media/deployment-page-proposals-2026-11-17/v2/s5.png\" alt=\"Deployments\" loading=\"eager\"></div><div class=\"dp-steps\"><button type=\"button\" data-story-to=\"s1\">1 · The rack: 3D + typed tree</button><button type=\"button\" data-story-to=\"s2\">2 · CAN 11: metrics and gates</button><button type=\"button\" data-story-to=\"s3\">3 · Nested table</button><button type=\"button\" data-story-to=\"s4\">4 · Before fit vs now</button><button type=\"button\" data-story-to=\"s5\">5 · Deployments</button></div></div>",
+   "story": {
+    "title": "Walk the same five states",
+    "steps": [
+     {
+      "label": "The rack: 3D + typed tree",
+      "caption": "The deployment as one nested table: verdict round 0 and now, the five questions with their numbers, the dock with 3D and the rack's answer.",
+      "state": "s1",
+      "target": "[data-story-to=\"s1\"]"
+     },
+     {
+      "label": "CAN 11: metrics and gates",
+      "caption": "CAN 11's Twin cell picked: the dock's inspector lists every metric round 0 → now, the twin row highlighted.",
+      "state": "s2",
+      "target": "[data-story-to=\"s2\"]"
+     },
+     {
+      "label": "Nested table",
+      "caption": "Dock folded: the whole sheet, CAN 11's servo opened to its parts, key metric round 0 → now → Δ on every row.",
+      "state": "s3",
+      "target": "[data-story-to=\"s3\"]"
+     },
+     {
+      "label": "Before fit vs now",
+      "caption": "Round 0 and now side by side in the inspector: floor 0.104° → 0.045°, repeats 3 → 5, twin 4.27× → 2.14×.",
+      "state": "s4",
+      "target": "[data-story-to=\"s4\"]"
+     },
+     {
+      "label": "Deployments",
+      "caption": "Deployments as rows, gates round 0 → now (82 → 151 of 180).",
+      "state": "s5",
+      "target": "[data-story-to=\"s5\"]"
+     }
+    ]
+   },
+   "media": [
+    {
+     "label": "Click-through (real clicks, 16 s)",
+     "caption": "Recorded from the running prototype with real clicks only: deployments → the rack → CAN 11 → this variant's own moves. Muted, loops.",
+     "html": "<video src=\"media/deployment-page-proposals-2026-11-17/v2/walk.mp4\" poster=\"media/deployment-page-proposals-2026-11-17/v2/s2.png\" muted loop autoplay playsinline controls width=\"1280\" height=\"800\"></video>"
+    },
+    {
+     "label": "The ledger rows",
+     "caption": "The servo's inspector with the raw values.jsonl rows this backend would write: what the table reads.",
+     "html": "<img src=\"media/deployment-page-proposals-2026-11-17/v2/x_ledger.png\" alt=\"The ledger rows\">"
+    },
+    {
+     "label": "Backend: where the metrics live",
+     "caption": "This variant's backend (v2/BACKEND.md): a sketch, not implemented in any library.",
+     "html": "<div style=\"padding:16px;max-width:1100px;font:14px/1.5 system-ui,sans-serif\"><p style=\"margin:0 0 10px\"><b>Thesis.</b> Zach&#x27;s &quot;for now I can just have a folder called metrics where I put this information... I will move it\naround later&quot;. Records, not classes: one module per type id, no family imports it, so moving it later is a <code>git mv</code>.\nThe values are a ledger the table reads row for row.</p><table style=\"border-collapse:collapse;font-size:12.5px;margin:0 0 12px\"><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">metric definition</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>robot_models/metrics/&lt;type_id&gt;.py</code>, plain <code>MetricSpec</code> records</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>MetricSpec(&quot;T3&quot;, unit=&quot;× scatter&quot;, question=&quot;twin&quot;)</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">the five generic questions</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>robot_models/metrics/__init__.py</code> <code>FIVE_QUESTIONS</code></td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">gate number</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">on the record (<code>target=&quot;&lt;= 2.0&quot;</code>); a deployment overrides in sim2real <code>registry.json</code></td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">current value</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>app/data/&lt;dep&gt;/values.jsonl</code>, one row per node × metric × round</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">fit / health</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">unchanged (Model / RobotDx)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr></table><pre style=\"font:12px/1.5 ui-monospace,monospace;background:rgba(127,127,127,.12);padding:12px;border-radius:8px;overflow:auto;white-space:pre\"># robot_models/metrics/integrated_servo.py\nfrom robot_models.metrics import MetricSpec, FIVE_QUESTIONS\nMETRICS = FIVE_QUESTIONS.at(output=&quot;output angle&quot;) + (\n    MetricSpec(&quot;T3&quot;, &quot;current fidelity&quot;, unit=&quot;× scatter&quot;, question=&quot;twin&quot;, target=&quot;&lt;= 2.0&quot;, fn=&quot;current_over_scatter&quot;),\n    MetricSpec(&quot;T7&quot;, &quot;envelope: top speed&quot;, unit=&quot;%&quot;, question=&quot;twin&quot;, target=&quot;|x| &lt;= 5&quot;, fn=&quot;top_speed_error&quot;),\n)\n# robot_models/metrics/__init__.py\ndef for_type(type_id: str) -&gt; tuple[MetricSpec, ...]: ...      # the registry; nothing else imports these modules\n\n# sim2real writes the ledger; the page&#x27;s table reads it as is\nfor node in deployment.tree:\n    for spec in metrics.for_type(node.type):\n        ledger.append(round=8, node=node.id, metric=spec.id, value=spec.compute(node.runs), status=spec.judge(value))\n# {&quot;round&quot;: 8, &quot;node&quot;: &quot;can11&quot;, &quot;type&quot;: &quot;pendulum_arm_1dof&quot;, &quot;metric&quot;: &quot;twin_over_floor&quot;, &quot;value&quot;: 2.139, &quot;status&quot;: &quot;fail&quot;}</pre><p style=\"margin:10px 0 0\">Fits:his &quot;folder called metrics&quot; today, and &quot;move it around later&quot; is cheap; the ledger is the same shape as\nrobot_controllers&#x27; <code>results.json</code> and W&amp;B rows. Strains: a folder of loose records can drift from the families it\ndescribes (no import ties them), and <code>robot_models/metrics/</code> still puts non-models in robot_models.</p></div>"
+    },
+    {
+     "label": "Live prototype",
+     "caption": "The real prototype, embedded (drag, click, fold, switch rounds). Open it full size with the serve command in the README.",
+     "html": "<iframe src=\"../docs/proposals/2026-11-17-deployment-page/v2/index.html#/d/one-dof-test-rack?n=can11\" width=\"1440\" height=\"900\" style=\"width:1440px;height:900px;border:1px solid #26282d;border-radius:8px\" title=\"v2 live\"></iframe>"
+    }
+   ]
+  },
+  {
+   "id": "v3",
+   "name": "Scene",
+   "thesis": "The deployment in 3D is the page: each station wears its verdict in space, a servo explodes into its parts tinted by their own status, the nested table pulls up from the bottom, and a time bar under the scene flips round 0 ↔ now.",
+   "accent": "#4cc06e",
+   "bestWhen": "You think spatially and want the physical rig to be the index: 'which arm, which part' before 'which row'.",
+   "losesWhen": "You need to compare many numbers: the table is a pull-up, the overview is spatial, not tabular.",
+   "decisions": [
+    {
+     "label": "Mental model",
+     "value": "the scene is the page; the tree is a slim outline"
+    },
+    {
+     "label": "Before vs now",
+     "value": "a time bar under the scene: drag it and labels, rings and the card change together"
+    },
+    {
+     "label": "Backend",
+     "value": "the RobotPart type carries .models, .metrics and .dx (health = metric + threshold)"
+    },
+    {
+     "label": "3D",
+     "value": "the stage; servo-level picks pull the station's parts apart, each tinted by its status"
+    }
+   ],
+   "keepParts": [
+    "verdict labels in space",
+    "exploded servo with part tints",
+    "time bar",
+    "bottom sheet table"
+   ],
+   "proof": [
+    "Walked by real clicks (clip); verify.py: outline row, mesh pick, ViewCube, CAD toggle, outline drag + persist + reset, card fold, time bar all pass.",
+    "Prototype: front-end over the real fixture; backend sketch in v3/BACKEND.md."
+   ],
+   "scores": {
+    "fr1": {
+     "score": 5,
+     "evidence": "Station labels carry verdict + number in space and the card opens on the one-line answer at every level.",
+     "confidence": "medium"
+    },
+    "fr2": {
+     "score": 4,
+     "evidence": "Same tree component (keyboard, search) and a nested table, all sharing one selection with 3D; the table is a pull-up rather than RobotDx's Table view.",
+     "confidence": "medium"
+    },
+    "fr3": {
+     "score": 4,
+     "evidence": "The time bar flips scene, labels and card together and the card shows 'was' values; a flip, not side by side.",
+     "confidence": "medium"
+    },
+    "fr4": {
+     "score": 4,
+     "evidence": "Five questions in the card at every level, exploded parts tinted by their own status, not-observable hollow; parent rule implicit.",
+     "confidence": "medium"
+    },
+    "fr5": {
+     "score": 2,
+     "evidence": "His literal words, but a pendulum arm or a cell is not a part, so composite metrics still need another home, and he said robot_parts should not be specific to each part.",
+     "confidence": "medium"
+    },
+    "fr6": {
+     "score": 5,
+     "evidence": "The 3D is the navigation: verdict labels, ViewCube, part-level picks, exploded servo; 'schematic geometry · simulated' labelled.",
+     "confidence": "high"
+    }
+   },
+   "gateResults": {
+    "g1": {
+     "pass": true,
+     "evidence": "Every number reads the shared fixture (fixture/build_fixture.py recomputes the scorecards' 82 and 151 gates and holds them); the 3D wears a 'schematic geometry · simulated' chip."
+    },
+    "g2": {
+     "pass": true,
+     "evidence": "tools/verify.py clicked the tree/table row, a 3D station mesh, the ViewCube, the CAD-render toggle and the before/after control: all moved the page; 0 console errors."
+    },
+    "g3": {
+     "pass": true,
+     "evidence": "Main boundary dragged +70 px (230→300), kept 300 px after a reload, double-click restored 230 px; inspector fold: True."
+    },
+    "g4": {
+     "pass": true,
+     "evidence": "Angles print in degrees (0.045°, 2.14× floor); every T-code sits beside its name (T2 Twin ÷ floor at the output)."
+    },
+    "g5": {
+     "pass": true,
+     "evidence": "Static pages over the fixture file; no network, bus or device access; nothing written outside the proposal folder and reports/."
+    }
+   },
+   "previewLabel": "The same five states, captured from the running prototype",
+   "preview": "<style>.dp{width:1440px;max-width:100%}.dp .dp-shot img{display:none;width:100%;height:auto;border-radius:6px;border:1px solid #26282d}.prototype:not([data-story-state]) .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s1\"] .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s2\"] .dp .dp-shot img.st-s2{display:block}.prototype[data-story-state=\"s3\"] .dp .dp-shot img.st-s3{display:block}.prototype[data-story-state=\"s4\"] .dp .dp-shot img.st-s4{display:block}.prototype[data-story-state=\"s5\"] .dp .dp-shot img.st-s5{display:block}.dp-steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.dp-steps button{font:600 13px system-ui,sans-serif;padding:5px 10px;border-radius:7px;border:1px solid #c4c4c4;background:transparent;color:inherit;cursor:pointer}.prototype[data-story-state=\"s1\"] [data-story-to=\"s1\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s2\"] [data-story-to=\"s2\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s3\"] [data-story-to=\"s3\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s4\"] [data-story-to=\"s4\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s5\"] [data-story-to=\"s5\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}</style><div class=\"dp\"><div class=\"dp-shot\"><img class=\"st-s1\" src=\"media/deployment-page-proposals-2026-11-17/v3/s1.png\" alt=\"The rack: 3D + typed tree\" loading=\"eager\"><img class=\"st-s2\" src=\"media/deployment-page-proposals-2026-11-17/v3/s2.png\" alt=\"CAN 11: metrics and gates\" loading=\"eager\"><img class=\"st-s3\" src=\"media/deployment-page-proposals-2026-11-17/v3/s3.png\" alt=\"Nested table\" loading=\"eager\"><img class=\"st-s4\" src=\"media/deployment-page-proposals-2026-11-17/v3/s4.png\" alt=\"Before fit vs now\" loading=\"eager\"><img class=\"st-s5\" src=\"media/deployment-page-proposals-2026-11-17/v3/s5.png\" alt=\"Deployments\" loading=\"eager\"></div><div class=\"dp-steps\"><button type=\"button\" data-story-to=\"s1\">1 · The rack: 3D + typed tree</button><button type=\"button\" data-story-to=\"s2\">2 · CAN 11: metrics and gates</button><button type=\"button\" data-story-to=\"s3\">3 · Nested table</button><button type=\"button\" data-story-to=\"s4\">4 · Before fit vs now</button><button type=\"button\" data-story-to=\"s5\">5 · Deployments</button></div></div>",
+   "story": {
+    "title": "Walk the same five states",
+    "steps": [
+     {
+      "label": "The rack: 3D + typed tree",
+      "caption": "The rack as the page: every station labelled with its verdict and deciding number; the card on the right answers for the whole rack.",
+      "state": "s1",
+      "target": "[data-story-to=\"s1\"]"
+     },
+     {
+      "label": "CAN 11: metrics and gates",
+      "caption": "CAN 11 picked in 3D: the camera flies to it, the card leads with 'Fails at Twin 2.14×' and the five questions.",
+      "state": "s2",
+      "target": "[data-story-to=\"s2\"]"
+     },
+     {
+      "label": "Nested table",
+      "caption": "The sheet pulled up: the same typed tree as a nested table under the scene, its height remembered.",
+      "state": "s3",
+      "target": "[data-story-to=\"s3\"]"
+     },
+     {
+      "label": "Before fit vs now",
+      "caption": "The time bar at As found: rings and labels turn red, CAN 11 fails first at Floor; 82 of 180 gates.",
+      "state": "s4",
+      "target": "[data-story-to=\"s4\"]"
+     },
+     {
+      "label": "Deployments",
+      "caption": "Deployments as picture tiles: the rack's CAD render, the oracle examples dimmed.",
+      "state": "s5",
+      "target": "[data-story-to=\"s5\"]"
+     }
+    ]
+   },
+   "media": [
+    {
+     "label": "Click-through (real clicks, 16 s)",
+     "caption": "Recorded from the running prototype with real clicks only: deployments → the rack → CAN 11 → this variant's own moves. Muted, loops.",
+     "html": "<video src=\"media/deployment-page-proposals-2026-11-17/v3/walk.mp4\" poster=\"media/deployment-page-proposals-2026-11-17/v3/s2.png\" muted loop autoplay playsinline controls width=\"1280\" height=\"800\"></video>"
+    },
+    {
+     "label": "CAN 11's servo pulled apart",
+     "caption": "The motor picked: motor, gearbox, encoder and driver separate behind the plate; the motor tints amber (envelope +71 %, not gating).",
+     "html": "<img src=\"media/deployment-page-proposals-2026-11-17/v3/x_exploded.png\" alt=\"CAN 11&#x27;s servo pulled apart\">"
+    },
+    {
+     "label": "Backend: where the metrics live",
+     "caption": "This variant's backend (v3/BACKEND.md): a sketch, not implemented in any library.",
+     "html": "<div style=\"padding:16px;max-width:1100px;font:14px/1.5 system-ui,sans-serif\"><p style=\"margin:0 0 10px\"><b>Thesis.</b> Zach&#x27;s own sentence, &quot;each RobotPart, just like it has .models, has these performance metrics&quot;. The type\nthat joins a datasheet to its models already lives in robotparts (PEP 0004 amendment 2), so the metrics join it there,\nand the health diagnostics come from the same metrics plus a threshold (&quot;diagnostics build on top of metrics, just\nadding a threshold&quot;).</p><table style=\"border-collapse:collapse;font-size:12.5px;margin:0 0 12px\"><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">metric definition</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">robotparts, on the part TYPE (never per SKU)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>robotparts.types.IntegratedServo.metrics</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">models</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">robot_models, referenced by the type</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>IntegratedServo.models = robot_models.IntegratedServo</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">gate number</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">the type card&#x27;s default, a deployment&#x27;s override</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">health</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>dx = Diagnostics.from_metrics(metrics, warn_at=1.25)</code>, read live on the unit (RobotDx)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>unit(&quot;moteus-r4.11 · CAN 11&quot;).dx</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">current value</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">sim2real composes: each tree node points at its part type, <code>type.metrics.evaluate(node.runs)</code></td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr></table><pre style=\"font:12px/1.5 ui-monospace,monospace;background:rgba(127,127,127,.12);padding:12px;border-radius:8px;overflow:auto;white-space:pre\"># robotparts/types/integrated_servo.py\nclass IntegratedServo(PartType, id=&quot;integrated_servo&quot;):\n    datasheet = IntegratedServoDatasheet\n    models = robot_models.IntegratedServo                    # fit lives on the Model\n    metrics = Metrics(FIVE, output=&quot;output angle&quot;,           # NEW, beside .models\n                      own=[T3_current_fidelity, T7_envelope, limiter_share])\n    dx = Diagnostics.from_metrics(metrics, warn_at=1.25)     # health = a metric + a threshold, read on the UNIT\n\npart = robotparts.part(&quot;jmc-60asm200-ad60g10&quot;)               # a SKU: its datasheet values, never its own metrics\nunit = robotparts.unit(&quot;moteus-r4.11 · CAN 11&quot;)              # a physical unit: unit.dx is RobotDx&#x27;s live health</pre><p style=\"margin:10px 0 0\">Fits:his words exactly, and one object answers &quot;what is this part, how do I model it, how is it judged&quot;. Strains:\nrobotparts is the catalog (McMaster-style site); judging a composition (a pendulum arm, a cell) is not a part, so the\ncomposite types&#x27; metrics need a home outside robotparts anyway, and he said robot_parts &quot;shouldn&#x27;t be specific to\neach part&quot;.</p></div>"
+    },
+    {
+     "label": "Live prototype",
+     "caption": "The real prototype, embedded (drag, click, fold, switch rounds). Open it full size with the serve command in the README.",
+     "html": "<iframe src=\"../docs/proposals/2026-11-17-deployment-page/v3/index.html#/d/one-dof-test-rack?n=can11\" width=\"1440\" height=\"900\" style=\"width:1440px;height:900px;border:1px solid #26282d;border-radius:8px\" title=\"v3 live\"></iframe>"
+    }
+   ]
+  },
+  {
+   "id": "v4",
+   "name": "Questions",
+   "thesis": "The page is the question matrix: rows are the typed tree, columns the five questions in order, each cell the number that decides it; a banner names the one thing that stops the goal, and a click on any cell opens its evidence per speed rung.",
+   "accent": "#f0a548",
+   "bestWhen": "You want the cause, not the data: 'what stops the goal, at which level, at which question' in one look, and what moved since round 0.",
+   "losesWhen": "You want to browse a part like a catalog page, or you live in RobotDx's tree: there is no separate tree pane, and the 3D is a thumbnail.",
+   "decisions": [
+    {
+     "label": "Mental model",
+     "value": "a question matrix: rows = typed tree, columns = Floor → Data → Routines → Twin → Job"
+    },
+    {
+     "label": "Before vs now",
+     "value": "Now · As found · What changed (every cell before → after, unchanged rows dimmed)"
+    },
+    {
+     "label": "Backend",
+     "value": "sim2real owns the verdict: five questions once (verdicts.py), a card per type (cards/pendulum_arm.py lifts pendulum_goal.py)"
+    },
+    {
+     "label": "3D",
+     "value": "a thumbnail beside the matrix, synced both ways"
+    }
+   ],
+   "keepParts": [
+    "'one thing stops the goal' banner",
+    "question columns",
+    "What changed mode",
+    "per-rung evidence table",
+    "the first failing question marked as the cause"
+   ],
+   "proof": [
+    "Walked by real clicks (clip); verify.py: row select, mesh pick, ViewCube, CAD toggle, side drag + persist + reset, inspector fold, What changed all pass.",
+    "Prototype: front-end over the real fixture; backend sketch in v4/BACKEND.md."
+   ],
+   "scores": {
+    "fr1": {
+     "score": 5,
+     "evidence": "The banner answers for the deployment ('One thing stops the goal: CAN 11 · Twin 2.14×, gate 1.5×'); every cell carries its deciding number.",
+     "confidence": "high"
+    },
+    "fr2": {
+     "score": 3,
+     "evidence": "The matrix is a nested typed table with twisties, but no tree pane, no search, no keyboard; a new primary layout to learn.",
+     "confidence": "medium"
+    },
+    "fr3": {
+     "score": 5,
+     "evidence": "What changed shows every cell before → after and dims unchanged rows; As found is one click; the ladder caveat sits under the rung table.",
+     "confidence": "high"
+    },
+    "fr4": {
+     "score": 5,
+     "evidence": "The five questions in order are the page's columns; the parent rule is written beside it; the first failing question is marked 'the cause'; not observable and not gating distinct.",
+     "confidence": "high"
+    },
+    "fr5": {
+     "score": 5,
+     "evidence": "One home per concern on the settled layering: verdict and gate numbers in sim2real (cards/servo_gates.py exists), pendulum_goal.py lifted as a card, robot_models stays models-only, metric_values/<dep>.json exists.",
+     "confidence": "medium"
+    },
+    "fr6": {
+     "score": 3,
+     "evidence": "A synced 3D thumbnail with ViewCube; secondary to the matrix, labels only on the picked station.",
+     "confidence": "medium"
+    }
+   },
+   "gateResults": {
+    "g1": {
+     "pass": true,
+     "evidence": "Every number reads the shared fixture (fixture/build_fixture.py recomputes the scorecards' 82 and 151 gates and holds them); the 3D wears a 'schematic geometry · simulated' chip."
+    },
+    "g2": {
+     "pass": true,
+     "evidence": "tools/verify.py clicked the tree/table row, a 3D station mesh, the ViewCube, the CAD-render toggle and the before/after control: all moved the page; 0 console errors."
+    },
+    "g3": {
+     "pass": true,
+     "evidence": "Main boundary dragged +70 px (260→330), kept 330 px after a reload, double-click restored 260 px; inspector fold: True."
+    },
+    "g4": {
+     "pass": true,
+     "evidence": "Angles print in degrees (0.045°, 2.14× floor); every T-code sits beside its name (T2 Twin ÷ floor at the output)."
+    },
+    "g5": {
+     "pass": true,
+     "evidence": "Static pages over the fixture file; no network, bus or device access; nothing written outside the proposal folder and reports/."
+    }
+   },
+   "previewLabel": "The same five states, captured from the running prototype",
+   "preview": "<style>.dp{width:1440px;max-width:100%}.dp .dp-shot img{display:none;width:100%;height:auto;border-radius:6px;border:1px solid #26282d}.prototype:not([data-story-state]) .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s1\"] .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s2\"] .dp .dp-shot img.st-s2{display:block}.prototype[data-story-state=\"s3\"] .dp .dp-shot img.st-s3{display:block}.prototype[data-story-state=\"s4\"] .dp .dp-shot img.st-s4{display:block}.prototype[data-story-state=\"s5\"] .dp .dp-shot img.st-s5{display:block}.dp-steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.dp-steps button{font:600 13px system-ui,sans-serif;padding:5px 10px;border-radius:7px;border:1px solid #c4c4c4;background:transparent;color:inherit;cursor:pointer}.prototype[data-story-state=\"s1\"] [data-story-to=\"s1\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s2\"] [data-story-to=\"s2\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s3\"] [data-story-to=\"s3\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s4\"] [data-story-to=\"s4\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s5\"] [data-story-to=\"s5\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}</style><div class=\"dp\"><div class=\"dp-shot\"><img class=\"st-s1\" src=\"media/deployment-page-proposals-2026-11-17/v4/s1.png\" alt=\"The rack: 3D + typed tree\" loading=\"eager\"><img class=\"st-s2\" src=\"media/deployment-page-proposals-2026-11-17/v4/s2.png\" alt=\"CAN 11: metrics and gates\" loading=\"eager\"><img class=\"st-s3\" src=\"media/deployment-page-proposals-2026-11-17/v4/s3.png\" alt=\"Nested table\" loading=\"eager\"><img class=\"st-s4\" src=\"media/deployment-page-proposals-2026-11-17/v4/s4.png\" alt=\"Before fit vs now\" loading=\"eager\"><img class=\"st-s5\" src=\"media/deployment-page-proposals-2026-11-17/v4/s5.png\" alt=\"Deployments\" loading=\"eager\"></div><div class=\"dp-steps\"><button type=\"button\" data-story-to=\"s1\">1 · The rack: 3D + typed tree</button><button type=\"button\" data-story-to=\"s2\">2 · CAN 11: metrics and gates</button><button type=\"button\" data-story-to=\"s3\">3 · Nested table</button><button type=\"button\" data-story-to=\"s4\">4 · Before fit vs now</button><button type=\"button\" data-story-to=\"s5\">5 · Deployments</button></div></div>",
+   "story": {
+    "title": "Walk the same five states",
+    "steps": [
+     {
+      "label": "The rack: 3D + typed tree",
+      "caption": "The matrix: one banner names the stop (CAN 11 · Twin 2.14×), every cell carries its deciding number, the inspector holds the rack's ladder.",
+      "state": "s1",
+      "target": "[data-story-to=\"s1\"]"
+     },
+     {
+      "label": "CAN 11: metrics and gates",
+      "caption": "CAN 11's Twin cell: the metrics behind it, round 0 beside, and the per-rung table where the 0.4 and 0.6 rungs miss 1.5×.",
+      "state": "s2",
+      "target": "[data-story-to=\"s2\"]"
+     },
+     {
+      "label": "Nested table",
+      "caption": "The matrix is the nested table: CAN 11's servo opened to its parts, motor amber (+71 % envelope), gearbox not observable.",
+      "state": "s3",
+      "target": "[data-story-to=\"s3\"]"
+     },
+     {
+      "label": "Before fit vs now",
+      "caption": "What changed: every cell as round 0 → now; 6 of 6 floors and data now pass, twins 0 → 5 of 6.",
+      "state": "s4",
+      "target": "[data-story-to=\"s4\"]"
+     },
+     {
+      "label": "Deployments",
+      "caption": "Deployments × the five questions: virtual ones answer only Routines (their sysid oracle).",
+      "state": "s5",
+      "target": "[data-story-to=\"s5\"]"
+     }
+    ]
+   },
+   "media": [
+    {
+     "label": "Click-through (real clicks, 16 s)",
+     "caption": "Recorded from the running prototype with real clicks only: deployments → the rack → CAN 11 → this variant's own moves. Muted, loops.",
+     "html": "<video src=\"media/deployment-page-proposals-2026-11-17/v4/walk.mp4\" poster=\"media/deployment-page-proposals-2026-11-17/v4/s2.png\" muted loop autoplay playsinline controls width=\"1280\" height=\"800\"></video>"
+    },
+    {
+     "label": "CAN 11 as a ladder",
+     "caption": "A row name opens the level as the five questions in order; Twin is marked as the cause.",
+     "html": "<img src=\"media/deployment-page-proposals-2026-11-17/v4/x_ladder.png\" alt=\"CAN 11 as a ladder\">"
+    },
+    {
+     "label": "Backend: where the metrics live",
+     "caption": "This variant's backend (v4/BACKEND.md): a sketch, not implemented in any library.",
+     "html": "<div style=\"padding:16px;max-width:1100px;font:14px/1.5 system-ui,sans-serif\"><p style=\"margin:0 0 10px\"><b>Thesis.</b> the verdict lives on a composition (settled, MOC Nov 15), so sim2real owns it. The five questions are\ngeneric code, written once; each type contributes only its card: the output it is judged at, its own metrics and its\ngate numbers. robot_models stays &quot;ModelFamily → Model → Parameter only&quot;. The pendulum contract is lifted, not\nrewritten: <code>bam_rack_twin/pendulum_goal.py</code> becomes the 1-DOF arm&#x27;s card.</p><table style=\"border-collapse:collapse;font-size:12.5px;margin:0 0 12px\"><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">the five questions</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>sim2real/verdicts.py</code>, once for every type</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>five_questions(node, runs)</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">a type&#x27;s own metrics + gate numbers</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>sim2real/cards/&lt;type&gt;.py</code> (servo_gates.py is already one)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>cards/pendulum_arm.py</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">the parent rule</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">the card: <code>children=…, gating_children=False</code> (MOC decision 1 default)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">current value</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>CalibrationResult.verdicts()</code> → the site&#x27;s <code>data/domain/metric_values/&lt;dep&gt;.json</code> (exists today)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">fit / health</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">unchanged: <code>Model.score</code> / RobotDx</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr></table><pre style=\"font:12px/1.5 ui-monospace,monospace;background:rgba(127,127,127,.12);padding:12px;border-radius:8px;overflow:auto;white-space:pre\"># sim2real/cards/pendulum_arm.py   (pendulum_goal.py&#x27;s Thresholds + cell_gates, moved byte for byte)\nCARD = Card(type=&quot;rigid_body_chain&quot;, joints=1, output=&quot;link tip&quot;,\n            own=[TipStop(at_most(1.0, &quot;mm&quot;), settle=at_most(0.3, &quot;s&quot;)),       # Zach&#x27;s 1 mm\n                 SpeedLadder(rungs=(0.2, 0.4, 0.6, 0.8, 0.9, 1.0), goal=0.9),\n                 SimPredicts(rel=0.2, abs_deg=0.05)],\n            children=(&quot;integrated_servo&quot;, &quot;rigid_link&quot;), gating_children=False)\n\n# sim2real/verdicts.py\ndef five_questions(node, runs) -&gt; dict[str, Verdict]:\n    &quot;&quot;&quot;Floor → Data → Routines → Twin → Job at the node&#x27;s OWN output; a parent passes only with its children.&quot;&quot;&quot;\n\nresult = twin.evaluate()                       # or a scored round\nresult.verdicts()[&quot;can11&quot;][&quot;twin&quot;]             # Verdict(fail, Value(2.14, &quot;× floor&quot;), first=True)</pre><p style=\"margin:10px 0 0\">Fits:every settled ruling (fit on the Model, health on the unit, verdict on the composition; robot_models only\nmodels); the T-gates already live in <code>cards/servo_gates.py</code>; additive. Strains: a type&#x27;s metrics are not found\n&quot;on the type&quot; in robot_models, which is where Zach leaned; two places to look (family for models, card for metrics).</p></div>"
+    },
+    {
+     "label": "Live prototype",
+     "caption": "The real prototype, embedded (drag, click, fold, switch rounds). Open it full size with the serve command in the README.",
+     "html": "<iframe src=\"../docs/proposals/2026-11-17-deployment-page/v4/index.html#/d/one-dof-test-rack?n=can11\" width=\"1440\" height=\"900\" style=\"width:1440px;height:900px;border:1px solid #26282d;border-radius:8px\" title=\"v4 live\"></iframe>"
+    }
+   ]
+  },
+  {
+   "id": "v5",
+   "name": "Ladder",
+   "thesis": "Measurement first: every level opens on its KPIs with round 0 beside them, then the evidence drawn: a ladder grid (stations × speed rungs, each cell the rung's five gates), speed-ladder plots with the gate as a band, bullet charts for the servo and parts.",
+   "accent": "#8e95ff",
+   "bestWhen": "You think in curves: 'how does it degrade with speed, and did round 8 move the curve under the gate'.",
+   "losesWhen": "You want the five questions as the frame: here they are implicit in gates and plots, and the ladder grid needs its legend.",
+   "decisions": [
+    {
+     "label": "Mental model",
+     "value": "a measurement ladder: KPIs, then plots and grids of the evidence"
+    },
+    {
+     "label": "Before vs now",
+     "value": "round 0 drawn underneath everything (dashed lines, a thin bar row, hollow marks); one toggle"
+    },
+    {
+     "label": "Backend",
+     "value": "a small robot_metrics package of model-free functions; a type names what judges it"
+    },
+    {
+     "label": "3D",
+     "value": "a hero beside the KPIs on every level"
+    }
+   ],
+   "keepParts": [
+    "ladder grid (stations × rungs × 5 gates)",
+    "speed-ladder plots with round 0 dashed",
+    "bullet charts with a round-0 mark",
+    "KPI cards with 'was'"
+   ],
+   "proof": [
+    "Walked by real clicks (clip); verify.py: tree row, mesh pick, ViewCube, CAD toggle, tree drag + persist + reset, overlay toggle all pass; no inspector beside a wide view.",
+    "Prototype: front-end over the real fixture; backend sketch in v5/BACKEND.md."
+   ],
+   "scores": {
+    "fr1": {
+     "score": 4,
+     "evidence": "The one-line answer leads, but five KPI cards and a plot wall compete with it; calmer pages put one answer and fold the rest.",
+     "confidence": "medium"
+    },
+    "fr2": {
+     "score": 4,
+     "evidence": "RobotDx tree on the left (keyboard, search); the nested table is a ladder grid with rung columns, an unfamiliar layout.",
+     "confidence": "medium"
+    },
+    "fr3": {
+     "score": 5,
+     "evidence": "Round 0 drawn under every number and curve (dashed, thin row, hollow mark), toggle to clear it; the caveat over the plots.",
+     "confidence": "high"
+    },
+    "fr4": {
+     "score": 3,
+     "evidence": "Gates per rung in Zach's order (sim stop → twin → predicts → tracking → stop) and hatched 'not observable' bullets, but the five questions are not the visible frame.",
+     "confidence": "medium"
+    },
+    "fr5": {
+     "score": 3,
+     "evidence": "Shared model-free functions once, below robot_models; a new package to version and publish, and the five questions still need a home in sim2real.",
+     "confidence": "medium"
+    },
+    "fr6": {
+     "score": 4,
+     "evidence": "A hero 3D on every level, synced both ways with ViewCube; beside, not part of, the evidence.",
+     "confidence": "medium"
+    }
+   },
+   "gateResults": {
+    "g1": {
+     "pass": true,
+     "evidence": "Every number reads the shared fixture (fixture/build_fixture.py recomputes the scorecards' 82 and 151 gates and holds them); the 3D wears a 'schematic geometry · simulated' chip."
+    },
+    "g2": {
+     "pass": true,
+     "evidence": "tools/verify.py clicked the tree/table row, a 3D station mesh, the ViewCube, the CAD-render toggle and the before/after control: all moved the page; 0 console errors."
+    },
+    "g3": {
+     "pass": true,
+     "evidence": "Main boundary dragged +70 px (290→360), kept 360 px after a reload, double-click restored 290 px; inspector fold: n/a (no inspector beside a wide view)."
+    },
+    "g4": {
+     "pass": true,
+     "evidence": "Angles print in degrees (0.045°, 2.14× floor); every T-code sits beside its name (T2 Twin ÷ floor at the output)."
+    },
+    "g5": {
+     "pass": true,
+     "evidence": "Static pages over the fixture file; no network, bus or device access; nothing written outside the proposal folder and reports/."
+    }
+   },
+   "previewLabel": "The same five states, captured from the running prototype",
+   "preview": "<style>.dp{width:1440px;max-width:100%}.dp .dp-shot img{display:none;width:100%;height:auto;border-radius:6px;border:1px solid #26282d}.prototype:not([data-story-state]) .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s1\"] .dp .dp-shot img.st-s1{display:block}.prototype[data-story-state=\"s2\"] .dp .dp-shot img.st-s2{display:block}.prototype[data-story-state=\"s3\"] .dp .dp-shot img.st-s3{display:block}.prototype[data-story-state=\"s4\"] .dp .dp-shot img.st-s4{display:block}.prototype[data-story-state=\"s5\"] .dp .dp-shot img.st-s5{display:block}.dp-steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.dp-steps button{font:600 13px system-ui,sans-serif;padding:5px 10px;border-radius:7px;border:1px solid #c4c4c4;background:transparent;color:inherit;cursor:pointer}.prototype[data-story-state=\"s1\"] [data-story-to=\"s1\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s2\"] [data-story-to=\"s2\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s3\"] [data-story-to=\"s3\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s4\"] [data-story-to=\"s4\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}.prototype[data-story-state=\"s5\"] [data-story-to=\"s5\"]{background:#2a2a2f;color:#f7f8f8;border-color:#8a8d96}</style><div class=\"dp\"><div class=\"dp-shot\"><img class=\"st-s1\" src=\"media/deployment-page-proposals-2026-11-17/v5/s1.png\" alt=\"The rack: 3D + typed tree\" loading=\"eager\"><img class=\"st-s2\" src=\"media/deployment-page-proposals-2026-11-17/v5/s2.png\" alt=\"CAN 11: metrics and gates\" loading=\"eager\"><img class=\"st-s3\" src=\"media/deployment-page-proposals-2026-11-17/v5/s3.png\" alt=\"Nested table\" loading=\"eager\"><img class=\"st-s4\" src=\"media/deployment-page-proposals-2026-11-17/v5/s4.png\" alt=\"Before fit vs now\" loading=\"eager\"><img class=\"st-s5\" src=\"media/deployment-page-proposals-2026-11-17/v5/s5.png\" alt=\"Deployments\" loading=\"eager\"></div><div class=\"dp-steps\"><button type=\"button\" data-story-to=\"s1\">1 · The rack: 3D + typed tree</button><button type=\"button\" data-story-to=\"s2\">2 · CAN 11: metrics and gates</button><button type=\"button\" data-story-to=\"s3\">3 · Nested table</button><button type=\"button\" data-story-to=\"s4\">4 · Before fit vs now</button><button type=\"button\" data-story-to=\"s5\">5 · Deployments</button></div></div>",
+   "story": {
+    "title": "Walk the same five states",
+    "steps": [
+     {
+      "label": "The rack: 3D + typed tree",
+      "caption": "The rack: KPIs with round 0 beside them, then the ladder grid: each station's six rungs, each cell its five gates, round 0's thin row under it.",
+      "state": "s1",
+      "target": "[data-story-to=\"s1\"]"
+     },
+     {
+      "label": "CAN 11: metrics and gates",
+      "caption": "CAN 11: the answer and KPIs on top (2.14× was 4.27×), then the plots up the speed ladder.",
+      "state": "s2",
+      "target": "[data-story-to=\"s2\"]"
+     },
+     {
+      "label": "Nested table",
+      "caption": "The ladder grid is the nested table: CAN 11 opened to its servo and parts, their gates spelled out across the row.",
+      "state": "s3",
+      "target": "[data-story-to=\"s3\"]"
+     },
+     {
+      "label": "Before fit vs now",
+      "caption": "CAN 11's plots, the 0.4 rung highlighted (picked from the grid): round 0 dashed far above the gate, now under it except the twin.",
+      "state": "s4",
+      "target": "[data-story-to=\"s4\"]"
+     },
+     {
+      "label": "Deployments",
+      "caption": "Deployments with gates passed round 0 (82) under now (151 of 180).",
+      "state": "s5",
+      "target": "[data-story-to=\"s5\"]"
+     }
+    ]
+   },
+   "media": [
+    {
+     "label": "Click-through (real clicks, 16 s)",
+     "caption": "Recorded from the running prototype with real clicks only: deployments → the rack → CAN 11 → this variant's own moves. Muted, loops.",
+     "html": "<video src=\"media/deployment-page-proposals-2026-11-17/v5/walk.mp4\" poster=\"media/deployment-page-proposals-2026-11-17/v5/s2.png\" muted loop autoplay playsinline controls width=\"1280\" height=\"800\"></video>"
+    },
+    {
+     "label": "Servo as bullet charts",
+     "caption": "CAN 11's servo: T1 and T2 against their gates, round 0 as a hollow mark, T4 not run.",
+     "html": "<img src=\"media/deployment-page-proposals-2026-11-17/v5/x_servo.png\" alt=\"Servo as bullet charts\">"
+    },
+    {
+     "label": "Backend: where the metrics live",
+     "caption": "This variant's backend (v5/BACKEND.md): a sketch, not implemented in any library.",
+     "html": "<div style=\"padding:16px;max-width:1100px;font:14px/1.5 system-ui,sans-serif\"><p style=\"margin:0 0 10px\"><b>Thesis.</b> Zach&#x27;s &quot;it&#x27;s almost like robot_metrics&quot;. Metrics are model-free functions of logs (robot_msgs\ntrajectories), shared across types (tracking RMS is the same function for a servo and an arm, at a different output),\nso they get their own small package between robot_msgs and robot_models. A type only names which ones judge it.</p><table style=\"border-collapse:collapse;font-size:12.5px;margin:0 0 12px\"><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">metric function</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>robot_metrics</code> (depends on robot_msgs only)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>stop_error_at_tool(traj, fk, stops)</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">which metrics judge a type</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">one tuple on the family</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"><code>RigidBodyChain.judged_by = (...)</code></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">gate number</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">sim2real <code>cards/</code> targets (as today for T1-T11)</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">current value</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">per run → per rung → per node, a ledger per round (<code>results.json</code>), W&amp;B a copy</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr><tr><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">fit / health</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\">unchanged</td><td style=\"padding:3px 10px 3px 0;border-bottom:1px solid rgba(127,127,127,.25);vertical-align:top\"></td></tr></table><pre style=\"font:12px/1.5 ui-monospace,monospace;background:rgba(127,127,127,.12);padding:12px;border-radius:8px;overflow:auto;white-space:pre\"># robot_metrics/tracking.py      (new package; robot_msgs only, numpy optional)\n@metric(question=&quot;job&quot;, unit=&quot;mm&quot;, output=&quot;tool&quot;)\ndef stop_error_at_tool(traj: JointTrajectory, fk, stops) -&gt; float: ...\n\n@metric(question=&quot;twin&quot;, unit=&quot;× floor&quot;)\ndef twin_over_floor(real: list[JointTrajectory], sim: list[JointTrajectory], floor: float) -&gt; float: ...\n\n# robot_models/arms/rigid_body_chain/__init__.py\nclass RigidBodyChain(ModelFamily, id=&quot;rigid_body_chain&quot;):\n    judged_by = (&quot;floor&quot;, &quot;coverage&quot;, &quot;oracle_recovery&quot;, &quot;twin_over_floor&quot;, &quot;stop_error_at_tool&quot;, &quot;tracking_rms&quot;)\n\n# sim2real: a round is a ledger; the ladder grid is its per-rung rows\nledger = sim2real.score_round(deployment, &quot;.../round8&quot;)       # pendulum_score, generalised\nledger.rows(node=&quot;can11&quot;, rung=0.4)[&quot;twin_over_floor&quot;]        # 2.14</pre><p style=\"margin:10px 0 0\">Fits:shared functions once (the stock-diagnostics catalog already reduced 89 diagnostics to 30 functions);\nmodel-free by construction. Strains: a new package to version and publish (robot-models-lib needed a PyPI name\ntoo), and the five questions still need a home (here: sim2real).</p></div>"
+    },
+    {
+     "label": "Live prototype",
+     "caption": "The real prototype, embedded (drag, click, fold, switch rounds). Open it full size with the serve command in the README.",
+     "html": "<iframe src=\"../docs/proposals/2026-11-17-deployment-page/v5/index.html#/d/one-dof-test-rack?n=can11\" width=\"1440\" height=\"900\" style=\"width:1440px;height:900px;border:1px solid #26282d;border-radius:8px\" title=\"v5 live\"></iframe>"
+    }
+   ]
+  }
+ ]
+}
