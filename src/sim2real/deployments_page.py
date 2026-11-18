@@ -34,6 +34,12 @@ from pathlib import Path
 
 from . import paths, verdicts
 
+
+def _deg_per_s(rad_per_s: float) -> str:
+    """An angular speed for display. WHY: Zach reads angles in degrees, never rad (feedback_angles_in_degrees); data stays SI."""
+    return f"{math.degrees(rad_per_s):.0f} °/s"
+
+
 SCHEMA = "sim2real.deployments-page/1"
 DEPLOYMENT = "one-dof-test-rack"
 REPO = Path(__file__).resolve().parents[2]
@@ -327,7 +333,7 @@ def station_nodes(sid: str, rounds: dict, oracle: dict) -> list[dict]:
         # performance: real or sim vs the target
         metric("passes_up_to", "Tracks and stops up to", "job", "of top speed",
                per_round(lambda rs: {"value": rs["max_trackable_fraction"], "status": "pass" if rs["max_trackable_fraction"] >= GOAL_FRACTION else "fail",
-                                     "detail": f"top speed {rs['omega_max_rad_s']:g} rad/s ({rs['omega_source']})"}),
+                                     "detail": f"top speed {_deg_per_s(rs['omega_max_rad_s'])} ({rs['omega_source']})"}),
                PERFORMANCE, gate={"op": ">=", "limit": GOAL_FRACTION, "text": "≥ 0.9 of top speed"}, better="higher",
                note="the highest rung with every rung up to it passing tracking and the tip stop"),
         metric("tracking_rms_09", "Tracking RMS at 0.9 of top speed", "job", "°",
@@ -370,9 +376,8 @@ def station_nodes(sid: str, rounds: dict, oracle: dict) -> list[dict]:
                "type": {"id": "pendulum_arm_1dof", "name": "1-DOF pendulum arm", "rm": "RigidBodyChain (1 joint)"},
                "judged_at": f"the link tip ({tip_mm:g} mm)", "unit": f"{f['board']} · {can}", "gating": True, "metrics": m,
                "facts": [["tip length", f"{tip_mm:g} mm"], ["1 mm at the tip", f"{math.degrees(0.001 / r8['tip_length_m']):.2f}°"],
-                         ["top speed, measured", (f"{r0['omega_max_rad_s']:g} → {r8['omega_max_rad_s']:g} rad/s" if r0["omega_max_rad_s"] != r8["omega_max_rad_s"]
-                                                  else f"{r8['omega_max_rad_s']:g} rad/s")
-                          + f" ({math.degrees(r8['omega_max_rad_s']):.0f} °/s)"],
+                         ["top speed, measured", (f"{_deg_per_s(r0['omega_max_rad_s'])} → {_deg_per_s(r8['omega_max_rad_s'])}" if r0["omega_max_rad_s"] != r8["omega_max_rad_s"]
+                                                  else _deg_per_s(r8["omega_max_rad_s"]))],
                          ["motor", f["motor"]], ["load", f["load"]]],
                "plate": f["plate"], "family": f["family"], "device": can,
                "rungs": {rid: rd["stations"][sid]["rungs"] for rid, rd in rounds.items()},
@@ -381,8 +386,8 @@ def station_nodes(sid: str, rounds: dict, oracle: dict) -> list[dict]:
                "health": {rid: {"faults": sum((r["faults"] or 0) for r in rd["stations"][sid]["rungs"]),
                                 "missing": sum((r["missing"] or 0) for r in rd["stations"][sid]["rungs"])} for rid, rd in rounds.items()}}
     if r0["omega_max_rad_s"] != r8["omega_max_rad_s"]:
-        station["caveat"] = (f"The ladder moved: round 0's top speed was {r0['omega_max_rad_s']:g} rad/s (the current-limit onset), round 8's is "
-                             f"{r8['omega_max_rad_s']:g} rad/s, so a rung is the same fraction but a faster move now.")
+        station["caveat"] = (f"The ladder moved: round 0's top speed was {_deg_per_s(r0['omega_max_rad_s'])} (the current-limit onset), round 8's is "
+                             f"{_deg_per_s(r8['omega_max_rad_s'])}, so a rung is the same fraction but a faster move now.")
 
     ch = {rid: rd["stations"][sid]["children"] for rid, rd in rounds.items()}
     unit = f"{f['board']} · {can}"

@@ -51,6 +51,8 @@
   function fmtShort(m, v) { return fmt(m, v).replace(" of top speed", "").replace(" rungs", "").replace(" stations", ""); }
   function deg(x, d) { return x == null ? "—" : n(x, d == null ? (Math.abs(x) < 1 ? 2 : 2) : d) + "°"; }
   function mm(x) { return x == null ? "—" : n(x, Math.abs(x) < 0.1 ? 3 : 2) + " mm"; }
+  // WHY degrees: Zach reads angles and angular speeds in degrees, never rad (memory feedback_angles_in_degrees); data stays SI.
+  function degPerS(radPerS) { return radPerS == null ? "—" : Math.round(radPerS * 180 / Math.PI) + " °/s"; }
   function gateText(m) { return m.gate ? m.gate.text : "no gate"; }
 
   // ---- the data -----------------------------------------------------------------------------------------------------------------
@@ -449,7 +451,7 @@
         var ok = v <= gate, worst = key === "stop_tool_max_mm";
         var cls = worst ? (ok ? "" : "over") : ok ? "" : "fail";
         var txt = g[1] === "°" ? deg(v) : mm(v);
-        return '<td class="' + cls + '" data-node="' + esc(st.id) + '" title="' + esc(st.short + " · " + f + " of top speed (" + (r.speed_rad_s != null ? r.speed_rad_s + " rad/s" : "—") + ") · " + g[0] + " " + txt + " · goal ≤ " + gate + " " + g[1] + (worst ? " (not the gate: it reads the median)" : "")) + '">' + esc(txt) + "</td>";
+        return '<td class="' + cls + '" data-node="' + esc(st.id) + '" title="' + esc(st.short + " · " + f + " of top speed (" + degPerS(r.speed_rad_s) + ") · " + g[0] + " " + txt + " · goal ≤ " + gate + " " + g[1] + (worst ? " (not the gate: it reads the median)" : "")) + '">' + esc(txt) + "</td>";
       }).join("") + "</tr>";
     });
     return h + "</tbody></table>";
@@ -823,7 +825,7 @@
       tile("Tip stop at 0.9, median", mm(r.stop_tool_mm), r.stop_tool_mm != null ? (r.stop_tool_mm <= t.stop_tool_mm ? "pass" : "fail") : null, "GOOD ≤ " + t.stop_tool_mm + " mm", round(o).label.toLowerCase() + " " + mm(r0.stop_tool_mm)) +
       tile("Worst single stop at 0.9", mm(r.stop_tool_max_mm), null, "of " + (r.stops || "—") + " stops · not the gate", round(o).label.toLowerCase() + " " + mm(r0.stop_tool_max_mm)) +
       tile("Real performance gates", pg.values[rid].value + " of " + pg.values[rid].of, null, "tracking + tip stop, 6 rungs", round(o).label.toLowerCase() + " " + pg.values[o].value) + "</div>";
-    var omega = x.omega[o] !== x.omega[rid] ? "each rung is a fraction of that round's top speed: " + x.omega.r0 + " rad/s in round 0, " + x.omega.r8 + " rad/s now" : "top speed " + x.omega[rid] + " rad/s in both rounds";
+    var omega = x.omega[o] !== x.omega[rid] ? "each rung is a fraction of that round's top speed: " + degPerS(x.omega.r0) + " in round 0, " + degPerS(x.omega.r8) + " now" : "top speed " + degPerS(x.omega[rid]) + " in both rounds";
     return "<h3>Where it stands · " + esc(round(rid).label + ", " + round(rid).long) + "</h3>" + tiles +
       '<h3>Up the speed ladder · the goal line drawn</h3><div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">' + legend(rid) + '<span class="muted" style="font-size:12px">' + esc(omega) + "</span></div>" +
       '<div class="dw-plots">' + Object.keys(RUNG_KEYS).map(function (k) { return '<div class="pc">' + rungPlot(x, k, rid) + "</div>"; }).join("") + "</div>" +
@@ -1006,7 +1008,7 @@
       var bad = function (v, g) { return v != null && v > g ? ' class="f"' : ""; };
       var rec = r.replay_url ? '<a class="rr" href="' + esc(r.replay_url) + '" target="_blank" rel="noopener" title="' + esc("Opens " + (r.rrd || "") + " in the native Rerun viewer (the bam-replay-link launcher on 127.0.0.1:8771)" + (r.rrd_via === "identical copy" ? "; the recording of a byte-identical copy of this run" : "")) + '">Open in Rerun ↗</a>'
         : '<span class="muted" title="' + esc(r.rrd ? "recorded, but no replay launcher on this machine: " + r.rrd : "no .rrd was built for this run") + '">' + (r.rrd ? "recorded · no launcher" : "no recording yet") + "</span>";
-      return "<tr><td>" + link({ view: "", node: r.station, tab: "" }, esc(canName(r.station))) + "</td><td>" + r.fraction + "</td><td>" + (r.speed_rad_s == null ? "—" : n(r.speed_rad_s, 2) + " rad/s <span class=\"muted\">(" + Math.round(r.speed_rad_s * 180 / Math.PI) + " °/s)</span>") + "</td>" +
+      return "<tr><td>" + link({ view: "", node: r.station, tab: "" }, esc(canName(r.station))) + "</td><td>" + r.fraction + "</td><td>" + degPerS(r.speed_rad_s) + "</td>" +
         "<td>" + esc(r.kind === "held_out" ? "held-out" : r.kind) + '</td><td class="mono" title="' + esc(r.run) + '">' + esc(r.name) + "</td>" +
         "<td" + bad(r.tracking_rms_deg, t.tracking_rms_deg) + ">" + deg(r.tracking_rms_deg) + "</td><td" + bad(r.tracking_peak_deg, t.tracking_peak_deg) + ">" + deg(r.tracking_peak_deg) + "</td>" +
         "<td>" + dot(r.tracks, r.tracks === "pass" ? "meets RMS ≤ " + t.tracking_rms_deg + "° and peak ≤ " + t.tracking_peak_deg + "°" : r.tracks === "fail" ? "misses the tracking goal" : "not judged") + " " + esc(r.tracks === "pass" ? "yes" : r.tracks === "fail" ? "no" : "—") + "</td>" +
