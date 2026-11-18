@@ -360,6 +360,9 @@ table.dw-rt a.rr:hover { text-decoration: underline; }
 .dw .scene .s-label small { color: var(--ink3); font-weight: 500; }
 .dw .scene .s-label small.fid { font-weight: 650; }
 .dw .scene .s-label small.fid.fail { color: var(--fail); } .dw .scene .s-label small.fid.watch { color: var(--warn); }
+.dw .scene .s-leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.dw .scene .s-leads line { stroke: var(--ink3); stroke-width: 1; opacity: .75; }
+.dw .scene .s-leads circle { fill: var(--ink3); opacity: .75; }
 .dw .scene .s-plabel { transform: translate(0, -100%); font-size: 11.5px; }
 .dw .scene .s-plabel.flip { transform: translate(-100%, -100%); }
 .dw .scene .s-plabel[hidden] { display: none; }

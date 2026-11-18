@@ -542,30 +542,49 @@
     var v = m.values[rid];
     return { m: m, v: v, st: m.kind === "shown" && v.status === "fail" ? "watch" : v.status };
   }
-  // labels in the 3D never sit on each other, on a station's joint (a click there picks that station's mesh) or under the chips and the
-  // ViewCube: each, lowest first, takes the nearest free spot a few pixels up (or, failing that, down) from its anchor, inside the view.
-  // Anchors: a station's label at its bottom centre (ax 0.5), a part's at its bottom left (ax 0; ax 1, its bottom right, flipped near the
-  // right edge). Six stations on three plates crowd (CAN 1, 14 and 15 share one).
-  function spread(items, W, H, obstacles) {
+  // labels in the 3D never sit on each other, on a station's joint (a click there picks that station's mesh) or under the chips, the
+  // ViewCube, the caption and the time bar: each, lowest first, takes the nearest free spot to its anchor inside the view (straight up
+  // first, then a little down, then beside it); with no free spot left it takes the one it overlaps least. A label pushed off its anchor
+  // draws a thin leader back to it, so it still reads as its station's. Anchors: a station's label at its bottom centre (ax 0.5), a
+  // part's at its bottom left (ax 0; ax 1, its bottom right, flipped near the right edge). Six stations on three plates crowd (CAN 1, 14
+  // and 15 share one): WHY the sideways spots and the fallback (2026-11-18: CAN 14's and 15's labels sat on each other, one cut to "CAN").
+  var SPOTS = [];
+  for (var sdy = -175; sdy <= 63; sdy += 7) for (var ssx = -2; ssx <= 2; ssx++) SPOTS.push([sdy, ssx]);
+  function spread(items, W, H, obstacles, leads) {
     items.sort(function (a, b) { return b.y - a.y; });
-    var done = (obstacles || []).slice(), OFFS = [0];
-    for (var k = 1; k <= 14; k++) OFFS.push(-7 * k);
-    for (k = 1; k <= 7; k++) OFFS.push(7 * k);
+    var done = (obstacles || []).slice(), lines = [];
+    function overlap(l, t, r, b) {
+      var s = 0;
+      done.forEach(function (d) { var ox = Math.min(r, d.r + 2) - Math.max(l, d.l - 2), oy = Math.min(b, d.b + 1) - Math.max(t, d.t - 1); if (ox > 0 && oy > 0) s += ox * oy; });
+      return s;
+    }
     items.forEach(function (it) {
       if (it.ax === 0 && it.x + it.w > W - 6) { it.x -= 28; it.ax = 1; }
-      if (it.ax === 0.5) it.x = Math.max(it.w / 2 + 4, Math.min(W - it.w / 2 - 4, it.x));
       it.el.classList.toggle("flip", it.ax === 1);
-      var l = it.x - it.w * it.ax, r = l + it.w, y0 = it.y, best = null;
-      for (var i = 0; i < OFFS.length && best == null; i++) {
-        var y = y0 + OFFS[i], t = y - it.h;
-        if (t < 4 || y > H - 4) continue;
-        var hit = done.some(function (d) { return l < d.r + 2 && d.l < r + 2 && t < d.b + 1 && d.t < y + 1; });
-        if (!hit) best = y;
+      var ox = it.x, oy = it.y;
+      if (it.ax === 0.5) it.x = Math.max(it.w / 2 + 4, Math.min(W - it.w / 2 - 4, it.x));
+      var x0 = it.x, y0 = Math.max(it.h + 4, Math.min(H - 4, it.y)), step = it.w / 2 + 6;
+      var spots = SPOTS.map(function (s) { return [s[0], s[1] * step, (s[0] < 0 ? -s[0] : 1.6 * s[0]) + 0.8 * Math.abs(s[1] * step)]; }).sort(function (a, b) { return a[2] - b[2]; });
+      var best = null, least = null;
+      for (var i = 0; i < spots.length && !best; i++) {
+        var x = x0 + spots[i][1], y = y0 + spots[i][0], l = x - it.w * it.ax, r = l + it.w, t = y - it.h;
+        if (t < 4 || y > H - 4 || l < 4 || r > W - 4) continue;
+        var o = overlap(l, t, r, y);
+        if (!o) best = [x, y];
+        else if (!least || o < least[2]) least = [x, y, o];
       }
-      it.y = best == null ? Math.max(it.h + 4, Math.min(H - 4, y0)) : best;
-      done.push({ l: l, r: r, t: it.y - it.h, b: it.y });
+      var at = best || least || [x0, y0];
+      it.x = at[0]; it.y = at[1];
+      var L = it.x - it.w * it.ax;
+      done.push({ l: L, r: L + it.w, t: it.y - it.h, b: it.y });
       it.el.style.left = it.x + "px"; it.el.style.top = it.y + "px";
+      // the leader: from the anchor (kept inside the view) to the nearest point of the label's box, when it moved more than a hair
+      if (it.lead) {
+        var ax2 = Math.max(4, Math.min(W - 4, ox)), ay2 = Math.max(4, Math.min(H - 4, oy)), nx = Math.max(L, Math.min(L + it.w, ax2)), ny = Math.max(it.y - it.h, Math.min(it.y, ay2));
+        if (Math.hypot(nx - ax2, ny - ay2) > 10) lines.push('<line x1="' + ax2.toFixed(1) + '" y1="' + ay2.toFixed(1) + '" x2="' + nx.toFixed(1) + '" y2="' + ny.toFixed(1) + '"/><circle cx="' + ax2.toFixed(1) + '" cy="' + ay2.toFixed(1) + '" r="2"/>');
+      }
     });
+    if (leads) leads.innerHTML = lines.join("");
   }
   function Rack3D(el, opts) {
     var self = this, THREE = window.THREE;
@@ -658,6 +677,7 @@
       cap.textContent = on ? "MuJoCo render of the rack's cad2robot payload (the site's media), a still" : "drag to orbit · scroll to zoom · click a station or a part"; paint();
     });
     var labelLayer = document.createElement("div"); labelLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:2"; el.appendChild(labelLayer);
+    var leads = document.createElementNS("http://www.w3.org/2000/svg", "svg"); leads.setAttribute("class", "s-leads"); leads.setAttribute("aria-hidden", "true"); labelLayer.appendChild(leads);
     var labels = {}, plabels = {};
     Object.keys(groups).forEach(function (sid) {
       var l = document.createElement("div"); l.className = "s-label"; l.style.pointerEvents = "auto"; l.dataset.id = sid;
@@ -770,7 +790,10 @@
     function resize() {
       var w = el.clientWidth, hh = el.clientHeight; if (!w || !hh) return;
       renderer.setSize(w, hh, false); camera.aspect = w / hh; camera.updateProjectionMatrix();
-      if (atHome && !tween) { camera.position.copy(homePos()); controls.target.copy(HOME.target); }
+      // WHY retarget a flight home: it was aimed at the home fit of the slot the 3D just left (the Workbench's wide strip, or the
+      // detached 1:1 holder on first load), so the Scene opened too close and CAN 15, at the rack's right end, fell out of view
+      if (atHome && tween) { tween.to = homePos(); tween.tto = HOME.target.clone(); }
+      else if (atHome) { camera.position.copy(homePos()); controls.target.copy(HOME.target); }
       dirty = true;
     }
     if (window.ResizeObserver) new ResizeObserver(resize).observe(el);
@@ -794,26 +817,32 @@
       var w = el.clientWidth, hh = el.clientHeight, placed = [];
       Object.keys(labels).forEach(function (k3) {
         if (labels[k3].hidden) return;
-        v3.copy(groups[k3].anchor).project(camera);
-        var lx = (v3.x + 1) / 2 * w, ly = (1 - v3.y) / 2 * hh;
-        // a station out of the view keeps its label out of it too (never piled at the edge, as if it were there)
-        var out = v3.z > 1 || lx < 0 || lx > w || ly < 0 || ly > hh;
+        // a station out of the view keeps its label out of it too (never piled at the edge, as if it were there); a station in the view
+        // always wears its label, pulled inside the view when the spot above the station is not (2026-11-18: CAN 15's went missing)
+        v3.set(STATIONS[k3].x, STATIONS[k3].y, 0.02).project(camera);
+        var jx = (v3.x + 1) / 2 * w, jy = (1 - v3.y) / 2 * hh, out = v3.z > 1 || jx < 0 || jx > w || jy < 0 || jy > hh;
         labels[k3].style.display = out ? "none" : "";
-        if (!out) placed.push({ el: labels[k3], x: lx, y: ly, w: labels[k3].offsetWidth, h: labels[k3].offsetHeight, ax: 0.5 });
+        if (out) return;
+        v3.copy(groups[k3].anchor).project(camera);
+        var lx = v3.z > 1 ? jx : (v3.x + 1) / 2 * w, ly = v3.z > 1 ? jy : (1 - v3.y) / 2 * hh;
+        placed.push({ el: labels[k3], x: lx, y: ly, w: labels[k3].offsetWidth, h: labels[k3].offsetHeight, ax: 0.5, lead: true });
       });
       Object.keys(plabels).forEach(function (id) {
         var p = plabels[id]; if (p.el.hidden) return;
         p.mesh.getWorldPosition(v3); v3.project(camera);
         var px = (v3.x + 1) / 2 * w, py = (1 - v3.y) / 2 * hh, pout = v3.z > 1 || px < 0 || px > w || py < 0 || py > hh;
         p.el.style.display = pout ? "none" : "";
-        if (!pout) placed.push({ el: p.el, x: px + 14, y: py + 10, w: p.el.offsetWidth, h: p.el.offsetHeight, ax: 0 });
+        if (!pout) placed.push({ el: p.el, x: px + 14, y: py + 10, w: p.el.offsetWidth, h: p.el.offsetHeight, ax: 0, lead: true });
       });
-      var obstacles = [chips, cube].map(function (o) { return { l: o.offsetLeft, t: o.offsetTop, r: o.offsetLeft + o.offsetWidth, b: o.offsetTop + o.offsetHeight }; });
+      var obstacles = [chips, cube, cap].map(function (o) { return { l: o.offsetLeft, t: o.offsetTop, r: o.offsetLeft + o.offsetWidth, b: o.offsetTop + o.offsetHeight }; });
+      // the Scene's time bar floats over the 3D's foot (a sibling in the stage, drawn above the labels): no label goes under it
+      var bar = el.parentNode && el.parentNode.querySelector(":scope > .dw-timebar");
+      if (bar && bar.offsetWidth) { var er = el.getBoundingClientRect(), br = bar.getBoundingClientRect(); obstacles.push({ l: br.left - er.left, t: br.top - er.top, r: br.right - er.left, b: br.bottom - er.top }); }
       Object.keys(groups).forEach(function (k4) {
         v3.set(STATIONS[k4].x, STATIONS[k4].y, 0.02).project(camera);
         if (v3.z <= 1) { var jx = (v3.x + 1) / 2 * w, jy = (1 - v3.y) / 2 * hh; obstacles.push({ l: jx - 14, t: jy - 14, r: jx + 14, b: jy + 14 }); }
       });
-      spread(placed, w, hh, obstacles);
+      spread(placed, w, hh, obstacles, leads);
       var e = camera.matrixWorldInverse.elements, f = [1, -1, 1], m = [];
       for (var j = 0; j < 3; j++) { for (var i = 0; i < 3; i++) m.push(e[j * 4 + i] * f[i] * f[j]); m.push(0); }
       cubeInner.style.transform = "translateZ(-26px) matrix3d(" + m.concat([0, 0, 0, 1]).join(",") + ")";
