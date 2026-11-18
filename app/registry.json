@@ -12,6 +12,13 @@
    "setting": "bench",
    "tags_note": "Run tags (site/deploy_tree.py): every run recorded in the archive days below is a real recording of this rack (bam_rack_twin.hardware), so its environment is bench (a test run on real hardware, not live deployed data) and its setting is bench (type_cards SETTINGS: in the office, on the test rack; the rack sits on Zach's bench at home). A run outside these archive days, or whose basis is not real, stays unknown.",
    "summary": "Eight moteus servo stations on three plates (GIM43, JMC60), each a 1-DOF joint run against its own bam_rack_twin.",
+   "wandb": {
+    "project": "Sim2Real \u00b7 1-DOF rack",
+    "url": "https://forge.coreweave.com/wandb/zach-yamaoka-independent/Sim2Real%20%C2%B7%201-DOF%20rack/workspace",
+    "report": "https://forge.coreweave.com/wandb/zach-yamaoka-independent/Sim2Real%20%C2%B7%201-DOF%20rack/reports/Sim2Real-1-DOF-rack-pendulum-campaign-default--VmlldzoxODMxMjMzNg",
+    "report_title": "Sim2Real \u00b7 1-DOF rack \u00b7 pendulum campaign (default)",
+    "note": "The W&B backdoor (Zach, Daily Note 2026-11-18: \"Each deployment in the sim2real app should have a button to open within weights and biases\"): the Deployments page's \"Open in W&B\" opens url. The project bam_ws registered for this rack's campaigns (tools/wandb_trackers/trackers/sim2real_1_dof_rack.py); url and report are the web URLs the W&B API gives (wandb.Api().projects / .reports, 2026-11-18), percent-encoded. A deployment with no project has no wandb block, and shows no button."
+   },
    "record": "/home/bam/bam_ws/src/dev/bam_rack_twin/records/one-dof-test-rack/deployment.json",
    "archive": [
     "/archive/datasets/bam_rig/rack_2026-10-23",

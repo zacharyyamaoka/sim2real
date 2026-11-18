@@ -23,6 +23,8 @@ What it reads, never a new number:
   the five-question verdicts (sim2real.verdicts), round-by-round history, and every run of every round with its Rerun recording;
 - the deployments (data/domain/deployments.json via site/deployments_pages.py's Domain): the list on the home view, each other deployment
   opening its existing page /deployments/<id>/;
+- each deployment's W&B project (sim2real.deployments_page.wandb_links over app/registry.json): its "Open in W&B" button, the backdoor
+  Zach asked for (Daily Note 2026-11-18: "Each deployment in the sim2real app should have a button to open within weights and biases");
 - data_recorder.runlink (/home/bam/data_recorder): each recording registered (an additive write to its replay index) for its
   http://127.0.0.1:8771/f/<token>/<id> link, the always-on bam-replay-link launcher (bam_ws bam_trackio.replay_link) that opens the
   native Rerun viewer. WHY not the campaign's pendulum_rerun links (9461/9462): those servers live only while someone runs them.
@@ -117,6 +119,7 @@ def page_data(site, now: str | None = None) -> tuple[dict, dict]:
     except FileNotFoundError as error:
         missing = str(error)
     links = replay_links(rows) if rows else {"recordings": 0, "registered_now": 0, "launcher": False}
+    wandb = dpage.wandb_links()  # each deployment's W&B project, from app/registry.json: its "Open in W&B" button (none: no button)
     deployments = []
     for row in dps.card_rows(d):
         tree = trees.get(row["id"])
@@ -128,7 +131,7 @@ def page_data(site, now: str | None = None) -> tuple[dict, dict]:
         doc = d.results.get(row["id"]) or d.scenarios.get(row["id"]) or {}
         deployments.append({"id": row["id"], "title": row["title"], "kind": row["kind"], "tags": row["tags"], "what": row["what"],
                             "summary": row.get("summary") or "", "where": row.get("where") or "", "image": row["image"], "page": row["url"],
-                            "workbench": row["id"] in trees, "headline": headline,
+                            "workbench": row["id"] in trees, "headline": headline, "wandb": wandb.get(row["id"]),
                             "oracle": (doc.get("verdict") or {}).get("status") if row["kind"] == "virtual" else None})
     media = getattr(site, "media", None)
     data = {"schema": "sim2real.deployments-workbench/1", "built_utc": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -194,6 +197,7 @@ BODY = """<div class="dw" id="dw" data-src="/data/{data}">
   <div class="dw-bar">
     <div class="dw-vtitle" id="dw-vtitle"></div>
     <span class="dw-grow"></span>
+    <span class="dw-depacts" id="dw-depacts"></span>
     <div class="dw-seg" id="dw-round" role="group" aria-label="Round shown" hidden></div>
     <button class="dw-toggle right" id="dw-unfold" type="button" aria-label="Collapse the inspector" data-tip="Collapse the inspector" data-tip-pos="left" aria-expanded="true" hidden>{toggle}</button>
   </div>

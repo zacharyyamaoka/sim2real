@@ -200,9 +200,11 @@ def wandb_backdoor(page, base: str, ready) -> None:
     for view in ("page", "scene", "sheet", "runs"):
         page.goto(base + DEP + ("" if view == "page" else "&view=" + view))
         ready()
-        bar = page.eval_on_selector_all(".dw-bar a[data-wandb]", """els => els.map((a) => {const r = a.getBoundingClientRect();
+        # in view: inside the header bar's own box (under the site's top bar) and the window, never clipped or zero-sized
+        bar = page.eval_on_selector_all(".dw-bar a[data-wandb]", """els => els.map((a) => {const r = a.getBoundingClientRect(),
+            b = document.querySelector('.dw-bar').getBoundingClientRect();
             return {kind: a.dataset.wandb, href: a.getAttribute('href'), target: a.target, rel: a.rel, text: a.textContent.trim(),
-                    shown: r.width > 40 && r.height > 16 && r.right <= innerWidth && r.top >= 0 && r.bottom <= 60}})""")
+                    shown: r.width > 40 && r.height > 16 && r.left >= b.left && r.right <= Math.min(b.right, innerWidth) && r.top >= b.top && r.bottom <= b.bottom}})""")
         proj = [b for b in bar if b["kind"] == "project"]
         check(len(proj) == 1 and proj[0]["href"] == RACK_WANDB and proj[0]["target"] == "_blank" and "noopener" in proj[0]["rel"] and proj[0]["shown"]
               and "Open in W&B" in proj[0]["text"], f"the rack's {view} view: \"Open in W&B\" in its header bar, in view, to the project ({proj})")

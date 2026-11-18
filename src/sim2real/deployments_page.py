@@ -55,6 +55,8 @@ AS_FOUND = "r0"
 # (?round=r0, the default dropped) and the tests key on it; every label reads the round's own number from its scorecard instead
 NOW = "r8"
 ORACLE = REPO / "sysid" / "results" / "index.json"
+# the deployments sim2real knows, with each one's W&B project when it has one (wandb_links)
+REGISTRY = REPO / "app" / "registry.json"
 
 STATIONS = ("can1", "can11", "can12", "can13", "can14", "can15")
 RUNGS = (0.2, 0.4, 0.6, 0.8, 0.9, 1.0)
@@ -617,6 +619,27 @@ def runs(scorecards: Path = SCORECARDS, rrd_root: Path | None = None, now: str =
                                  "stops": play.get("stops"), "fault": bool(play.get("fault")), "tracks": gate_word(ok),
                                  "rrd": str(rrd) if rrd else None, "rrd_via": via})
     return rows
+
+
+def wandb_links(registry: Path = REGISTRY) -> dict[str, dict]:
+    """Deployment id -> its W&B backdoor {project, url, report, report_title}, from app/registry.json's `wandb` blocks.
+
+    Zach (Daily Note 2026-11-18, "# Ok back to performance metrics"): "Each deployment in the sim2real app should have a button to open
+    within weights and biases, as like a backdoor, so that we can always still support W&B for summary". WHY the registry: the link is
+    the deployment's data, kept beside its other producer fields, never written into the page. A deployment without a project, or whose
+    url is not a web URL, is left out, so the page draws no dead button. Only the One Dof Test Rack has a project today ("Sim2Real ·
+    1-DOF rack"); the virtual deployments are sysid's oracle examples and are logged nowhere."""
+    if not registry.is_file():
+        return {}
+    out = {}
+    for entry in json.loads(registry.read_text(encoding="utf-8")).get("deployments", []):
+        wb = entry.get("wandb") or {}
+        url, report = wb.get("url") or "", wb.get("report") or ""
+        if not url.startswith("https://"):
+            continue
+        out[entry["id"]] = {"project": wb.get("project"), "url": url, "report": report if report.startswith("https://") else None,
+                            "report_title": (wb.get("report_title") or None) if report.startswith("https://") else None}
+    return out
 
 
 def columns(rounds: dict) -> list[dict]:

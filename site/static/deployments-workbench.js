@@ -843,6 +843,19 @@
     return changed;
   }
 
+  // ---- the W&B backdoor (Zach, Daily Note 2026-11-18: "Each deployment in the sim2real app should have a button to open within weights
+  // and biases, as like a backdoor, so that we can always still support W&B for summary"): the deployment's project, and its report when
+  // it has one, each in a new tab. The links are the deployment's data (app/registry.json via the page data); none without a project.
+  var EXT = '<svg class="ext" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M11.5 9.5v4h-9v-9h4"/></svg>';
+  function wandbLinks(d) {
+    var w = d && d.wandb;
+    if (!w || !w.url) return "";
+    return '<span class="dw-wandb">' +
+      '<a class="dw-btn" data-wandb="project" href="' + esc(w.url) + '" target="_blank" rel="noopener noreferrer" title="' + esc("Open the W&B project " + (w.project || "") + " in a new tab") + '">Open in W&amp;B' + EXT + "</a>" +
+      (w.report ? '<a class="dw-btn" data-wandb="report" href="' + esc(w.report) + '" target="_blank" rel="noopener noreferrer" title="' + esc("Open its W&B report" + (w.report_title ? ", " + w.report_title + "," : "") + " in a new tab") + '">W&amp;B report' + EXT + "</a>" : "") +
+      "</span>";
+  }
+
   // ---- home: every deployment ------------------------------------------------------------------------------------------------------
   function home() {
     var row = function (d) {
@@ -859,8 +872,11 @@
         head = '<div class="head"><div class="m">' + esc(DATA.missing || "opens its page") + "</div></div>";
       }
       var t = '<div><div class="t">' + esc(d.title) + " " + chip(d.kind === "physical" ? "real" : "sim", d.kind === "physical" ? "real hardware" : "virtual") + '</div><div class="l">' + esc(d.summary || d.what) + '</div><div class="m">' + esc(d.where || d.what) + "</div></div>";
-      return d.workbench ? '<a class="dw-drow" data-go href="' + esc(location.pathname + "?d=" + encodeURIComponent(d.id)) + '" data-dep="' + esc(d.id) + '">' + img + t + head + "</a>"
+      var a = d.workbench ? '<a class="dw-drow" data-go href="' + esc(location.pathname + "?d=" + encodeURIComponent(d.id)) + '" data-dep="' + esc(d.id) + '">' + img + t + head + "</a>"
         : '<a class="dw-drow" href="' + esc(d.page) + '" data-dep="' + esc(d.id) + '">' + img + t + head + "</a>";
+      // WHY beside the row's link, never in it: a link inside a link is invalid HTML, and a click on it would also open the row
+      var wb = wandbLinks(d);
+      return wb ? '<div class="dw-drow-w" data-dep="' + esc(d.id) + '">' + a + '<div class="dw-drow-wb">' + wb + "</div></div>" : a;
     };
     var phys = DATA.deployments.filter(function (d) { return d.kind === "physical"; }), virt = DATA.deployments.filter(function (d) { return d.kind !== "physical"; });
     $("dw-home").innerHTML = "<h1>Deployments</h1><p class=\"lede\">Every machine we do sim to real on. Open one for its 3D view and its typed component tree; every node shows its <b>performance</b> against the target first, then how close its twin is.</p>" +
@@ -1296,6 +1312,7 @@
     var dep = st.dep ? DATA.deployments.filter(function (d) { return d.id === st.dep; })[0] : null;
     var rb = document.querySelector('.dw-rb[data-v="' + view + '"] svg');
     $("dw-vtitle").innerHTML = (rb ? '<span class="ic">' + rb.outerHTML + "</span>" : "") + "<b>" + esc(VIEW_NAME[view]) + "</b>" + (dep ? '<span class="muted"> · ' + esc(dep.title) + "</span>" : "");
+    $("dw-depacts").innerHTML = dep ? wandbLinks(dep) : "";  // the open deployment's W&B, in every view; nothing on the list
     var seg = $("dw-round");
     seg.hidden = view === "home" || view === "runs";
     var nowL = "Now" + (rn("r8") ? " · " + rn("r8") : ""), wasL = "As found" + (rn("r0") ? " · " + rn("r0") : "");
