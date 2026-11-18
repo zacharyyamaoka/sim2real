@@ -2,7 +2,7 @@
 
 The click-through's numbers are round 8's (the round they were written against), so it runs on a site built with round8.json as "now";
 "Now" on the real site is the campaign's latest scorecard, whichever round that is. --labels-only checks just that every "Now" label
-names the round the data holds (Runs' picker too), on any build:
+names the round the data holds (Runs' picker too), and the "Open in W&B" buttons (wandb_backdoor), on any build:
 
     env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py --deployments-now round8.json --out /home/bam/.cache/sim2real/site-round8
     env -u VIRTUAL_ENV taskset -c 2-5,16,17 uv run --isolated --no-project --with playwright python /home/bam/sim2real/site/tests/test_deployments_workbench.py --out /home/bam/.cache/sim2real/site-round8
@@ -57,6 +57,9 @@ EXE = str(max(Path.home().glob(".cache/ms-playwright/chromium_headless_shell-*/c
 ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
 DEP = "/deployments/?d=one-dof-test-rack"
 PINNED_ROUND = 8  # the round the click-through's numbers were written against (2026-11-17)
+# the rack's W&B project as the W&B API gives its web URL (wandb.Api().projects("zach-yamaoka-independent"), 2026-11-18); app/registry.json
+# holds it as the deployment's data
+RACK_WANDB = "https://forge.coreweave.com/wandb/zach-yamaoka-independent/Sim2Real%20%C2%B7%201-DOF%20rack/workspace"
 FAILS: list[str] = []
 
 
@@ -175,6 +178,39 @@ def now_labels(page, base: str, ready) -> None:
     check([h["round"] for h in tree["history"]] == want, f"the history is every round up to {n}, none after ({[h['round'] for h in tree['history']]}; missing {tree['history_missing']})")
 
 
+def wandb_backdoor(page, base: str, ready) -> None:
+    """Every deployment with a W&B project opens it from the app (Zach, Daily Note 2026-11-18: "Each deployment in the sim2real app should
+    have a button to open within weights and biases, as like a backdoor, so that we can always still support W&B for summary"): an
+    "Open in W&B" button on its row in Deployments, beside the row's link (a link inside a link is invalid and would open the row), and
+    in the deployment's header bar in every view, each opening the project in a new tab. A deployment without a project shows nothing:
+    no dead control. Nothing is clicked (that would open W&B); the hrefs are read and the buttons measured. Any build."""
+    page.goto(base + "/deployments/")
+    ready()
+    rows = page.eval_on_selector_all("#dw-home a[data-wandb]", """els => els.map((a) => ({dep: (a.closest('[data-dep]') || {dataset: {}}).dataset.dep,
+        kind: a.dataset.wandb, href: a.getAttribute('href'), target: a.target, rel: a.rel, text: a.textContent.trim(),
+        inRow: !!a.parentElement.closest('a'), w: a.getBoundingClientRect().width, h: a.getBoundingClientRect().height}))""")
+    project = [r for r in rows if r["kind"] == "project"]
+    check(len(project) == 1 and project[0]["dep"] == "one-dof-test-rack" and project[0]["href"] == RACK_WANDB and "Open in W&B" in project[0]["text"]
+          and project[0]["target"] == "_blank" and "noopener" in project[0]["rel"] and not project[0]["inRow"] and project[0]["w"] > 40 and project[0]["h"] > 16,
+          f"Deployments: the rack's row has an \"Open in W&B\" button to its project, in a new tab, beside the row's link ({project})")
+    others = sorted({r["dep"] for r in rows} - {"one-dof-test-rack"})
+    deps = page.eval_on_selector_all(".dw-drow", "els => els.map((a) => a.dataset.dep)")
+    check(not others and len(deps) == 8, f"the 7 deployments without a W&B project show no W&B control ({others}; {len(deps)} rows)")
+    check(page.query_selector(".dw-bar a[data-wandb]") is None, "the Deployments list's bar has no W&B control (no deployment is open)")
+    for view in ("page", "scene", "sheet", "runs"):
+        page.goto(base + DEP + ("" if view == "page" else "&view=" + view))
+        ready()
+        bar = page.eval_on_selector_all(".dw-bar a[data-wandb]", """els => els.map((a) => {const r = a.getBoundingClientRect();
+            return {kind: a.dataset.wandb, href: a.getAttribute('href'), target: a.target, rel: a.rel, text: a.textContent.trim(),
+                    shown: r.width > 40 && r.height > 16 && r.right <= innerWidth && r.top >= 0 && r.bottom <= 60}})""")
+        proj = [b for b in bar if b["kind"] == "project"]
+        check(len(proj) == 1 and proj[0]["href"] == RACK_WANDB and proj[0]["target"] == "_blank" and "noopener" in proj[0]["rel"] and proj[0]["shown"]
+              and "Open in W&B" in proj[0]["text"], f"the rack's {view} view: \"Open in W&B\" in its header bar, in view, to the project ({proj})")
+        rep = [b for b in bar if b["kind"] == "report"]
+        check(all(b["href"].startswith(RACK_WANDB.removesuffix("/workspace") + "/reports/") and b["target"] == "_blank" for b in rep),
+              f"the rack's {view} view: its W&B report link, when it has one, is in the same project ({[b['href'][-40:] for b in rep]})")
+
+
 def run(base: str, record: Path | None, labels_only: bool = False) -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=EXE, args=ARGS)
@@ -197,6 +233,7 @@ def run(base: str, record: Path | None, labels_only: bool = False) -> None:
 
         if labels_only:
             now_labels(page, base, ready)
+            wandb_backdoor(page, base, ready)
             check(not errors, f"no console error on the way ({errors[:3]})")
             ctx.close()
             browser.close()
@@ -588,6 +625,8 @@ def run(base: str, record: Path | None, labels_only: bool = False) -> None:
 
         # and every Now label names the round the data holds (round 8 here, the click-through's pinned round)
         now_labels(page, base, ready)
+        # and every deployment with a W&B project opens it, from its row and its header bar (Zach 2026-11-18)
+        wandb_backdoor(page, base, ready)
 
         check(not errors, f"no console error on the way ({errors[:3]})")
         ctx.close()
@@ -603,7 +642,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"the built site (site/build.py's OUT; default {DEFAULT_OUT})")
     parser.add_argument("--base", help="an already-running server's base URL instead of serving --out")
     parser.add_argument("--record", type=Path, help="write stills and the click-through video here")
-    parser.add_argument("--labels-only", action="store_true", help="only check that every Now label names the round the data holds (any build)")
+    parser.add_argument("--labels-only", action="store_true", help="only check that every Now label names the round the data holds, and the W&B "
+                        "buttons (any build)")
     args = parser.parse_args()
     if args.record:
         args.record.mkdir(parents=True, exist_ok=True)

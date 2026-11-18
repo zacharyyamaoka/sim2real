@@ -279,3 +279,40 @@ def test_a_missing_middle_round_is_skipped_and_reported(tmp_path):
     assert [h["round"] for h in d["history"]] == [0, 1, 2, 4, 5, 6, 7, 8]
     assert d["history_missing"] == [3]
     assert sorted({r["round"] for r in dp.runs(scorecards=tmp_path, now="round8.json")}) == [0, 1, 2, 4, 5, 6, 7, 8]
+
+
+# ---- the W&B backdoor (Zach, Daily Note 2026-11-18, "# Ok back to performance metrics": "Each deployment in the sim2real app should have a
+# button to open within weights and biases, as like a backdoor, so that we can always still support W&B for summary"): written before the
+# code. The link is the deployment's data (app/registry.json), never the page's; one without a project gets no link, so no dead button.
+
+# the project's web URL as the W&B API gives it (wandb.Api().projects("zach-yamaoka-independent"), 2026-11-18), percent-encoded
+RACK_WANDB = "https://forge.coreweave.com/wandb/zach-yamaoka-independent/Sim2Real%20%C2%B7%201-DOF%20rack/workspace"
+TRACKER = dp.Path("/home/bam/bam_ws/tools/wandb_trackers/trackers/sim2real_1_dof_rack.py")
+
+
+def test_the_rack_opens_its_wandb_project():
+    rack = dp.wandb_links()["one-dof-test-rack"]
+    assert rack["project"] == "Sim2Real · 1-DOF rack" and rack["url"] == RACK_WANDB
+    if TRACKER.is_file():  # the project bam_ws registered for the rack's campaigns (tools/wandb_trackers, 2026-11-17)
+        assert f'project="{rack["project"]}"' in TRACKER.read_text()
+    if rack.get("report"):  # its report, when it has one, lives in the same project
+        assert rack["report"].startswith(RACK_WANDB.removesuffix("/workspace") + "/reports/") and rack["report_title"]
+
+
+def test_a_virtual_deployment_has_no_wandb_link():
+    links = dp.wandb_links()
+    # WHY pendulum_can11 named: it is the sysid oracle's simulated pendulum, never the rack's real CAN 11 campaign the project holds
+    assert not {"pendulum_can11", "ur5e", "ur5e_2f85", "conveyor", "dual_arm_cell", "linescan_cell", "ur5e_backlash"} & set(links)
+
+
+def test_only_a_deployment_with_a_project_url_gets_a_link(tmp_path):
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({"deployments": [
+        {"id": "a", "wandb": {"project": "P", "url": "https://wandb.ai/e/P"}},
+        {"id": "b"},                                                   # no project
+        {"id": "c", "wandb": {"project": "Q"}},                         # a project but no URL: nothing to open
+        {"id": "d", "wandb": {"project": "R", "url": "javascript:alert(1)"}},  # not a web URL
+    ]}))
+    links = dp.wandb_links(registry)
+    assert set(links) == {"a"} and links["a"] == {"project": "P", "url": "https://wandb.ai/e/P", "report": None, "report_title": None}
+    assert dp.wandb_links(tmp_path / "missing.json") == {}
