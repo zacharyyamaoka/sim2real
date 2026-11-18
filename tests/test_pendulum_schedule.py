@@ -81,8 +81,22 @@ def test_the_description_twin_shows_the_same_schedule(schedule):
 
 
 @pytest.mark.skipif(not SLOW, reason="SIM2REAL_SLOW=1: the CAN 11 oracle's calibration takes minutes")
-def test_calibrate_plays_the_schedule_it_shows(twin, schedule):
+def test_calibrate_plays_the_schedule_it_shows(twin, schedule, monkeypatch):
+    # WHY every replay pool is watched (added 2026-11-17, the one-click session's point 3): bdfed7d capped workers in SimRunner only;
+    # a scheduled routine that calls the pipeline without workers= reopens identify()'s 8-worker pool beside the powered arm. Every
+    # pendulum replay goes through bam_rack_twin.budget.Replayer (imported at call time), so recording its workers catches any caller.
+    from bam_rack_twin import budget  # noqa: PLC0415
+
+    opened = []
+
+    class Watched(budget.Replayer):
+        def __init__(self, *args, **kwargs):
+            opened.append(kwargs.get("workers", args[4] if len(args) > 4 else None))
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(budget, "Replayer", Watched)
     fitted = twin.calibrate(on="sim", truth="sealed")
+    assert opened and max(opened) <= WORKERS, f"replay pools opened with workers {sorted(set(opened))}, cap {WORKERS}"
     print(fitted.calibration_.summary(), flush=True)
     assert isinstance(fitted.plan_, CalibrationPlan), type(fitted.plan_)
     assert fitted.plan_.ids == schedule.ids, (fitted.plan_.ids, schedule.ids)
