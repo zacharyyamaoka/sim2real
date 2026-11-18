@@ -106,13 +106,14 @@ def old_pages(d: dps.Domain) -> dict[str, str]:
     return out
 
 
-def page_data(site) -> tuple[dict, dict]:
-    """(the page's data, the runs table)."""
+def page_data(site, now: str | None = None) -> tuple[dict, dict]:
+    """(the page's data, the runs table). `now`: the scorecard the Now column reads (default the campaign's latest, latest_real.json)."""
+    now = now or dpage.NOW_FILE
     d = dps.load(site)
     trees, missing, rows = {}, None, []
     try:
-        trees[dpage.DEPLOYMENT] = dpage.build()
-        rows = dpage.runs()
+        trees[dpage.DEPLOYMENT] = dpage.build(now=now)
+        rows = dpage.runs(now=now)
     except FileNotFoundError as error:
         missing = str(error)
     links = replay_links(rows) if rows else {"recordings": 0, "registered_now": 0, "launcher": False}
@@ -142,12 +143,13 @@ def page_data(site) -> tuple[dict, dict]:
     return data, runs_doc
 
 
-def write_data(data_dir, site) -> dict:
-    data, runs_doc = page_data(site)
+def write_data(data_dir, site, now: str | None = None) -> dict:
+    data, runs_doc = page_data(site, now)
     (data_dir / DATA).write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
     (data_dir / RUNS).write_text(json.dumps(runs_doc, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
+    tree = data["trees"].get(dpage.DEPLOYMENT)
     return {"nodes": sum(len(t["nodes"]) for t in data["trees"].values()), "runs": len(runs_doc["rows"]), "missing": data["missing"],
-            **data["replay"]}
+            "now": tree["rounds"][-1]["long"] if tree else None, "history_missing": tree["history_missing"] if tree else None, **data["replay"]}
 
 
 # WHY an Obsidian frame (Zach 2026-11-17: "update it so it has the left toolbar sidebar like Obsidian ... 3 primary views could be the Scene

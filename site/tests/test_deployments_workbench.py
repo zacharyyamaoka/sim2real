@@ -1,7 +1,12 @@
 """The Deployments workbench (/deployments/), clicked through in headless Chromium on the built site: the acceptance of 2026-11-17.
 
-    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py
-    env -u VIRTUAL_ENV taskset -c 2-5,16,17 uv run --isolated --no-project --with playwright python /home/bam/sim2real/site/tests/test_deployments_workbench.py
+The click-through's numbers are round 8's (the round they were written against), so it runs on a site built with round8.json as "now";
+"Now" on the real site is the campaign's latest scorecard, whichever round that is. --labels-only checks just that every "Now" label
+names the round the data holds (Runs' picker too), on any build:
+
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py --deployments-now round8.json --out /home/bam/.cache/sim2real/site-round8
+    env -u VIRTUAL_ENV taskset -c 2-5,16,17 uv run --isolated --no-project --with playwright python /home/bam/sim2real/site/tests/test_deployments_workbench.py --out /home/bam/.cache/sim2real/site-round8
+    env -u VIRTUAL_ENV taskset -c 2-5,16,17 uv run --isolated --no-project --with playwright python /home/bam/sim2real/site/tests/test_deployments_workbench.py --labels-only
     ... test_deployments_workbench.py --out /abs/site --record /abs/capture/dir      (stills s01..s15 and the click-through walk.webm)
 
 Zach's journey (Daily Note 2026-11-17: "Sim2Real at the top level we seperate it into DEPLOYMENTS. When I click into each deployment I
@@ -51,6 +56,7 @@ EXE = str(max(Path.home().glob(".cache/ms-playwright/chromium_headless_shell-*/c
               key=lambda p: int(p.parts[-3].rsplit("-", 1)[1])))
 ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
 DEP = "/deployments/?d=one-dof-test-rack"
+PINNED_ROUND = 8  # the round the click-through's numbers were written against (2026-11-17)
 FAILS: list[str] = []
 
 
@@ -118,7 +124,58 @@ def resolves(url: str) -> Path | None:
     return runlink.resolve(url.rstrip("/").rsplit("/", 1)[-1])
 
 
-def run(base: str, record: Path | None) -> None:
+def now_round(base: str) -> tuple[dict, dict]:
+    """(the rack's Now column, its tree) from the built site's data."""
+    with urllib.request.urlopen(base + "/data/deployments-workbench.json", timeout=10) as response:
+        tree = json.loads(response.read())["trees"]["one-dof-test-rack"]
+    return next(r for r in tree["rounds"] if r["label"] == "Now"), tree
+
+
+def now_labels(page, base: str, ready) -> None:
+    """Every "Now" says which round it is, read from the data (Zach: "open up that deployment and at a glance see exactly the current
+    state"): the page head, the round switch, the Metrics table, the Scene's time bar, the Sheet, the Runs view's picker; and no label
+    names another round as now. The history is every round up to now, a missing one skipped and listed. Any build."""
+    now, tree = now_round(base)
+    n, day = now["round"], now["scored_utc"][:10]
+    seen = {}
+    page.goto(base + DEP + "&tab=metrics")
+    ready()
+    seen["head"] = text(page, "#dw-dep .dw-sub")
+    seen["switch"] = text(page, '#dw-round button[data-r="r8"]')
+    seen["metrics"] = text(page, "#dw-tabbody table.dw-mt thead")
+    seen["metrics_lede"] = text(page, "#dw-tabbody p.lede")
+    page.goto(base + DEP + "&view=scene")
+    ready()
+    page.wait_for_selector("#dw-timebar .tb-r small")
+    seen["timebar"] = text(page, "#dw-timebar .tb-r small")
+    page.goto(base + DEP + "&view=sheet")
+    ready()
+    page.wait_for_selector("table.dw-tt")
+    seen["sheet_now"] = page.eval_on_selector_all("table.dw-tt thead th.sub", "els => els.map((e) => e.title)")[1]
+    seen["sheet_note"] = text(page, ".dw-ttools .lab")
+    page.goto(base + DEP + "&view=runs")
+    ready()
+    page.wait_for_selector("table.dw-rt tbody tr")
+    seen["runs_pick"] = text(page, '.dw-rtop button[aria-pressed="true"]')
+    seen["runs_now"] = page.eval_on_selector_all(".dw-rtop button[data-rr]", "els => els.filter((b) => b.textContent.endsWith('· now')).map((b) => b.textContent)")
+    seen["runs_sum"] = text(page, ".dw-rsum")
+    check(f"Now · round {n} · {day}" in seen["head"] and seen["switch"] == f"Now · round {n}" and f"now round {n}" in " ".join(seen["metrics"].split()).lower()
+          and f"now (round {n})" in seen["metrics_lede"] and seen["timebar"].startswith(f"round {n} · "),
+          f"the page says which round Now is: round {n}, scored {day} (head {seen['head'][:70]!r}, switch {seen['switch']!r}, metrics {' '.join(seen['metrics'].split())[:40]!r}, "
+          f"time bar {seen['timebar']!r})")
+    check(seen["sheet_now"] == f"round {n} · now" and f"now (round {n})" in seen["sheet_note"],
+          f"the Sheet's Now column is round {n} ({seen['sheet_now']!r}; {seen['sheet_note']!r})")
+    check(seen["runs_pick"] == f"Round {n} · now" and seen["runs_now"] == [f"Round {n} · now"] and f"runs in round {n}" in seen["runs_sum"].lower(),
+          f"Runs opens on round {n}, the only round called now ({seen['runs_pick']!r}, {seen['runs_now']})")
+    blob = " ".join(seen[k] if isinstance(seen[k], str) else " ".join(seen[k]) for k in seen).lower()
+    called_now = {int(m) for pat in (r"round (\d+) · now", r"now \(round (\d+)\)", r"now · round (\d+)", r"now, round (\d+)") for m in re.findall(pat, blob)}
+    stale = sorted(called_now - {n})
+    check(not stale, f"no label calls another round now ({stale})")
+    want = [k for k in range(n + 1) if k not in tree["history_missing"]]
+    check([h["round"] for h in tree["history"]] == want, f"the history is every round up to {n}, none after ({[h['round'] for h in tree['history']]}; missing {tree['history_missing']})")
+
+
+def run(base: str, record: Path | None, labels_only: bool = False) -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=EXE, args=ARGS)
         video = {"record_video_dir": str(record), "record_video_size": {"width": 1440, "height": 900}} if record else {}
@@ -137,6 +194,13 @@ def run(base: str, record: Path | None) -> None:
 
         def pause(ms: int = 900) -> None:
             page.wait_for_timeout(ms if record else 250)
+
+        if labels_only:
+            now_labels(page, base, ready)
+            check(not errors, f"no console error on the way ({errors[:3]})")
+            ctx.close()
+            browser.close()
+            return
 
         # 0. a clean slate: no remembered panel sizes or folds
         page.goto(base + "/deployments/")
@@ -522,6 +586,9 @@ def run(base: str, record: Path | None) -> None:
         check(home_ok == [True, True, "home"] and "d=one-dof-test-rack" in page.url and "view=sheet" in page.url,
               f"Deployments: no tree to show, so no sidebar and no toggle; its Sheet icon opens the rack in the Sheet ({home_ok}, {page.url[-40:]})")
 
+        # and every Now label names the round the data holds (round 8 here, the click-through's pinned round)
+        now_labels(page, base, ready)
+
         check(not errors, f"no console error on the way ({errors[:3]})")
         ctx.close()
         browser.close()
@@ -536,16 +603,26 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"the built site (site/build.py's OUT; default {DEFAULT_OUT})")
     parser.add_argument("--base", help="an already-running server's base URL instead of serving --out")
     parser.add_argument("--record", type=Path, help="write stills and the click-through video here")
+    parser.add_argument("--labels-only", action="store_true", help="only check that every Now label names the round the data holds (any build)")
     args = parser.parse_args()
     if args.record:
         args.record.mkdir(parents=True, exist_ok=True)
     if not (args.base or (args.out / "data" / "deployments-workbench.json").is_file()):
         raise SystemExit(f"no workbench data in {args.out}: build the site first (site/build.py)")
+
+    def go(base: str) -> None:
+        now, _tree = now_round(base)
+        if not args.labels_only and now["round"] != PINNED_ROUND:
+            raise SystemExit(f"this site's Now is round {now['round']}; the click-through's numbers are round {PINNED_ROUND}'s: build with "
+                             f"--deployments-now round{PINNED_ROUND}.json into its own --out and pass that --out here (or --labels-only)")
+        print(f"Now on this site: {now['long']} ({now['source']})", flush=True)
+        run(base, args.record, args.labels_only)
+
     if args.base:
-        run(args.base.rstrip("/"), args.record)
+        go(args.base.rstrip("/"))
     else:
         with serve(args.out) as base:
-            run(base, args.record)
+            go(base)
     print(f"{'FAIL' if FAILS else 'PASS'}: {len(FAILS)} failing check(s)")
     sys.exit(1 if FAILS else 0)
 

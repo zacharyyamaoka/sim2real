@@ -1,6 +1,6 @@
 """Build sim2real's site: catalog-workbench (vendored, site/vendor/) over the app's data (tools/build_app.py).
 
-    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py [--data PATH] [--out PATH]
+    env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py [--data PATH] [--out PATH] [--deployments-now FILE]
     python3 -m http.server 4710 --bind 127.0.0.1 --directory /home/bam/.cache/sim2real/site
 
 Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing here is in git):
@@ -171,7 +171,7 @@ def link_media(root: pathlib.Path, out: pathlib.Path) -> site_media.Media | None
     return site_media.load(out / "media")
 
 
-def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site_media.DEFAULT) -> dict:
+def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site_media.DEFAULT, deployments_now: str | None = None) -> dict:
     started = time.monotonic()
     adapter.check_kit()
     from catalog_workbench.build import build as workbench_build  # noqa: PLC0415
@@ -211,7 +211,7 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     import deployments_pages  # noqa: PLC0415  (the deployments index's rows, beside search.json: the workbench's writer keeps out of data/)
     deployments_pages.write_data(out / "data", site)
     import deployments_workbench  # noqa: PLC0415  (the workbench's tree, values and runs: sim2real.deployments_page over the scorecards)
-    workbench = deployments_workbench.write_data(out / "data", site)
+    workbench = deployments_workbench.write_data(out / "data", site, now=deployments_now)
     import models_pages  # noqa: PLC0415  (the routines' and the parameters view's rows, beside the deployments' cards)
     models_pages.write_data(out / "data", site)
     import metrics_pages  # noqa: PLC0415  (the metrics page's runs table: each run's per-run values and levels)
@@ -236,13 +236,15 @@ def main(argv=None):
     parser.add_argument("--data", type=pathlib.Path, default=adapter.DATA, help=f"the app's data (default {adapter.DATA})")
     parser.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT, help=f"the site folder (default {DEFAULT_OUT})")
     parser.add_argument("--media", type=pathlib.Path, default=site_media.DEFAULT, help=f"the media folder tools/build_media.py wrote (default {site_media.DEFAULT})")
+    parser.add_argument("--deployments-now", metavar="FILE", help="the pendulum scorecard the Deployments workbench's Now column reads (default "
+                        "latest_real.json, the campaign's latest; site/tests/test_deployments_workbench.py builds with round8.json)")
     parser.add_argument("--repin", action="store_true", help="pin the data-ui kit vendor/data-ui/dist holds now (site/DATA_UI.json)")
     args = parser.parse_args(argv)
     if args.repin:
         pin = adapter.repin()
         print(f"pinned the vendored data-ui kit: manifest {pin['manifest_sha256'][:12]}, {pin['files']} files")
         return
-    build(args.data.resolve(), args.out.resolve(), args.media)
+    build(args.data.resolve(), args.out.resolve(), args.media, deployments_now=args.deployments_now)
 
 
 if __name__ == "__main__":

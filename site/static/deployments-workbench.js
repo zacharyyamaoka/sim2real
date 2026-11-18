@@ -15,6 +15,7 @@
 
    State lives in the URL (?d=<deployment>&n=<node>&view=scene|sheet|runs&tab=...&round=r0|r8&mode=changed&cols=questions&rr=<round>), so
    every view is a link, Back works, and the views share one selection (n) and one round. view=table is the Sheet's old name, still read.
+   "r8" is the Now column, whatever round the campaign's latest scorecard holds (see rn()); "r0" is round 0, as found.
    WHY no framework: one tree of 45 nodes and a table of a few hundred runs; plain DOM, like the proposals. */
 (function () {
   "use strict";
@@ -74,6 +75,16 @@
   function stationOf(id) { var x = byId[id]; while (x && x.level !== "station") x = x.parent ? byId[x.parent] : null; return x; }
   function round(rid) { return FX.rounds.filter(function (r) { return r.id === rid; })[0]; }
   function other(rid) { return rid === "r8" ? "r0" : "r8"; }
+  // WHY "r8" means "now", whatever round it holds (round 9 on 2026-11-18): the id was round 8's when the page was written, and the URL
+  // (?round=r0, the default dropped) and the tests key on it; every label reads the round's own number from the data instead (Zach:
+  // "open up that deployment and at a glance see exactly the current state")
+  function rn(rid) { var r = FX && round(rid); return r ? "round " + r.round : ""; }
+  function scoredDay(rid) { var r = FX && round(rid); return r ? String(r.scored_utc).slice(0, 10) : ""; }
+  // a round below now whose scorecard is missing is skipped in the history, and said so, never drawn as if it were there
+  function historyGap() {
+    var gap = (FX && FX.history_missing) || [];
+    return gap.length ? '<p class="caveat dw-histgap">No scorecard for round' + (gap.length > 1 ? "s " : " ") + esc(gap.join(", ")) + ": skipped in the history below, not drawn.</p>" : "";
+  }
   function metric(x, mid) { return x ? x.metrics.filter(function (m) { return m.id === mid; })[0] || null : null; }
   function rung(st, rid, f) { return (st.rungs[rid] || []).filter(function (r) { return r.fraction === f; })[0] || {}; }
   function change(m, rid) {
@@ -400,7 +411,7 @@
       ' · <svg width="22" height="8"><line x1="0" x2="22" y1="4" y2="4" stroke="var(--real)" stroke-width="2"/></svg> ' + esc(round(rid).label + " · " + round(rid).long) +
       ' · <svg width="22" height="8"><line x1="0" x2="22" y1="4" y2="4" stroke="var(--pass)" stroke-dasharray="5 3" stroke-width="1.3"/></svg> the goal · x: the fraction of top speed</span>';
   }
-  // round by round (0..8): one line per station at the goal's rung, log scale, the goal line drawn; red points miss it
+  // round by round (every scored round up to now): one line per station at the goal's rung, log scale, the goal line drawn; red points miss it
   var HIST_KEYS = {
     tracking_rms_09: { name: "Tracking RMS at 0.9 of top speed", unit: "°", gate: function () { return FX.thresholds.tracking_rms_deg; } },
     stop_09: { name: "Tip stop at 0.9 of top speed, median", unit: "mm", gate: function () { return FX.thresholds.stop_tool_mm; } },
@@ -474,8 +485,8 @@
     opts = opts || {};
     if (!x.metrics.length) return '<p class="muted">No metrics at this level: ' + esc(x.judged_at) + ".</p>";
     var r0 = "r0", r8 = "r8";
-    var cols = opts.compact ? '<tr><th>Metric</th><th title="round 0, as found">Round 0</th><th title="round 8, now">Now</th><th title="round 0 → now"></th></tr>'
-      : '<tr><th>Metric</th><th>' + esc(round(r0).label) + ' <span class="muted" style="text-transform:none;letter-spacing:0">round 0</span></th><th>' + esc(round(r8).label) + ' <span class="muted" style="text-transform:none;letter-spacing:0">round 8</span></th><th>Change</th><th class="gate">Goal</th><th>Counts as</th><th>Defined in</th></tr>';
+    var cols = opts.compact ? '<tr><th>Metric</th><th title="round 0, as found">Round 0</th><th title="' + esc(rn(r8)) + ', now">Now</th><th title="round 0 → now"></th></tr>'
+      : '<tr><th>Metric</th><th>' + esc(round(r0).label) + ' <span class="muted" style="text-transform:none;letter-spacing:0">' + esc(rn(r0)) + '</span></th><th>' + esc(round(r8).label) + ' <span class="muted" style="text-transform:none;letter-spacing:0">' + esc(rn(r8)) + '</span></th><th>Change</th><th class="gate">Goal</th><th>Counts as</th><th>Defined in</th></tr>';
     var h = '<table class="dw-mt"><thead>' + cols + "</thead><tbody>";
     var span = opts.compact ? 4 : 7;
     ["performance", "fidelity", "evidence"].forEach(function (fam) {
@@ -893,7 +904,7 @@
     el.querySelectorAll("[data-tab]").forEach(function (b) { b.addEventListener("click", function () { go({ tab: b.dataset.tab }, true); }); });
     var body = $("dw-tabbody");
     if (tab === "perf") body.innerHTML = x.level === "deployment" ? perfRack(x, rid) : perfStation(x, rid);
-    else if (tab === "metrics") body.innerHTML = '<p class="lede">Every metric at this level, performance first, round 0 (as found, before any fit) beside now (round 8) and which way it moved.</p>' + metricTable(x, rid) + children(x, rid);
+    else if (tab === "metrics") body.innerHTML = '<p class="lede">Every metric at this level, performance first, round 0 (as found, before any fit) beside now (' + esc(rn("r8")) + ') and which way it moved.</p>' + metricTable(x, rid) + children(x, rid);
     else if (tab === "runs") body.innerHTML = runsTeaser(x, rid);
     else if (tab === "questions") body.innerHTML = '<p class="lede">The five questions in order at this level: the ruler (Floor), the data, the routines, then fidelity (Twin) and the job.</p>' + fiveQuestions(x, rid) + RULE + children(x, rid);
     else body.innerHTML = definition(x);
@@ -920,7 +931,7 @@
     var gridSwitch = '<div class="dw-seg" role="group" aria-label="What the grid shows">' + Object.keys(GRID).map(function (k) { return '<button data-grid="' + k + '" aria-pressed="' + (k === gk) + '">' + esc(GRID[k][0]) + "</button>"; }).join("") + "</div>";
     return '<h3>Where it stands · ' + esc(round(rid).label + ", " + round(rid).long) + "</h3>" + tiles +
       '<h3>Round by round · the goal line drawn</h3><p class="lede">Each station at the goal\'s rung (0.9 of its top speed), every scored round. Green points meet the goal, red miss it. ' +
-      'Caveat: round 0 was scored against the plan tick, later rounds against the measured target (re-scored the later way, round 0 reads worse, not better), and CAN 11\'s top speed doubled after round 0.</p>' +
+      'Caveat: round 0 was scored against the plan tick, later rounds against the measured target (re-scored the later way, round 0 reads worse, not better), and CAN 11\'s top speed doubled after round 0.</p>' + historyGap() +
       '<div class="dw-plots wide"><div class="pc">' + historyPlot("tracking_rms_09") + '</div><div class="pc">' + historyPlot("stop_09") + "</div></div>" +
       '<h3 style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">Every station × every speed rung ' + gridSwitch + '</h3><p class="lede">The fraction of each station\'s top speed across, the round shown. Green meets the goal, red misses it; a worst stop over 1 mm is outlined amber (the gate reads the median). Click a station for its page.</p>' +
       grid(rid, gk) + children(x, rid);
@@ -938,7 +949,7 @@
     return "<h3>Where it stands · " + esc(round(rid).label + ", " + round(rid).long) + "</h3>" + tiles +
       '<h3>Up the speed ladder · the goal line drawn</h3><div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">' + legend(rid) + '<span class="muted" style="font-size:12px">' + esc(omega) + "</span></div>" +
       '<div class="dw-plots">' + Object.keys(RUNG_KEYS).map(function (k) { return '<div class="pc">' + rungPlot(x, k, rid) + "</div>"; }).join("") + "</div>" +
-      '<h3>Round by round</h3><div class="dw-plots wide"><div class="pc">' + historyPlot("tracking_rms_09", x.id) + '</div><div class="pc">' + historyPlot("stop_max_09", x.id) + "</div></div>" + children(x, rid);
+      '<h3>Round by round</h3>' + historyGap() + '<div class="dw-plots wide"><div class="pc">' + historyPlot("tracking_rms_09", x.id) + '</div><div class="pc">' + historyPlot("stop_max_09", x.id) + "</div></div>" + children(x, rid);
   }
   function children(x, rid) {
     if (!x.children.length) return "";
@@ -994,7 +1005,7 @@
     function st(v) { return v == null ? "" : c.ok ? (c.ok(v) ? "pass" : "fail") : c.watch && c.watch(v) ? "watch" : ""; }
     var dir = a == null || b == null ? "na" : Math.abs(a - b) < 1e-9 ? "flat" : (c.higher ? b > a : b < a) ? "up" : "down";
     return '<td class="q was bl" data-c="' + c.id + '" data-r="r0" title="' + esc(c.name + " · round 0, as found: " + c.fmt(a)) + '"><span class="cell">' + (st(a) ? dot(st(a)) : "") + esc(c.fmt(a)) + "</span></td>" +
-      '<td class="q ' + st(b) + '" data-c="' + c.id + '" data-r="r8" title="' + esc(c.name + " · now, round 8: " + c.fmt(b) + " · " + c.goal) + '"><span class="cell">' + (st(b) ? dot(st(b)) : "") + esc(c.fmt(b)) + "</span></td>" + chg(dir, c.fmt(a), c.fmt(b));
+      '<td class="q ' + st(b) + '" data-c="' + c.id + '" data-r="r8" title="' + esc(c.name + " · now, " + rn("r8") + ": " + c.fmt(b) + " · " + c.goal) + '"><span class="cell">' + (st(b) ? dot(st(b)) : "") + esc(c.fmt(b)) + "</span></td>" + chg(dir, c.fmt(a), c.fmt(b));
   }
   function fidMetric(x) { return metric(x, "twin_over_floor") || metric(x, "T2") || metric(x, "stations_twinned"); }
   function fidTrio(x) {
@@ -1013,10 +1024,10 @@
   }
   function tableCols(st) {
     var rid = st.mode === "changed" ? "r8" : st.round, withQ = st.cols === "questions", P = perfCols();
-    var sub = '<th class="bl sub" title="round 0 · as found, before any fit">Round 0</th><th class="sub" title="round 8 · now">Now</th><th class="sub" title="round 0 → now">Δ</th>';
+    var sub = '<th class="bl sub" title="round 0 · as found, before any fit">Round 0</th><th class="sub" title="' + esc(rn("r8")) + ' · now">Now</th><th class="sub" title="round 0 → now">Δ</th>';
     var head = '<tr><th rowspan="3" class="nmh">Typed component tree</th><th rowspan="3">Type</th><th class="grp bl perf" colspan="' + P.length * 3 + '">Performance · real vs the target</th>' +
       '<th class="grp bl fid" colspan="3">Fidelity · real vs sim</th><th rowspan="3" class="bl">Other</th>' +
-      (withQ ? '<th class="grp bl" colspan="5">The five questions · ' + esc(st.mode === "changed" ? "round 0 → round 8" : round(rid).label) + '</th><th rowspan="3" class="bl">Verdict</th>' : "") + "</tr>" +
+      (withQ ? '<th class="grp bl" colspan="5">The five questions · ' + esc(st.mode === "changed" ? rn("r0") + " → " + rn("r8") : round(rid).label) + '</th><th rowspan="3" class="bl">Verdict</th>' : "") + "</tr>" +
       "<tr>" + P.map(function (c) { return '<th colspan="3" class="bl mh" data-col="' + c.id + '">' + esc(c.name) + "<small>" + esc(c.goal) + "</small></th>"; }).join("") +
       '<th colspan="3" class="bl mh" data-col="twin">Twin ÷ floor<small>goal ≤ ' + FX.thresholds.sim_vs_real_floor_ratio + "×</small></th>" +
       (withQ ? FX.questions.map(function (q, i) { return '<th rowspan="2" data-q="' + q.id + '" class="' + (i === 0 ? "bl" : "") + '">' + q.n + " " + q.name + "<small>" + esc(q.ask) + "</small></th>"; }).join("") : "") + "</tr>" +
@@ -1059,7 +1070,7 @@
         icon(x.type.id) + '<b title="' + esc(x.title + (x.line ? " · " + x.line : "")) + '">' + esc(x.short) + '</b></span></td><td class="ty" title="' + esc(x.type.name) + '">' + esc(x.type.name) + "</td>" + cols.cells(x) + "</tr>");
     });
     var groupBtn = '<span class="lab">Column group</span><button class="dw-btn" data-cols="questions" aria-pressed="' + cols.withQ + '" title="' + (cols.withQ ? "Hide" : "Show") + ' the five questions: Floor → Data → Routines → Twin → Job">' + (cols.withQ ? "✓ " : "+ ") + "Five questions</button>";
-    var note = st.mode === "changed" ? "What changed: rows that did not move are dimmed" + (cols.withQ ? "; each question cell reads round 0 → round 8" : "") : "Every metric: round 0 (as found) · now (round 8) · change";
+    var note = st.mode === "changed" ? "What changed: rows that did not move are dimmed" + (cols.withQ ? "; each question cell reads " + rn("r0") + " → " + rn("r8") : "") : "Every metric: round 0 (as found) · now (" + rn("r8") + ") · change";
     $("dw-tablewrap").innerHTML = '<div class="dw-ttools"><span class="lab">' + esc(note) + '</span><span class="dw-grow"></span>' + groupBtn + "</div>" +
       '<table class="dw-tt"><thead>' + cols.head + "</thead><tbody>" + rows.join("") + "</tbody></table>";
     $("dw-tablewrap").querySelectorAll("[data-cols]").forEach(function (b) { b.addEventListener("click", function () { go({ cols: cols.withQ ? "" : "questions" }, true); }); });
@@ -1122,8 +1133,8 @@
     sync3d(x, rid);
     var root = node(FX.root), pg = metric(root, "perf_gates"), tr = metric(root, "stations_tracking"), tw = metric(root, "stations_twinned");
     function when(r) { return round(r).scored_utc.slice(5, 10); }
-    $("dw-timebar").innerHTML = '<span class="tb-l">As found<small>round 0 · ' + esc(when("r0")) + '</small></span><input id="dw-time" type="range" min="0" max="1" step="1" value="' + (rid === "r0" ? 0 : 1) + '" aria-label="Round shown: as found (round 0) or now (round 8)">' +
-      '<span class="tb-r">Now<small>round 8 · ' + esc(when("r8")) + "</small></span>" +
+    $("dw-timebar").innerHTML = '<span class="tb-l">As found<small>' + esc(rn("r0")) + " · " + esc(when("r0")) + '</small></span><input id="dw-time" type="range" min="0" max="1" step="1" value="' + (rid === "r0" ? 0 : 1) + '" aria-label="' + esc("Round shown: as found (" + rn("r0") + ") or now (" + rn("r8") + ")") + '">' +
+      '<span class="tb-r">Now<small>' + esc(rn("r8")) + " · " + esc(when("r8")) + "</small></span>" +
       '<span class="tb-sum"><span><b>' + pg.values[rid].value + " of " + pg.values[rid].of + "</b> real performance gates</span><span><b>" + tr.values[rid].value + " of 6</b> track to 0.9" + (tw ? " · <b>" + tw.values[rid].value + " of 6</b> twinned" : "") + "</span></span>";
     $("dw-time").addEventListener("input", function () { go({ round: this.value === "0" ? "r0" : "r8", mode: "" }, true); });
   }
@@ -1146,7 +1157,9 @@
     var rows = RUNS.rows, rounds = [];
     rows.forEach(function (r) { if (rounds.indexOf(r.round) < 0) rounds.push(r.round); });
     rounds.sort(function (a, b) { return a - b; });
-    var rr = st.rr != null && st.rr !== "" && rounds.indexOf(+st.rr) >= 0 ? +st.rr : rounds[rounds.length - 1];
+    // "now" is the Now column's round (the same scorecard everywhere on the page); the last round with runs only if the tree has none
+    var nowR = FX && round("r8") ? round("r8").round : rounds[rounds.length - 1];
+    var rr = st.rr != null && st.rr !== "" && rounds.indexOf(+st.rr) >= 0 ? +st.rr : rounds.indexOf(nowR) >= 0 ? nowR : rounds[rounds.length - 1];
     var t = RUNS.thresholds || FX.thresholds;
     var mine = rows.filter(function (r) { return r.round === rr; });
     var f = { st: st.st, kind: st.raw.get("kind") || "", rung: st.raw.get("rung") || "", miss: st.raw.get("miss") === "1", q: (st.q || "").toLowerCase() };
@@ -1186,7 +1199,7 @@
         "<td>" + deg(r.sim_tracking_rms_deg) + "</td><td>" + (r.sim_vs_real_deg == null ? '<span class="muted">—</span>' : deg(r.sim_vs_real_deg, 3)) + "</td><td>" + (r.stops == null ? "—" : r.stops) + "</td><td" + (r.fault ? ' class="f"' : "") + ">" + (r.fault ? "fault" : "—") + "</td><td>" + rec + "</td></tr>";
     }).join("");
     el.innerHTML = '<div class="dw-rtop"><h2>Runs · ' + esc(DATA.deployments.filter(function (x) { return x.id === st.dep; })[0].title) + '</h2><div class="dw-seg" role="group" aria-label="Round">' +
-      rounds.map(function (r) { return '<button data-rr="' + r + '" aria-pressed="' + (r === rr) + '" title="' + esc("round " + r + (r === 0 ? " · as found, before any fit" : r === rounds[rounds.length - 1] ? " · now" : "")) + '">Round ' + r + (r === 0 ? " · as found" : r === rounds[rounds.length - 1] ? " · now" : "") + "</button>"; }).join("") + "</div></div>" +
+      rounds.map(function (r) { return '<button data-rr="' + r + '" aria-pressed="' + (r === rr) + '" title="' + esc("round " + r + (r === 0 ? " · as found, before any fit" : r === nowR ? " · now, scored " + scoredDay("r8") : "")) + '">Round ' + r + (r === 0 ? " · as found" : r === nowR ? " · now" : "") + "</button>"; }).join("") + "</div></div>" +
       '<div class="dw-rsum">' + tile("Runs in round " + rr, String(mine.length), null, "on 6 stations, 6 speed rungs", "") +
       tile("Meet the tracking goal", meets + " of " + judged, meets === judged ? "pass" : null, "RMS ≤ " + t.tracking_rms_deg + "° and peak ≤ " + t.tracking_peak_deg + "°, no fault", "") +
       tile("At the goal's rung (0.9)", at09ok + " of " + at09.length, at09ok === at09.length ? "pass" : null, "runs meeting the tracking goal", "") +
@@ -1285,9 +1298,10 @@
     $("dw-vtitle").innerHTML = (rb ? '<span class="ic">' + rb.outerHTML + "</span>" : "") + "<b>" + esc(VIEW_NAME[view]) + "</b>" + (dep ? '<span class="muted"> · ' + esc(dep.title) + "</span>" : "");
     var seg = $("dw-round");
     seg.hidden = view === "home" || view === "runs";
-    var opts = view === "sheet" ? [["r8", "Now · round 8"], ["r0", "As found · round 0"], ["changed", "What changed"]] : [["r0", "As found · round 0"], ["r8", "Now · round 8"]];
+    var nowL = "Now" + (rn("r8") ? " · " + rn("r8") : ""), wasL = "As found" + (rn("r0") ? " · " + rn("r0") : "");
+    var opts = view === "sheet" ? [["r8", nowL], ["r0", wasL], ["changed", "What changed"]] : [["r0", wasL], ["r8", nowL]];
     var cur = view === "sheet" && st.mode === "changed" ? "changed" : st.round;
-    seg.innerHTML = opts.map(function (o) { return '<button data-r="' + o[0] + '" aria-pressed="' + (o[0] === cur) + '" title="' + esc(o[0] === "changed" ? "round 0 → round 8, every cell that moved" : o[0] === "r0" ? "the controller as found and the twin unfitted (scored 2026-11-15)" : "round 8, scored 2026-11-17") + '">' + esc(o[1]) + "</button>"; }).join("");
+    seg.innerHTML = opts.map(function (o) { return '<button data-r="' + o[0] + '" aria-pressed="' + (o[0] === cur) + '" title="' + esc(o[0] === "changed" ? rn("r0") + " → " + rn("r8") + ", every cell that moved" : o[0] === "r0" ? "the controller as found and the twin unfitted (scored " + scoredDay("r0") + ")" : rn("r8") + ", scored " + scoredDay("r8")) + '">' + esc(o[1]) + "</button>"; }).join("");
     seg.querySelectorAll("button").forEach(function (b) { b.addEventListener("click", function () { var r = b.dataset.r; go(r === "changed" ? { mode: "changed", round: "" } : { mode: "", round: r }, true); }); });
     // the site's trail: Home › Deployments › the deployment › the node › the view
     var crumbs = document.querySelector(".trail nav.crumbs");

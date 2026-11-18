@@ -1,5 +1,5 @@
 """The Deployments page's data for the One Dof Test Rack: the pendulum campaign's scorecards in, its typed tree out, every node with its
-metrics per round (round 0 as found, round 8 now) and the five-question verdicts (sim2real.verdicts).
+metrics per round (round 0 as found, the latest round now) and the five-question verdicts (sim2real.verdicts).
 
 Zach (Daily Note 2026-11-17, "# What is required for me to actually get this working?"): "Even before I fit any data. let me run the
 pendulum As it currently it as understand the performance"; "When I click into each deployment I should bring up the 3D viewer of that
@@ -7,13 +7,15 @@ deployment AND the tree should be the typed component tree. then If I click on a
 relevant to that level"; "on the part page I want to see basically the current value of its metrics and gates". And, for the two groups
 every node page shows apart: "Performance is real/sim vs target. Fidelity is real vs sim."
 
-Round 0 (`round0.json`, scored 2026-11-15) is the controller as found and the twin unfitted: the "as it currently is". Round 8
-(`latest_real.json`, 2026-11-17) is now. Both are onedof-pendulum-scorecard/1 files the campaign's scorer wrote; this module reads them,
-never writes them.
+Round 0 (`round0.json`, scored 2026-11-15) is the controller as found and the twin unfitted: the "as it currently is". "Now" is
+`latest_real.json`, which the campaign's scorer rewrites every round (round 8 on 2026-11-17, round 9 on 2026-11-18), labelled from its own
+`round` and `scored_utc`, never from a number written here (Zach: "open up that deployment and at a glance see exactly the current
+state"). All are onedof-pendulum-scorecard/1 files the campaign's scorer wrote; this module reads them, never writes them.
 
 WHY the cell gates are re-stated here and not imported: the frozen campaign contract is bam_rack_twin/pendulum_goal.py (`Thresholds`,
 `cell_gates`) on bam_ws's campaign branch, which sim2real does not import; the five gates below are its rule, the gate NUMBERS are each
-scorecard's own `thresholds`, and check() holds the re-scored totals to the scorecard's own goal block (82 and 151 of 180), so a drift from
+scorecard's own `thresholds`, and check() holds the re-scored totals to the scorecard's own goal block (82 of 180 in round 0, 151 in round 8,
+153 in round 9), so a drift from
 the contract fails the build. Promoted from the proposal round's fixture builder (docs/proposals/2026-11-17-deployment-page/fixture/
 build_fixture.py), which stays as the proposals' frozen input. The model-free metric functions themselves moving to robot_models (Zach's
 "folder called metrics") is a later step; this module only reads the numbers the campaign's scorer computed.
@@ -21,7 +23,7 @@ build_fixture.py), which stays as the proposals' frozen input. The model-free me
 Each metric carries `family`: performance (real or sim vs the target: does it do the job), fidelity (real vs sim: does the twin match),
 or evidence (the ruler and the data the other two stand on: the repeat floor, the data, the routines).
 
-    python -m sim2real.deployments_page --out /tmp/page.json          (stdlib only; PYTHONPATH=src from a checkout)
+    python -m sim2real.deployments_page --out /tmp/page.json [--now round8.json]    (stdlib only; PYTHONPATH=src from a checkout)
 """
 
 from __future__ import annotations
@@ -44,9 +46,14 @@ SCHEMA = "sim2real.deployments-page/1"
 DEPLOYMENT = "one-dof-test-rack"
 REPO = Path(__file__).resolve().parents[2]
 SCORECARDS = paths.RIG_DATA / "onedof_2026-11-15" / "scorecards"
-# (round id, file, label, long label): the page's two columns
-ROUNDS = (("r0", "round0.json", "As found", "round 0 · before any fit"),
-          ("r8", "latest_real.json", "Now", "round 8 · today"))
+# the page's two columns. "Now" is the campaign's latest scorecard, whichever round that is; build(now=...) pins another (the tests pin
+# round8.json, the round their numbers were written against)
+AS_FOUND_FILE = "round0.json"
+NOW_FILE = "latest_real.json"
+AS_FOUND = "r0"
+# WHY "r8" means "now", whatever round it holds: the id was round 8's when the page was written, and the workbench's js, its URLs
+# (?round=r0, the default dropped) and the tests key on it; every label reads the round's own number from its scorecard instead
+NOW = "r8"
 ORACLE = REPO / "sysid" / "results" / "index.json"
 
 STATIONS = ("can1", "can11", "can12", "can13", "can14", "can15")
@@ -267,9 +274,9 @@ def child_value(children: dict, key: str) -> dict:
 def station_nodes(sid: str, rounds: dict, oracle: dict) -> list[dict]:
     f = STATION_FACTS[sid]
     can = sid.replace("can", "CAN ")
-    r0, r8 = rounds["r0"]["stations"][sid], rounds["r8"]["stations"][sid]
-    tip_mm = round(r8["tip_length_m"] * 1000, 1)
-    t = rounds["r8"]["thresholds"]
+    r0, now = rounds[AS_FOUND]["stations"][sid], rounds[NOW]["stations"][sid]
+    tip_mm = round(now["tip_length_m"] * 1000, 1)
+    t = rounds[NOW]["thresholds"]
 
     def per_round(fn):
         return {rid: fn(rd["stations"][sid]) for rid, rd in rounds.items()}
@@ -375,19 +382,19 @@ def station_nodes(sid: str, rounds: dict, oracle: dict) -> list[dict]:
     station = {"id": sid, "parent": "rack", "title": f"{can} · {f['plain']}", "short": can, "line": f["plain"], "level": "station",
                "type": {"id": "pendulum_arm_1dof", "name": "1-DOF pendulum arm", "rm": "RigidBodyChain (1 joint)"},
                "judged_at": f"the link tip ({tip_mm:g} mm)", "unit": f"{f['board']} · {can}", "gating": True, "metrics": m,
-               "facts": [["tip length", f"{tip_mm:g} mm"], ["1 mm at the tip", f"{math.degrees(0.001 / r8['tip_length_m']):.2f}°"],
-                         ["top speed, measured", (f"{_deg_per_s(r0['omega_max_rad_s'])} → {_deg_per_s(r8['omega_max_rad_s'])}" if r0["omega_max_rad_s"] != r8["omega_max_rad_s"]
-                                                  else _deg_per_s(r8["omega_max_rad_s"]))],
+               "facts": [["tip length", f"{tip_mm:g} mm"], ["1 mm at the tip", f"{math.degrees(0.001 / now['tip_length_m']):.2f}°"],
+                         ["top speed, measured", (f"{_deg_per_s(r0['omega_max_rad_s'])} → {_deg_per_s(now['omega_max_rad_s'])}" if r0["omega_max_rad_s"] != now["omega_max_rad_s"]
+                                                  else _deg_per_s(now["omega_max_rad_s"]))],
                          ["motor", f["motor"]], ["load", f["load"]]],
                "plate": f["plate"], "family": f["family"], "device": can,
                "rungs": {rid: rd["stations"][sid]["rungs"] for rid, rd in rounds.items()},
                "omega": {rid: rd["stations"][sid]["omega_max_rad_s"] for rid, rd in rounds.items()},
-               "tip_length_m": r8["tip_length_m"], "gravity_nm": f["gravity_nm"],
+               "tip_length_m": now["tip_length_m"], "gravity_nm": f["gravity_nm"],
                "health": {rid: {"faults": sum((r["faults"] or 0) for r in rd["stations"][sid]["rungs"]),
                                 "missing": sum((r["missing"] or 0) for r in rd["stations"][sid]["rungs"])} for rid, rd in rounds.items()}}
-    if r0["omega_max_rad_s"] != r8["omega_max_rad_s"]:
-        station["caveat"] = (f"The ladder moved: round 0's top speed was {_deg_per_s(r0['omega_max_rad_s'])} (the current-limit onset), round 8's is "
-                             f"{_deg_per_s(r8['omega_max_rad_s'])}, so a rung is the same fraction but a faster move now.")
+    if r0["omega_max_rad_s"] != now["omega_max_rad_s"]:
+        station["caveat"] = (f"The ladder moved: round {rounds[AS_FOUND]['round']}'s top speed was {_deg_per_s(r0['omega_max_rad_s'])} (the current-limit onset), "
+                             f"round {rounds[NOW]['round']}'s is {_deg_per_s(now['omega_max_rad_s'])}, so a rung is the same fraction but a faster move now.")
 
     ch = {rid: rd["stations"][sid]["children"] for rid, rd in rounds.items()}
     unit = f"{f['board']} · {can}"
@@ -508,18 +515,28 @@ def camera_nodes() -> list[dict]:
 
 # ---- round by round, and every run ------------------------------------------------------------------------------------------------
 
-# every round the campaign scored, in order; round 8 is the same file the page's "Now" reads (round8.json is its byte-for-byte twin)
-HISTORY = tuple((n, f"round{n}.json") for n in range(8)) + ((8, "latest_real.json"),)
+def scored_rounds(scorecards: Path = SCORECARDS, now: str = NOW_FILE) -> tuple[list[tuple[int, Path]], list[int]]:
+    """(every round the campaign scored up to "now", in order, as (round, file); the rounds below it with no file). The rounds below the
+    now file's own `round` are round{n}.json; the now file itself is the last, so nothing after it is ever read (round9.json beside a
+    round-8 "now" stays out). A round whose file is missing is skipped and listed, never invented."""
+    now_path = scorecards / now
+    latest = int(json.loads(now_path.read_text())["round"])
+    files, missing = [], []
+    for n in range(latest):
+        path = scorecards / f"round{n}.json"
+        if path.is_file():
+            files.append((n, path))
+        else:
+            missing.append(n)
+    return files + [(latest, now_path)], missing
 
 
-def history(scorecards: Path = SCORECARDS) -> list[dict]:
+def history(scorecards: Path = SCORECARDS, now: str = NOW_FILE) -> list[dict]:
     """Each scored round's performance per station at the goal's rung (0.9 of top speed), for the round-by-round charts with the goal
-    line drawn (Zach liked the W&B round-by-round chart's "GOOD <= 0.5 deg" line). A round whose file is missing is left out."""
+    line drawn (Zach liked the W&B round-by-round chart's "GOOD <= 0.5 deg" line). A round whose file is missing is left out
+    (scored_rounds lists it; build() reports it as history_missing)."""
     out = []
-    for n, name in HISTORY:
-        path = scorecards / name
-        if not path.is_file():
-            continue
+    for n, path in scored_rounds(scorecards, now)[0]:
         rd = read_round(f"r{n}", path)
         stations = {}
         for sid in STATIONS:
@@ -571,20 +588,18 @@ def recording(run: str, index: dict[str, Path], by_name: dict[str, list[str]]) -
     return None, None
 
 
-def runs(scorecards: Path = SCORECARDS, rrd_root: Path | None = None) -> list[dict]:
+def runs(scorecards: Path = SCORECARDS, rrd_root: Path | None = None, now: str = NOW_FILE) -> list[dict]:
     """Every play of every scored round as one row (Zach, 2026-11-17: "Runs are the atomic unit ... drill into a particular run (rerun)"):
     its round, station, rung and speed, kind (repeat or held-out), the scorer's own per-run numbers, whether it meets the tracking gates,
-    and its Rerun recording when one exists (`rrd`, how it was found in `rrd_via`; None: no recording yet)."""
+    and its Rerun recording when one exists (`rrd`, how it was found in `rrd_via`; None: no recording yet). The rounds are scored_rounds':
+    every one up to "now", none after."""
     rrd_root = rrd_root or scorecards.parent / "rrd"
     index = rerun_index(rrd_root)
     by_name: dict[str, list[str]] = {}
     for run in index:
         by_name.setdefault(Path(run).name, []).append(run)
     rows = []
-    for n, name in HISTORY:
-        path = scorecards / name
-        if not path.is_file():
-            continue
+    for _n, path in scored_rounds(scorecards, now)[0]:
         card = json.loads(path.read_text())
         t = card["thresholds"]
         for sid in STATIONS:
@@ -604,15 +619,25 @@ def runs(scorecards: Path = SCORECARDS, rrd_root: Path | None = None) -> list[di
     return rows
 
 
-def build(scorecards: Path = SCORECARDS, oracle_index: Path = ORACLE) -> dict:
+def columns(rounds: dict) -> list[dict]:
+    """The page's two columns, each labelled from its own scorecard: "As found" (round 0, before any fit) and "Now" (the now file's round
+    and the day it was scored, e.g. "round 9 · 2026-11-18"; UTC, as the scorecard writes it)."""
+    a, b = rounds[AS_FOUND], rounds[NOW]
+    return [{"id": AS_FOUND, "label": "As found", "long": f"round {a['round']} · before any fit"},
+            {"id": NOW, "label": "Now", "long": f"round {b['round']} · {str(b['scored_utc'])[:10]}"}]
+
+
+def build(scorecards: Path = SCORECARDS, oracle_index: Path = ORACLE, now: str = NOW_FILE) -> dict:
     """The page's data for the One Dof Test Rack (SCHEMA): its rounds, the five questions, its typed tree with every node's metrics per
-    round, the five-question verdicts rolled up (sim2real.verdicts) and, on the rack, what stops the goal."""
-    missing = [scorecards / name for _rid, name, _l, _g in ROUNDS if not (scorecards / name).is_file()]
+    round, the five-question verdicts rolled up (sim2real.verdicts) and, on the rack, what stops the goal. `now`: the scorecard the "Now"
+    column reads, a file in `scorecards` (default the campaign's latest)."""
+    files = {AS_FOUND: scorecards / AS_FOUND_FILE, NOW: scorecards / now}
+    missing = [path for path in files.values() if not path.is_file()]
     if missing:
         raise FileNotFoundError(f"no pendulum scorecard at {missing[0]}")
     oracle_doc = json.loads(Path(oracle_index).read_text()) if Path(oracle_index).is_file() else {"examples": []}
     oracle = {row["example"]: row for row in oracle_doc["examples"]}
-    rounds = {rid: read_round(rid, scorecards / name) for rid, name, _l, _g in ROUNDS}
+    rounds = {rid: read_round(rid, path) for rid, path in files.items()}
     check(rounds)
     nodes = [rack_node(rounds)]
     for sid in STATIONS:
@@ -634,25 +659,27 @@ def build(scorecards: Path = SCORECARDS, oracle_index: Path = ORACLE) -> dict:
         "schema": SCHEMA, "deployment": DEPLOYMENT, "built_by": "sim2real.deployments_page",
         "title": "One Dof Test Rack", "kind": "physical", "where": "Zach's bench at home",
         "summary": "Six single-joint pendulums on one fdcanusb at 24 V, each run up a speed ladder against its own twin.",
-        "rounds": [{"id": rid, "round": rd["round"], "label": label, "long": long, "scored_utc": rd["scored_utc"], "controller": rd["controller"],
-                    "twin": rd["twin"], "source": rd["source"], "sha256": rd["sha256"], "round_dir": rd["round_dir"],
+        "rounds": [{"id": col["id"], "round": rd["round"], "label": col["label"], "long": col["long"], "scored_utc": rd["scored_utc"],
+                    "controller": rd["controller"], "twin": rd["twin"], "source": rd["source"], "sha256": rd["sha256"], "round_dir": rd["round_dir"],
                     "gates_passed": rd["goal"]["gates_passed"], "gates_total": rd["goal"]["gates_total"], "goal_met": rd["goal"]["goal_met"]}
-                   for (rid, _name, label, long), rd in zip(ROUNDS, rounds.values())],
-        "thresholds": rounds["r8"]["thresholds"],
+                   for col, rd in ((c, rounds[c["id"]]) for c in columns(rounds))],
+        "thresholds": rounds[NOW]["thresholds"],
         "questions": list(verdicts.QUESTIONS),
         "families": {PERFORMANCE: "real or sim vs the target: does it do the job", FIDELITY: "real vs sim: does the twin match",
                      EVIDENCE: "the ruler and the data the other two stand on"},
         "root": "rack",
         "nodes": nodes,
-        "history": history(scorecards),
+        "history": history(scorecards, now),
+        # the rounds below "now" whose round{n}.json is missing: skipped in the history and the runs, never invented
+        "history_missing": scored_rounds(scorecards, now)[1],
         "oracle_source": str(Path(oracle_index)),
     }
 
 
-def write(out: Path, scorecards: Path = SCORECARDS, oracle_index: Path = ORACLE) -> Path:
+def write(out: Path, scorecards: Path = SCORECARDS, oracle_index: Path = ORACLE, now: str = NOW_FILE) -> Path:
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(build(scorecards, oracle_index), ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(build(scorecards, oracle_index, now), ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
     return out
 
 
@@ -660,10 +687,13 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, required=True, help="the JSON file to write")
     parser.add_argument("--scorecards", type=Path, default=SCORECARDS, help=f"the campaign's scorecards folder (default {SCORECARDS})")
+    parser.add_argument("--now", default=NOW_FILE, help=f"the scorecard the Now column reads, in --scorecards (default {NOW_FILE}, the latest)")
     args = parser.parse_args(argv)
-    doc = json.loads(write(args.out, args.scorecards).read_text())
-    r0, r8 = doc["rounds"]
-    print(f"{args.out}: {len(doc['nodes'])} nodes; gates {r0['gates_passed']} -> {r8['gates_passed']} of {r8['gates_total']}, held to the scorecards")
+    doc = json.loads(write(args.out, args.scorecards, now=args.now).read_text())
+    r0, now = doc["rounds"]
+    gap = f"; no scorecard for round(s) {doc['history_missing']}, skipped" if doc["history_missing"] else ""
+    print(f"{args.out}: {len(doc['nodes'])} nodes; gates {r0['gates_passed']} ({r0['long']}) -> {now['gates_passed']} of {now['gates_total']} "
+          f"({now['long']}), held to the scorecards{gap}")
 
 
 if __name__ == "__main__":
