@@ -20,8 +20,10 @@ Stdlib only. Writes OUT (default ~/.cache/sim2real/site, disposable; nothing her
                      poses and the camera runs' clips; --media, else $SIM2REAL_MEDIA, else ~/.cache/sim2real/media), when it is built
     OUT/<pages>      /, /<deployment>/, /<deployment>/<station>/, /<deployment>/runs/<run>/, /runs/, /search/,
                      /stations/, /deployments/, /analysis/…
-    OUT/deployments/ the deployments index and /deployments/<node id>/ for every node of every deployment's tree (site/deployments_pages.py;
-                     its rows in OUT/data/deployment-cards.json)
+    OUT/deployments/ /deployments/: the Deployments workbench (site/deployments_workbench.py; its data in OUT/data/deployments-workbench.json
+                     and every run in deployments-workbench-runs.json); /deployments/all/, the filter-bar index of every deployment's card,
+                     and /deployments/<node id>/ for every node of every deployment's tree (site/deployments_pages.py; rows in
+                     OUT/data/deployment-cards.json)
     OUT/models/      a page per generic type, its model ladder by family; OUT/routines/, the calibration routines both ways; OUT/parameters/,
                      every parameter in data-ui (site/models_pages.py; rows in OUT/data/routines.json, parameter-routines.json, parameters-view.json)
     OUT/metrics/     /metrics/<dep>/: metrics, diagnostics and coverage over any selection of a deployment's runs, live (site/metrics_pages.py,
@@ -99,6 +101,9 @@ def site_files(site):
     # the deployments index and one page per node of every deployment's tree (Domain model v3: site/deployments_pages.py)
     import deployments_pages  # noqa: PLC0415
     yield from deployments_pages.files(site)
+    # the Deployments workbench at /deployments/ (2026-11-17): 3D, typed tree, every node's performance first (site/deployments_workbench.py)
+    import deployments_workbench  # noqa: PLC0415
+    yield from deployments_workbench.files(site)
     # the models by entity type, the calibration routines both ways, the parameters view (site/models_pages.py)
     import models_pages  # noqa: PLC0415
     yield from models_pages.files(site)
@@ -205,6 +210,8 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     (out / "data" / "search.json").write_text(pages.search_rows(site), encoding="utf-8")
     import deployments_pages  # noqa: PLC0415  (the deployments index's rows, beside search.json: the workbench's writer keeps out of data/)
     deployments_pages.write_data(out / "data", site)
+    import deployments_workbench  # noqa: PLC0415  (the workbench's tree, values and runs: sim2real.deployments_page over the scorecards)
+    workbench = deployments_workbench.write_data(out / "data", site)
     import models_pages  # noqa: PLC0415  (the routines' and the parameters view's rows, beside the deployments' cards)
     models_pages.write_data(out / "data", site)
     import metrics_pages  # noqa: PLC0415  (the metrics page's runs table: each run's per-run values and levels)
@@ -213,6 +220,7 @@ def build(data: pathlib.Path, out: pathlib.Path, media_root: pathlib.Path = site
     result = {"files": len(writer.written), "bytes": sum(writer.written.values()), "rewritten_tables": rewritten, "data": str(data),
               "schedules": schedules, "schedules_root": str(adapter.SCHEDULES), "overlays": overlay_counts, "tree": tree_counts, "domain": domain_counts,
               "runs": len(site.runs), "stations": len(site.stations), "deployments": len(site.deployments), "metric_runs": metric_runs,
+              "workbench": workbench,
               "media": ({"root": str(media_root.resolve()), "scenes": len(site.media.scenes), "stations": len(site.media.stations),
                          "links": sum(1 for r in site.runs if (site.media.runs.get(r["run"]) or {}).get("links")),
                          "clips": sum(1 for r in site.runs if site.media.clips(r["run"]))} if site.media else None),

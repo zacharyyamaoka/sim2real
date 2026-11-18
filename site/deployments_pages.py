@@ -45,6 +45,9 @@ from type_cards import instances as inst  # noqa: E402  (the instance level)
 from type_cards import selection as sel  # noqa: E402  (metrics, diagnostics and coverage over any runs)
 
 URL = "/deployments/"
+# WHY /deployments/all/ (2026-11-17): /deployments/ is the Deployments workbench now (site/deployments_workbench.py, Zach: "Sim2Real at the top
+# level we seperate it into DEPLOYMENTS"); this filter-bar index of every deployment's card moved here, unchanged
+INDEX_URL = URL + "all/"
 VIEWS_ID = "deployments-views"
 CARDS = "deployment-cards.json"  # under the site's data/
 INDEX_BASE = "views/deployments.base"
@@ -725,8 +728,14 @@ def runs_section(d: Domain, node: dict) -> str:
             f'{pages.dashboard(src, node["title"] + ": runs")}</section>')
 
 
+WORKBENCH_STATIONS = ("CAN 1", "CAN 11", "CAN 12", "CAN 13", "CAN 14", "CAN 15")  # the pendulum campaign's six (sim2real.deployments_page)
+
+
 def elsewhere(d: Domain, node: dict) -> str:
     links = []
+    if node["root"] == "one-dof-test-rack" and (node["parent"] is None or (node.get("structural") == "station" and node.get("device") in WORKBENCH_STATIONS)):
+        pick = "" if node["parent"] is None else "&" + urlencode({"n": node["device"].replace(" ", "").lower()})
+        links.append(pages.a(f"/deployments/?d=one-dof-test-rack{pick}", "The pendulum campaign in the Deployments workbench: performance first, round 0 vs now"))
     if is_scenario(d, node):
         links += scenario_links(node["root"])
     elif node["kind"] == "virtual":
@@ -781,9 +790,9 @@ def files(site):
     yield INDEX_BASE, base_text(index_base(), "the deployments index: the rail (kind, tags), the cards with their renders, the table")
     yield RUNS_BASE, base_text(node_runs_base(), "a deployment's runs, newest first, scoped to the node its URL names")
     roots = d.roots()
-    yield "deployments/index.html", s2r.page(
-        site, "Deployments: sim2real", URL, index_body(d), "deployments", aside=ui_shared.filter_bar(VIEWS_ID, "The filters need JavaScript; every deployment is listed on the right."),
-        data_ui=True, extra_head=STYLES, trail=breadcrumb([s2r.ROOT_CRUMB, ("Deployments", URL)]),
+    yield "deployments/all/index.html", s2r.page(
+        site, "All deployments: sim2real", INDEX_URL, index_body(d), "deployments", aside=ui_shared.filter_bar(VIEWS_ID, "The filters need JavaScript; every deployment is listed on the right."),
+        data_ui=True, extra_head=STYLES, trail=breadcrumb([s2r.ROOT_CRUMB, ("Deployments", URL), ("All, by kind and tags", INDEX_URL)]),
         description=f"Every deployment, virtual and physical ({len(roots)}), filtered by kind and tags; every part of one a deployment of its own.")
     counts = {r["id"]: run_counts(d, r["id"]) for r in roots}
     for node in d.nodes:

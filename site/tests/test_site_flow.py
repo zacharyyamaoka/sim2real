@@ -2322,7 +2322,7 @@ def deployments_data_checks(out: Path, data: Path) -> dict:
     scenes = {s["id"]: s for s in json.loads(media_index.read_text()).get("scenes", [])} if media_index.is_file() else {}
 
     # 1. the index: the two panes' left column is the filter bar (data-ui's rail), the results a data-ui cards view
-    path = out / "deployments" / "index.html"
+    path = out / "deployments" / "all" / "index.html"  # moved 2026-11-17: /deployments/ is the workbench (test_deployments_workbench.py)
     html = path.read_text() if path.is_file() else ""
     aside = re.search(r'<aside class="fcol" id="filter"[^>]*>(.*?)</aside>', html, re.S)
     check(bool(aside) and '<data-facets for="deployments-views"' in aside.group(1) and '<data-views id="deployments-views" src="/views/deployments.base"' in html,
@@ -2547,7 +2547,7 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     roots = layout["roots"]
     scenes = layout["scenes"]
     page.set_viewport_size({"width": 1280, "height": 900})
-    page.goto(f"{base}/deployments/")
+    page.goto(f"{base}/deployments/all/")
     page.wait_for_load_state("load")
     soft_wait(page, "() => { const v = document.getElementById('deployments-views'); return !!v && !!v.model && v.querySelectorAll('article.dv-cards-card').length > 0; }")
     soft_wait(page, "() => [...document.querySelectorAll('#deployments-views article.dv-cards-card img')].every((i) => i.complete && i.naturalWidth > 0)", timeout=15000)
@@ -2595,13 +2595,13 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     page.wait_for_load_state("load")
     got = shown(len(camera))
     check(got == camera, f"a reload keeps the picks, read back from the URL ({unquote(page.url).split('?', 1)[-1][:80]}: {got})")
-    page.goto(f"{base}/deployments/?kind=physical")
+    page.goto(f"{base}/deployments/all/?kind=physical")
     page.wait_for_load_state("load")
     physical = sorted(n["id"] for n in roots if n["kind"] == "physical")
     got = shown(len(physical))
     check(got == physical == [DEP], f"a link to ?kind=physical opens on the physical deployments ({got})")
     page.evaluate("localStorage.clear()")
-    page.goto(f"{base}/deployments/")
+    page.goto(f"{base}/deployments/all/")
     page.wait_for_load_state("load")
     shown(len(roots))
     w0, w1 = drag_right_edge(page, "aside#filter", 120)
@@ -2611,7 +2611,7 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
     w2 = page.locator("aside#filter").evaluate("el => el.getBoundingClientRect().width")
     check(abs((w1 - w0) - 120) < 4 and abs(w2 - w1) < 2, f"the filter bar drags 120 px wider and keeps its width on reload ({w0:.0f} -> {w1:.0f} -> {w2:.0f} px)")
     page.evaluate("localStorage.clear()")
-    page.goto(f"{base}/deployments/")
+    page.goto(f"{base}/deployments/all/")
     page.wait_for_load_state("load")
     shown(len(roots))
     page.locator(f"#deployments-views article.dv-cards-card[data-id='{DEP}']").first.click()
@@ -2692,7 +2692,7 @@ def deployments_browser_checks(page, base: str, layout: dict, still) -> None:
 
     # a phone: no sideways scroll on the index and on a physical, a station's and a virtual page
     page.set_viewport_size({"width": 390, "height": 844})
-    for url in ("/deployments/", node_url(DEP), node_url(can11), node_url("pendulum_can11")):
+    for url in ("/deployments/all/", node_url(DEP), node_url(can11), node_url("pendulum_can11")):
         page.goto(base + url)
         page.wait_for_load_state("load")
         page.wait_for_timeout(1200)
@@ -3592,7 +3592,7 @@ def deployments_splitter_checks(page, base: str) -> None:
     column shows over the trail (a rail's splitter placed in the page's coordinates would stay there once its rail scrolls away). WHY the
     hit test and not the box: a splitter scrolled up inside the pane overlaps the trail's box but is clipped by the pane, unseen; what shows
     is what the point hits (the run page's own check). It can fail: on a filmed run's page with the fix undone it does (2026-11-07)."""
-    for u in ("/deployments/", f"/deployments/{DEP}/", f"/deployments/{DEP}/fdcanusb-0607623A/can11/", METRICS_URL):
+    for u in ("/deployments/all/", f"/deployments/{DEP}/", f"/deployments/{DEP}/fdcanusb-0607623A/can11/", METRICS_URL):
         page.goto(base + u)
         page.wait_for_load_state("load")
         page.wait_for_timeout(2500)
