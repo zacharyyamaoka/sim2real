@@ -4,11 +4,12 @@
     twin = sim2real.examples.pendulum_can11()      # CAN 11 on the One Dof Test Rack swung as a pendulum: the one-DOF oracle
     twin = sim2real.examples.ur_wrist_test_rig()   # the UR wrist test rig on the one-click seam (sim2real.rig)
 
-WHY fixtures and not a load(name) (Zach, 2026-11-11: "Sim2real just knows about the twin"): sim2real sits below robot_description and
-keeps no registry of robots. A robot's twin comes from its description, description.to_robot_twin() (robot_description side: not built
-yet), or is built directly, sim2real.RobotTwin(instances, name=...). Until robot_description can carry typed instances, each example's
-instances come from its sysid manifest (sysid/examples/<name>/description.json) through twin.describe, the internal adapter: the
-manifest's own units and sources on robot_msgs Values.
+WHY fixtures and not a load(name) (Zach, 2026-11-11: "Sim2real just knows about the twin"): sim2real keeps no registry of robots. A robot's
+twin comes from its description, sim2real.RobotTwin.from_robot_description(rd) (2026-11-17; the first description is
+bam_rack_twin.description.station_description(11), whose twin equals pendulum_can11() value for value:
+tests/test_from_robot_description.py), or is built directly, sim2real.RobotTwin(instances, name=...). Each fixture's instances come from
+its sysid manifest (sysid/examples/<name>/description.json) through twin.describe, the internal adapter: the manifest's own units and
+sources on robot_msgs Values. The fixtures stay as the oracle a description's twin is held to.
 """
 
 from __future__ import annotations

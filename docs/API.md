@@ -5,29 +5,29 @@ A `RobotTwin` is a digital twin for an electromechanical device. You build one, 
 ```python
 import sim2real
 
-twin = sim2real.examples.pendulum_can11()        # or: description.to_robot_twin()
+twin = sim2real.RobotTwin.from_robot_description(rd)   # or the fixture: sim2real.examples.pendulum_can11()
 twin.simulate()
 fitted = twin.calibrate(on="sim")
-print(fitted.eval().summary())
-description = description.from_robot_twin(fitted)   # robot_description side (not built yet)
+print(fitted.evaluate().summary())                     # eval() is its alias
+fitted.parameters                                      # the calibrated Values; writing them into a description is not built yet
 ```
 
-- **Lines 3–6 run today.** `docs/api_example.py` is the same lines with the last one swapped for `parameters = fitted.parameters`, the values `from_robot_twin` will take. `reports/sim2real-api-2026-11-11.html` shows its real output.
+- **Every line runs today.** `rd` is a robot's description; the first is `bam_rack_twin.description.station_description(11)` (CAN 11's pendulum: its record, its twin of record, its robotparts parts), whose twin equals `pendulum_can11()` value for value (`tests/test_from_robot_description.py`). `docs/api_example.py` runs the fixture's lines; `reports/sim2real-api-2026-11-11.html` shows their real output.
 - **Run it from a REPL or notebook, or inside `if __name__ == "__main__":` in a script.** `calibrate()` replays runs in a process pool whose workers re-import your main module. A bare script would run again inside every worker, and Python refuses that with a `RuntimeError`.
 - **The slow call** is `calibrate(on="sim")`: about 15–27 min on the CAN 11 oracle, because the rack twin replays at 30 kHz.
 
 ## The design principle: every robot description comes with a twin
 
 ```
-robot_msgs  ←  sim2real  ←  robot_description  ←  robotparts, cad2robot, five_bar, scripts
- (Value …)     (types, models,    (one robot: topology + typed instances
-               RobotTwin, fit)     holding parameter Values)
+robot_msgs  →  robot_models  →  robot_parts  →  robot_descriptions        sim2real (outside all of it)
+ (Value …)     (types, rungs)   (one SKU, its    (composition: parts,     RobotTwin.from_robot_description(rd),
+                                 nominal values)  units, fitted values)    calibrate(), evaluate()
 ```
 
-- **sim2real sits right above robot_msgs on purpose.** Every robot description should come with a twin, so robot_description depends on sim2real. That's the point, not a cost. Zach, 2026-11-11: "the whole point of robotics is to like actually do something in reality! We are making this first class" (`docs/decision-types-seam-2026-11-11.md`, addenda 2 and 3).
-- **sim2real knows nothing about RobotDescription.** Its public noun is `RobotTwin`. robot_description builds one with `description.to_robot_twin()` and takes the calibrated values back with `description.from_robot_twin(fitted)`. RobotDescription stays bare-bones: it only holds the information.
-- **robot_description imports only sim2real's light core:** the types, the models and `RobotTwin`, on robot_msgs and numpy. MuJoCo is the `sim` extra (`sim2real[sim]`) purely for install size. A package that only describes robots never installs a simulator.
-- **Arrows are imports, and there is no cycle.** sim2real imports neither robot_description nor robotparts.
+- **The order since 2026-11-16** (Zach; the 2026-11-12 ruling put sim2real on top, "it really depends on kinda everything"). The 2026-11-11 order, robot_msgs ← sim2real ← robot_description, is superseded (`docs/decision-types-seam-2026-11-11.md`, addenda 2 and 3, kept as history). Every robot description should still come with a twin: Zach, 2026-11-11, "the whole point of robotics is to like actually do something in reality! We are making this first class".
+- **The twin is built from the description: `RobotTwin.from_robot_description(rd)` (2026-11-17).** Its public noun is still `RobotTwin`. The 2026-11-11 plan was the other way round, `description.to_robot_twin()`, because sim2real then sat below robot_description and could not import it; since the 2026-11-12 and 2026-11-16 rulings sim2real sits on top of everything, so the twin owns the conversion. It still imports no description package: it reads `rd` by attribute (`name`, `title`, `model`, `source`, `record` = the unit, `components` with `id`, `title`, `type`, `parent`, `parameters`, `binds`, `part`) and binds the calibration world by the unit. A design-only `RobotDescription` (bam_robot_descriptions: geometry, no unit, no typed priors) is refused by name. The description stays bare-bones: it only holds the information.
+- **MuJoCo is the `sim` extra** (`sim2real[sim]`), purely for install size.
+- **No cycle.** sim2real reads a description by attribute and imports neither a description package nor robotparts.
 
 ## Concepts
 
@@ -37,7 +37,7 @@ robot_msgs  ←  sim2real  ←  robot_description  ←  robotparts, cad2robot, f
 - **Value** (`robot_msgs.space.Value`). A float that remembers where it came from: `unit`, `low`/`high`, `basis` (`assumed`, `datasheet`, `measured` …), `source`, `measured_by` and `notes`. Priors are `assumed`. A calibrated value is `measured`, its 95 % interval is in `low`/`high`, and its source reads `sim2real calibrate · on=sim · <rung> · <date>`. An interval that doesn't bracket the fitted value stays in `notes`, because `Value` refuses such a `low`/`high`. On CAN 11 that's the two friction values polished by output error after the regression that gave their interval.
 - **Runner** (`twin.runner`). The level below the verbs, and the one to drop to. `SimRunner` is the pendulum tracer: plan → measure → identify (sealed from the truth) → score. `RigRunner` (`sim2real.rig`) runs a rig's routine sequence. A rig opts in by shipping `rig.py`. The guards (sealed truth, held-out only) live in the runner, never in a callback.
 - **Calibration** (`fitted.calibration_`). What the fit found: each parameter's nominal, hidden truth (sim only), recovered value, interval, tolerance and verdict. `.summary()`, `.passed`, `.failing`, `.to_dict()`.
-- **Report** (`fitted.eval()`). Held-out fidelity: each model's error ÷ the floor (the run-to-run spread you can't beat) and the gates. `TwinReport` for the tracer, `RigReport` for a rig. Both have `.summary()`, `.passed`, `.gates` and `.to_dict()`.
+- **Report** (`fitted.evaluate()`). Held-out fidelity: each model's error ÷ the floor (the run-to-run spread you can't beat) and the gates. `TwinReport` for the tracer, `RigReport` for a rig. Both have `.summary()`, `.passed`, `.gates` and `.to_dict()`.
 - **Gate** (`sim2real.twin.Gate`). One pass/fail rule on a report: `id`, `title`, `value`, `rule`, `passed`, `source` (where the limit comes from) and `violations`. Examples: `twinned` (error ≤ 1.5× floor), `held_out_link_fidelity` and `recovery` (every hidden value within tolerance; sim only).
 
 ## Calls
@@ -111,14 +111,23 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   - `CalibrationCycleError` when the routines' declared needs form a cycle;
   - `NotImplementedError` for `config=` or `data=` on the tracer.
 
-### `fitted.eval() -> TwinReport | RigReport`
+### `RobotTwin.from_robot_description(rd, *, models=None, workers=6) -> RobotTwin`
+
+- **What it does:** builds the twin from a robot's description: its typed components with their priors (robot_msgs Values), its model file and its unit. The calibration world is the one built for that unit (the sysid example whose manifest `record` names the same deployment file and component).
+- **First description:** `bam_rack_twin.description.station_description(11)`; its twin is `pendulum_can11()` value for value.
+- **Raises:**
+  - `TypeError` for a design-only `RobotDescription` (it names no unit and no typed priors), and for a prior that is a bare number instead of a Value;
+  - `ValueError` for a type that is no sim2real type, repeated component ids, or a parent that is no component;
+  - `LookupError` when no calibration world was built for the unit.
+
+### `fitted.evaluate() -> TwinReport | RigReport` (alias `fitted.eval()`)
 
 - **What it does:** scores the fitted twin on held-out runs only and returns error ÷ floor and the gates.
 - **Never:** writes anything or touches hardware.
 - **Raises:**
   - `RuntimeError` on an unfitted twin;
   - `ValueError` when a run it would score was used for training. It refuses rather than filtering it out.
-- **Renamed:** this was `eval_twin()` until 2026-11-11.
+- **Renamed:** this was `eval_twin()` until 2026-11-11, and `eval()` until 2026-11-17 (Zach's sketch `twin.evaluate()`; Keras' `model.evaluate()`; PyTorch's `.eval()` means inference mode). `eval()` stays as its alias.
 
 ### Also on a twin
 
@@ -130,11 +139,10 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 
 ## Not built yet
 
-- **`calibrate(on="real")`.** The rack path: CAN 11 plays the same schedule through bam_rack_twin.hardware, with its torque cap and stops as the runner's guards. The runs come back as robot_msgs `JointTrajectory`, and the same identify fits them. The held-out score is against the rack's own floor (gate T1).
-- **robot_description's side.** RobotDescription needs:
-  - a typed-instance element: a sim2real type id, a parent, binds, and `parameters: {name: Value}`;
-  - `description.to_robot_twin()`;
-  - `description.from_robot_twin(fitted)`, which returns a new description from `fitted.parameters`;
-  - its own explicit save.
-- **Until then,** the examples' instances come from the sysid manifests through `sim2real.twin.describe`, which is internal and not public API.
+- **A real `calibrate(on="real")` run.** The backend is built (`f4d84c8`, `sim2real.real`, docs/CALIBRATE.md "on='real'"): CAN 11's schedule goes out as a rack submission and the runs come back as robot_msgs `JointTrajectory` for the same identify, scored against the rack's own floor (gate T1). It is proved on the rack twin only (`TwinTransport`); no run has executed on the rack yet.
+- **The description's side, past CAN 11.** Built: `bam_rack_twin.description.station_description(11)`, the shape `from_robot_description` reads. Not built:
+  - a description for any other unit (each needs a calibration world: a sysid example whose manifest `record` names it);
+  - one from a Cad2Robot bundle (CAN 11's `cad_joint` is null in the rack record: the Oct 9 export predates the station);
+  - the write-back: a new description from `fitted.parameters`, and its own explicit save.
+- **The fixtures** (`sim2real.examples`) still build from the sysid manifests through `sim2real.twin.describe`, which is internal and not public API; they are the oracle a description's twin is held to.
 - **`simulate()` on a rig.**

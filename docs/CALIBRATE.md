@@ -16,6 +16,15 @@ fitted.record_.to_dict()                               # the sim2real.calibratio
 fitted.record_.with_evaluation(fitted.eval().to_dict())   # the same record with eval()'s gates
 ```
 
+From a robot's description (2026-11-17; CAN 11's pendulum, under bam_rack_twin's venv; its twin is `pendulum_can11()` value for value):
+
+```python
+from bam_rack_twin.description import station_description
+twin = sim2real.RobotTwin.from_robot_description(station_description(11))
+fitted = twin.calibrate()                              # on="sim", sealed truth: ~15-27 min on the CAN 11 oracle
+fitted.evaluate().summary()                            # held-out runs only; eval() is its alias
+```
+
 Spec: `docs/peps/0001-sim2real-docs-site-and-calibrate-backend.md`. Code: `src/sim2real/calibration/`.
 
 ## The routine kinds: configure → fit → tune → measure

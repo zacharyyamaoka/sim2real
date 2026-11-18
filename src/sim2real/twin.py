@@ -2,26 +2,29 @@
 .calibrate() and .eval() (Zach, 2026-11-11).
 
     import sim2real
-    twin = sim2real.examples.pendulum_can11()            # a RobotTwin: typed instances with parameter values (robot_msgs Value)
+    twin = sim2real.RobotTwin.from_robot_description(rd) # a robot's description in (rd = bam_rack_twin.description.station_description(11))
+    twin = sim2real.examples.pendulum_can11()            # the same twin, the hand-built fixture: typed instances with robot_msgs Values
     twin.simulate()                                      # MuJoCo, headless: the model swung from off its bottom
     fitted = twin.calibrate(on="sim", truth="sealed")    # the type's routine schedule on a hidden truth; a NEW, fitted twin
-    fitted.eval().summary()                              # held-out runs only: error / floor, the gates
+    fitted.evaluate().summary()                          # held-out runs only: error / floor, the gates (eval() is its alias)
     fitted.parameters                                    # {instance: {name: Value}}: the calibrated values replace the priors
     twin.calibrate(on="real", transport=sim2real.real.RackTransport(out))   # the same schedule on the rack (sim2real.real; a dry run by default)
 
 Zach: "So you start with a robotDescription. Honestly it should just be like .calibrate() and .eval_twin()... so you set the model, you
 calibrate it and then you eval it", plus .simulate(). Each verb is a thin call over a runner (SimRunner: plan, measure, identify, score),
 so there is always a level to drop to. eval(), not eval_twin() (Zach, the same evening: "I think twin.eval() no need to do eval_twin()
-that's redundant").
+that's redundant"); evaluate() since 2026-11-17 (his sketch "twin.evaluate()"), eval() kept as its alias.
 
-WHY sim2real knows only the RobotTwin (docs/decision-types-seam-2026-11-11.md, addenda 2 and 3: robot_msgs <- sim2real <- robot_description <-
-robotparts): Zach, "sim2real then doesn't know about RobotDescription... The robotDescription does .to_twin or from_twin(). Sim2real just
-knows about the twin." That order is the design, not a cost: every robot description should come with a twin, so sim2real sits right above
-robot_msgs (MuJoCo stays the `sim` extra only for install size). Renamed RobotTwin the same evening ("a digital twin for an
-electromechanical device"); robot_description's side is description.to_robot_twin() / description.from_robot_twin(fitted), and the
-description stays bare-bones, holding only the information. So a RobotTwin is built directly from its instances, never loaded by a name
-string (no registry of robots here; the oracle examples are fixtures, sim2real.examples), and the calibrated values come back on the twin,
-fitted.parameters, for robot_description's from_robot_twin(fitted) to take (robot_description side: not built yet). The fit follows
+WHY RobotTwin.from_robot_description(rd) and not description.to_robot_twin() (Zach, 2026-11-17: "twin = RobotTwin.from_robot_description(rd)"):
+on 2026-11-11 (docs/decision-types-seam-2026-11-11.md, addenda 2 and 3) sim2real sat BELOW robot_description, so it could not import a
+description and the conversion was to live on the description's side ("The robotDescription does .to_twin or from_twin(). Sim2real just
+knows about the twin"). The 2026-11-12 and 2026-11-16 rulings put sim2real on top of everything (robot_msgs -> robot_models -> robot_parts
+-> robot_descriptions, sim2real outside), so that reason is gone: the twin now owns the conversion, the description stays bare-bones
+(it only holds the information), and the one mapping from a description to typed instances lives here. It still imports no description
+package: it reads rd by attribute, and binds the calibration world by rd's unit (the sysid example built for it), never by a name string
+(no registry of robots here; the oracle examples stay fixtures, sim2real.examples). Renamed RobotTwin on 2026-11-11 ("a digital twin for an
+electromechanical device"). The calibrated values come back on the twin, fitted.parameters; writing them into a description is not built
+yet. The fit follows
 scikit-learn's estimator contract: calibrate() returns a new twin whose learned values end in `_` (values_, intervals_, rungs_), and it
 writes nothing anywhere. Sim or real is an argument (on=), not another verb; eval() refuses a training run; guards live in the runner, never
 in callbacks.
@@ -66,6 +69,8 @@ REPO = Path(__file__).resolve().parents[2]
 BACKENDS = ("sim", "real")  # calibrate(on=...)
 # the v2 card each sim2real type's oracle rungs are keyed by (sysid's ladders are the cards' own: M0, M2, M3, M4 on "servo")
 ORACLE_CARD = {"integrated_servo": "servo"}
+STRUCTURAL = ("deployment", "mount")  # a description's untyped nodes (sysid's cards.STRUCTURAL words)
+EXAMPLES = REPO / "sysid" / "examples"  # the calibration worlds, one per unit (each manifest's `record` names the unit)
 
 
 def _sysid():
@@ -96,12 +101,13 @@ class Instance:
     structural: str | None = None
     word: str = ""                      # the description's own word for it ("moteus_servo")
     binds: Mapping[str, Any] = field(default_factory=dict)
+    part: str | None = None             # the robotparts part it is ("jmc-60asm200-5-1024c"), when the description names one
 
 
 @dataclass(frozen=True)
 class Description:
-    """A RobotTwin's own record of its typed instances with parameter values (internal: the runners take it; never robot_description's
-    RobotDescription, which sim2real does not know). `model` is the simulation model file (an MJCF), or None."""
+    """A RobotTwin's own record of its typed instances with parameter values (internal: the runners take it; never a robot description's
+    own class, which RobotTwin.from_robot_description reads by attribute). `model` is the simulation model file (an MJCF), or None."""
     id: str
     title: str
     model: Path | None
@@ -134,7 +140,8 @@ class Description:
         lines = [f"{self.title} ({self.id}): {len(self.instances)} instances" + (f", model {self.model.name}" if self.model else "")]
         for i in self.instances:
             kind = i.type or f"({i.structural})"
-            lines.append(f"  {i.id:14s} {kind:18s} {i.title}" + (f"  [{len(i.parameters)} parameters]" if i.parameters else ""))
+            lines.append(f"  {i.id:14s} {kind:18s} {i.title}" + (f"  [{i.part}]" if i.part else "")
+                         + (f"  [{len(i.parameters)} parameters]" if i.parameters else ""))
         return "\n".join(lines)
 
 
@@ -463,6 +470,49 @@ class RobotTwin:
             servo = self.runner.typed()
             self.model = self.models.get(servo.id) or dm.current_models(servo.type)[0].id
 
+    @classmethod
+    def from_robot_description(cls, rd, *, models: Mapping[str, str] | None = None, workers: int = 6) -> RobotTwin:
+        """The twin of a robot's description (Zach, 2026-11-17: "twin = RobotTwin.from_robot_description(rd)"). Read by attribute, so
+        sim2real imports no description package: `rd.name`, `rd.title`, `rd.model` (the MJCF), `rd.source`, `rd.record` (the unit:
+        {"path": its deployment record, "component": its id}) and `rd.components`, each with `.id`, `.title`, `.type` (a sim2real type
+        id, or "deployment" for the structural root), `.parent`, `.parameters` ({name: robot_msgs Value, or None for "states none"}),
+        `.binds` and `.part` (a robotparts id, or None). First description: bam_rack_twin.description.station_description(11).
+
+        The runner world is bound by the unit: the sysid example whose manifest `record` names the same deployment file and component
+        (the calibration world built for that unit), so the twin calibrates exactly where the hand-built fixture does."""
+        if not hasattr(rd, "components"):
+            if hasattr(rd, "elements") or hasattr(rd, "interfaces"):
+                raise TypeError(f"{getattr(rd, 'name', rd)!r} is a design-only RobotDescription: it names no unit (which board, which CAN id) "
+                                "and no typed priors (robot_msgs Values per sim2real type), so no twin can be built from it alone. Pass a "
+                                "description that joins the design with its unit and parts, e.g. "
+                                "bam_rack_twin.description.station_description(11)")
+            raise TypeError(f"from_robot_description reads rd.components; {type(rd).__name__} has none")
+        components = tuple(rd.components)
+        ids = [c.id for c in components]
+        repeated = sorted({i for i in ids if ids.count(i) > 1})
+        if repeated:
+            raise ValueError(f"{rd.name}: component ids must be unique, {repeated} repeat")
+        orphans = sorted(c.id for c in components if c.parent is not None and c.parent not in ids)
+        if orphans:
+            raise ValueError(f"{rd.name}: {orphans} name a parent that is no component")
+        instances = []
+        for c in components:
+            structural = c.type if c.type in STRUCTURAL else None
+            if structural is None and c.type not in dm.TYPES:
+                raise ValueError(f"{rd.name}: component {c.id!r} has type {c.type!r}, which is no sim2real type "
+                                 f"({', '.join(sorted(dm.TYPES))}) nor a structural node ({', '.join(STRUCTURAL)})")
+            parameters = dict(c.parameters or {})
+            for name, value in parameters.items():
+                # WHY refused, not wrapped: a bare number carries no unit and no source, and a prior without them is not a description
+                if value is not None and not isinstance(value, Value):
+                    raise TypeError(f"{rd.name}: {c.id}.{name} is a {type(value).__name__}, not a robot_msgs Value (unit + source)")
+            on_type = {p.name for p in dm.TYPES[c.type].parameters} if structural is None else set()
+            instances.append(Instance(c.id, c.title, None if structural else c.type, c.parent, parameters,
+                                      {p: p in on_type for p in parameters}, structural, c.type, dict(c.binds or {}),
+                                      getattr(c, "part", None)))
+        world = _world_for(rd.record)
+        return cls(instances, name=world, model_file=rd.model, models=models, title=rd.title, source=rd.source, workers=workers)
+
     @property
     def fitted(self) -> bool:
         return hasattr(self, "values_")
@@ -593,11 +643,17 @@ class RobotTwin:
             raise NotImplementedError("the pendulum tracer's page is reports/one-click-tracer-2026-11-11.html")
         return self.runner.result()
 
-    def eval(self) -> TwinReport:
-        """The fitted twin on held-out runs only: error / floor per model and the gates (TwinReport, or the rig's RigReport)."""
+    def evaluate(self) -> TwinReport:
+        """The fitted twin on held-out runs only: error / floor per model and the gates (TwinReport, or the rig's RigReport).
+        WHY evaluate(), with eval() its alias (Zach's 2026-11-17 sketch, twin.evaluate()): Keras names this model.evaluate(); in PyTorch
+        model.eval() means "switch to inference mode", not "score me". The Nov 11 call dropped eval_twin()'s "_twin", which still holds."""
         if not self.fitted:
-            raise RuntimeError("eval needs a fitted twin: fitted = twin.calibrate(...), then fitted.eval()")
+            raise RuntimeError("evaluate needs a fitted twin: fitted = twin.calibrate(...), then fitted.evaluate()")
         return self.runner.eval()
+
+    def eval(self) -> TwinReport:
+        """Alias of evaluate()."""
+        return self.evaluate()
 
     def summary(self) -> str:
         return self.calibration_.summary() if self.fitted else self.description.summary()
@@ -619,6 +675,25 @@ def _identified(calibration, rung: str, key=lambda name: name) -> dict[str, Valu
         out[key(name)] = Value(float(fitted), fitted.unit, low=low if bracketed else None, high=high if bracketed else None,
                                basis=Basis.MEASURED, source=stamp, measured_by=fitted.measured_by, notes=notes)
     return out
+
+
+def _world_for(record: Mapping[str, Any] | None) -> str:
+    """The calibration world built for a unit: the sysid example whose manifest `record` names the same deployment file (resolved) and
+    component. WHY by the unit and not by a name the description carries: the world (its schedule, its hidden truth, its rig) was built
+    for one physical unit, so the unit is what binds them; a description never has to know sim2real's example names."""
+    if not record or "path" not in record or "component" not in record:
+        raise LookupError(f"from_robot_description binds the calibration world by the unit, rd.record = {{'path', 'component'}}; got {record!r}")
+    wanted = (Path(record["path"]).resolve(), record["component"])
+    worlds = {}
+    for manifest in sorted(EXAMPLES.glob("*/description.json")):
+        unit = json.loads(manifest.read_text(encoding="utf-8")).get("record") or {}
+        if unit.get("path") and unit.get("component"):
+            worlds[manifest.parent.name] = (Path(unit["path"]).resolve(), unit["component"])
+    found = [name for name, unit in worlds.items() if unit == wanted]
+    if not found:
+        have = ", ".join(f"{name} ({unit[1]} in {unit[0].name})" for name, unit in worlds.items()) or "none"
+        raise LookupError(f"no calibration world for component {record['component']!r} of {record['path']}; the worlds built for a unit: {have}")
+    return found[0]
 
 
 def _runner(description: Description, workers: int):
