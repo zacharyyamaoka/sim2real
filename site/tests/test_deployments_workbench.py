@@ -2,7 +2,7 @@
 
     env -u VIRTUAL_ENV uv run --isolated --no-project --with-editable /home/bam/robot_msgs python /home/bam/sim2real/site/build.py
     env -u VIRTUAL_ENV taskset -c 2-5,16,17 uv run --isolated --no-project --with playwright python /home/bam/sim2real/site/tests/test_deployments_workbench.py
-    ... test_deployments_workbench.py --out /abs/site --record /abs/capture/dir      (stills s01..s10 and the hero clip hero.webm)
+    ... test_deployments_workbench.py --out /abs/site --record /abs/capture/dir      (stills s01..s15 and the click-through walk.webm)
 
 Zach's journey (Daily Note 2026-11-17: "Sim2Real at the top level we seperate it into DEPLOYMENTS. When I click into each deployment I
 should bring up the 3D viewer of that deployment AND the tree should be the typed component tree. then If I click on any of the things in
@@ -17,6 +17,15 @@ drill into a particular run (rerun)"), each step measured, never a screenshot-on
   recording a working link (the launcher answers HEAD 200 and data_recorder.runlink resolves the id to the file; nothing is opened).
   And the panels: the tree's boundary drags +70 px, survives a reload, resets on double-click; the 3D strip drags; the inspector folds;
   a click on a station's mesh in 3D selects it; no console error anywhere.
+
+Then Obsidian's frame (Zach 2026-11-17: "the left toolbar sidebar like Obsidian ... 3 primary views could be the Scene View, the Sheet
+view and the Workbench-like view"), measured with getBoundingClientRect: the ribbon 44 px at the far left with its icons (18 px in 30 x 26
+buttons, 4 px apart, Runs in a group of its own) and their tooltips to the right; the sidebar toggle in the ribbon's 40 px header cell;
+the sidebar 300 px, collapsed and reopened, its width and its state remembered; Scene (the 3D filling the page, every station's
+performance in place, CAN 11 clicked in 3D, the time bar to round 0) -> Sheet (CAN 11 and round 0 carried; performance round 0 · now ·
+change first, fidelity beside it, the 3D and inspector docked) -> Workbench (CAN 11's page, as found) -> Runs (CAN 11 still selected,
+its 42 runs one click away; a tree pick filters); the servo pulled apart in the Scene, motor and gearbox "not observable on this rack";
+the right inspector folds and the 3D takes the room.
 
 Serves OUT with `python3 -m http.server` on a free port in 4711-4799 and stops it by the PID it started. Exits 1 on any FAIL.
 """
@@ -202,26 +211,31 @@ def run(base: str, record: Path | None) -> None:
         pause(600)
         still("s05-can11-metrics")
 
-        # 5. the Table view: the five question columns, then What changed
+        # 5. the Sheet (the Table view, renamed; view=table still opens it): the five question columns, then What changed
         page.evaluate("document.getElementById('dw-entity').scrollTop = 0")
-        page.click('.dw-view[data-v="table"]')
+        page.click('.dw-view[data-v="sheet"]')
         page.wait_for_selector("table.dw-tt")
         pause(900)
         still("s06-table-performance")
         page.click('[data-cols="questions"]')
         pause(900)
-        heads = page.eval_on_selector_all("table.dw-tt thead tr:nth-child(2) th", "els => els.slice(0, 5).map((e) => e.firstChild.textContent.trim())")
+        # the question columns are now a group after the performance columns: found by what they are (th[data-q]), no longer by position
+        heads = page.eval_on_selector_all("table.dw-tt thead th[data-q]", "els => els.slice(0, 5).map((e) => e.firstChild.textContent.trim())")
         check(heads == ["1 Floor", "2 Data", "3 Routines", "4 Twin", "5 Job"], f"the Table view's five question columns, in order ({heads})")
-        twin_cell = page.eval_on_selector("tr[data-id='can11'] td.q:nth-of-type(6)", "td => [td.className, td.textContent.trim()]")
+        twin_cell = page.eval_on_selector("tr[data-id='can11'] td[data-q='twin']", "td => [td.className, td.textContent.trim()]")
         check("fail" in twin_cell[0] and "2.14×" in twin_cell[1], f"CAN 11's Twin cell fails at 2.14x ({twin_cell})")
+        if record:  # the question group sits right of performance and fidelity: bring it into the still
+            page.evaluate("document.querySelector(\"tr[data-id='can11'] td[data-q='twin']\").scrollIntoView({block: 'nearest', inline: 'center'})")
         still("s07-table-questions")
         page.click('#dw-round button[data-r="changed"]')
         pause(900)
-        changed = page.eval_on_selector("tr[data-id='can11'] td.q:nth-of-type(6)", "td => td.textContent.trim()")
+        changed = page.eval_on_selector("tr[data-id='can11'] td[data-q='twin']", "td => td.textContent.trim()")
         check("mode=changed" in page.url and "4.27×" in changed and "→" in changed and "2.14×" in changed,
               f"What changed: CAN 11's Twin reads 4.27x → 2.14x ({changed!r})")
         same = page.eval_on_selector_all("table.dw-tt tbody tr.same", "els => els.length")
         check(same > 0, f"rows that did not move are dimmed ({same})")
+        if record:
+            page.evaluate("document.querySelector(\"tr[data-id='can11'] td[data-q='twin']\").scrollIntoView({block: 'nearest', inline: 'center'})")
         still("s08-table-what-changed")
         # the inspector folds and comes back
         w_insp = width(page, "#dw-insp")
@@ -320,6 +334,193 @@ def run(base: str, record: Path | None) -> None:
         page.goto(base + "/deployments/all/")
         page.wait_for_load_state("load")
         check(page.query_selector('data-views#deployments-views') is not None, "the filter-bar index of deployment cards lives on at /deployments/all/")
+
+        # 10. Obsidian's frame (Zach 2026-11-17: "update it so it has the left toolbar sidebar like Obsidian. And then I think 3 primary
+        # views could be the Scene View, the Sheet view and the Workbench-like view"), every claim measured
+        page.goto(base + DEP)
+        page.evaluate("Object.keys(localStorage).filter((k) => k.startsWith('s2r.deployments-workbench.')).forEach((k) => localStorage.removeItem(k))")
+        page.reload()
+        ready()
+        pause(700)
+        rb = page.evaluate("""(() => {
+          const r = document.getElementById('dw-ribbon').getBoundingClientRect(), head = document.querySelector('.dw-rb-head').getBoundingClientRect();
+          const t = document.getElementById('dw-sidetoggle').getBoundingClientRect();
+          const items = [...document.querySelectorAll('.dw-rb')].map((a) => { const b = a.getBoundingClientRect(), s = a.querySelector('svg').getBoundingClientRect();
+            return {v: a.dataset.v, x: b.left, y: b.top, w: b.width, h: b.height, sw: s.width, sh: s.height}; });
+          return {left: r.left, w: r.width, top: r.top, bottom: r.bottom, vh: innerHeight, head: head.height, tx: t.left, tr: t.right, tb: t.bottom,
+                  seps: document.querySelectorAll('.dw-rb-sep').length, items}; })()""")
+        views = [i["v"] for i in rb["items"]]
+        check(rb["left"] == 0 and abs(rb["w"] - 44) < 0.5 and abs(rb["bottom"] - rb["vh"]) < 1,
+              f"the ribbon: a 44 px strip at the far left, down to the bottom (left {rb['left']}, width {rb['w']:.1f}, bottom {rb['bottom']:.0f} of {rb['vh']})")
+        sizes = sorted({(round(i["w"]), round(i["h"]), round(i["sw"]), round(i["sh"])) for i in rb["items"]})
+        gaps = [round(rb["items"][k + 1]["y"] - rb["items"][k]["y"] - rb["items"][k]["h"]) for k in range(len(rb["items"]) - 1)]
+        check(views == ["home", "scene", "sheet", "page", "runs"] and rb["seps"] == 2 and gaps[1:3] == [4, 4] and gaps[0] > 4 and gaps[3] > 4,
+              f"its icons: Deployments, then the three views Scene · Sheet · Workbench 4 px apart, then Runs in a group of its own ({views}, gaps {gaps})")
+        check(sizes == [(30, 26, 18, 18)] and all(abs(i["x"] + i["w"] / 2 - 22) < 1 for i in rb["items"]),
+              f"Obsidian's icon geometry: an 18 px icon in a 30 x 26 button, centred in the strip ({sizes})")
+        check(abs(rb["head"] - 40) < 1 and rb["tx"] >= 0 and rb["tr"] <= 44 and rb["tb"] <= rb["top"] + 40,
+              f"the sidebar toggle sits in the ribbon's 40 px header cell, where Obsidian puts it (cell {rb['head']:.1f} px)")
+        tips = []
+        for sel in [f'.dw-rb[data-v="{v}"]' for v in views] + ["#dw-sidetoggle"]:
+            page.mouse.move(5, 700)
+            pause(150)
+            page.hover(sel)
+            page.wait_for_selector("#dw-tip:not([hidden])", timeout=3000)
+            tips.append(page.evaluate("""(sel) => { const el = document.querySelector(sel), b = el.getBoundingClientRect(), tp = document.getElementById('dw-tip'), r = tp.getBoundingClientRect();
+                return [tp.textContent, el.dataset.tip, r.left - b.right, (r.top + r.height / 2) - (b.top + b.height / 2), r.width]; }""", sel))
+            if sel.endswith('"scene"]'):
+                pause(500)
+                still("s11-ribbon-tooltip")
+        page.mouse.move(700, 700)
+        check(len(tips) == 6 and all(t[0] == t[1] and t[0] and 4 <= t[2] <= 12 and abs(t[3]) <= 1.5 and t[4] > 40 for t in tips),
+              f"every ribbon icon and the toggle show their tooltip to the right, centred on them ({[t[0] for t in tips]})")
+
+        # the sidebar: 300 px by default; the toggle collapses it (the view takes the room) and the choice survives a reload; its width
+        # drags, survives a collapse and a reload, and resets on double-click
+        side0, work0 = width(page, "#dw-left"), width(page, ".dw-work")
+        page.click("#dw-sidetoggle")
+        pause(300)
+        closed = page.evaluate("[document.getElementById('dw-left').hidden, document.getElementById('dw-left').getBoundingClientRect().width, document.getElementById('dw-sidetoggle').getAttribute('aria-expanded')]")
+        work1 = width(page, ".dw-work")
+        page.reload()
+        ready()
+        pause(400)
+        still_closed = page.evaluate("document.getElementById('dw-left').hidden")
+        page.click("#dw-sidetoggle")
+        pause(300)
+        side1 = width(page, "#dw-left")
+        check(abs(side0 - 300) <= 1 and closed[0] and closed[1] == 0 and closed[2] == "false" and work1 - work0 >= side0 - 1 and still_closed and abs(side1 - side0) <= 1,
+              f"the toggle collapses the sidebar ({side0:.0f} -> 0 px, the view grows {work1 - work0:.0f} px), it stays collapsed after a reload, and opens again at {side1:.0f} px")
+        box = page.locator("#dw-sashL").bounding_box()
+        sx, sy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        page.mouse.move(sx, sy)
+        page.mouse.down()
+        page.mouse.move(sx + 50, sy, steps=6)
+        page.mouse.up()
+        wa = width(page, "#dw-left")
+        page.click("#dw-sidetoggle")
+        pause(200)
+        page.click("#dw-sidetoggle")
+        pause(200)
+        wb = width(page, "#dw-left")
+        page.reload()
+        ready()
+        pause(400)
+        wc = width(page, "#dw-left")
+        page.locator("#dw-sashL").dblclick()
+        wd = width(page, "#dw-left")
+        check(abs(wa - side0 - 50) <= 3 and abs(wb - wa) <= 1 and abs(wc - wa) <= 1 and abs(wd - 300) <= 1,
+              f"the sidebar's width drags +50 px and is remembered through a collapse and a reload; double-click resets it ({[round(wa), round(wb), round(wc), round(wd)]})")
+
+        # Scene: the 3D is the page, each station wearing its performance; a click on CAN 11 in 3D selects it
+        page.click('.dw-rb[data-v="scene"]')
+        page.wait_for_selector("#dw-scene:not([hidden]) #dw-stage canvas")
+        pause(1400)
+        sc = page.evaluate("""(() => { const st = document.getElementById('dw-stage').getBoundingClientRect(), cv = document.querySelector('#dw-stage canvas').getBoundingClientRect();
+          const shown = ['dw-home', 'dw-dep', 'dw-scene', 'dw-table', 'dw-runs'].filter((id) => !document.getElementById(id).hidden);
+          const labels = [...document.querySelectorAll('#dw-stage .s-label:not(.s-plabel)')].filter((l) => !l.hidden && l.style.display !== 'none').map((l) => {
+            const r = l.getBoundingClientRect(); return [l.dataset.id, l.querySelector('.dot').className, r.left >= st.left && r.right <= st.right && r.top >= st.top && r.bottom <= st.bottom]; });
+          return {shown, sw: st.width, sh: st.height, cw: cv.width, ch: cv.height, labels, cur: document.querySelector('.dw-rb[aria-current]').dataset.v,
+                  time: !!document.querySelector('#dw-timebar input[type=range]'), title: document.getElementById('dw-vtitle').textContent}; })()""")
+        check(sc["shown"] == ["dw-scene"] and sc["cur"] == "scene" and "view=scene" in page.url and sc["title"].startswith("Scene") and sc["cw"] >= sc["sw"] - 2 and sc["ch"] >= sc["sh"] - 2 and sc["time"],
+              f"Scene: the ribbon's Scene icon renders it, the 3D filling the page ({sc['cw']:.0f} x {sc['ch']:.0f} of {sc['sw']:.0f} x {sc['sh']:.0f}), a time bar under it")
+        check(len(sc["labels"]) == 6 and all("pass" in c and inside for _i, c, inside in sc["labels"]),
+              f"Scene: all 6 stations wear their performance in place, inside the view (now all pass: {[(i, c.split()[-1]) for i, c, _x in sc['labels']]})")
+        pt = page.evaluate("window.__dwRack.screenOf('can11')")
+        page.mouse.click(pt["x"], pt["y"] + 2)
+        page.wait_for_function("new URLSearchParams(location.search).get('n') === 'can11'", timeout=5000)
+        pause(1500)
+        ins = page.evaluate("""(() => [document.querySelector('#dw-insp .dw-insp-head b').textContent, [...document.querySelectorAll('#dw-insp .dw-answer .row .lab')].map((e) => e.textContent),
+            document.querySelector('.dw-tree li[aria-selected=true]').dataset.id, new URLSearchParams(location.search).get('view')])()""")
+        check(ins[0].startswith("CAN 11") and ins[1] == ["Performance", "Fidelity"] and ins[2] == "can11" and ins[3] == "scene",
+              f"Scene: a click on CAN 11 in 3D selects it, the tree follows, the inspector leads with performance, then fidelity ({ins})")
+        still("s12-scene-can11")
+        page.focus("#dw-time")
+        page.keyboard.press("Home")
+        page.wait_for_function("new URLSearchParams(location.search).get('round') === 'r0'", timeout=5000)
+        pause(700)
+        lab0 = text(page, '#dw-stage .s-label[data-id="can11"]')
+        check("no rung" in lab0, f"Scene: the time bar moves to round 0 and CAN 11's label reads as found ({lab0!r})")
+
+        # the selection (CAN 11) and the round (as found) carry across the views
+        page.click('.dw-rb[data-v="sheet"]')
+        page.wait_for_selector("#dw-table:not([hidden]) table.dw-tt")
+        pause(1200)
+        sh = page.evaluate("""(() => { const cell = (c, r) => (document.querySelector(`tr[data-id='can11'] td[data-c='${c}'][data-r='${r}']`) || {}).textContent;
+          const chg = (c) => document.querySelector(`tr[data-id='can11'] td[data-c='${c}'][data-r='r8']`).nextElementSibling.className;
+          const dock = document.querySelector('#dw-insp #dw-dock3d canvas'), insp = document.getElementById('dw-insp').getBoundingClientRect(), tbl = document.getElementById('dw-tablewrap').getBoundingClientRect();
+          return {sel: (document.querySelector('table.dw-tt tr.sel') || {dataset: {}}).dataset.id, title: document.querySelector('#dw-insp .dw-insp-head b').textContent,
+                  round: document.querySelector('#dw-round button[aria-pressed=true]').dataset.r, tree: document.querySelector('.dw-tree li[aria-selected=true]').dataset.id,
+                  groups: [...document.querySelectorAll('table.dw-tt thead th.grp')].map((e) => e.textContent), q: document.querySelectorAll('table.dw-tt th[data-q]').length,
+                  rung: [cell('rung', 'r0'), cell('rung', 'r8'), chg('rung')], twin: [cell('twin', 'r0'), cell('twin', 'r8'), chg('twin')],
+                  dock: !!dock, docked: insp.left >= tbl.right - 8}; })()""")
+        check(sh["sel"] == "can11" and sh["title"].startswith("CAN 11") and sh["tree"] == "can11" and sh["round"] == "r0",
+              f"Scene -> Sheet: CAN 11 stays selected (row, inspector, tree) and the round stays as found ({sh['sel']}, {sh['tree']}, {sh['round']})")
+        check(sh["groups"][:2] == ["Performance · real vs the target", "Fidelity · real vs sim"] and sh["q"] == 0,
+              f"Sheet: the performance columns come first, fidelity beside them; the five questions an optional group, off by default ({sh['groups']}, {sh['q']} question columns)")
+        check(sh["rung"][:2] == ["none", "1.0"] and "up" in sh["rung"][2] and sh["twin"][:2] == ["4.27×", "2.14×"] and "up" in sh["twin"][2],
+              f"Sheet: round 0 · now · change side by side: CAN 11's highest rung none -> 1.0, its twin 4.27x -> 2.14x, both better ({sh['rung']}, {sh['twin']})")
+        check(sh["dock"] and sh["docked"], "Sheet: the 3D and the inspector are docked on the right")
+        still("s13-sheet")
+        page.click('.dw-rb[data-v="page"]')
+        page.wait_for_selector("#dw-dep:not([hidden]) .dw-title")
+        pause(1000)
+        wbn = page.evaluate("""(() => [document.querySelector('#dw-dep .dw-title').textContent, document.querySelector('.dw-tree li[aria-selected=true]').dataset.id,
+            document.querySelector('#dw-round button[aria-pressed=true]').dataset.r, new URLSearchParams(location.search).get('view'), document.querySelector('.dw-rb[aria-current]').dataset.v])()""")
+        check("CAN 11" in wbn[0] and wbn[1] == "can11" and wbn[2] == "r0" and wbn[3] is None and wbn[4] == "page",
+              f"Sheet -> Workbench: CAN 11's page, as found ({wbn})")
+        page.click('#dw-round button[data-r="r8"]')
+        pause(500)
+        page.click('.dw-rb[data-v="runs"]')
+        page.wait_for_selector("#dw-runs:not([hidden]) table.dw-rt tbody tr")
+        pause(900)
+        rn = page.evaluate("""(() => [document.querySelector('.dw-tree li[aria-selected=true]').dataset.id, (document.querySelector('.dw-rfilters button[data-st]') || {}).textContent,
+            document.querySelectorAll('table.dw-rt tbody tr').length])()""")
+        page.click('.dw-rfilters button[data-st="can11"]')
+        pause(700)
+        only = page.eval_on_selector_all("table.dw-rt tbody tr td:first-child", "els => els.map((e) => e.textContent)")
+        check(rn[0] == "can11" and "CAN 11" in (rn[1] or "") and rn[2] == 252 and len(only) == 42 and set(only) == {"CAN 11"},
+              f"Workbench -> Runs: CAN 11 still selected; one click shows only its runs ({rn}; {len(only)} rows, {sorted(set(only))})")
+        page.click('.dw-tree li[data-id="can12"] > .dw-trow')
+        pause(700)
+        only12 = page.eval_on_selector_all("table.dw-rt tbody tr td:first-child", "els => els.map((e) => e.textContent)")
+        check("view=runs" in page.url and set(only12) == {"CAN 12"}, f"Runs: a pick in the tree filters the runs to its station ({sorted(set(only12))})")
+        still("s15-runs-selected")
+
+        # Scene: the servo pulled apart into its parts, each named in place; the inspector folds and the 3D takes the room
+        page.click('.dw-tree li[data-id="can11"] > .dw-trow')
+        page.click('.dw-rb[data-v="scene"]')
+        page.wait_for_selector("#dw-scene:not([hidden])")
+        page.click('.dw-tree li[data-id="can11/servo"] > .dw-trow')
+        page.wait_for_function("new URLSearchParams(location.search).get('n') === 'can11/servo'", timeout=5000)
+        pause(1900)
+        parts = page.evaluate("""(() => { const st = document.getElementById('dw-stage').getBoundingClientRect();
+          return [...document.querySelectorAll('#dw-stage .s-plabel')].filter((l) => !l.hidden && l.style.display !== 'none').map((l) => { const r = l.getBoundingClientRect();
+            return [l.dataset.id.split('/').pop(), l.textContent, r.left >= st.left && r.right <= st.right && r.top >= st.top && r.bottom <= st.bottom]; }); })()""")
+        named = {k: t for k, t, _in in parts}
+        check(page.evaluate("window.__dwRack.exploded()") == "can11" and sorted(named) == ["driver", "encoder", "gearbox", "motor"] and all(i for _k, _t, i in parts)
+              and "not observable on this rack" in named.get("motor", "") and "not observable on this rack" in named.get("gearbox", ""),
+              f"Scene: CAN 11's servo pulls apart into driver, motor, gearbox, encoder, each named inside the view; motor and gearbox 'not observable on this rack' ({named})")
+        still("s14-scene-servo")
+        sw0 = width(page, "#dw-stage")
+        page.click("#dw-unfold")
+        pause(400)
+        folded_r = page.evaluate("[document.getElementById('dw-insp').hidden, document.getElementById('dw-unfold').getAttribute('aria-expanded')]")
+        sw1 = width(page, "#dw-stage")
+        page.click("#dw-unfold")
+        pause(400)
+        sw2 = width(page, "#dw-stage")
+        check(folded_r == [True, "false"] and sw1 - sw0 >= 300 and abs(sw2 - sw0) <= 1,
+              f"Scene: the right inspector folds from the bar's toggle and the 3D takes the room ({round(sw0)} -> {round(sw1)} -> {round(sw2)} px)")
+
+        # from the Deployments list, a view icon opens the deployment in that view (no dead icon on the home view)
+        page.click('.dw-rb[data-v="home"]')
+        page.wait_for_selector("#dw-home:not([hidden]) .dw-drow")
+        home_ok = page.evaluate("[document.getElementById('dw-left').hidden, document.getElementById('dw-sidetoggle').hidden, document.querySelector('.dw-rb[aria-current]').dataset.v]")
+        page.click('.dw-rb[data-v="sheet"]')
+        page.wait_for_selector("#dw-table:not([hidden]) table.dw-tt")
+        check(home_ok == [True, True, "home"] and "d=one-dof-test-rack" in page.url and "view=sheet" in page.url,
+              f"Deployments: no tree to show, so no sidebar and no toggle; its Sheet icon opens the rack in the Sheet ({home_ok}, {page.url[-40:]})")
 
         check(not errors, f"no console error on the way ({errors[:3]})")
         ctx.close()

@@ -7,15 +7,25 @@
    leads with performance (real vs the target, the goal line drawn) and fidelity (real vs sim) sits under it; a Runs view lists every run
    with its Rerun recording.
 
-   State lives in the URL (?d=<deployment>&n=<node>&view=table|runs&tab=...&round=r0|r8&mode=changed&cols=questions&rr=<round>), so every
-   view is a link and Back works. WHY no framework: one tree of 45 nodes and a table of a few hundred runs; plain DOM, like the proposals. */
+   The frame is Obsidian's (Zach 2026-11-17: "the left toolbar sidebar like Obsidian ... 3 primary views could be the Scene View, the
+   Sheet view and the Workbench-like view"): the ribbon at the far left switches the views (Deployments; Scene · Sheet · Workbench; Runs),
+   the typed tree sits in a collapsible, resizable left sidebar, a right inspector folds. Scene (V3): the 3D is the page, every station
+   wearing its performance in place, a servo pulled apart into its parts. Sheet (V2): the nested table, every performance metric as
+   round 0 · now · change, the five questions an optional column group, the 3D and the inspector docked. Workbench (V1): the node's page.
+
+   State lives in the URL (?d=<deployment>&n=<node>&view=scene|sheet|runs&tab=...&round=r0|r8&mode=changed&cols=questions&rr=<round>), so
+   every view is a link, Back works, and the views share one selection (n) and one round. view=table is the Sheet's old name, still read.
+   WHY no framework: one tree of 45 nodes and a table of a few hundred runs; plain DOM, like the proposals. */
 (function () {
   "use strict";
   var host = document.getElementById("dw");
   if (!host) return;
   var $ = function (id) { return document.getElementById(id); };
   var DATA = null, FX = null, byId = {}, Q = {}, RUNS = null, runsLoading = null;
-  var rack3d = null, current = null, treeUI = null;
+  var rack3d = null, current = null, treeUI = null, VIEW = "home";
+  // the views a deployment opens in; "" (no view in the URL) is the Workbench, so every older link (?d=…&n=…) still opens the node's page
+  var VIEWS = { scene: "scene", sheet: "sheet", table: "sheet", runs: "runs" };
+  var VIEW_NAME = { home: "Deployments", scene: "Scene", sheet: "Sheet", page: "Workbench", runs: "Runs" };
 
   // ---- small words ----------------------------------------------------------------------------------------------------------------
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -103,6 +113,7 @@
     var s = state(), p = new URLSearchParams(location.search);
     Object.keys(patch || {}).forEach(function (k) {
       var key = { node: "n", dep: "d" }[k] || k, v = patch[k];
+      if (key === "view" && v === "page") v = "";
       if (v == null || v === "" || (key === "round" && v === "r8") || (key === "n" && FX && v === FX.root)) p.delete(key); else p.set(key, v);
     });
     if (!p.get("d")) { return location.pathname; }
@@ -111,9 +122,10 @@
   }
   function go(patch, replace) {
     var h = href(patch);
-    if (h === location.pathname + location.search) return;
+    if (h === location.pathname + location.search) return false;
     if (replace) history.replaceState(null, "", h); else history.pushState(null, "", h);
     render();
+    return true;
   }
   addEventListener("popstate", function () { render(); });
   document.addEventListener("click", function (ev) {
@@ -512,12 +524,44 @@
   };
   var PLATES = { a: { x: -0.44, w: 0.2, h: 0.66, y: 0.37 }, b: { x: 0.02, w: 0.26, h: 0.5, y: 0.31 }, c: { x: 0.43, w: 0.28, h: 0.5, y: 0.31 } };
   var STATUS_HEX = { pass: 0x4cc06e, fail: 0xf2685c, watch: 0xf0a548 };
+  // a station's performance (how far up the speed ladder it does its job) and its fidelity (its twin over its repeat floor)
+  function stationPerf(x, rid) { var m = metric(x, "passes_up_to"); return m ? m.values[rid] : { status: "none", value: null }; }
+  function stationFid(x, rid) {
+    var m = metric(x, "twin_over_floor"); if (!m) return null;
+    var v = m.values[rid];
+    return { m: m, v: v, st: m.kind === "shown" && v.status === "fail" ? "watch" : v.status };
+  }
+  // labels in the 3D never sit on each other, on a station's joint (a click there picks that station's mesh) or under the chips and the
+  // ViewCube: each, lowest first, takes the nearest free spot a few pixels up (or, failing that, down) from its anchor, inside the view.
+  // Anchors: a station's label at its bottom centre (ax 0.5), a part's at its bottom left (ax 0; ax 1, its bottom right, flipped near the
+  // right edge). Six stations on three plates crowd (CAN 1, 14 and 15 share one).
+  function spread(items, W, H, obstacles) {
+    items.sort(function (a, b) { return b.y - a.y; });
+    var done = (obstacles || []).slice(), OFFS = [0];
+    for (var k = 1; k <= 14; k++) OFFS.push(-7 * k);
+    for (k = 1; k <= 7; k++) OFFS.push(7 * k);
+    items.forEach(function (it) {
+      if (it.ax === 0 && it.x + it.w > W - 6) { it.x -= 28; it.ax = 1; }
+      if (it.ax === 0.5) it.x = Math.max(it.w / 2 + 4, Math.min(W - it.w / 2 - 4, it.x));
+      it.el.classList.toggle("flip", it.ax === 1);
+      var l = it.x - it.w * it.ax, r = l + it.w, y0 = it.y, best = null;
+      for (var i = 0; i < OFFS.length && best == null; i++) {
+        var y = y0 + OFFS[i], t = y - it.h;
+        if (t < 4 || y > H - 4) continue;
+        var hit = done.some(function (d) { return l < d.r + 2 && d.l < r + 2 && t < d.b + 1 && d.t < y + 1; });
+        if (!hit) best = y;
+      }
+      it.y = best == null ? Math.max(it.h + 4, Math.min(H - 4, y0)) : best;
+      done.push({ l: l, r: r, t: it.y - it.h, b: it.y });
+      it.el.style.left = it.x + "px"; it.el.style.top = it.y + "px";
+    });
+  }
   function Rack3D(el, opts) {
     var self = this, THREE = window.THREE;
     el.classList.add("scene");
-    if (!THREE || !window.OrbitControls) { el.innerHTML = '<p class="muted" style="padding:16px">The 3D view needs three.js (static/three-orbit-0.186.1.min.js).</p>'; self.select = self.setRound = self.explode = self.resize = function () {}; return; }
+    if (!THREE || !window.OrbitControls) { el.innerHTML = '<p class="muted" style="padding:16px">The 3D view needs three.js (static/three-orbit-0.186.1.min.js).</p>'; self.select = self.setRound = self.setLabels = self.setFocusScale = self.explode = self.resize = function () {}; return; }
     var renderer;
-    try { renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); } catch (err) { el.innerHTML = '<p class="muted" style="padding:16px">No WebGL in this browser: the 3D view is off.</p>'; self.select = self.setRound = self.explode = self.resize = function () {}; return; }
+    try { renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); } catch (err) { el.innerHTML = '<p class="muted" style="padding:16px">No WebGL in this browser: the 3D view is off.</p>'; self.select = self.setRound = self.setLabels = self.setFocusScale = self.explode = self.resize = function () {}; return; }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     el.appendChild(renderer.domElement);
     var scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(35, 1, 0.01, 20);
@@ -525,6 +569,14 @@
     camera.position.copy(HOME.pos);
     var controls = new window.OrbitControls(camera, renderer.domElement);
     controls.target.copy(HOME.target); controls.enableDamping = true; controls.dampingFactor = 0.12; controls.minDistance = 0.18; controls.maxDistance = 4;
+    // the home view fits the whole rack across whatever the view's shape is: the Scene's tall stage needs the camera further back than
+    // the Workbench's wide strip (the rack spans about ±0.6 m; 0.72 leaves room for the labels). It refits on resize until you orbit.
+    var atHome = true;
+    function homePos() {
+      var dir = HOME.pos.clone().sub(HOME.target), base = dir.length(), half = Math.tan(camera.fov * Math.PI / 360);
+      return HOME.target.clone().add(dir.normalize().multiplyScalar(Math.max(base, 0.72 / (half * (camera.aspect || 1)))));
+    }
+    controls.addEventListener("start", function () { atHome = false; });
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8d96, 1.6));
     var sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(1.2, 2.2, 1.6); scene.add(sun);
     var gridH = new THREE.GridHelper(2.4, 24, 0x7f838c, 0x5a5e66); gridH.material.opacity = 0.35; gridH.material.transparent = true; scene.add(gridH);
@@ -595,11 +647,18 @@
       cap.textContent = on ? "MuJoCo render of the rack's cad2robot payload (the site's media), a still" : "drag to orbit · scroll to zoom · click a station or a part"; paint();
     });
     var labelLayer = document.createElement("div"); labelLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:2"; el.appendChild(labelLayer);
-    var labels = {};
+    var labels = {}, plabels = {};
     Object.keys(groups).forEach(function (sid) {
       var l = document.createElement("div"); l.className = "s-label"; l.style.pointerEvents = "auto"; l.dataset.id = sid;
       l.addEventListener("click", function (ev) { ev.stopPropagation(); opts.onPick(sid); });
       labelLayer.appendChild(l); labels[sid] = l;
+      // V3's pulled-apart servo, named in place: a label beside each of the servo's four parts, shown while that servo is pulled apart
+      groups[sid].back.children.forEach(function (m) {
+        var id = m.userData.nodeId; if (!node(id)) return;
+        var pl = document.createElement("div"); pl.className = "s-label s-plabel"; pl.style.pointerEvents = "auto"; pl.dataset.id = id; pl.hidden = true;
+        pl.addEventListener("click", function (ev) { ev.stopPropagation(); opts.onPick(id); });
+        labelLayer.appendChild(pl); plabels[id] = { el: pl, mesh: m, station: sid };
+      });
     });
     var cube = document.createElement("div"); cube.className = "viewcube";
     cube.innerHTML = '<div class="cube">' + [["FRONT", "translateZ(26px)", [0, 0, 1]], ["BACK", "rotateY(180deg) translateZ(26px)", [0, 0, -1]], ["RIGHT", "rotateY(90deg) translateZ(26px)", [1, 0, 0]],
@@ -611,13 +670,15 @@
     cube.addEventListener("click", function (ev) {
       var f = ev.target.closest(".face"); if (!f) return;
       var d = f.dataset.dir.split(",").map(Number), dist = camera.position.distanceTo(controls.target);
+      atHome = false;
       tweenTo(controls.target.clone().add(new THREE.Vector3(d[0], d[1], d[2]).normalize().multiplyScalar(dist)), controls.target.clone());
     });
-    var selected = null, rid = "r8", exploded = null, tween = null, dirty = true, t0 = performance.now();
+    var selected = null, rid = "r8", exploded = null, tween = null, dirty = true, t0 = performance.now(), labelMode = "all", focusScale = 1;
     function selectedStation() { var st = selected ? stationOf(selected) : null; return st ? st.id : null; }
     function paint() {
       Object.keys(groups).forEach(function (sid) {
-        var st = node(sid).verdict[rid].status;
+        // the ring wears the station's performance (performance first: does it do the job); fidelity is the label's second word
+        var st = stationPerf(node(sid), rid).status;
         groups[sid].ring.material.color.setHex(STATUS_HEX[st] || 0x8a8d96);
         groups[sid].ring.scale.setScalar(sid === selectedStation() ? 1.18 : 1);
       });
@@ -630,12 +691,22 @@
         }
       });
       Object.keys(labels).forEach(function (sid) {
-        var l = labels[sid], x = node(sid), v = x.verdict[rid];
-        l.hidden = !img.hidden;
-        var up = metric(x, "passes_up_to").values[rid];
-        l.innerHTML = dot(v.status) + "<b>" + esc(x.short) + "</b><small>" + esc(up.value > 0 ? "to " + n(up.value, 1) : "no rung") + (v.status === "fail" && v.first ? " · " + Q[v.first].name : "") + "</small>";
+        var l = labels[sid], x = node(sid), up = stationPerf(x, rid), f = stationFid(x, rid);
+        l.hidden = !img.hidden || (labelMode === "selected" && !!selectedStation() && sid !== selectedStation());
+        l.innerHTML = dot(up.status, "performance: " + (WORD[up.status] || up.status)) + "<b>" + esc(x.short) + '</b><small title="tracks and stops up to this fraction of its top speed">' + esc(up.value > 0 ? "to " + n(up.value, 1) : "no rung") + "</small>" +
+          (f && (f.st === "fail" || f.st === "watch") ? '<small class="fid ' + f.st + '" title="fidelity: ' + esc(f.m.name) + '">twin ' + esc(fmtShort(f.m, f.v)) + "</small>" : "");
         l.title = x.title + " · " + oneLine(x, rid);
         l.classList.toggle("sel", sid === selectedStation());
+      });
+      Object.keys(plabels).forEach(function (id) {
+        // a part's label leads with its performance row, as its page does (the motor and gearbox: "not observable on this rack"); a
+        // fidelity miss follows as a second word
+        var p = plabels[id], x = node(id), rows = answerRows(x, rid), s2 = rows[0].st, f2 = rows[1];
+        p.el.hidden = !img.hidden || exploded !== p.station;
+        p.el.innerHTML = dot(s2) + "<b>" + esc(x.short) + "</b><small>" + esc(s2 === "none" ? "no gates" : WORD[s2] || s2) + "</small>" +
+          (f2 && (f2.st === "fail" || f2.st === "watch") ? '<small class="fid ' + f2.st + '">fidelity ' + (f2.st === "fail" ? "fails" : "outside target") + "</small>" : "");
+        p.el.title = x.title + " · " + oneLine(x, rid);
+        p.el.classList.toggle("sel", id === selected);
       });
       dirty = true;
     }
@@ -646,14 +717,19 @@
       if (focus && sid) {
         var s = STATIONS[sid], gg = groups[sid];
         var cy = gg.link === "arm" ? s.y - 0.16 : gg.link === "oval" ? s.y - 0.05 : s.y;
-        var target = new THREE.Vector3(s.x, cy, 0), dist = gg.link === "arm" ? 1.25 : 0.75;
+        var target = new THREE.Vector3(s.x, cy, 0), dist = (gg.link === "arm" ? 1.25 : 0.75) * focusScale;
         var dir = camera.position.clone().sub(controls.target).normalize();
-        if (exploded === sid) { target.set(s.x, s.y, -0.14); dist = 0.75; dir = new THREE.Vector3(0.85, 0.3, 0.45).normalize(); }
+        if (exploded === sid) { target.set(s.x, s.y, -0.14); dist = 0.75 * Math.sqrt(focusScale); dir = new THREE.Vector3(0.85, 0.3, 0.45).normalize(); }
+        atHome = false;
         tweenTo(target.clone().add(dir.multiplyScalar(dist)), target);
-      } else if (focus && !sid) tweenTo(HOME.pos.clone(), HOME.target.clone());
+      } else if (focus && !sid) { atHome = true; tweenTo(homePos(), HOME.target.clone()); }
       paint();
     };
     self.setRound = function (r) { rid = r; paint(); };
+    // "selected": only the picked station wears its label (V2's small dock); "all": every station does (the Scene, the Workbench's strip)
+    self.setLabels = function (mode) { if (mode !== labelMode) { labelMode = mode; paint(); } };
+    // how far the camera stays from a picked station: the Scene keeps the other stations in view (1.7), the strip and the dock come close
+    self.setFocusScale = function (k) { focusScale = k; };
     // V3's pulled-apart servo: the station whose servo (or a part of it) is picked has its motor, gearbox, encoder and driver drawn apart
     self.explode = function (sid) {
       exploded = sid || null;
@@ -680,7 +756,12 @@
     });
     controls.addEventListener("change", function () { dirty = true; });
     var v3 = new THREE.Vector3();
-    function resize() { var w = el.clientWidth, hh = el.clientHeight; if (!w || !hh) return; renderer.setSize(w, hh, false); camera.aspect = w / hh; camera.updateProjectionMatrix(); dirty = true; }
+    function resize() {
+      var w = el.clientWidth, hh = el.clientHeight; if (!w || !hh) return;
+      renderer.setSize(w, hh, false); camera.aspect = w / hh; camera.updateProjectionMatrix();
+      if (atHome && !tween) { camera.position.copy(homePos()); controls.target.copy(HOME.target); }
+      dirty = true;
+    }
     if (window.ResizeObserver) new ResizeObserver(resize).observe(el);
     function bg() { var c = getComputedStyle(host).getPropertyValue("--scene-bg").trim() || "#111214"; scene.background = new THREE.Color(c); dirty = true; }
     bg();
@@ -699,12 +780,29 @@
       if (!dirty) return;
       dirty = false;
       renderer.render(scene, camera);
-      var w = el.clientWidth, hh = el.clientHeight;
+      var w = el.clientWidth, hh = el.clientHeight, placed = [];
       Object.keys(labels).forEach(function (k3) {
         if (labels[k3].hidden) return;
         v3.copy(groups[k3].anchor).project(camera);
-        labels[k3].style.left = ((v3.x + 1) / 2 * w) + "px"; labels[k3].style.top = ((1 - v3.y) / 2 * hh) + "px"; labels[k3].style.display = v3.z > 1 ? "none" : "";
+        var lx = (v3.x + 1) / 2 * w, ly = (1 - v3.y) / 2 * hh;
+        // a station out of the view keeps its label out of it too (never piled at the edge, as if it were there)
+        var out = v3.z > 1 || lx < 0 || lx > w || ly < 0 || ly > hh;
+        labels[k3].style.display = out ? "none" : "";
+        if (!out) placed.push({ el: labels[k3], x: lx, y: ly, w: labels[k3].offsetWidth, h: labels[k3].offsetHeight, ax: 0.5 });
       });
+      Object.keys(plabels).forEach(function (id) {
+        var p = plabels[id]; if (p.el.hidden) return;
+        p.mesh.getWorldPosition(v3); v3.project(camera);
+        var px = (v3.x + 1) / 2 * w, py = (1 - v3.y) / 2 * hh, pout = v3.z > 1 || px < 0 || px > w || py < 0 || py > hh;
+        p.el.style.display = pout ? "none" : "";
+        if (!pout) placed.push({ el: p.el, x: px + 14, y: py + 10, w: p.el.offsetWidth, h: p.el.offsetHeight, ax: 0 });
+      });
+      var obstacles = [chips, cube].map(function (o) { return { l: o.offsetLeft, t: o.offsetTop, r: o.offsetLeft + o.offsetWidth, b: o.offsetTop + o.offsetHeight }; });
+      Object.keys(groups).forEach(function (k4) {
+        v3.set(STATIONS[k4].x, STATIONS[k4].y, 0.02).project(camera);
+        if (v3.z <= 1) { var jx = (v3.x + 1) / 2 * w, jy = (1 - v3.y) / 2 * hh; obstacles.push({ l: jx - 14, t: jy - 14, r: jx + 14, b: jy + 14 }); }
+      });
+      spread(placed, w, hh, obstacles);
       var e = camera.matrixWorldInverse.elements, f = [1, -1, 1], m = [];
       for (var j = 0; j < 3; j++) { for (var i = 0; i < 3; i++) m.push(e[j * 4 + i] * f[i] * f[j]); m.push(0); }
       cubeInner.style.transform = "translateZ(-26px) matrix3d(" + m.concat([0, 0, 0, 1]).join(",") + ")";
@@ -714,6 +812,24 @@
     // for the acceptance script: where a station's joint is on screen, so a test can click the mesh itself
     self.screenOf = function (sid) { var s = STATIONS[sid], p = new THREE.Vector3(s.x, s.y, 0.02).project(camera), r = renderer.domElement.getBoundingClientRect(); return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height }; };
     window.__dwRack = self;
+  }
+
+  // ---- one 3D for every view: the same scene (and its camera) moves between the Workbench's strip, the Scene's stage and the Sheet's dock
+  function mount3d(slot) {
+    if (!rack3d) { var keep = document.createElement("div"); rack3d = new Rack3D(keep, { onPick: function (id) { go({ node: id }); } }); rack3d._host = keep; }
+    if (rack3d._host.parentNode !== slot) slot.insertBefore(rack3d._host, slot.firstChild);
+  }
+  // the picked node in 3D: a servo or one of its parts pulls that station's servo apart; true when the pick changed (the camera flies to it)
+  function sync3d(x, rid) {
+    var station = stationOf(x.id);
+    rack3d.setLabels(VIEW === "sheet" ? "selected" : "all");
+    rack3d.setFocusScale(VIEW === "scene" ? 1.7 : 1);
+    rack3d.explode(x.level === "servo" || x.level === "part" ? (station && x.id.indexOf("/link") < 0 ? station.id : null) : null);
+    rack3d.setRound(rid);
+    var changed = current !== x.id;
+    rack3d.select(x.id === FX.root ? null : x.id, changed);
+    current = x.id;
+    return changed;
   }
 
   // ---- home: every deployment ------------------------------------------------------------------------------------------------------
@@ -769,18 +885,11 @@
       '<div class="dw-scene-wrap" id="dw-sceneWrap"></div><div class="dw-sash h" id="dw-sashS"></div>' +
       '<div class="dw-tabs" role="tablist">' + tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === tab) + '">' + esc(t[1]) + (t[2] ? '<span class="n">' + t[2] + "</span>" : "") + "</button>"; }).join("") + "</div>" +
       '<div class="dw-tabbody" id="dw-tabbody"></div>';
-    var el = $("dw-entity"), keep = rack3d && rack3d._host;
+    var el = $("dw-entity");
     el.innerHTML = html;
-    if (!keep) { keep = document.createElement("div"); rack3d = new Rack3D(keep, { onPick: function (id) { go({ node: id, view: "" }); } }); rack3d._host = keep; }
-    $("dw-sceneWrap").appendChild(keep);
+    mount3d($("dw-sceneWrap"));
     sash($("dw-sashS"), $("dw-sceneWrap"), { key: "scene", horizontal: true, min: 140, max: 640, dflt: 280, onResize: function () { if (rack3d) rack3d.resize(); } });
-    var station = stationOf(x.id);
-    rack3d.explode(x.level === "servo" || x.level === "part" ? (station && x.id.indexOf("/link") < 0 ? station.id : null) : null);
-    rack3d.setRound(rid);
-    var changed = current !== x.id;
-    if (changed) el.scrollTop = 0;
-    rack3d.select(x.id === FX.root ? null : x.id, changed);
-    current = x.id;
+    if (sync3d(x, rid)) el.scrollTop = 0;
     el.querySelectorAll("[data-tab]").forEach(function (b) { b.addEventListener("click", function () { go({ tab: b.dataset.tab }, true); }); });
     var body = $("dw-tabbody");
     if (tab === "perf") body.innerHTML = x.level === "deployment" ? perfRack(x, rid) : perfStation(x, rid);
@@ -859,64 +968,79 @@
       "Next (not built): the model-free metric functions move to robot_models' <code>metrics/</code> folder (" + "Zach's \"folder called metrics\"" + "), and the cards call them.</p>";
   }
 
-  // ---- the Table view: the nested tree-table; performance columns or the five questions; What changed -------------------------------
+  // ---- the Sheet (V2): the nested tree-table; every performance metric as round 0 · now · change, fidelity beside it; the five
+  // questions an optional column group; What changed dims the rows that did not move. Its 3D and inspector sit docked on the right. --
   var tableFolded = null;
+  function perfCols() {
+    var t = FX.thresholds;
+    function at(key) { return function (x, r) { return rung(x, r, 0.9)[key]; }; }
+    return [
+      { id: "rung", name: "Highest rung tracked", goal: "goal ≥ 0.9", get: function (x, r) { return metric(x, "passes_up_to").values[r].value; },
+        fmt: function (v) { return v == null ? "—" : v > 0 ? n(v, 1) : "none"; }, ok: function (v) { return v >= 0.9; }, higher: true },
+      { id: "rms", name: "Tracking RMS at 0.9", goal: "GOOD ≤ " + t.tracking_rms_deg + "°", get: at("tracking_rms_deg"), fmt: function (v) { return deg(v); }, ok: function (v) { return v <= t.tracking_rms_deg; } },
+      { id: "peak", name: "Tracking peak at 0.9", goal: "GOOD ≤ " + t.tracking_peak_deg + "°", get: at("tracking_peak_deg"), fmt: function (v) { return deg(v); }, ok: function (v) { return v <= t.tracking_peak_deg; } },
+      { id: "stop", name: "Tip stop at 0.9, median", goal: "GOOD ≤ " + t.stop_tool_mm + " mm", get: at("stop_tool_mm"), fmt: mm, ok: function (v) { return v <= t.stop_tool_mm; } },
+      // not the gate (it reads the median): over 1 mm reads amber, never red
+      { id: "worst", name: "Worst stop at 0.9", goal: "not the gate", get: at("stop_tool_max_mm"), fmt: mm, ok: null, watch: function (v) { return v > t.stop_tool_mm; } },
+    ];
+  }
+  function chg(dir, a, b) {
+    var word = { up: "better", down: "worse", flat: "same" }[dir] || "";
+    return '<td class="chg ' + dir + '"' + (word ? ' title="round 0 → now: ' + esc(word + (a != null ? " (" + a + " → " + b + ")" : "")) + '"' : "") + ">" + ({ up: "▲", down: "▼", flat: "=" }[dir] || "") + "</td>";
+  }
+  function trio(x, c) {
+    if (x.level !== "station") return '<td class="q bl none" data-c="' + c.id + '" data-r="r0">—</td><td class="q none" data-c="' + c.id + '" data-r="r8">—</td><td class="chg"></td>';
+    var a = c.get(x, "r0"), b = c.get(x, "r8");
+    function st(v) { return v == null ? "" : c.ok ? (c.ok(v) ? "pass" : "fail") : c.watch && c.watch(v) ? "watch" : ""; }
+    var dir = a == null || b == null ? "na" : Math.abs(a - b) < 1e-9 ? "flat" : (c.higher ? b > a : b < a) ? "up" : "down";
+    return '<td class="q was bl" data-c="' + c.id + '" data-r="r0" title="' + esc(c.name + " · round 0, as found: " + c.fmt(a)) + '"><span class="cell">' + (st(a) ? dot(st(a)) : "") + esc(c.fmt(a)) + "</span></td>" +
+      '<td class="q ' + st(b) + '" data-c="' + c.id + '" data-r="r8" title="' + esc(c.name + " · now, round 8: " + c.fmt(b) + " · " + c.goal) + '"><span class="cell">' + (st(b) ? dot(st(b)) : "") + esc(c.fmt(b)) + "</span></td>" + chg(dir, c.fmt(a), c.fmt(b));
+  }
+  function fidMetric(x) { return metric(x, "twin_over_floor") || metric(x, "T2") || metric(x, "stations_twinned"); }
+  function fidTrio(x) {
+    var fm = fidMetric(x);
+    if (!fm) return '<td class="q bl none" data-c="twin" data-r="r0">—</td><td class="q none" data-c="twin" data-r="r8">—</td><td class="chg"></td>';
+    function s(v) { return fm.kind === "shown" && v.status === "fail" ? "watch" : v.status; }
+    var a = fm.values.r0, b = fm.values.r8, c = change(fm, "r8");
+    return '<td class="q was bl" data-c="twin" data-r="r0" title="' + esc(fm.name + " · round 0, as found: " + fmt(fm, a)) + '"><span class="cell">' + dot(s(a)) + esc(fmtShort(fm, a)) + "</span></td>" +
+      '<td class="q ' + s(b) + '" data-c="twin" data-r="r8" title="' + esc(fm.name + " · now: " + fmt(fm, b) + (fm.gate ? " · goal " + gateText(fm) : "")) + '"><span class="cell">' + dot(s(b)) + esc(fmtShort(fm, b)) + "</span></td>" + chg(c.dir, fmtShort(fm, a), fmtShort(fm, b));
+  }
+  var KEY_IDS = ["passes_up_to", "tracking_rms_09", "tracking_peak_09", "tip_stop_09", "tip_stop_worst_09", "tip_tracking_09", "gates_passed", "perf_gates", "sim_stop", "sim_predicts", "goal_met", "stations_tracking"];
+  function otherCell(x, rid) {
+    var fm = fidMetric(x);
+    var others = x.metrics.filter(function (m) { return m.family !== "evidence" && m !== fm && KEY_IDS.indexOf(m.id) < 0; });
+    return others.length ? '<td class="ty bl" title="' + esc(others.map(function (m) { return (m.code ? m.code + " " : "") + m.name + " " + fmt(m, m.values[rid]); }).join(" · ")) + '">' + others.map(function (m) { var s = m.kind === "shown" && m.values[rid].status === "fail" ? "watch" : m.values[rid].status; return dot(s) + " " + esc((m.code || "") + " " + fmtShort(m, m.values[rid])); }).join(" &nbsp;") + "</td>" : '<td class="muted bl">—</td>';
+  }
   function tableCols(st) {
-    var rid = st.mode === "changed" ? "r8" : st.round;
-    if (st.cols === "questions") {
-      return { head: '<tr><th rowspan="2">Typed component tree</th><th rowspan="2">Type</th><th class="grp bl" colspan="5">The five questions, in order</th><th rowspan="2" class="bl">Verdict</th><th class="grp bl" colspan="4">Key metric · round 0 → now</th></tr><tr>' +
-        FX.questions.map(function (q, i) { return '<th class="' + (i === 0 ? "bl" : "") + '">' + q.n + " " + q.name + "<small>" + esc(q.ask) + "</small></th>"; }).join("") + '<th class="bl">Metric</th><th>Round 0</th><th>Now</th><th>Change</th></tr>',
-        cells: function (x) {
-          var c = FX.questions.map(function (q, i) { return qcell(x, q, rid, st.mode, i === 0); }).join("");
-          var v = st.mode === "changed" ? dot(lineStatus(x, "r0")) + '<span class="arrow">→</span>' + dot(lineStatus(x, "r8")) : (function () { var s = lineStatus(x, rid); return '<span class="cell">' + dot(s) + esc(s === "none" ? "no gates" : WORD[s] === "fails" ? "fails" : WORD[s]) + (x.verdict[rid].first ? " · " + Q[x.verdict[rid].first].name : "") + "</span>"; })();
-          var km = keyMetric(x, rid), ch = km ? change(km, "r8") : { dir: "na" };
-          return c + '<td class="q bl ' + (st.mode === "changed" ? "" : lineStatus(x, rid)) + '">' + v + "</td>" +
-            '<td class="bl">' + (km ? code(km) + esc(km.name) : "") + '</td><td class="was">' + (km ? esc(fmtShort(km, km.values.r0)) : "") + "</td><td><b>" + (km ? esc(fmtShort(km, km.values.r8)) : "") + "</b></td><td>" + arrow(ch) + "</td>";
-        } };
-    }
-    return { head: '<tr><th rowspan="2">Typed component tree</th><th rowspan="2">Type</th><th class="grp bl" colspan="5">Performance · real vs the target, at 0.9 of top speed</th><th class="grp bl" colspan="2">Fidelity · real vs sim</th></tr><tr>' +
-      '<th class="bl">Highest rung tracked<small>goal ≥ 0.9</small></th><th>Tracking RMS<small>GOOD ≤ ' + FX.thresholds.tracking_rms_deg + "°</small></th><th>Tracking peak<small>GOOD ≤ " + FX.thresholds.tracking_peak_deg + "°</small></th><th>Tip stop, median<small>GOOD ≤ " + FX.thresholds.stop_tool_mm + " mm</small></th><th>Worst stop<small>not the gate</small></th>" +
-      '<th class="bl">Twin ÷ floor<small>goal ≤ ' + FX.thresholds.sim_vs_real_floor_ratio + "×</small></th><th>Other</th></tr>",
+    var rid = st.mode === "changed" ? "r8" : st.round, withQ = st.cols === "questions", P = perfCols();
+    var sub = '<th class="bl sub" title="round 0 · as found, before any fit">Round 0</th><th class="sub" title="round 8 · now">Now</th><th class="sub" title="round 0 → now">Δ</th>';
+    var head = '<tr><th rowspan="3" class="nmh">Typed component tree</th><th rowspan="3">Type</th><th class="grp bl perf" colspan="' + P.length * 3 + '">Performance · real vs the target</th>' +
+      '<th class="grp bl fid" colspan="3">Fidelity · real vs sim</th><th rowspan="3" class="bl">Other</th>' +
+      (withQ ? '<th class="grp bl" colspan="5">The five questions · ' + esc(st.mode === "changed" ? "round 0 → round 8" : round(rid).label) + '</th><th rowspan="3" class="bl">Verdict</th>' : "") + "</tr>" +
+      "<tr>" + P.map(function (c) { return '<th colspan="3" class="bl mh" data-col="' + c.id + '">' + esc(c.name) + "<small>" + esc(c.goal) + "</small></th>"; }).join("") +
+      '<th colspan="3" class="bl mh" data-col="twin">Twin ÷ floor<small>goal ≤ ' + FX.thresholds.sim_vs_real_floor_ratio + "×</small></th>" +
+      (withQ ? FX.questions.map(function (q, i) { return '<th rowspan="2" data-q="' + q.id + '" class="' + (i === 0 ? "bl" : "") + '">' + q.n + " " + q.name + "<small>" + esc(q.ask) + "</small></th>"; }).join("") : "") + "</tr>" +
+      "<tr>" + P.map(function () { return sub; }).join("") + sub + "</tr>";
+    return { head: head, withQ: withQ,
       cells: function (x) {
-        function pc(fn, fmtv, gate, isGate) {
-          if (x.level !== "station") return '<td class="q none">—</td>';
-          var a = fn("r0"), b = fn("r8"), v = fn(rid);
-          if (st.mode === "changed") {
-            var moved = a !== b;
-            return '<td class="q ' + (moved ? "" : "same") + '"><span class="cell"><span class="was">' + esc(fmtv(a)) + '</span><span class="arrow">→</span>' + (isGate && b != null ? dot(b <= gate || (gate === "up" && b >= 0.9) ? "pass" : "fail") : "") + esc(fmtv(b)) + "</span></td>";
-          }
-          var s = v == null || !isGate ? "observed" : (gate === "up" ? (v >= 0.9 ? "pass" : "fail") : (v <= gate ? "pass" : "fail"));
-          return '<td class="q ' + (isGate ? s : "") + '"><span class="cell">' + (isGate && v != null ? dot(s) : "") + esc(fmtv(v)) + "</span></td>";
-        }
-        var t = FX.thresholds;
-        var perf = pc(function (r) { return metric(x, "passes_up_to").values[r].value; }, function (v) { return v == null ? "—" : v > 0 ? n(v, 1) : "none"; }, "up", true).replace('class="q', 'class="q bl') +
-          pc(function (r) { return rung(x, r, 0.9).tracking_rms_deg; }, function (v) { return deg(v); }, t.tracking_rms_deg, true) +
-          pc(function (r) { return rung(x, r, 0.9).tracking_peak_deg; }, function (v) { return deg(v); }, t.tracking_peak_deg, true) +
-          pc(function (r) { return rung(x, r, 0.9).stop_tool_mm; }, function (v) { return mm(v); }, t.stop_tool_mm, true) +
-          pc(function (r) { return rung(x, r, 0.9).stop_tool_max_mm; }, function (v) { return mm(v); }, t.stop_tool_mm, false);
-        var fm = metric(x, "twin_over_floor") || metric(x, "T2") || metric(x, "stations_twinned");
-        var fid = fm ? (function () {
-          var a = fm.values.r0, b = fm.values.r8, v = fm.values[rid], sv = fm.kind === "shown" && v.status === "fail" ? "watch" : v.status;
-          if (st.mode === "changed") return '<td class="q bl ' + (fmt(fm, a) === fmt(fm, b) ? "same" : "") + '"><span class="cell"><span class="was">' + esc(fmtShort(fm, a)) + '</span><span class="arrow">→</span>' + dot(fm.kind === "shown" && b.status === "fail" ? "watch" : b.status) + esc(fmtShort(fm, b)) + "</span></td>";
-          return '<td class="q bl ' + sv + '"><span class="cell">' + dot(sv) + esc(fmtShort(fm, v)) + "</span></td>";
-        })() : '<td class="q bl none">—</td>';
-        var others = x.metrics.filter(function (m) { return m.family !== "evidence" && m !== fm && ["passes_up_to", "tracking_rms_09", "tracking_peak_09", "tip_stop_09", "tip_stop_worst_09", "tip_tracking_09", "gates_passed", "perf_gates", "sim_stop", "sim_predicts", "goal_met", "stations_tracking"].indexOf(m.id) < 0; });
-        var oth = others.length ? '<td class="ty" title="' + esc(others.map(function (m) { return (m.code ? m.code + " " : "") + m.name + " " + fmt(m, m.values[rid]); }).join(" · ")) + '">' + others.map(function (m) { var s = m.kind === "shown" && m.values[rid].status === "fail" ? "watch" : m.values[rid].status; return dot(s) + " " + esc((m.code || "") + " " + fmtShort(m, m.values[rid])); }).join(" &nbsp;") + "</td>" : '<td class="muted">—</td>';
-        return perf + fid + oth;
+        var h = P.map(function (c) { return trio(x, c); }).join("") + fidTrio(x) + otherCell(x, rid);
+        if (!withQ) return h;
+        var v = st.mode === "changed" ? dot(lineStatus(x, "r0")) + '<span class="arrow">→</span>' + dot(lineStatus(x, "r8")) : (function () { var s = lineStatus(x, rid); return '<span class="cell">' + dot(s) + esc(s === "none" ? "no gates" : WORD[s]) + (x.verdict[rid].first ? " · " + Q[x.verdict[rid].first].name : "") + "</span>"; })();
+        return h + FX.questions.map(function (q, i) { return qcell(x, q, rid, st.mode, i === 0); }).join("") + '<td class="q bl ' + (st.mode === "changed" ? "" : lineStatus(x, rid)) + '">' + v + "</td>";
       } };
   }
   function qcell(x, q, rid, mode, first) {
-    var s = x.questions[rid][q.id], cls = "q" + (first ? " bl" : "");
+    var s = x.questions[rid][q.id], cls = "q" + (first ? " bl" : ""), dq = ' data-q="' + q.id + '"';
     if (mode === "changed") {
       var a = x.questions.r0[q.id], b = x.questions.r8[q.id], m = b.metric ? metric(x, b.metric) : null;
-      if (b.status === "none") return '<td class="' + cls + ' none">—</td>';
+      if (b.status === "none") return '<td class="' + cls + ' none"' + dq + ">—</td>";
       var moved = a.status !== b.status || (m && JSON.stringify(m.values.r0.value) !== JSON.stringify(m.values.r8.value));
-      return '<td class="' + cls + " " + (moved ? "" : "same") + '"><span class="cell">' + dot(a.status) + '<span class="was">' + (m ? esc(fmtShort(m, m.values.r0)) : "") + '</span><span class="arrow">→</span>' + dot(b.status) + (m ? esc(fmtShort(m, m.values.r8)) : "") + "</span></td>";
+      return '<td class="' + cls + " " + (moved ? "" : "same") + '"' + dq + '><span class="cell">' + dot(a.status) + '<span class="was">' + (m ? esc(fmtShort(m, m.values.r0)) : "") + '</span><span class="arrow">→</span>' + dot(b.status) + (m ? esc(fmtShort(m, m.values.r8)) : "") + "</span></td>";
     }
     var mm2 = s.metric ? metric(x, s.metric) : null;
-    if (s.status === "none") return '<td class="' + cls + ' none">' + (s.via && s.via.length ? "" : "—") + "</td>";
+    if (s.status === "none") return '<td class="' + cls + ' none"' + dq + ">" + (s.via && s.via.length ? "" : "—") + "</td>";
     var text = s.status === "not_observable" ? "not observable" : mm2 ? fmtShort(mm2, mm2.values[rid]) : "";
-    return '<td class="' + cls + " " + s.status + '" title="' + esc(q.name + " at " + x.short + ": " + (WORD[s.status] || "") + (s.via && s.via.length ? " (via " + s.via.map(function (id) { return node(id).short; }).join(", ") + ")" : "")) + '"><span class="cell">' + dot(s.status) + esc(text) + (s.misses ? '<span class="misses" title="counted gates that miss (in the 180, not the goal)">+' + s.misses + "</span>" : "") + "</span></td>";
+    return '<td class="' + cls + " " + s.status + '"' + dq + ' title="' + esc(q.name + " at " + x.short + ": " + (WORD[s.status] || "") + (s.via && s.via.length ? " (via " + s.via.map(function (id) { return node(id).short; }).join(", ") + ")" : "")) + '"><span class="cell">' + dot(s.status) + esc(text) + (s.misses ? '<span class="misses" title="counted gates that miss (in the 180, not the goal)">+' + s.misses + "</span>" : "") + "</span></td>";
   }
   function keyMetric(x, rid) {
     var v = x.verdict[rid]; if (v.first) return metric(x, x.questions[rid][v.first].metric);
@@ -925,28 +1049,20 @@
   }
   function table(st) {
     if (!tableFolded) tableFolded = new Set(load("table.folded", FX.nodes.filter(function (x) { return x.level === "servo"; }).map(function (x) { return x.id; })));
-    var rid = st.mode === "changed" ? "r8" : st.round, sel = st.node, cols = tableCols(st), rows = [];
+    var sel = st.node, cols = tableCols(st), rows = [];
     walk(function (x, depth) {
       for (var p = parent(x.id); p; p = parent(p.id)) if (tableFolded.has(p.id)) return;
       var moved = st.mode !== "changed" || FX.questions.some(function (q) { var a = x.questions.r0[q.id], b = x.questions.r8[q.id]; return a.status !== b.status; }) || x.metrics.some(function (m) { return JSON.stringify(m.values.r0.value) !== JSON.stringify(m.values.r8.value); });
-      rows.push('<tr data-id="' + esc(x.id) + '" class="' + (x.id === sel ? "sel" : "") + (moved ? "" : " same") + '"><td><span class="nm" style="padding-left:' + depth * 16 + 'px">' +
+      rows.push('<tr data-id="' + esc(x.id) + '" class="' + (x.id === sel ? "sel" : "") + (moved ? "" : " same") + '"><td class="nmc"><span class="nm" style="padding-left:' + depth * 16 + 'px">' +
         '<span class="tw" ' + (x.children.length ? 'data-tw="1"' : 'style="visibility:hidden"') + '><svg viewBox="0 0 12 12" style="transform:rotate(' + (tableFolded.has(x.id) ? 0 : 90) + 'deg)"><path d="M4 2.5L7.5 6 4 9.5"/></svg></span>' +
-        icon(x.type.id) + '<b title="' + esc(x.title) + '">' + esc(x.short) + '</b> <span class="muted" style="font-size:12px">' + esc(x.level === "station" ? x.line : "") + '</span></span></td><td class="ty" title="' + esc(x.type.name) + '">' + esc(x.type.name) + "</td>" + cols.cells(x) + "</tr>");
+        // WHY the short name only: the sidebar's tree already carries each station's line; the Sheet's width goes to the numbers
+        icon(x.type.id) + '<b title="' + esc(x.title + (x.line ? " · " + x.line : "")) + '">' + esc(x.short) + '</b></span></td><td class="ty" title="' + esc(x.type.name) + '">' + esc(x.type.name) + "</td>" + cols.cells(x) + "</tr>");
     });
-    var colSwitch = '<span class="lab">Columns</span><div class="dw-seg" role="group" aria-label="Columns"><button data-cols="perf" aria-pressed="' + (st.cols !== "questions") + '">Performance</button><button data-cols="questions" aria-pressed="' + (st.cols === "questions") + '">Five questions</button></div>';
-    var fold = load("insp.folded", false);
-    $("dw-tablewrap").innerHTML = '<div class="dw-ttools">' + colSwitch + '<span class="lab">' + esc(st.mode === "changed" ? "Each cell: round 0 → round 8; rows that did not move are dimmed" : round(rid).label + " · " + round(rid).long) + "</span>" +
-      (fold ? '<span class="dw-grow"></span><button class="dw-btn" id="dw-unfold" title="Show the inspector">' + SVG.side + " Inspector</button>" : "") + "</div>" +
+    var groupBtn = '<span class="lab">Column group</span><button class="dw-btn" data-cols="questions" aria-pressed="' + cols.withQ + '" title="' + (cols.withQ ? "Hide" : "Show") + ' the five questions: Floor → Data → Routines → Twin → Job">' + (cols.withQ ? "✓ " : "+ ") + "Five questions</button>";
+    var note = st.mode === "changed" ? "What changed: rows that did not move are dimmed" + (cols.withQ ? "; each question cell reads round 0 → round 8" : "") : "Every metric: round 0 (as found) · now (round 8) · change";
+    $("dw-tablewrap").innerHTML = '<div class="dw-ttools"><span class="lab">' + esc(note) + '</span><span class="dw-grow"></span>' + groupBtn + "</div>" +
       '<table class="dw-tt"><thead>' + cols.head + "</thead><tbody>" + rows.join("") + "</tbody></table>";
-    $("dw-tablewrap").querySelectorAll("[data-cols]").forEach(function (b) { b.addEventListener("click", function () { go({ cols: b.dataset.cols === "questions" ? "questions" : "" }, true); }); });
-    var uf = $("dw-unfold"); if (uf) uf.addEventListener("click", function () { save("insp.folded", false); table(state()); });
-    $("dw-table").classList.toggle("folded", fold);
-    $("dw-insp").hidden = fold;
-    var x = node(sel) || node(FX.root);
-    $("dw-insp").innerHTML = '<div class="dw-insp-head">' + icon(x.type.id) + '<b title="' + esc(x.title) + '">' + esc(x.title) + '</b>' + link({ view: "", tab: "" }, "Open page", "dw-btn") + '<button class="dw-iconbtn" data-fold title="Fold the inspector (Esc)">' + SVG.close + "</button></div>" +
-      '<div class="dw-insp-body">' + answerHTML(x, rid) + (x.metrics.length ? "<h3>Every metric · round 0 → now</h3>" + metricTable(x, rid, { compact: true }) : "") + (x.metrics.length ? "<h3>Five questions</h3>" + fiveQuestions(x, rid, true) : "") + "</div>";
-    $("dw-insp").querySelector("[data-fold]").addEventListener("click", function () { save("insp.folded", true); table(state()); });
-    $("dw-insp").querySelectorAll(".dw-answer [data-node]").forEach(function (b) { b.addEventListener("click", function () { go({ node: b.dataset.node }, true); }); });
+    $("dw-tablewrap").querySelectorAll("[data-cols]").forEach(function (b) { b.addEventListener("click", function () { go({ cols: cols.withQ ? "" : "questions" }, true); }); });
     var tr = $("dw-tablewrap").querySelector("tr.sel"); if (tr && tr.scrollIntoView) tr.scrollIntoView({ block: "nearest" });
   }
   $("dw-tablewrap").addEventListener("click", function (ev) {
@@ -955,9 +1071,62 @@
     if (ev.target.closest("[data-tw]")) { if (tableFolded.has(id)) tableFolded.delete(id); else tableFolded.add(id); save("table.folded", Array.from(tableFolded)); table(state()); return; }
     if (node(id) && node(id).level === "servo" && tableFolded.has(id)) { tableFolded.delete(id); save("table.folded", Array.from(tableFolded)); }
     save("insp.folded", false);
-    go({ node: id }, true);
+    if (!go({ node: id }, true)) render();
   });
-  addEventListener("keydown", function (ev) { if (ev.key === "Escape" && state().view === "table" && !load("insp.folded", false) && ev.target.tagName !== "INPUT") { save("insp.folded", true); table(state()); } });
+
+  // ---- the right inspector (Scene and Sheet): the picked node, performance first, then fidelity; it folds (Esc or the toggle) -------------
+  function rightOpen() { return !load("insp.folded", false); }
+  function setRight(open) { save("insp.folded", !open); render(); }
+  function perfMini(x, rid) {
+    var o = other(rid), t = FX.thresholds, was = round(o).label.toLowerCase() + " ";
+    function ok(v, g) { return v == null ? null : v <= g ? "pass" : "fail"; }
+    if (x.level === "station") {
+      var r = rung(x, rid, 0.9), r0 = rung(x, o, 0.9), up = metric(x, "passes_up_to");
+      return '<h3>Performance · ' + esc(round(rid).label + ", " + round(rid).long) + '</h3><div class="dw-tiles mini">' +
+        tile("Highest rung tracked", up.values[rid].value > 0 ? n(up.values[rid].value, 1) + " of top speed" : "none", up.values[rid].status, "goal ≥ 0.9", was + (up.values[o].value > 0 ? n(up.values[o].value, 1) : "none")) +
+        tile("Tracking RMS at 0.9", deg(r.tracking_rms_deg), ok(r.tracking_rms_deg, t.tracking_rms_deg), "GOOD ≤ " + t.tracking_rms_deg + "°", was + deg(r0.tracking_rms_deg)) +
+        tile("Tip stop at 0.9, median", mm(r.stop_tool_mm), ok(r.stop_tool_mm, t.stop_tool_mm), "GOOD ≤ " + t.stop_tool_mm + " mm", was + mm(r0.stop_tool_mm)) +
+        tile("Worst single stop at 0.9", mm(r.stop_tool_max_mm), null, "not the gate", was + mm(r0.stop_tool_max_mm)) + "</div>" +
+        '<div class="dw-plots one"><div class="pc">' + rungPlot(x, "tracking_rms_deg", rid) + "</div></div>";
+    }
+    if (x.level === "deployment") {
+      var tr = metric(x, "stations_tracking"), pg = metric(x, "perf_gates");
+      return '<h3>Performance · ' + esc(round(rid).label + ", " + round(rid).long) + '</h3><div class="dw-tiles mini">' +
+        tile("Stations tracking to 0.9", tr.values[rid].value + " of 6", tr.values[rid].status, "goal 6 of 6", was + tr.values[o].value) +
+        tile("Real performance gates", pg.values[rid].value + " of " + pg.values[rid].of, pg.values[rid].value === pg.values[rid].of ? "pass" : null, "tracking + tip stop, every rung", was + pg.values[o].value) + "</div>";
+    }
+    return "";
+  }
+  function ichildren(x, rid) {
+    if (!x.children.length) return "";
+    var title = x.level === "station" ? "Under this station · shown, not gating" : x.level === "servo" ? "Its parts · pulled apart in the 3D" : "Under it";
+    return '<div class="dw-ichilds"><h3>' + esc(title) + "</h3>" + kids(x.id).map(function (k) {
+      return '<div class="dw-crow" data-node="' + esc(k.id) + '">' + dot(lineStatus(k, rid)) + icon(k.type.id) + "<b>" + esc(k.short) + '</b><span class="cl">' + esc(oneLine(k, rid)) + "</span></div>";
+    }).join("") + "</div>";
+  }
+  function inspector(x, rid) {
+    var body = $("dw-inspBody");
+    body.innerHTML = '<div class="dw-insp-head">' + icon(x.type.id) + '<b title="' + esc(x.title) + '">' + esc(x.title) + "</b>" + link({ view: "", tab: "" }, "Open in Workbench", "dw-btn") +
+      '<button class="dw-iconbtn" data-fold title="Fold the inspector (Esc)" aria-label="Fold the inspector">' + SVG.close + "</button></div>" +
+      '<div class="dw-insp-body">' + answerHTML(x, rid) + perfMini(x, rid) + ichildren(x, rid) +
+      (x.metrics.length ? "<h3>Every metric · round 0 → now</h3>" + metricTable(x, rid, { compact: true }) : "") + (x.metrics.length ? "<h3>Five questions</h3>" + fiveQuestions(x, rid, true) : "") + "</div>";
+    body.querySelector("[data-fold]").addEventListener("click", function () { setRight(false); });
+    body.querySelectorAll("[data-node]").forEach(function (b) { b.addEventListener("click", function () { go({ node: b.dataset.node }); }); });
+  }
+  addEventListener("keydown", function (ev) { if (ev.key === "Escape" && (VIEW === "sheet" || VIEW === "scene") && rightOpen() && ev.target.tagName !== "INPUT") setRight(false); });
+
+  // ---- the Scene (V3): the 3D is the page; every station wears its performance in place; a time bar moves between the rounds ---------
+  function scene(st) {
+    var x = node(st.node) || node(FX.root), rid = st.mode === "changed" ? "r8" : st.round;
+    mount3d($("dw-stage"));
+    sync3d(x, rid);
+    var root = node(FX.root), pg = metric(root, "perf_gates"), tr = metric(root, "stations_tracking"), tw = metric(root, "stations_twinned");
+    function when(r) { return round(r).scored_utc.slice(5, 10); }
+    $("dw-timebar").innerHTML = '<span class="tb-l">As found<small>round 0 · ' + esc(when("r0")) + '</small></span><input id="dw-time" type="range" min="0" max="1" step="1" value="' + (rid === "r0" ? 0 : 1) + '" aria-label="Round shown: as found (round 0) or now (round 8)">' +
+      '<span class="tb-r">Now<small>round 8 · ' + esc(when("r8")) + "</small></span>" +
+      '<span class="tb-sum"><span><b>' + pg.values[rid].value + " of " + pg.values[rid].of + "</b> real performance gates</span><span><b>" + tr.values[rid].value + " of 6</b> track to 0.9" + (tw ? " · <b>" + tw.values[rid].value + " of 6</b> twinned" : "") + "</span></span>";
+    $("dw-time").addEventListener("input", function () { go({ round: this.value === "0" ? "r0" : "r8", mode: "" }, true); });
+  }
 
   // ---- the Runs view: every run of a round, the summary first, each with its Rerun recording ------------------------------------------
   var runSort = load("runs.sort", { key: "station", dir: 1 });
@@ -999,6 +1168,8 @@
     var med = rms.length ? rms[Math.floor(rms.length / 2)] : null;
     var at09 = mine.filter(function (r) { return r.fraction === 0.9; }), at09ok = at09.filter(function (r) { return r.tracks === "pass"; }).length;
     var sts = ["can1", "can11", "can12", "can13", "can14", "can15"];
+    var selSt = stationOf(st.node);
+    var only = selSt && selSt.id !== f.st ? '<button class="dw-btn" data-st="' + esc(selSt.id) + '" title="The tree\'s selection is ' + esc(node(st.node).short) + '">Only ' + esc(canName(selSt.id)) + "'s runs (selected)</button>" : "";
     var stBtns = '<button data-st="" aria-pressed="' + (!f.st) + '">All stations</button>' + sts.map(function (s) {
       var m = mine.filter(function (r) { return r.station === s; }), ok = m.filter(function (r) { return r.tracks === "pass"; }).length;
       return '<button data-st="' + s + '" aria-pressed="' + (f.st === s) + '" title="' + esc(canName(s) + " · " + (node(s) ? node(s).line : "")) + '">' + dot(m.length && ok === m.length ? "pass" : ok ? "watch" : "fail") + esc(canName(s)) + ' <span class="muted">' + ok + "/" + m.length + "</span></button>";
@@ -1026,11 +1197,12 @@
       '<div class="dw-rfilters"><label>Rung <select data-f="rung"><option value="">all</option>' + [0.2, 0.4, 0.6, 0.8, 0.9, 1].map(function (x) { return '<option value="' + x + '"' + (f.rung === String(x) ? " selected" : "") + ">" + x + " of top speed</option>"; }).join("") + "</select></label>" +
       '<label>Kind <select data-f="kind"><option value="">all</option><option value="repeat"' + (f.kind === "repeat" ? " selected" : "") + '>repeat</option><option value="held_out"' + (f.kind === "held_out" ? " selected" : "") + ">held-out</option></select></label>" +
       '<label><input type="checkbox" data-f="miss"' + (f.miss ? " checked" : "") + "> only runs that miss the goal</label>" +
-      '<input type="search" data-f="q" placeholder="Filter by run name…" value="' + esc(st.q) + '" aria-label="Filter runs by name">' +
+      '<input type="search" data-f="q" placeholder="Filter by run name…" value="' + esc(st.q) + '" aria-label="Filter runs by name">' + only +
       '<span class="muted">' + shown.length + " of " + mine.length + " runs · click a heading to sort</span></div>" +
       '<table class="dw-rt"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table>";
     el.querySelectorAll("[data-rr]").forEach(function (b) { b.addEventListener("click", function () { go({ rr: b.dataset.rr }, true); }); });
-    el.querySelectorAll("[data-st]").forEach(function (b) { b.addEventListener("click", function () { go({ st: b.dataset.st }, true); }); });
+    // a station picked here is the views' selection too (the tree follows); All stations is the whole deployment
+    el.querySelectorAll("[data-st]").forEach(function (b) { b.addEventListener("click", function () { go({ st: b.dataset.st, node: b.dataset.st || FX.root }, true); }); });
     el.querySelectorAll("[data-sort]").forEach(function (th) { th.addEventListener("click", function () { var key = th.dataset.sort; runSort = { key: key, dir: runSort.key === key ? -runSort.dir : 1 }; save("runs.sort", runSort); runs(state()); }); });
     el.querySelectorAll("select[data-f]").forEach(function (s) { s.addEventListener("change", function () { var p = {}; p[s.dataset.f] = s.value; go(p, true); }); });
     var miss = el.querySelector('input[data-f="miss"]'); miss.addEventListener("change", function () { go({ miss: miss.checked ? "1" : "" }, true); });
@@ -1038,54 +1210,137 @@
     q.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(function () { go({ q: q.value }, true); var again = $("dw-runs").querySelector('input[data-f="q"]'); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } }, 200); });
   }
 
-  // ---- the bar, the trail, routing -----------------------------------------------------------------------------------------------------
-  function bar(st, view) {
-    document.querySelectorAll(".dw-view").forEach(function (a) {
-      var v = a.dataset.v;
-      a.hidden = v !== "home" && !st.dep;
-      if (st.dep && v !== "home") a.setAttribute("href", href({ view: v === "page" ? "" : v }));
+  // ---- Obsidian's frame: the ribbon, the sidebar and its toggle, the tooltips, the bar and the trail -------------------------------------
+  var tip = document.getElementById("dw-tip"), tipFor = null, tipTimer = null;
+  function hideTip() { clearTimeout(tipTimer); tipFor = null; if (tip) tip.hidden = true; }
+  function showTip(el) {
+    var text = el.getAttribute("data-tip"); if (!tip || !text || !el.isConnected || el.hidden) return;
+    var pos = el.getAttribute("data-tip-pos") || "right", r = el.getBoundingClientRect();
+    tip.textContent = text; tip.className = "dw-tip mod-" + pos; tip.hidden = false;
+    var arrow = document.createElement("span"); arrow.className = "dw-tip-arrow"; tip.appendChild(arrow);
+    // WHY right of the icon: Obsidian's ribbon tooltips sit to the right (.tooltip.mod-right), vertically centred, an arrow pointing back
+    if (pos === "left") { tip.style.left = (r.left - 8) + "px"; tip.style.top = (r.top + r.height / 2) + "px"; }
+    else { tip.style.left = (r.right + 8) + "px"; tip.style.top = (r.top + r.height / 2) + "px"; }
+  }
+  document.addEventListener("mouseover", function (ev) {
+    var el = ev.target.closest && ev.target.closest("[data-tip]");
+    if (el === tipFor) return;
+    hideTip();
+    if (!el) return;
+    tipFor = el;
+    tipTimer = setTimeout(function () { showTip(el); }, 250);
+  });
+  document.addEventListener("focusin", function (ev) { var el = ev.target.closest && ev.target.closest("[data-tip]"); hideTip(); if (el && el.matches(":focus-visible")) { tipFor = el; showTip(el); } });
+  document.addEventListener("focusout", hideTip);
+  document.addEventListener("pointerdown", hideTip);
+
+  function workbenchDeps() { return DATA ? Object.keys(DATA.trees) : []; }
+  function ribbon(st, view) {
+    var deps = workbenchDeps(), dep = st.dep && DATA.trees[st.dep] ? st.dep : (deps.indexOf(load("last.dep", "")) >= 0 ? load("last.dep", "") : deps[0]);
+    var title = dep ? (DATA.deployments.filter(function (d) { return d.id === dep; })[0] || { title: dep }).title : "";
+    document.querySelectorAll(".dw-rb").forEach(function (a) {
+      var v = a.dataset.v, base = a.dataset.tipBase || (a.dataset.tipBase = a.getAttribute("data-tip"));
+      if (v === "home") a.setAttribute("href", location.pathname);
+      else if (!dep) a.hidden = true;  // no deployment with a typed tree (its scorecards missing): nothing for the view to open
+      else {
+        a.hidden = false;
+        // from the Deployments list, a view opens the deployment last opened (Obsidian reopens your last workspace)
+        a.setAttribute("href", st.dep ? href({ view: v }) : location.pathname + "?d=" + encodeURIComponent(dep) + (v === "page" ? "" : "&view=" + v));
+        a.setAttribute("data-tip", st.dep ? base : base + " · opens " + title);
+      }
       if (v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
+  }
+  function sideOpen() { return !!load("side.open", true); }
+  function setToggle(b, open, what) {
+    b.setAttribute("aria-expanded", String(open));
+    var label = (open ? "Collapse the " : "Expand the ") + what;
+    b.setAttribute("aria-label", label); b.setAttribute("data-tip", label);
+    // Obsidian's sidebar icon: the filled bar inside the frame widens when its sidebar is open (8.33 % closed, 24 % open)
+    b.querySelector(".inner").setAttribute("width", open ? "4.3" : "1.6");
+  }
+  function layoutSide(view) {
+    var has = view !== "home", open = has && sideOpen();
+    $("dw-left").hidden = !open; $("dw-sashL").hidden = !open;
+    $("dw-sidetoggle").hidden = !has;
+    setToggle($("dw-sidetoggle"), open, "sidebar");
+    host.classList.toggle("side-closed", !open);
+  }
+  $("dw-sidetoggle").addEventListener("click", function () { save("side.open", !sideOpen()); hideTip(); layoutSide(VIEW); });
+  $("dw-unfold").addEventListener("click", function () { hideTip(); setRight(!rightOpen()); });
+  function layoutRight(view) {
+    var has = view === "scene" || view === "sheet", open = has && rightOpen();
+    $("dw-insp").hidden = !open; $("dw-sashT").hidden = !open;
+    $("dw-unfold").hidden = !has;
+    if (has) setToggle($("dw-unfold"), open, "inspector");
+    var dock = view === "sheet";
+    $("dw-dock3d").hidden = !dock; $("dw-sashD").hidden = !dock;
+    // WHY empty it when it is not shown: a hidden inspector must not answer a query meant for the page in view
+    if (!open) $("dw-inspBody").innerHTML = "";
+    return open;
+  }
+  function bar(st, view) {
+    var dep = st.dep ? DATA.deployments.filter(function (d) { return d.id === st.dep; })[0] : null;
+    var rb = document.querySelector('.dw-rb[data-v="' + view + '"] svg');
+    $("dw-vtitle").innerHTML = (rb ? '<span class="ic">' + rb.outerHTML + "</span>" : "") + "<b>" + esc(VIEW_NAME[view]) + "</b>" + (dep ? '<span class="muted"> · ' + esc(dep.title) + "</span>" : "");
     var seg = $("dw-round");
     seg.hidden = view === "home" || view === "runs";
-    var opts = view === "table" ? [["r8", "Now · round 8"], ["r0", "As found · round 0"], ["changed", "What changed"]] : [["r0", "As found · round 0"], ["r8", "Now · round 8"]];
-    var cur = view === "table" && st.mode === "changed" ? "changed" : st.round;
+    var opts = view === "sheet" ? [["r8", "Now · round 8"], ["r0", "As found · round 0"], ["changed", "What changed"]] : [["r0", "As found · round 0"], ["r8", "Now · round 8"]];
+    var cur = view === "sheet" && st.mode === "changed" ? "changed" : st.round;
     seg.innerHTML = opts.map(function (o) { return '<button data-r="' + o[0] + '" aria-pressed="' + (o[0] === cur) + '" title="' + esc(o[0] === "changed" ? "round 0 → round 8, every cell that moved" : o[0] === "r0" ? "the controller as found and the twin unfitted (scored 2026-11-15)" : "round 8, scored 2026-11-17") + '">' + esc(o[1]) + "</button>"; }).join("");
     seg.querySelectorAll("button").forEach(function (b) { b.addEventListener("click", function () { var r = b.dataset.r; go(r === "changed" ? { mode: "changed", round: "" } : { mode: "", round: r }, true); }); });
-    // the site's trail: Home › Deployments › the deployment › the node
+    // the site's trail: Home › Deployments › the deployment › the node › the view
     var crumbs = document.querySelector(".trail nav.crumbs");
     if (crumbs) {
       var parts = ['<a href="/">Home</a>', '<a href="' + location.pathname + '"' + (view === "home" ? ' aria-current="page"' : "") + ">Deployments</a>"];
       if (st.dep) {
-        var dep = DATA.deployments.filter(function (d) { return d.id === st.dep; })[0];
-        parts.push('<a href="' + esc(href({ node: "", view: "", tab: "" })) + '">' + esc(dep ? dep.title : st.dep) + "</a>");
-        if (view !== "runs" && FX && st.node && st.node !== FX.root && node(st.node)) ancestors(st.node).slice(1).concat([node(st.node)]).forEach(function (a) { parts.push('<a href="' + esc(href({ node: a.id, view: "", tab: "" })) + '">' + esc(a.short) + "</a>"); });
-        if (view === "table") parts.push("<span>Table</span>"); else if (view === "runs") parts.push("<span>Runs</span>");
+        parts.push('<a href="' + esc(href({ node: "", tab: "" })) + '">' + esc(dep ? dep.title : st.dep) + "</a>");
+        if (view !== "runs" && FX && st.node && st.node !== FX.root && node(st.node)) ancestors(st.node).slice(1).concat([node(st.node)]).forEach(function (a) { parts.push('<a href="' + esc(href({ node: a.id, tab: "" })) + '">' + esc(a.short) + "</a>"); });
+        if (view !== "page") parts.push("<span>" + esc(VIEW_NAME[view]) + "</span>");
       }
       crumbs.innerHTML = parts.join(" › ");
       crumbs.querySelectorAll("a").forEach(function (a) { if (a.getAttribute("href").indexOf(location.pathname) === 0) a.setAttribute("data-go", ""); });
     }
   }
+  // a pick in the tree keeps the view; in Runs it also filters the runs to the picked station (the deployment: every station)
+  function pick(id) {
+    if (VIEW === "runs") { var s = stationOf(id); go({ node: id, st: s ? s.id : "" }); }
+    else go({ node: id });
+  }
   function render() {
+    hideTip();
     var st = state();
     var dep = st.dep && DATA.trees[st.dep] ? st.dep : null;
     FX = dep ? DATA.trees[dep] : null;
     byId = {}; Q = {};
     if (FX) { FX.nodes.forEach(function (x) { byId[x.id] = x; }); FX.questions.forEach(function (q) { Q[q.id] = q; }); }
     if (FX && !node(st.node)) st.node = FX.root;
-    var view = !dep ? "home" : st.view === "table" ? "table" : st.view === "runs" ? "runs" : "page";
-    $("dw-home").hidden = view !== "home"; $("dw-dep").hidden = view !== "page"; $("dw-table").hidden = view !== "table"; $("dw-runs").hidden = view !== "runs";
-    bar(st, view);
-    document.title = (FX ? (view === "page" && st.node !== FX.root ? node(st.node).short + " · " : "") + DATA.trees[dep].title + " · " : "") + "Deployments: sim2real";
+    var view = !dep ? "home" : VIEWS[st.view] || "page";
+    VIEW = view; host.dataset.view = view;
+    if (dep) save("last.dep", dep);
+    $("dw-home").hidden = view !== "home"; $("dw-dep").hidden = view !== "page"; $("dw-scene").hidden = view !== "scene"; $("dw-table").hidden = view !== "sheet"; $("dw-runs").hidden = view !== "runs";
+    ribbon(st, view); bar(st, view); layoutSide(view);
+    var right = layoutRight(view);
+    document.title = (FX ? (view !== "home" && st.node !== FX.root ? node(st.node).short + " · " : "") + (view !== "page" ? VIEW_NAME[view] + " · " : "") + DATA.trees[dep].title + " · " : "") + "Deployments: sim2real";
     if (view === "home") return home();
     if (!treeUI) {
-      treeUI = new Tree($("dw-left"), { round: function () { return state().round; }, onSelect: function (id) { go({ node: id, view: "" }); } });
-      sash($("dw-sashL"), $("dw-left"), { key: "tree", min: 220, max: 560, dflt: 330 });
-      sash($("dw-sashT"), $("dw-insp"), { key: "insp", min: 320, max: 760, dflt: 470, invert: true });
+      treeUI = new Tree($("dw-left"), { round: function () { var s2 = state(); return s2.mode === "changed" ? "r8" : s2.round; }, onSelect: pick });
+      sash($("dw-sashL"), $("dw-left"), { key: "tree", min: 220, max: 560, dflt: 300 });
+      sash($("dw-sashT"), $("dw-insp"), { key: "insp", min: 320, max: 760, dflt: 420, invert: true });
+      sash($("dw-sashD"), $("dw-dock3d"), { key: "dock3d", horizontal: true, min: 140, max: 640, dflt: 260 });
     }
-    if (view === "page") { treeUI.select(st.node); return entity(st); }
-    if (view === "table") return table(st);
-    return runs(st);
+    treeUI.select(st.node);
+    var x = node(st.node), rid = st.mode === "changed" ? "r8" : st.round;
+    if (view === "page") return entity(st);
+    if (view === "runs") return runs(st);
+    if (view === "scene") scene(st); else table(st);
+    if (right) {
+      if (view === "sheet") { mount3d($("dw-dock3d")); sync3d(x, rid); }
+      var changed = $("dw-inspBody").dataset.node !== x.id;
+      inspector(x, rid);
+      $("dw-inspBody").dataset.node = x.id;
+      if (changed) $("dw-inspBody").scrollTop = 0;
+    } else $("dw-inspBody").dataset.node = "";
   }
 
   fetch(host.dataset.src).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function (d) {

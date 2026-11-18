@@ -11,7 +11,7 @@ body[data-page="deployments-workbench"] > footer { display: none; }
   --pass: var(--s2r-pass); --pass-bg: var(--s2r-pass-bg); --fail: var(--s2r-fail); --fail-bg: var(--s2r-fail-bg);
   --warn: var(--s2r-warn); --warn-bg: var(--s2r-warn-bg); --none: var(--s2r-none); --none-bg: var(--s2r-none-bg);
   --real: var(--data-series-1); --sim: var(--data-series-2); --was: var(--ink3); --scene-bg: #eef0f3;
-  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; font-size: 14px;
+  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: row; font-size: 14px;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dw { --scene-bg: #111214; } }
 :root[data-theme="dark"] .dw { --scene-bg: #111214; }
@@ -23,12 +23,37 @@ body[data-page="deployments-workbench"] > footer { display: none; }
 .dw .mono { font-family: var(--mono); font-size: .92em; }
 .dw .grow, .dw .dw-grow { flex: 1 1 auto; }
 
-/* the bar: the views (Deployments · Workbench · Table · Runs) and the round control */
-.dw-bar { flex: none; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--rule); background: var(--bg); }
-.dw-views { display: flex; gap: 2px; height: 100%; }
-.dw-view { display: inline-flex; align-items: center; padding: 0 12px; text-decoration: none; color: var(--ink2); border-bottom: 2px solid transparent; font-size: 13.5px; }
-.dw-view:hover { color: var(--ink); }
-.dw-view[aria-current="page"] { color: var(--ink); font-weight: 650; border-bottom-color: var(--ink); }
+/* Obsidian's frame, its geometry from like_obsidian_md_viewer's captured obsidian-app.css: the ribbon (.workspace-ribbon) 44 px wide on
+   the secondary background, a 40 px header cell (--header-height) holding the sidebar toggle, then the actions with padding 8/4/12 px and
+   a 4 px gap; each action a clickable-icon (padding 4/6 px, radius 4 px) around an 18 px icon at a 1.75 stroke (--icon-l); the active
+   view on the hover fill, as Obsidian marks its active sidebar tab; tooltips to the right with an arrow (.tooltip.mod-right) */
+.dw-ribbon { flex: 0 0 44px; width: 44px; display: flex; flex-direction: column; background: var(--bg2); border-right: 1px solid var(--rule); color: var(--ink3); z-index: 10; }
+.dw-rb-head { flex: none; height: 40px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--rule); }
+.dw-rb-actions { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 12px; }
+.dw-rb, .dw-toggle { display: flex; align-items: center; justify-content: center; padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--ink3); cursor: pointer; text-decoration: none; }
+.dw-rb svg, .dw-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.dw-toggle svg .inner { fill: currentColor; stroke: none; }
+.dw-rb:hover, .dw-toggle:hover { background: var(--hover); color: var(--ink); }
+.dw-rb[aria-current="page"] { background: var(--hover); color: var(--ink); }
+.dw-rb:focus-visible, .dw-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.dw-rb-sep { width: 18px; height: 1px; background: var(--rule); margin: 4px 0; flex: none; }
+.dw-toggle.right svg { transform: scaleX(-1); }
+:root { --dw-tip-bg: color-mix(in srgb, var(--ink) 16%, var(--bg3)); }
+/* WHY the raised surface and a hairline: Obsidian's near-black message colour disappears on this site's near-black dark theme */
+.dw-tip { position: fixed; z-index: 70; max-width: 300px; padding: 4px 8px; border-radius: 4px; background: var(--dw-tip-bg); color: var(--ink);
+  font: 500 12px/1.3 var(--sans); white-space: nowrap; pointer-events: none; box-shadow: 0 0 0 1px var(--rule), 0 2px 8px rgba(0, 0, 0, .35); transform: translateY(-50%); }
+.dw-tip[hidden] { display: none; }
+.dw-tip.mod-left { transform: translate(-100%, -50%); }
+.dw-tip .dw-tip-arrow { position: absolute; top: calc(50% - 5px); width: 0; height: 0; border: 5px solid transparent; }
+.dw-tip.mod-right .dw-tip-arrow { left: -10px; border-right-color: var(--dw-tip-bg); }
+.dw-tip.mod-left .dw-tip-arrow { right: -10px; border-left-color: var(--dw-tip-bg); }
+
+/* the work area: the view's header (its name, the round, the inspector's toggle at the far right, as Obsidian's right sidebar toggle) */
+.dw-work { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.dw-bar { flex: none; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 6px 0 14px; border-bottom: 1px solid var(--rule); background: var(--bg); }
+.dw-vtitle { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; }
+.dw-vtitle .ic svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.dw-row { flex: 1 1 auto; min-height: 0; display: flex; }
 .dw-seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 7px; overflow: hidden; background: var(--bg2); }
 .dw-seg button { border: 0; border-radius: 0; background: none; padding: 3px 10px; font-size: 12.5px; color: var(--ink2); cursor: pointer; white-space: nowrap; }
 .dw-seg button + button { border-left: 1px solid var(--rule); }
@@ -40,7 +65,7 @@ body[data-page="deployments-workbench"] > footer { display: none; }
 .dw-iconbtn:hover { background: var(--hover); color: var(--ink); }
 .dw-iconbtn svg, .dw .ic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 
-.dw-home, .dw-dep, .dw-tablev, .dw-runs { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.dw-home, .dw-dep, .dw-tablev, .dw-runs, .dw-scenev { flex: 1; min-width: 0; min-height: 0; display: flex; }
 
 /* status: a dot and a word */
 .dw .dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid transparent; vertical-align: middle; }
@@ -86,13 +111,14 @@ body.dw-resizing-h, body.dw-resizing-h * { cursor: row-resize !important; user-s
 .dw-drow .head b { display: block; font-size: 15px; }
 .dw-home .after { margin-top: 12px; font-size: 13px; }
 
-/* the workbench: the typed tree and the node's page */
-.dw-left { flex: none; min-width: 220px; background: var(--bg); overflow: hidden; }
+/* the left sidebar: the typed tree, on the secondary background (Obsidian's side dock); its edge drags, its width is remembered */
+.dw-left { flex: none; min-width: 220px; background: var(--bg2); overflow: hidden; }
 /* WHY a block, not a flex column: a column flex box that scrolls shrinks its rows (the tabs collapsed under the 3D, 2026-11-17) */
 .dw-entity { flex: 1; min-width: 0; overflow: auto; display: block; }
 .dw-tree { display: flex; flex-direction: column; min-height: 0; height: 100%; font-size: 13.5px; }
-.dw-tree-tools { display: flex; align-items: center; gap: 2px; padding: 6px 6px 0 10px; }
-.dw-tree-tools b { flex: 1; }
+.dw-tree-tools { flex: none; height: 40px; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--rule); }
+.dw-tree-tools b { flex: 1; font-size: 13px; }
+.dw-tree-find { margin-top: 8px !important; }
 .dw-tree-find { display: flex; align-items: center; gap: 6px; margin: 6px 8px; padding: 0 8px; height: 30px; border: 1px solid var(--rule); border-radius: 6px; color: var(--ink3); background: var(--bg); }
 .dw-tree-find:focus-within { border-color: var(--ink2); }
 .dw-tree-find svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; }
@@ -220,13 +246,30 @@ table.dw-mt .sub { color: var(--ink3); font-size: 12px; }
 pre.dw-sketch { margin: 0; padding: 12px 14px; background: var(--bg2); border: 1px solid var(--rule); border-radius: 8px; font: 12.5px/1.5 var(--mono); overflow: auto; white-space: pre; color: var(--ink); }
 pre.dw-sketch .c { color: var(--ink3); }
 
-/* the Table view: the nested tree-table, its inspector folds */
+/* the Sheet (V2): the nested tree-table; each performance metric as round 0 · now · change; the name column and the head stay put */
 .dw-tablewrap { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
 .dw-ttools { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--rule2); flex-wrap: wrap; position: sticky; left: 0; }
 .dw-ttools .lab { font-size: 12px; color: var(--ink3); }
-table.dw-tt { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
-table.dw-tt th { position: sticky; top: 0; background: var(--bg); z-index: 1; text-align: left; font-size: 11.5px; font-weight: 600; color: var(--ink3); padding: 7px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; vertical-align: bottom; }
-table.dw-tt th small { display: block; font-weight: 400; font-size: 11px; color: var(--ink3); white-space: normal; max-width: 130px; line-height: 1.25; }
+.dw-ttools .dw-btn[aria-pressed="true"] { background: var(--accent-bg); color: var(--ink); border-color: var(--ink3); font-weight: 650; }
+table.dw-tt { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 13px; }
+table.dw-tt thead { position: sticky; top: 0; z-index: 3; }
+table.dw-tt th { background: var(--bg); text-align: left; font-size: 11.5px; font-weight: 600; color: var(--ink3); padding: 6px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; vertical-align: bottom; }
+table.dw-tt th small { display: block; font-weight: 400; font-size: 11px; color: var(--ink3); white-space: normal; max-width: 150px; line-height: 1.25; }
+table.dw-tt th.mh { text-align: center; color: var(--ink2); border-bottom: 1px solid var(--rule2); }
+table.dw-tt th.mh small { margin: 0 auto; }
+table.dw-tt th.sub { font-weight: 500; font-size: 11px; padding: 3px 8px; }
+table.dw-tt th.grp { text-align: left; }
+table.dw-tt th.grp.perf { color: var(--ink); }
+table.dw-tt td.nmc { max-width: 250px; }
+table.dw-tt td.nmc .nm b { overflow: hidden; text-overflow: ellipsis; }
+table.dw-tt th.nmh, table.dw-tt td.nmc { position: sticky; left: 0; z-index: 2; background: var(--bg); box-shadow: inset -1px 0 0 var(--rule2); }
+table.dw-tt th.nmh { z-index: 4; }
+table.dw-tt tbody tr:hover td.nmc { background: linear-gradient(var(--hover), var(--hover)), var(--bg); }
+table.dw-tt tr.sel td.nmc { background: linear-gradient(var(--accent-bg), var(--accent-bg)), var(--bg); }
+table.dw-tt td.q.was { min-width: 0; color: var(--was); }
+table.dw-tt td.q.was .cell { padding: 2px 4px; }
+table.dw-tt td.chg { width: 22px; padding: 0 6px 0 0; text-align: center; font-size: 11px; color: var(--ink3); }
+table.dw-tt td.chg.up { color: var(--pass); } table.dw-tt td.chg.down { color: var(--fail); }
 table.dw-tt td { padding: 0 8px; height: 34px; border-bottom: 1px solid var(--rule2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 table.dw-tt tr { cursor: pointer; }
 table.dw-tt tbody tr:hover { background: var(--hover); }
@@ -234,7 +277,7 @@ table.dw-tt tr.sel { background: var(--accent-bg); }
 table.dw-tt tr.same td.q { opacity: .45; }
 table.dw-tt .nm { display: flex; align-items: center; gap: 6px; }
 table.dw-tt .nm b { font-weight: 600; }
-table.dw-tt td.ty { color: var(--ink3); max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+table.dw-tt td.ty { color: var(--ink3); max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 table.dw-tt td.q { min-width: 84px; }
 table.dw-tt td.q .cell { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 5px; }
 table.dw-tt td.q.fail .cell { background: var(--fail-bg); color: var(--fail); font-weight: 650; }
@@ -244,14 +287,35 @@ table.dw-tt td.q.none, table.dw-tt td.q.not_run, table.dw-tt td.q.observed, tabl
 table.dw-tt td.q .arrow { color: var(--ink3); margin: 0 2px; }
 table.dw-tt td.q .misses { color: var(--warn); font-size: 11.5px; }
 table.dw-tt td.bl, table.dw-tt th.bl { border-left: 1px solid var(--rule2); }
-table.dw-tt th.grp { text-align: center; color: var(--ink2); border-bottom: 1px solid var(--rule2); }
-.dw-insp { flex: none; overflow: auto; background: var(--bg); padding: 0 0 20px; }
+table.dw-tt th.grp { color: var(--ink2); border-bottom: 1px solid var(--rule2); }
+/* the right inspector (Scene, Sheet): the Sheet docks the 3D on top of it; it folds from the bar's toggle or Esc; its edge drags */
+.dw-insp { flex: none; min-width: 0; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+.dw-dock3d { flex: none; position: relative; margin: 10px 12px 0; border-radius: 9px; overflow: hidden; border: 1px solid var(--rule); }
+.dw-dock3d > .scene { width: 100%; height: 100%; }
+#dw-sashD { margin: 2px 12px; }
+.dw-insp-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 0 20px; }
 .dw-insp-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--rule); position: sticky; top: 0; background: var(--bg); z-index: 2; }
 .dw-insp-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dw-insp-body { padding: 12px; display: grid; gap: 10px; }
 .dw-insp-body h3 { margin: 6px 0 0; }
-.dw-tablev.folded #dw-sashT { display: none; }
-.dw-unfold { position: absolute; right: 14px; top: 8px; }
+.dw-tiles.mini { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin: 0; }
+.dw-tiles.mini .tv { font-size: 16px; }
+.dw-plots.one { grid-template-columns: minmax(0, 1fr); margin: 0; }
+.dw-ichilds h3 { margin: 0 0 4px; }
+
+/* the Scene (V3): the 3D is the page; the time bar between the rounds floats under it */
+.dw-stage { flex: 1; min-width: 0; position: relative; }
+/* WHY .dw in front: ".dw .scene" (position: relative) comes later and would otherwise win, leaving the 3D half the stage's height */
+.dw .dw-stage > .scene { position: absolute; inset: 0; min-height: 0; }
+.dw-timebar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent); box-shadow: 0 0 0 1px var(--rule), 0 6px 18px rgba(0, 0, 0, .25); max-width: calc(100% - 24px); }
+.dw-timebar span { white-space: nowrap; font-size: 13px; font-weight: 650; text-align: center; line-height: 1.1; }
+.dw-timebar small { display: block; font-weight: 400; font-size: 11px; color: var(--ink3); }
+.dw-timebar input { width: 120px; accent-color: var(--real); cursor: pointer; }
+.dw-timebar .tb-sum { font-weight: 500; color: var(--ink2); text-align: left; border-left: 1px solid var(--rule); padding-left: 12px; line-height: 1.35; }
+.dw-timebar .tb-sum > span { display: block; text-align: left; font-weight: 500; }
+.dw-timebar .tb-sum b { color: var(--ink); }
+.dw[data-view="scene"] .scene .s-cap { bottom: 74px; }
 
 /* the Runs view: every run of a round, its summary first */
 .dw-runs { flex-direction: column; overflow: auto; padding: 12px 18px 28px; }
@@ -284,6 +348,11 @@ table.dw-rt a.rr:hover { text-decoration: underline; }
   box-shadow: 0 0 0 1px var(--rule); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; z-index: 2; }
 .dw .scene .s-label.sel { box-shadow: 0 0 0 2px var(--ink2); font-weight: 650; }
 .dw .scene .s-label small { color: var(--ink3); font-weight: 500; }
+.dw .scene .s-label small.fid { font-weight: 650; }
+.dw .scene .s-label small.fid.fail { color: var(--fail); } .dw .scene .s-label small.fid.watch { color: var(--warn); }
+.dw .scene .s-plabel { transform: translate(0, -100%); font-size: 11.5px; }
+.dw .scene .s-plabel.flip { transform: translate(-100%, -100%); }
+.dw .scene .s-plabel[hidden] { display: none; }
 .dw .viewcube { position: absolute; right: 12px; top: 12px; width: 70px; height: 70px; perspective: 260px; z-index: 4; }
 .dw .viewcube .cube { position: absolute; inset: 9px; transform-style: preserve-3d; }
 .dw .viewcube .face { position: absolute; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; font: 700 9.5px/1 var(--sans); letter-spacing: .04em;
@@ -291,6 +360,7 @@ table.dw-rt a.rr:hover { text-decoration: underline; }
 .dw .viewcube .face:hover { background: #cfe0f6; color: #1d4f91; }
 
 @media (max-width: 760px) {
+  .dw-timebar .tb-sum { display: none; }
   .dw-grid { grid-template-columns: minmax(0, 1fr); }
   .dw-drow { grid-template-columns: 80px minmax(0, 1fr); }
   .dw-drow img, .dw-drow .noimg { width: 80px; height: 50px; }

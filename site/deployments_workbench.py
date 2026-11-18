@@ -1,6 +1,12 @@
 """/deployments/: the Deployments workbench. Every deployment; open one for its 3D and its typed component tree; any node of the tree shows
-that level's data: performance first (real vs the target), then fidelity (real vs sim) and the five questions; a Table view (the nested
-tree-table, like RobotDx's) and a Runs view (every run of every round, each opening its Rerun recording).
+that level's data: performance first (real vs the target), then fidelity (real vs sim) and the five questions.
+
+Obsidian's frame (Zach 2026-11-17, on proposal V1: "update it so it has the left toolbar sidebar like Obsidian. And then I think 3 primary
+views could be the Scene View, the Sheet view and the Workbench-like view"): a 44 px ribbon at the far left (Deployments; Scene · Sheet ·
+Workbench; then Runs), the typed tree in a collapsible, resizable left sidebar, a right inspector that folds. Three primary views share
+one selection and one round through the URL: Scene (the 3D is the page, V3), Sheet (the nested table, round 0 · now · change side by
+side, the 3D and the inspector docked, V2), Workbench (the tree and the node's page, V1); and Runs (every run of every round, each opening
+its Rerun recording).
 
 Zach (Daily Note 2026-11-17, "# What is required for me to actually get this working?"): "Sim2Real at the top level we seperate it into
 DEPLOYMENTS. When I click into each deployment I should bring up the 3D viewer of that deployment AND the tree should be the typed
@@ -144,31 +150,68 @@ def write_data(data_dir, site) -> dict:
             **data["replay"]}
 
 
+# WHY an Obsidian frame (Zach 2026-11-17: "update it so it has the left toolbar sidebar like Obsidian ... 3 primary views could be the Scene
+# View, the Sheet view and the Workbench-like view"): Obsidian's geometry, read from like_obsidian_md_viewer's captured obsidian-app.css
+# (.workspace-ribbon 44 px, its 40 px header cell holding the sidebar toggle, ribbon padding 8/4/12 px, 4 px gap, 18 px icons at 1.75
+# stroke, the active icon on the hover fill, tooltips to the right, the sidebar's edge drags); nothing Obsidian has that we cannot back
+# (settings, help, vault switcher) is drawn.
+RIBBON_ICONS = {
+    "home": '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7M14 9h7M14 15h7M14 20h7"/>',
+    "scene": '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
+    "sheet": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 9v12M15 9v12"/>',
+    "page": '<rect width="7" height="18" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/>',
+    "runs": '<path d="M12 12H3M16 6H3M12 18H3"/><path d="m16 12 5 3-5 3v-6Z"/>',
+}
+# (data-v, label, tooltip); the group after the rule holds Runs, the atomic unit, reachable from every view
+RIBBON = [[("home", "Deployments", "Deployments · every machine we do sim to real on")],
+          [("scene", "Scene", "Scene · the 3D is the page"), ("sheet", "Sheet", "Sheet · the nested table, round 0 · now · change"),
+           ("page", "Workbench", "Workbench · the tree and the node's page")],
+          [("runs", "Runs", "Runs · every run, each with its Rerun recording")]]
+
+
+def ribbon_html() -> str:
+    groups = []
+    for group in RIBBON:
+        groups.append("".join(
+            f'<a class="dw-view dw-rb" data-v="{v}" data-go href="/deployments/" aria-label="{e(label)}" data-tip="{e(tip)}">'
+            f'<svg viewBox="0 0 24 24" aria-hidden="true">{RIBBON_ICONS[v]}</svg></a>' for v, label, tip in group))
+    return '<span class="dw-rb-sep" aria-hidden="true"></span>'.join(groups)
+
+
+TOGGLE = ('<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/>'
+          '<rect class="inner" x="4.5" y="6" width="4.3" height="12" rx="1"/></svg>')
+
 BODY = """<div class="dw" id="dw" data-src="/data/{data}">
-<div class="dw-bar">
-  <nav class="dw-views" role="tablist" aria-label="Views">
-    <a class="dw-view" data-v="home" href="/deployments/">Deployments</a>
-    <a class="dw-view" data-v="page" href="/deployments/?d=one-dof-test-rack" hidden>Workbench</a>
-    <a class="dw-view" data-v="table" href="/deployments/?d=one-dof-test-rack&amp;view=table" hidden>Table</a>
-    <a class="dw-view" data-v="runs" href="/deployments/?d=one-dof-test-rack&amp;view=runs" hidden>Runs</a>
-  </nav>
-  <span class="dw-grow"></span>
-  <div class="dw-seg" id="dw-round" role="group" aria-label="Round shown" hidden></div>
+<nav class="dw-ribbon" id="dw-ribbon" aria-label="Views">
+  <div class="dw-rb-head"><button class="dw-toggle" id="dw-sidetoggle" type="button" aria-label="Collapse the sidebar" data-tip="Collapse the sidebar" aria-expanded="true">{toggle}</button></div>
+  <div class="dw-rb-actions">{ribbon}</div>
+</nav>
+<aside class="dw-left" id="dw-left" aria-label="Typed component tree"></aside>
+<div class="dw-sash" id="dw-sashL"></div>
+<div class="dw-work">
+  <div class="dw-bar">
+    <div class="dw-vtitle" id="dw-vtitle"></div>
+    <span class="dw-grow"></span>
+    <div class="dw-seg" id="dw-round" role="group" aria-label="Round shown" hidden></div>
+    <button class="dw-toggle right" id="dw-unfold" type="button" aria-label="Collapse the inspector" data-tip="Collapse the inspector" data-tip-pos="left" aria-expanded="true" hidden>{toggle}</button>
+  </div>
+  <div class="dw-row">
+    <section class="dw-home" id="dw-home" hidden></section>
+    <section class="dw-dep" id="dw-dep" hidden><div class="dw-entity" id="dw-entity"></div></section>
+    <section class="dw-scenev" id="dw-scene" hidden><div class="dw-stage" id="dw-stage"><div class="dw-timebar" id="dw-timebar"></div></div></section>
+    <section class="dw-tablev" id="dw-table" hidden><div class="dw-tablewrap" id="dw-tablewrap"></div></section>
+    <section class="dw-runs" id="dw-runs" hidden></section>
+    <div class="dw-sash" id="dw-sashT"></div>
+    <aside class="dw-insp" id="dw-insp" aria-label="Inspector" hidden>
+      <div class="dw-dock3d" id="dw-dock3d"></div>
+      <div class="dw-sash h" id="dw-sashD"></div>
+      <div class="dw-insp-scroll" id="dw-inspBody"></div>
+    </aside>
+  </div>
 </div>
-<section class="dw-home" id="dw-home" hidden></section>
-<section class="dw-dep" id="dw-dep" hidden>
-  <aside class="dw-left" id="dw-left"></aside>
-  <div class="dw-sash" id="dw-sashL"></div>
-  <div class="dw-entity" id="dw-entity"></div>
-</section>
-<section class="dw-tablev" id="dw-table" hidden>
-  <div class="dw-tablewrap" id="dw-tablewrap"></div>
-  <div class="dw-sash" id="dw-sashT"></div>
-  <aside class="dw-insp" id="dw-insp"></aside>
-</section>
-<section class="dw-runs" id="dw-runs" hidden></section>
 <noscript><p class="lede">The workbench needs JavaScript. Every deployment is also listed, without it, at <a href="{all}">{all}</a>.</p></noscript>
 </div>
+<div class="dw-tip" id="dw-tip" role="tooltip" hidden></div>
 <script src="/static/{three}" defer></script>
 <script src="/static/deployments-workbench.js" defer></script>"""
 
@@ -176,7 +219,7 @@ BODY = """<div class="dw" id="dw" data-src="/data/{data}">
 def files(site):
     import catalog as s2r  # noqa: PLC0415
 
-    body = BODY.format(data=e(DATA), all=e(ALL_URL), three=e(THREE_NAME))
+    body = BODY.format(data=e(DATA), all=e(ALL_URL), three=e(THREE_NAME), ribbon=ribbon_html(), toggle=TOGGLE)
     yield "deployments/index.html", s2r.page(
         site, "Deployments: sim2real", URL, body, "deployments-workbench", extra_head='<link rel="stylesheet" href="/static/deployments-workbench.css">\n',
         trail=breadcrumb([s2r.ROOT_CRUMB, ("Deployments", URL)]),

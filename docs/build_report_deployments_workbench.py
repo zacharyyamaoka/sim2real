@@ -3,10 +3,10 @@
 
     env -u VIRTUAL_ENV taskset -c 2-5,16,17 uv run --isolated --no-project --with playwright python /home/bam/sim2real/docs/build_report_deployments_workbench.py --stills /abs/capture/dir --acceptance /abs/acceptance.log --pytest /abs/pytest.log
 
-Serves the built site (site/build.py's OUT, --out) on a free port in 4711-4799 (or uses --base), records the hero clip (the click-through
-Deployments -> the rack's performance -> CAN 11 -> the Table's five questions -> What changed -> the servo pulled apart -> Runs) from the
-real page in headless Chromium, copies the acceptance run's stills (site/tests/test_deployments_workbench.py --record DIR), and writes the
-page. Media go to reports/media/deployment-page-2026-11-17/ (gitignored); the page is text and links to them. Nothing is opened.
+Serves the built site (site/build.py's OUT, --out) on a free port in 4711-4799 (or uses --base), records the hero clip from the real page
+in headless Chromium (the Obsidian frame's three views with CAN 11 selected: Scene -> Sheet -> Workbench -> Runs, each switched from the
+ribbon), copies the acceptance run's stills (site/tests/test_deployments_workbench.py --record DIR), and writes the page. Media go to
+reports/media/deployment-page-2026-11-17/ (gitignored); the page is text and links to them. Nothing is opened.
 """
 
 from __future__ import annotations
@@ -33,14 +33,21 @@ DEFAULT_OUT = Path.home() / ".cache" / "sim2real" / "site"
 EXE = str(max(Path.home().glob(".cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell"),
               key=lambda p: int(p.parts[-3].rsplit("-", 1)[1])))
 ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
+FRAME_STILLS = [
+    ("s11-ribbon-tooltip", "The ribbon at the far left (Obsidian's 44 px strip): Deployments; Scene · Sheet · Workbench; Runs. Tooltips to the right"),
+    ("s12-scene-can11", "Scene: the 3D is the page; every station wears its performance in place; CAN 11 clicked in 3D, the inspector performance first"),
+    ("s13-sheet", "Sheet: CAN 11 and round 0 carried over; every performance metric round 0 · now · change, fidelity beside it; 3D and inspector docked"),
+    ("s14-scene-servo", "Scene: CAN 11's servo pulled apart, each part named in place; motor and gearbox not observable on this rack"),
+    ("s15-runs-selected", "Runs: the tree's pick filters the runs to its station; every run one click from its Rerun recording"),
+]
 STILLS = [
     ("s01-deployments", "Deployments: every deployment; the rack leads with performance (67 of 72 real gates, 28 as found)"),
     ("s02-rack-performance", "The rack: performance first, the top gap (tracking at full speed), CAN 11's worst stops, fidelity under it"),
     ("s03-rack-round-by-round", "Round by round with the goal line drawn, and every station × every speed rung"),
     ("s04-can11", "CAN 11 in the typed tree: tracks to 1.0 of top speed; its twin 2.14× its floor (4.27× as found)"),
     ("s05-can11-metrics", "CAN 11's Metrics tab: performance and fidelity as two groups, round 0 · now · change"),
-    ("s06-table-performance", "The Table view (RobotDx's nested table): performance columns, the inspector beside it"),
-    ("s07-table-questions", "The Table view's five question columns: Floor → Data → Routines → Twin → Job"),
+    ("s06-table-performance", "The Sheet (RobotDx's nested table): performance as round 0 · now · change, the 3D and inspector docked"),
+    ("s07-table-questions", "The Sheet's optional column group, the five questions: Floor → Data → Routines → Twin → Job"),
     ("s08-table-what-changed", "What changed: every cell round 0 → round 8; rows that did not move are dimmed"),
     ("s09-servo-parts", "The servo: driver, motor, gearbox, encoder under it, pulled apart in 3D; motor and gearbox not observable here"),
     ("s10-runs", "Runs: round 8's 252 runs, the summary on top, each with its Rerun recording"),
@@ -69,41 +76,30 @@ def serve(out: Path):
 
 
 def record_hero(base: str) -> Path:
-    """About 18 s of the real page: the journey Zach asked for, paced to read."""
+    """About 14 s of the real page: CAN 11 picked in the Scene, then the ribbon's Sheet, Workbench and Runs, the selection carried."""
     tmp = Path(tempfile.mkdtemp(prefix="dw-hero-"))
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=EXE, args=ARGS)
         ctx = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme="dark", record_video_dir=str(tmp),
                                   record_video_size={"width": 1440, "height": 900})
         page = ctx.new_page()
-        page.goto(base + "/deployments/")
+        page.goto(base + "/deployments/?d=one-dof-test-rack&view=scene")
         page.evaluate("Object.keys(localStorage).filter((k) => k.startsWith('s2r.deployments-workbench.')).forEach((k) => localStorage.removeItem(k))")
         page.reload()
         page.wait_for_function("document.getElementById('dw').dataset.ready === '1'")
-        page.wait_for_timeout(1000)
-        page.click('.dw-drow[data-dep="one-dof-test-rack"]')
-        page.wait_for_timeout(2300)
-        page.evaluate("document.getElementById('dw-tabbody').scrollIntoView({behavior: 'smooth'})")
+        page.wait_for_timeout(1600)
+        pt = page.evaluate("window.__dwRack.screenOf('can11')")
+        page.mouse.move(pt["x"], pt["y"] + 2, steps=10)
+        page.mouse.click(pt["x"], pt["y"] + 2)
+        page.wait_for_timeout(2400)
+        for view, dwell in (("sheet", 2400), ("page", 2400), ("runs", 1300)):
+            page.hover(f'.dw-rb[data-v="{view}"]')
+            page.wait_for_timeout(700)
+            page.click(f'.dw-rb[data-v="{view}"]')
+            page.mouse.move(700, 600)
+            page.wait_for_timeout(dwell)
+        page.click('.dw-rfilters button[data-st="can11"]')
         page.wait_for_timeout(1700)
-        page.evaluate("document.getElementById('dw-entity').scrollTo({top: 0})")
-        page.click('.dw-tree li[data-id="can11"] > .dw-trow')
-        page.wait_for_timeout(2100)
-        page.click('.dw-view[data-v="table"]')
-        page.wait_for_timeout(800)
-        page.click('[data-cols="questions"]')
-        page.wait_for_timeout(1300)
-        page.click('#dw-round button[data-r="changed"]')
-        page.wait_for_timeout(1500)
-        page.click('.dw-view[data-v="page"]')
-        page.wait_for_timeout(500)
-        page.click('.dw-tree li[data-id="can11/servo"] > .dw-trow')
-        page.wait_for_timeout(2100)
-        page.click('.dw-view[data-v="runs"]')
-        page.wait_for_timeout(1100)
-        page.click('.dw-rst button[data-st="can11"]')
-        page.wait_for_timeout(1000)
-        page.hover("table.dw-rt a.rr")
-        page.wait_for_timeout(900)
         video = page.video.path()
         ctx.close()
         browser.close()
@@ -130,10 +126,15 @@ def lines(path: Path | None, keep) -> list[str]:
     return [ln.rstrip() for ln in path.read_text(errors="replace").splitlines() if keep(ln)]
 
 
+def figures(items) -> str:
+    e = html.escape
+    return "".join(f'<figure><a href="media/{SLUG}/{name}.png"><img src="media/{SLUG}/{name}.png" alt="{e(cap)}" loading="lazy"></a><figcaption>{e(cap)}</figcaption></figure>'
+                   for name, cap in items if (MEDIA / f"{name}.png").is_file())
+
+
 def page(acceptance: list[str], pytest_lines: list[str], hero_s: float, commit: str) -> str:
     e = html.escape
-    stills = "".join(f'<figure><a href="media/{SLUG}/{name}.png"><img src="media/{SLUG}/{name}.png" alt="{e(cap)}" loading="lazy"></a><figcaption>{e(cap)}</figcaption></figure>'
-                     for name, cap in STILLS if (MEDIA / f"{name}.png").is_file())
+    stills, frame = figures(STILLS), figures(FRAME_STILLS)
     acc = "".join(f'<li class="{"ok" if ln.startswith("PASS") else "bad"}">{e(ln)}</li>' for ln in acceptance)
     py = "<br>".join(e(ln) for ln in pytest_lines)
     return f"""<!doctype html>
@@ -158,19 +159,31 @@ table {{ border-collapse:collapse; width:100%; font-size:14px; }} th, td {{ text
 @media (max-width:600px) {{ .grid {{ grid-template-columns:1fr; }} }}
 </style></head><body><main>
 <h1>Deployments workbench</h1>
-<p class="verdict">sim2real's /deployments/ is now the spliced workbench, performance first, on the real pendulum scorecards — verified in the running app ({len([a for a in acceptance if a.startswith("PASS")])} of {len(acceptance)} acceptance checks pass), on sim2real main {e(commit)}.</p>
-<p class="muted">2026-11-17 · Zach's ask: Daily Note Nov 17, "# What is required for me to actually get this working?" and "# Ok" (performance first and up centre; runs are the atomic unit). The splice: V1 Workbench's frame + V4's banner, question columns and "What changed" + V2's round 0 · now · change columns + V3's pulled-apart servo, from the proposal round (<code>docs/proposals/2026-11-17-deployment-page/</code>).</p>
+<p class="verdict">sim2real's /deployments/ now has Obsidian's left ribbon and three primary views, Scene · Sheet · Workbench, sharing one selection and one round, with Runs one icon below — verified in the running app ({len([a for a in acceptance if a.startswith("PASS")])} of {len(acceptance)} acceptance checks pass), on sim2real main {e(commit)}.</p>
+<p class="muted">2026-11-17 · Zach's ask, on proposal V1: "update it so it has the left toolbar sidebar like Obsidian. And then I think 3 primary views could be the Scene View, the Sheet view and the Workbench-like view." Built on the morning's workbench (Daily Note Nov 17, "# What is required for me to actually get this working?" and "# Ok": performance first and up centre; runs are the atomic unit), whose write-up follows below the new part.</p>
 
 <div class="hero"><video src="media/{SLUG}/hero.mp4" poster="media/{SLUG}/poster.jpg" autoplay muted loop playsinline controls>
 <img src="media/{SLUG}/hero.gif" alt="the click-through"></video></div>
-<p class="muted">{hero_s:.0f} s, recorded from the running app in headless Chromium: Deployments → the One Dof Test Rack (performance first) → round by round → CAN 11 → the Table's five questions → What changed → the servo pulled apart → Runs. <a href="media/{SLUG}/hero.gif">GIF</a>.</p>
+<p class="muted">{hero_s:.0f} s, recorded from the running app in headless Chromium: the Scene, CAN 11 clicked in 3D → the ribbon's Sheet (CAN 11 still selected, its row and the docked inspector) → Workbench (CAN 11's page) → Runs (CAN 11 still selected in the tree; one click shows only its runs). Each ribbon icon's tooltip shows before it is clicked. <a href="media/{SLUG}/hero.gif">GIF</a>.</p>
 
-<h2>What you get</h2>
+<h2>The Obsidian frame and the three views (new)</h2>
+<ul>
+<li><b>The ribbon</b>, matched to Obsidian's geometry (read from like_obsidian_md_viewer's captured <code>obsidian-app.css</code>, never from your running Obsidian): a 44 px strip at the far left; its 40 px header cell holds the sidebar toggle, Obsidian's own icon (the filled bar widens when the sidebar is open); 18 px icons at a 1.75 stroke in 30 × 26 buttons, 4 px apart; the active view on the hover fill, as Obsidian marks its active sidebar tab; tooltips to the right with an arrow. Order: <b>Deployments</b>; <b>Scene · Sheet · Workbench</b>; then <b>Runs</b> in a group of its own. Nothing Obsidian has that we cannot back (settings, help, vault switcher) is drawn.</li>
+<li><b>The left sidebar</b> holds the typed component tree in every deployment view. The toggle collapses it and the view takes the room; collapsed or open and its width (drag the edge, double-click resets) are remembered across reloads. On the Deployments list there is no tree, so no sidebar and no toggle.</li>
+<li><b>The right inspector</b> (Scene, Sheet) folds from the bar's toggle at the far right (Obsidian's place for the right sidebar's toggle) or Esc; its edge drags. It leads with the picked node's performance, then fidelity, then its parts, every metric round 0 → now, the five questions.</li>
+<li><b>Scene</b> (V3): the 3D is the page. Each station's label wears its performance in place (how far up the speed ladder it does its job, its ring coloured by it) and, when it misses, its twin in red; labels never cover each other, a joint, the chips or the ViewCube. A click on a station or a part selects it; a servo pulls apart into driver, motor, gearbox and encoder, each named in place (motor and gearbox: "not observable on this rack"). A time bar moves between round 0 and now.</li>
+<li><b>Sheet</b> (V2): the nested table is the page. Performance first, every metric as round 0 · now · change side by side (highest rung tracked, tracking RMS and peak at 0.9, tip stop median, worst stop), fidelity (twin ÷ floor) beside it; the five questions are an optional column group (+ Five questions); What changed dims the rows that did not move. The 3D (only the picked station labelled) and the inspector are docked on the right.</li>
+<li><b>Workbench</b> (V1): this morning's tree and node page, unchanged inside.</li>
+<li><b>One selection, one round:</b> both live in the URL (<code>n</code>, <code>round</code>), so CAN 11 picked in the Scene is CAN 11 in the Sheet, the Workbench and the tree in Runs, and round 0 stays round 0. <b>Runs</b> sits in the ribbon's second group: reachable from every view; a tree pick there filters the runs to that station, and "Only CAN 11's runs (selected)" does it in one click when you arrive with a selection.</li>
+</ul>
+<div class="grid">{frame}</div>
+
+<h2>What you get (this morning's workbench, kept)</h2>
 <ul>
 <li><b>Performance leads every page.</b> The rack: all six stations track and stop within the gates up to 0.9 of top speed; 67 of 72 real performance gates (28 as found). The top gap: at full speed, tracking misses on CAN 1, 12, 13, 14, 15 (0.59–1.22° RMS against 0.5°). CAN 11's worst stop is over 1 mm at the 0.4, 0.9 and 1.0 rungs although the median passes. Fidelity sits under it: CAN 11's twin is 2.14× its floor (4.27× as found), the campaign goal's one miss.</li>
 <li><b>The goal line drawn:</b> round-by-round charts (rounds 0–8, each station at 0.9 of top speed, "GOOD ≤ 0.5°" and "GOOD ≤ 1 mm"), the speed-ladder plots per station (round 0 dashed under now), and every station × every speed rung.</li>
 <li><b>Typed component tree</b> on the left (search, keyboard, collapse; RobotDx's dots), the node's page on the right with tabs: Performance · Metrics (performance, fidelity and evidence as separate groups; round 0 · now · change) · Runs · Five questions · Where it is defined.</li>
-<li><b>Table view</b> (RobotDx's nested table): performance columns, or the five question columns; Now · As found · What changed; a foldable, resizable inspector whose metric column no longer wraps word by word.</li>
+<li><b>Table view</b>, now the <b>Sheet</b> (RobotDx's nested table): performance round 0 · now · change, the five question columns as an optional group; Now · As found · What changed; a foldable, resizable inspector whose metric column no longer wraps word by word.</li>
 <li><b>Runs view:</b> every play of every scored round (rounds 0–8, 2,233 rows), round 8 by default, a summary on top, filters and sorting; each run's "Open in Rerun" goes through the always-on bam-replay-link launcher on 127.0.0.1:8771 (no more dead 9461/9462 links); a run with no .rrd says "no recording yet". The same table is written as JSON for a later W&amp;B sync.</li>
 <li><b>3D</b> (schematic, labelled "schematic geometry · simulated"; "CAD render" shows the rack's MuJoCo render): a click selects the station, the servo pulls apart into motor, gearbox, encoder and driver.</li>
 </ul>
@@ -194,6 +207,10 @@ table {{ border-collapse:collapse; width:100%; font-size:14px; }} th, td {{ text
 
 <h2>Decided for you</h2>
 <ul>
+<li><b>Runs is a ribbon icon in a group of its own</b>, not a mode inside each view: one place, reachable from every view; the selection carries in (the tree shows it, one click filters to it). Undo: move its entry in <code>site/deployments_workbench.py</code>'s <code>RIBBON</code>.</li>
+<li><b>Opening a deployment still lands on the Workbench</b> (no <code>view</code> in the URL), so every older link (<code>?d=…&amp;n=…</code>, the station pages' links, the run rows) keeps opening the node's page; the ribbon's order follows yours, Scene · Sheet · Workbench. Undo: map <code>""</code> to <code>"scene"</code> in the JS's <code>VIEWS</code>.</li>
+<li><b>The Table view is the Sheet</b> (<code>view=sheet</code>; <code>view=table</code> still opens it). Its five question columns moved from a switch to an optional group after performance and fidelity, so three acceptance checks now find the question cells by what they are (<code>th[data-q]</code>, <code>td[data-q='twin']</code>) instead of by position, and the Sheet's ribbon selector is <code>[data-v="sheet"]</code> — the same assertions on the same cells.</li>
+<li>The sidebar is 300 px by default (Obsidian-like), was 330; the inspector 420, was 470. The tooltip uses a raised surface and a hairline: Obsidian's near-black message colour vanishes on this site's near-black dark theme.</li>
 <li>The workbench replaced /deployments/; the card index moved to /deployments/all/ (undo: <code>git revert</code> the commit). <code>site/tests/test_site_flow.py</code>'s index checks now point at /deployments/all/ (paths only).</li>
 <li>Each recording is registered in data_recorder's replay index (~1,040 added; additive) so its link works; registration happens at every site build, once per file.</li>
 <li>Performance vs fidelity per metric follows sim2real's card families (T2, T3, T7, T8 fidelity; T4, T5, T6, limiter share performance); the repeat floor, data and routines are "evidence".</li>
@@ -202,6 +219,8 @@ table {{ border-collapse:collapse; width:100%; font-size:14px; }} th, td {{ text
 
 <h2>Simulated, or not done</h2>
 <ul>
+<li>Obsidian's sidebar slides open and shut; here it shows and hides without the animation. Obsidian has no default key for the sidebar toggle, so none is bound.</li>
+<li>The Scene's 3D is the same schematic scene (labelled so), not a CAD scene; "CAD render" shows the MuJoCo still.</li>
 <li>The 3D is schematic (real tip lengths, motor families and loads; plates laid out by hand) — not the house viser viewer, which needs a live server per page.</li>
 <li>RobotDx's live unit health is not on the page (only this round's faults and missing plays).</li>
 <li>Rounds 6 and 7 (and 31 plays of round 0, 27 of round 1, 84 of round 5) have no .rrd built: those rows say "no recording yet".</li>
@@ -232,7 +251,7 @@ def main() -> None:
         encode(webm)
         shutil.rmtree(webm.parent, ignore_errors=True)
     if args.stills:
-        for name, _cap in STILLS:
+        for name, _cap in STILLS + FRAME_STILLS:
             src = args.stills / f"{name}.png"
             if src.is_file():
                 shutil.copyfile(src, MEDIA / f"{name}.png")
