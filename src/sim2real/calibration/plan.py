@@ -655,9 +655,11 @@ def _plan_catalog(picked: Mapping[str, Any], config: CalibrationConfig, twin: st
     return CalibrationPlan(tuple(s.routine for s in steps), steps, sel.dropped, sel.uncovered, assumed, source, _totals(steps), config.level, twin)
 
 
-def _plan_rig(twin: Any, config: CalibrationConfig) -> CalibrationPlan:
+def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> CalibrationPlan:
+    """A twin that ships its routines: a rig on the one-click seam (twin.runner.rig), or the pendulum tracer's example routines (`rig`:
+    what SimRunner.schedule() gives, the planner's half of a RigBackend: name, parameters(), routines())."""
     catalog = _catalog()
-    rig = twin.runner.rig
+    rig = twin.runner.rig if rig is None else rig
     description = twin.runner.description
     names = {f"{i.id}.{n}": n for i in description.instances for n in i.parameters}
     custom = _custom(config)
@@ -721,7 +723,8 @@ def _plan_rig(twin: Any, config: CalibrationConfig) -> CalibrationPlan:
 
 def plan(twin_or_picked: Any, config: CalibrationConfig | None = None) -> CalibrationPlan:
     """What calibrate() would run, in what order, without running anything. Pass a RobotTwin (a rig twin plans its own routines; the
-    pendulum tracer plans its servo's model from the catalog) or picked models {instance: (type, model id)}."""
+    pendulum tracer plans the routines its example ships, sysid/examples/<id>/routines.py, and only without them its servo's model from the
+    catalog) or picked models {instance: (type, model id)}."""
     config = config or CalibrationConfig()
     if isinstance(twin_or_picked, Mapping):
         return _plan_catalog(twin_or_picked, config)
@@ -729,6 +732,11 @@ def plan(twin_or_picked: Any, config: CalibrationConfig | None = None) -> Calibr
     runner = getattr(twin, "runner", None)
     if runner is not None and hasattr(runner, "rig"):
         return _plan_rig(twin, config)
+    shipped = runner.schedule() if callable(getattr(runner, "schedule", None)) else None
+    if shipped is not None:
+        # WHY the routines the tracer plays and never the catalog's stand-ins (gap F, 2026-11-17): calibrate() plays this plan, so every
+        # step shown must be one that runs here
+        return _plan_rig(twin, config, shipped)
     if runner is not None and hasattr(runner, "typed"):
         servo = runner.typed()
         return _plan_catalog({servo.id: (servo.type, twin.model)}, config, twin=twin.description.id)

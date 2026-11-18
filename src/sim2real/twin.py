@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import sys
 import time
 from collections.abc import Mapping, Sequence
@@ -220,8 +221,9 @@ class Calibration:
 
     def summary(self) -> str:
         how = f"transport={self.plan['transport']!r}" if self.plan.get("transport") else "truth='sealed'"
-        head = (f"calibrate(on={self.backend!r}, {how}): {self.plan['train_runs']} train runs fitted rungs {', '.join(self.rungs)}; "
-                f"the fitted twin runs {self.model} ({self.rung}); {self.seconds:.0f} s")
+        head = (f"calibrate(on={self.backend!r}, {how}): {self.plan['train_runs']} train runs fitted rungs {', '.join(self.rungs)}"
+                + (f" through {' -> '.join(self.plan['routines'])}" if self.plan.get("routines") else "")
+                + f"; the fitted twin runs {self.model} ({self.rung}); {self.seconds:.0f} s")
         if self.truth_moved:
             head += f"\n  the hidden truth MOVED for this run: {self.truth_moved} (the ruler stays world.json's)"
         table = [f"  {'parameter':36s} {'nominal':>11s} {'hidden':>11s} {'recovered':>11s} {'error':>9s} {'tol':>9s}  verdict"]
@@ -297,11 +299,22 @@ def _plain(value):
 # --- the runners ---------------------------------------------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class PipelineHandle:
+    """What a tracer routine's fit may use (the third argument of fit(measured, values, twin)): the pipeline the runner plays, its sysid
+    description, the twin's cap on every pool and the rung the twin runs. Never the truth."""
+    module: Any
+    description: Any
+    workers: int
+    rung: str
+
+
 class SimRunner:
     """The sim backend: the description's oracle pipeline (sysid/examples/<id>/pipeline.py: plan, RealWorld, identify, score, assemble)
-    played on the simulator at the hidden truth. `truth` moves named hidden values for a run (the mutation test of the ruler: the world
-    plays the moved truth, the parameter rows still compare with world.json's). Its guards are its own, never a callback's: identification
-    runs sealed from the truth, and eval scores held-out runs only. `state` is a fitted twin's (plan, measurements, fit)."""
+    played on the simulator at the hidden truth, through the example's routines (sysid/examples/<id>/routines.py, the schedule plan(twin)
+    shows: each routine's fit is a step of the pipeline). `truth` moves named hidden values for a run (the mutation test of the ruler: the
+    world plays the moved truth, the parameter rows still compare with world.json's). Its guards are its own, never a callback's: every
+    routine fits sealed from the truth, and eval scores held-out runs only. `state` is a fitted twin's (plan, measurements, fit)."""
 
     def __init__(self, description: Description, *, workers: int = 6, state: dict | None = None):
         self.description = description
@@ -311,6 +324,16 @@ class SimRunner:
     def pipeline(self):
         _, oracle, _, _ = _sysid()
         return oracle.example_module(self.description.id)
+
+    def schedule(self):
+        """The routines the example ships (sysid/examples/<id>/routines.py, its schedule(): the planner's half of a RigBackend, `name`,
+        `parameters()` and `routines()`), or None: plan() then shows the catalog's routines, which nothing here runs."""
+        if not (EXAMPLES / self.description.id / "routines.py").exists():
+            return None
+        _sysid()  # puts this checkout (sysid's home) on the path
+        import importlib  # noqa: PLC0415
+
+        return importlib.import_module(f"sysid.examples.{self.description.id}.routines").schedule()
 
     def sysid_description(self):
         sysid_describe, *_ = _sysid()
@@ -324,7 +347,14 @@ class SimRunner:
             raise NotImplementedError(f"the sim pipeline reads its priors from {self.description.source}; edited values do not reach it yet: {edited}")
         return d
 
-    def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None) -> tuple[Calibration, dict]:
+    def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None,
+                  routines: Sequence[Any] | None = None) -> tuple[Calibration, dict]:
+        """`routines`: the planned sequence (sim2real.calibration.plan(twin).routines: ordered, substituted, option copies), else the
+        example's own routines in their declared order. The world plays the schedule once (pipeline RealWorld.measure: train, held-out
+        and the floor's repeat draws); each routine then reads the runs it names and fits them sealed, in order, each seeing what the ones
+        before it found. One of them must return the rung ladder (routines.Ladder: servo.dynamics_regression), the twin's model."""
+        from .calibration.plan import CalibrationPlanError, order  # noqa: PLC0415
+
         _, _, result, hidden = _sysid()
         started = time.monotonic()
         module, d = self.pipeline(), self.sysid_description()
@@ -343,31 +373,87 @@ class SimRunner:
         noise = {**real.noise, "level": scale, "seed": real.seed,
                  "sources": {name: f"sysid/examples/{self.description.id}/world.json noise block x{scale:g} (sysid.hidden.load)" for name in real.noise}}
         measured = real.measure(plan)
-        with hidden.sealed():
-            # WHY workers passed (2026-11-17): without it the pendulum's identify() polishes friction on its default 8-worker pool, which
-            # opened 8 processes beside the powered arm at host load 35; the runner's workers caps every pool it opens (tests/test_workers_cap.py)
-            fit = module.identify(d, measured.train, workers=self.workers)
+        measure_s = round(time.monotonic() - started, 1)
+        shipped = self.schedule()
+        if routines is None:
+            if shipped is None:
+                raise NotImplementedError(f"{self.description.id} ships no routines (sysid/examples/{self.description.id}/routines.py): "
+                                          "nothing here runs the catalog's routines plan() would show")
+            names = {f"{i.id}.{n}": n for i in self.description.instances for n in i.parameters}
+            routines = order(shipped.routines(), names)
+        played = {"train": measured.train}  # what the world played, by the run ids the routines name (routines.TRAIN)
+        # the values each routine sees: the description's priors, then what each routine before it found
+        values = {k: float(v) for k, v in self.description.values().items() if v is not None}
+        # WHY workers passed (2026-11-17): without it the pendulum's identify() polishes friction on its default 8-worker pool, which
+        # opened 8 processes beside the powered arm at host load 35; the runner's workers caps every pool it opens (tests/test_workers_cap.py)
+        handle = PipelineHandle(module, d, self.workers, rung)
+        estimates, steps, fit, ladder = {}, [], None, None
+        # WHY the planned routines in the planned order and nothing else (Zach, 2026-11-17: the schedule is "a static description of the
+        # routines that will be run"): what plan(twin) shows is what this loop plays
+        for routine in routines:
+            began = time.monotonic()
+            runs = list(routine.runs(dict(values)))
+            missing = [run.id for run in runs if run.id not in played]
+            if missing:
+                raise CalibrationPlanError(f"{routine.id} plays runs {missing}; the world played {sorted(played)}")
+            data = {name: run_data for run in runs for name, run_data in played[run.id].items()}
+            with hidden.sealed():
+                found = routine.fit(data, dict(values), handle)
+            extra = sorted(set(found) - set(routine.identifies))
+            if extra:
+                raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies})")
+            for key, estimate in found.items():
+                estimates[key] = (routine.id, estimate)
+                if estimate.value is not None and math.isfinite(estimate.value):
+                    values[key] = float(estimate.value)
+            if getattr(found, "fit", None) is not None:
+                fit, ladder = found.fit, routine.id
+            steps.append({"routine": routine.id, "identifies": list(routine.identifies), "runs": len(data),
+                          "seconds": round(time.monotonic() - began, 1),
+                          "found": {k: (None if e.value is None else float(e.value)) for k, e in found.items()}})
+        if fit is None:
+            raise CalibrationPlanError(f"the twin runs a rung of servo.dynamics_regression's ladder ({rung}), and the planned routines "
+                                       f"({', '.join(r.id for r in routines) or 'none'}) do not include it")
         ruler = json.loads(hidden.path(self.description.id).read_text(encoding="utf-8"))["truth"]  # world.json as committed: the ruler
+        # a value the ladder carries that another routine found (M4's gap, servo.backlash_reversals_camera) keeps that routine's interval
+        # and method: the ladder was handed it, it did not estimate it
+        handed = {}
+        for key, (rid, estimate) in estimates.items():
+            name = key.split(".", 1)[1] if key.startswith(f"{servo.id}.") else None
+            if rid == ladder or name is None or estimate.value is None:
+                continue
+            for k in fit.values:
+                if fit.values[k].get(name) == estimate.value and estimate.ci95:
+                    fit.ci95.setdefault(k, {})[name] = tuple(estimate.ci95)
+            if fit.values[rung].get(name) == estimate.value:
+                handed[name] = estimate.method
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
-                                              "method": fit.methods[rung]} for name, value in fit.values[rung].items()}
+                                              "method": handed.get(name, fit.methods[rung])} for name, value in fit.values[rung].items()}
         rows = result.parameter_rows(self.description.id, d, ruler, recovered)
+        ran = {r.id for r in routines}
+        owner = {p.key: p.routine for p in shipped.parameters()} if shipped is not None else {}
+        for row in rows:
+            if owner.get(row["key"]) is not None and owner[row["key"]] not in ran:
+                # not graded: its routine was left out of the plan (the prior or the rung's constant serves), as on the rig seam
+                row["pass"], row["why_not"] = None, f"its routine {owner[row['key']]} was not in the plan"
         values = {}
         for name, value in fit.values[rung].items():
             unit = d.nominal[f"{servo.id}.{name}"].unit if f"{servo.id}.{name}" in d.nominal else None
             ci = fit.ci95[rung].get(name)
             values[name] = None if value is None else Value(float(value), unit, basis=Basis.MEASURED, measured_by=f"sim2real.RobotTwin.calibrate(on='sim', truth='sealed'), {model}",
-                                                           source=fit.methods[rung], notes=f"95 % interval [{ci[0]:.6g}, {ci[1]:.6g}]" if ci else "")
-        # the rungs identify() fitted, in its order, each with only the values it estimated (the ones with a bootstrap interval; the
-        # rest are a rung's structural constants, such as M0's zero friction): the record's plan and routines (CalibrationRecord.from_sysid)
+                                                           source=handed.get(name, fit.methods[rung]), notes=f"95 % interval [{ci[0]:.6g}, {ci[1]:.6g}]" if ci else "")
+        # the rungs the ladder fitted, in its order, each with only the values it estimated (the ones with a bootstrap interval; the rest
+        # are a rung's structural constants, such as M0's zero friction): the sysid-shaped view of the fit (state["fits"]); the record's
+        # routines are the planned steps as they ran (state["routines"], CalibrationRecord.from_schedule)
         card = ORACLE_CARD[servo.type]
         fits = [{"rung": k, "model": dm.RUNG_MODELS.get((card, k), (k,))[0],
                  "found": {f"{servo.id}.{name}": fit.values[k][name] for name in fit.values[k] if name in fit.ci95.get(k, {})}} for k in fit.values]
         state = {"d": d, "plan": plan, "measured": measured, "fit": fit, "ruler": ruler, "model": model, "rung": rung, "module": module,
-                 "servo": servo, "noise": noise, "fits": fits, "noise_level": f"{scale:g}x"}
+                 "servo": servo, "noise": noise, "fits": fits, "noise_level": f"{scale:g}x", "routines": steps, "measure_seconds": measure_s}
         return Calibration("sim", model, rung, values, {k: dict(v) for k, v in fit.values.items()}, rows, moved,
                            round(time.monotonic() - started, 1),
                            {"train_runs": len(plan.train), "held_out_runs": len(plan.held_out), "digest": plan.digest,
-                            "coverage_train_pct": plan.coverage["train"]["pct"]}), state
+                            "coverage_train_pct": plan.coverage["train"]["pct"], "routines": [s["routine"] for s in steps]}), state
 
     def eval(self) -> TwinReport:
         if not self.state:
@@ -577,12 +663,29 @@ class RobotTwin:
             fitted.plan_ = plan
             fitted.record_ = CalibrationRecord.from_rig(calibration.to_dict(), description=self.description, plan=plan)
             return fitted
-        if config is not None or data is not None:
-            raise NotImplementedError("config= and data= plan routines on a rig on the one-click seam (sim2real.rig); the pendulum tracer "
-                                      "runs sysid's five-function pipeline")
+        if data is not None:
+            raise NotImplementedError("data= fits recorded runs on a rig on the one-click seam (sim2real.calibration.collect); the pendulum "
+                                      "tracer's world plays its schedule itself (recorded runs reach it through on='real')")
         if noise is not None:
             raise NotImplementedError("the pendulum tracer sets its noise through sysid's ladder (sysid.world.noise_scale), not calibrate(noise=)")
-        calibration, state = self.runner.calibrate(model=self.model, truth=move_truth)
+        from .calibration.config import CalibrationConfig  # noqa: PLC0415
+        from .calibration.plan import plan as schedule_of  # noqa: PLC0415
+        from .calibration.record import CalibrationRecord  # noqa: PLC0415
+
+        config = config if config is not None else CalibrationConfig()
+        # WHY refused by name rather than ignored: the tracer's config steers which routines run and in what order (plan()); what fixes a
+        # value, picks a rung or sets a noise reaches it another way, not yet through the config
+        unwired = [name for name, given in (("known", config.known), ("models", config.models), ("noise", config.noise is not None),
+                                            ("seed", config.seed is not None)) if given]
+        if unwired:
+            raise NotImplementedError(f"CalibrationConfig.{', CalibrationConfig.'.join(unwired)} does not reach the pendulum tracer yet: its "
+                                      "config picks, orders and excludes routines (plan()); its rung is RobotTwin(models=...), its noise "
+                                      "sysid's ladder (sysid.world.noise_scale)")
+        # WHY plan first and play exactly its routines (Zach, 2026-11-17: "robottwin.calibrate() internall mabye that does
+        # .generate_schedule() -> CalibrationSchedule and then you can pass that to something thats gonna like dispatch/execute it"): the
+        # schedule plan(twin) shows is the one that runs, and the fitted twin carries it as plan_
+        planned = schedule_of(self, config)
+        calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, routines=list(planned.routines))
         servo = self.runner.typed().id
         fitted = RobotTwin.__new__(RobotTwin)
         fitted.description = self.description.with_values(_identified(calibration, calibration.rung, lambda name: f"{servo}.{name}"))
@@ -593,21 +696,14 @@ class RobotTwin:
         fitted.intervals_ = {k: tuple(r["ci95"]) for k, r in ((r["name"], r) for r in calibration.rows) if r["ci95"]}
         fitted.rungs_ = calibration.rungs
         fitted.calibration_ = calibration
-        # WHY a sysid plan and not the catalog's (PEP 0001 section 7: a fitted twin carries plan_ and record_): the tracer runs sysid's
-        # pipeline, so its plan lists the model rungs identify() actually fitted (sysid.<example>.<rung>, source "sysid"), never catalog
-        # routines that did not run
-        from .calibration.record import CalibrationRecord, sysid_plan  # noqa: PLC0415
-
-        # WHY only when the runner reports its fits (2026-11-12): a record lists what actually ran; a runner that hands back no sysid state
-        # (tests/test_one_click.py stubs it) has nothing honest to record, so plan_ / record_ stay None rather than an invented plan
-        if not {"fits", "noise_level", "noise", "measured"} <= set(state):
+        # WHY only when the runner reports the routines it played (2026-11-12): a record lists what actually ran; a runner that hands back
+        # no state (tests/test_one_click.py stubs it) has nothing honest to record, so plan_ / record_ stay None rather than a plan not played
+        if not {"routines", "noise", "measured"} <= set(state):
             fitted.plan_ = fitted.record_ = None
             return fitted
-        fitted.plan_ = sysid_plan(self.description.id, state["fits"], level=state["noise_level"], wall_time_s=calibration.seconds,
-                                  description=self.description)
-        fitted.record_ = CalibrationRecord.from_sysid(calibration.to_dict(), fits=state["fits"], plan=fitted.plan_,
-                                                      runs=len(state["measured"].train), noise=state["noise"], twin=self.description.id,
-                                                      description=self.description)
+        fitted.plan_ = planned
+        fitted.record_ = CalibrationRecord.from_schedule(calibration.to_dict(), routines=state["routines"], plan=planned, noise=state["noise"],
+                                                         twin=self.description.id, description=self.description)
         return fitted
 
     def _calibrate_real(self, transport, *, move_truth=None, noise=None, config=None, data=None) -> RobotTwin:

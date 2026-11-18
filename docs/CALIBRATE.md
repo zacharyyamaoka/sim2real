@@ -21,7 +21,9 @@ From a robot's description (2026-11-17; CAN 11's pendulum, under bam_rack_twin's
 ```python
 from bam_rack_twin.description import station_description
 twin = sim2real.RobotTwin.from_robot_description(station_description(11))
-fitted = twin.calibrate()                              # on="sim", sealed truth: ~15-27 min on the CAN 11 oracle
+plan(twin).summary()                                   # 1. servo.backlash_reversals_camera  2. servo.dynamics_regression
+fitted = twin.calibrate()                              # on="sim", sealed truth: plays exactly that plan; ~15-27 min on the CAN 11 oracle
+fitted.plan_.ids == plan(twin).ids                     # True: the schedule shown is the schedule that ran
 fitted.evaluate().summary()                            # held-out runs only; eval() is its alias
 ```
 
@@ -140,7 +142,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `written` | the day the record was written (ISO date) |
 | `seconds` | how long the run took |
 | `noise` | the noise model it was played at (each term, its level, seed and sources) |
-| `plan` | the plan that ran: `twin`, `source` (`"planner"`, `"config.order"`, or `"sysid"` for the pendulum tracer, whose plan lists the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` |
+| `plan` | the plan that ran: `twin`, `source` (`"planner"`, `"config.order"`, or `"sysid"` for the pendulum's on='real' run, whose plan lists the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` |
 | `parameters` | one row per parameter (below) |
 | `routines` | one row per routine as it ran (below) |
 | `passed` | every graded value within its tolerance, and at least one graded |
@@ -197,9 +199,13 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `source` | `"rig"` (the rig's implementation), `"custom"` (injected through the config), `"catalog"` (planned for picked models; no implementation here) or `"sysid"` (a model rung a sysid pipeline fitted, id `sysid.<example>.<rung>`; its `wall_time_s` is null because `identify()` times no rung apart) |
 
 `CalibrationRecord.from_rig(calibration, report=, description=)` turns a rig's `RigCalibration.to_dict()` into this record without losing
-a row, and `CalibrationRecord.from_dict(record.to_dict())` gives back the same record. The pendulum tracer runs sysid's pipeline rather than
-planned routines; `CalibrationRecord.from_sysid(...)` records it in the same schema, its plan (`sysid_plan`) one fit step per model rung
-`identify()` actually fitted, never a catalog routine that did not run.
+a row, and `CalibrationRecord.from_dict(record.to_dict())` gives back the same record. The pendulum tracer's sim backend plays planned
+routines since 2026-11-17: its example ships them (`sysid/examples/pendulum_can11/routines.py`: `servo.backlash_reversals_camera`, the
+gap from the train runs' load reversals, then `servo.dynamics_regression`, the regression over every rung at that gap, each a step of the
+pipeline), `plan(twin)` shows them, `calibrate()` plays exactly those, and `CalibrationRecord.from_schedule(...)` records the steps as they
+ran. Its `CalibrationConfig` picks, orders and excludes routines; `known`, `models`, `noise` and `seed` do not reach it yet (its rung is
+`RobotTwin(models=...)`, its noise sysid's ladder). The on='real' path still fits with `identify()` in one call, and
+`CalibrationRecord.from_sysid(...)` records it, its plan (`sysid_plan`) one fit step per model rung `identify()` actually fitted.
 
 ## on='real': the rack path
 
@@ -292,7 +298,8 @@ recorded kp 400 / kd 8 on 11-15); and the session's own config and frame checks 
   exceeded, or recorded data missing a planned run.
 - `KeyError`: an option a routine does not have.
 - `ValueError`: noise given both to `calibrate(noise=)` and in `CalibrationConfig.noise`.
-- `NotImplementedError`: `config=` or `data=` on the pendulum tracer, which runs sysid's pipeline rather than planned routines.
+- `NotImplementedError`: `data=`, or a `CalibrationConfig` with `known`, `models`, `noise` or `seed`, on the pendulum tracer (its
+  config picks, orders and excludes its routines only).
 - `TypeError`: `calibrate(on="real")` without a transport (it names `RackTransport` and `TwinTransport`).
 - `RunsPending` (`sim2real.real`): the submission is written and dry-run, nothing has come back to fit; it carries the session commands.
 - `RackRefused` (`sim2real.real`): `RackTransport(execute=True)` refused before starting anything; `.refusals` says why.

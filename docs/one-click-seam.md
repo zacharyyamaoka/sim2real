@@ -19,6 +19,7 @@ One folder, `sysid/examples/<name>/`, in the existing description format:
 | `description.json` | `sysid.description/1`: the model file, the typed components (each a sim2real type through its word: `moteus_servo`, `motor`, `gearbox`, `driver`, `encoder`, `arm_subassembly`, `tool`, `deployment`), and every parameter `<instance>.<name>` with its unit and where its nominal value comes from. `sim2real.examples` reads it unchanged (`twin.describe`, the internal adapter). |
 | `world.json` | `sysid.world/1`: the hidden truth, `{"truth": {key: value}}` with a source for every value. Only the runner reads it, outside the seal. A key it leaves out plays at its nominal. |
 | `rig.py` | `rig() -> RigBackend`. Its presence is the opt-in: a `RobotTwin` named for the folder uses `RigRunner` when it exists, else the pendulum tracer's `SimRunner`. |
+| `routines.py` | (the tracer, `SimRunner`; 2026-11-17) `schedule()`: the planner's half of a RigBackend, `name`, `parameters()` and `routines()`, each routine a step of the example's `pipeline.py`. `plan(twin)` shows these routines and `calibrate()` plays exactly them over the pipeline's own measurement of the schedule; each fit's third argument is `twin.PipelineHandle` (the pipeline, its sysid description, the twin's `workers`, the rung it runs). First: `pendulum_can11` (`servo.backlash_reversals_camera`, then `servo.dynamics_regression`). |
 
 ## The RigBackend (all a rig implements)
 

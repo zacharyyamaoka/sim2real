@@ -135,6 +135,23 @@ class CalibrationRecord:
                 "passed": calibration.get("passed"), "failing": list(calibration.get("failing", []))}
         return cls.from_rig(seam, report=report, description=description, plan=plan, written=written)
 
+    @classmethod
+    def from_schedule(cls, calibration: Mapping[str, Any], *, routines: Sequence[Mapping[str, Any]], plan: Any, noise: Mapping[str, Any],
+                      twin: str, description: Any = None, report: Mapping[str, Any] | None = None, written: str | None = None) -> CalibrationRecord:
+        """The pendulum tracer's calibration (sim2real.twin.Calibration.to_dict()) played as its schedule (plan(twin), the example's
+        routines.py; 2026-11-17) as a record, losing no row. `routines`: the steps as they ran, in order, each {"routine", "identifies",
+        "runs", "seconds", "found"} with only the values that step estimated; `plan`: the CalibrationPlan that ran. Each parameter row names
+        the step that found it (none: a structural constant of the twin's rung, or a value whose step was not in the plan). WHY onto
+        from_rig's shape, as from_sysid: one code path writes every sim2real.calibration/1 record."""
+        owner = {key: step["routine"] for step in routines for key in step.get("found", {})}
+        rows = [{**r, "routine": owner.get(r["key"])} for r in calibration["rows"]]
+        steps = [{"routine": s["routine"], "identifies": list(s.get("identifies", [])), "runs": s.get("runs"), "seconds": s.get("seconds"),
+                  "found": dict(s.get("found", {}))} for s in routines]
+        seam = {"rig": twin, "backend": calibration.get("backend", "sim"), "model": calibration.get("model", ""),
+                "seconds": calibration.get("seconds"), "noise": dict(noise), "rows": rows, "routines": steps,
+                "passed": calibration.get("passed"), "failing": list(calibration.get("failing", []))}
+        return cls.from_rig(seam, report=report, description=description, plan=plan, written=written)
+
     def summary(self) -> str:
         identified = [p for p in self.parameters if p["pass"] is not None]
         lines = [f"{self.twin} on {self.backend}: {len(self.routines)} routines, {self.seconds} s; "

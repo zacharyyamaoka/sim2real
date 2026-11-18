@@ -249,20 +249,53 @@ class Fit:
     stock: dict = field(default_factory=dict)
 
 
-def identify(description, measurements: dict[str, RunData], *, workers: int = 8) -> Fit:
+@dataclass(frozen=True)
+class Gap:
+    """The gear gap from load reversals seen by the link camera (the catalog's servo.backlash_reversals_camera): `rad` the distance
+    between the two contact levels of (motor encoder - link camera), `levels` those two levels, `ci95` the bootstrap over runs."""
+    rad: float
+    levels: tuple[float, float]
+    ci95: tuple[float, float]
+    runs: int
+
+
+GAP_METHOD = ("two-means of (motor encoder - link camera) over every train row: the two contact levels, each re-taken as the median within a "
+              f"quarter gap of it; the gap is their distance; 95 % by a bootstrap over runs ({RESAMPLES} resamples)")
+
+
+def gear_gap(measurements: dict[str, RunData]) -> Gap:
+    """The gap between the motor encoder and the link camera over the train runs (backlash_from_gaps), with its bootstrap interval.
+    identify() calls it when no earlier routine handed it the gap; the schedule's servo.backlash_reversals_camera step calls it first."""
+    gaps = [run.output.q - run.q_link for run in measurements.values()]
+    gap_hat, levels = backlash_from_gaps(gaps, levels=True)
+    # WHY its own seeded generator (as identify() drew it before the split, 2026-11-17): the interval is the same numbers wherever it is drawn
+    rng = np.random.default_rng(20261105)
+    gap_boot = np.array([backlash_from_gaps([gaps[i] for i in rng.integers(0, len(gaps), len(gaps))]) for _ in range(RESAMPLES)])
+    return Gap(float(gap_hat), (float(levels[0]), float(levels[1])), tuple(float(v) for v in np.percentile(gap_boot, (2.5, 97.5))), len(gaps))
+
+
+def identify(description, measurements: dict[str, RunData], *, workers: int = 8, gap: float | None = None) -> Fit:
     """M2 and M3 by one inverse-dynamics regression over every train run on the stock smoother's grid, M4 by the gap between the
     motor encoder and the link camera; 95 % intervals by the stock moving-block bootstrap (0.5 s blocks, every run its own share).
     `workers`: the replay pool of the friction polish (refine_friction). WHY a keyword with the old 8 as its default (2026-11-15, the
     real backend): each replay is one deterministic (twin, run) job, so the pool's size moves no number; a lane beside the powered rack
-    caps it at 2 (sim2real.real), and every existing caller keeps its 8."""
+    caps it at 2 (sim2real.real), and every existing caller keeps its 8.
+
+    `gap` (rad): the gear gap a routine before this one found (the schedule's servo.backlash_reversals_camera, gear_gap()), or the prior
+    that serves when that routine did not run. M4 regresses on the rows within 30 % of THIS gap of a contact level, carries it as its
+    backlash, and leaves its interval to the routine that found it. None (every caller before 2026-11-17): the gap is found here."""
     from bam_rack_twin import identify as rack_identify  # noqa: PLC0415
 
     board = _rack()[1]  # the twin of record's board knobs: the description's known configuration (description.known)
     # the board's current loop (a first-order lag) stands between the requested torque the board reports and the joint
     shift = -1.0 / (2.0 * math.pi * board.current_loop_hz)
     ceiling = CEILING_FRACTION * board.current_limit[0] * board.current_limit[1]
-    gaps = [run.output.q - run.q_link for run in measurements.values()]
-    gap_hat, levels = backlash_from_gaps(gaps, levels=True)
+    found = gear_gap(measurements) if gap is None else None
+    if found is not None:
+        gap_hat, levels = found.rad, found.levels
+    else:
+        # the contact levels are where the data sits (a data selection, never a parameter); the gap's width is the one handed in
+        gap_hat, levels = float(gap), backlash_from_gaps([run.output.q - run.q_link for run in measurements.values()], levels=True)[1]
     q, qd, qdd, tau, sgn, contact, groups = [], [], [], [], [], [], []
     start = 0
     for run in measurements.values():
@@ -275,7 +308,8 @@ def identify(description, measurements: dict[str, RunData], *, workers: int = 8)
         keep = ~near_stuck & (np.abs(f.tau) < ceiling)
         if keep.sum() < BLOCK_ROWS:
             continue
-        in_contact = gear_in_contact(run, f, shift, levels, gap_hat)
+        # WHY every row when the gap handed in is none (a prior of 0 when the gap routine did not run): with no gap the gear is always in contact
+        in_contact = gear_in_contact(run, f, shift, levels, gap_hat) if gap_hat > 0 else np.ones(f.q.size, bool)
         q.append(f.q[keep]); qd.append(f.qd[keep]); qdd.append(f.qdd[keep]); tau.append(f.tau[keep]); sgn.append(f.sign_qd[keep])
         contact.append(in_contact[keep])
         groups.append(np.arange(start, start + int(keep.sum())))
@@ -336,8 +370,6 @@ def identify(description, measurements: dict[str, RunData], *, workers: int = 8)
     est4 = m3(rows4)
     local4 = np.geomspace(est4[6] / 1.6, est4[6] * 1.6, 15)
     boot4 = rack_identify.block_bootstrap(groups4, lambda r: m3(r, local4), rows_per_block=[BLOCK_ROWS] * len(groups4), resamples=RESAMPLES // 2)
-    rng = np.random.default_rng(20261105)
-    gap_boot = np.array([backlash_from_gaps([gaps[i] for i in rng.integers(0, len(gaps), len(gaps))]) for _ in range(RESAMPLES)])
 
     names2 = ("armature_kg_m2", "gravity_nm", "gravity_bottom_rad", "frictionloss_nm", "damping_nm_s_rad")
     names3 = names2 + ("friction_stribeck_drop_nm", "friction_stribeck_speed_rad_s")
@@ -353,7 +385,8 @@ def identify(description, measurements: dict[str, RunData], *, workers: int = 8)
     intervals = {"M0": {n: ci(boot0, i) for i, n in enumerate(names0)},
                  "M2": {n: ci(boot2, i) for i, n in enumerate(names2)}, "M3": {n: ci(boot3, i) for i, n in enumerate(names3)},
                  "M4": {n: ci(boot4, i) for i, n in enumerate(names3)}}
-    intervals["M4"]["backlash_rad"] = tuple(float(v) for v in np.percentile(gap_boot, (2.5, 97.5)))
+    if found is not None:
+        intervals["M4"]["backlash_rad"] = found.ci95
     methods = {
         "M0": "the same regression without friction terms: tau = J qdd + G sin(q - bottom) (the card's ideal rung, rigid under the board's PD)",
         "M2": f"tau(t {shift * 1e3:+.2f} ms) = J qdd + G sin(q - bottom) + Fc sgn(qd) + b qd over {q.size:,} moving rows of {len(groups)} train runs "
