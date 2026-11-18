@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>W2 Pendulum Dashboard</title>
+<style>
+:root{--bg:#fafafa;--fg:#1a1a1a;--muted:#666}
+@media (prefers-color-scheme:dark){:root{--bg:#141517;--fg:#eee;--muted:#aaa}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:1280px;margin:0 auto;padding:20px 16px}
+h1{font-size:22px;margin:0 0 6px} p{margin:4px 0 14px;color:var(--muted)}
+video,img{width:100%;height:auto;border-radius:8px;display:block}
+ol{color:var(--muted);font-size:15px}
+</style></head><body><main>
+<h1>W2 must-meet #1 · pendulum dashboards (round 9)</h1>
+<p>49 s, recorded headlessly on 2026-11-18. Three captioned segments:</p>
+<ol>
+<li>sim2real Deployments · One Dof Test Rack: Now · round 9 headline, the Scene with six labelled stations, the Runs view.</li>
+<li>Rerun: round 9, CAN 11 at 0.9 of top speed (s61_can11_waypoints): real encoder vs sim twin vs target, then the tracking-error trace.</li>
+<li>W&amp;B summary across rounds, rendered from W&amp;B API data (run <code>deployment-summary</code>; the headless browser was not signed in to Forge): best GOOD rung per round, 0 → 0.9.</li>
+</ol>
+<video autoplay muted loop playsinline controls poster="media/w2-pendulum-dashboard-2026-11-19/still-8.png">
+<source src="media/w2-pendulum-dashboard-2026-11-19/w2-pendulum-dashboard.mp4" type="video/mp4">
+<img src="media/w2-pendulum-dashboard-2026-11-19/w2-pendulum-dashboard.gif" alt="Pendulum dashboards walkthrough (GIF fallback)">
+</video>
+<p><a href="media/w2-pendulum-dashboard-2026-11-19/w2-pendulum-dashboard.gif">GIF fallback</a></p>
+</main></body></html>
