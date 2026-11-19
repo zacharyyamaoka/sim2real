@@ -49,6 +49,19 @@ __all__ = ["FeedforwardBench"]
 
 Cell = tuple[tuple[int, int], float]
 CHANNEL = "feedforward_effort"
+# The routine's defaults for the fit's two row rules, where the bench differs from fit.feedforward's own (0.02 / 0.02), both measured on the
+# closed-loop toy arm (tests/feedforward_toy.py, cloud dispatches d06364981, d07015580, d07280523, 2026-11-19):
+# WHY 0.05 rad to pair the legs: on a board's PD the measured way out and way back part by the tracking error (friction short of the
+# feedforward / kp, opposite on the two legs); with round 1 on the CAD prior only 12 % of one slow edge's way out lay within 0.02 rad of the
+# way back, so the fit refused the very first round; at 0.05 rad every round-1 leg at every noise level pairs (>= 96 %). The guard is against a run one
+# way or back along a detour (0.4 rad in tests/test_feedforward_bench.py), and the regressor reads the MEASURED poses, so a few
+# hundredths of a radian of parting costs the fit nothing
+BENCH_PAIR_TOL_RAD = 0.05
+# WHY 0.1 rad/s for a moving row: a board's speed noise makes a hold read as moving (at 3x, 0.015 rad/s of noise puts ~18 % of resting
+# samples over 0.02 rad/s), and each such sample enters with a random sign(qd) and a torque that rests on static friction ("no hold is a
+# row", 15c): at 0.02 the 3x fit's Coulomb fell to 0.78 N.m and its worst held-out cell residual sat at 0.75-0.84 N.m; at 0.1 the 3x and
+# 10x fits keep Coulomb within 0.03 N.m and gravity within 0.015 N.m, and 0x / 1x are unchanged (gravity <= 0.009 N.m)
+BENCH_MOVING_RAD_S = 0.1
 
 
 def _trajectories():
@@ -76,7 +89,8 @@ class FeedforwardBench:
     runs() (theta's units; None: no ridge). Each drive's friction is its ``frictionloss_nm`` (Coulomb) and ``damping_nm_s_rad`` (NET
     viscous: negative where friction weakens with speed). The rounds (module docstring): ``max_rounds`` (the runner's cap),
     ``tolerance_nm`` (a cell's held-out residual), ``delta_nm`` (ΔG between rounds), ``per_round`` (cells a later round may collect; None:
-    no cap), ``patience`` and ``min_improvement`` (the no-improvement stop)."""
+    no cap), ``patience`` and ``min_improvement`` (the no-improvement stop). ``moving_rad_s`` / ``pair_tol_rad``: the fit's row rules at
+    the bench's defaults, 0.1 rad/s and 0.05 rad (BENCH_MOVING_RAD_S, BENCH_PAIR_TOL_RAD: why, beside them)."""
 
     id = "arm.feedforward_bench"
     FRICTION = ("frictionloss_nm", "damping_nm_s_rad")
@@ -84,8 +98,8 @@ class FeedforwardBench:
     def __init__(self, *, space: Any, poses, grid: Sequence[Cell], drives: Sequence[str], gravity_keys: Sequence[str],
                  regressor: Callable[[np.ndarray], np.ndarray], first: Sequence[Cell] | None = None, inertial: Callable | None = None,
                  prior_sigma=None, tolerance_nm: float = 0.10, delta_nm: float = 0.05, max_rounds: int = 4, per_round: int | None = None,
-                 dwell_s: float = 0.3, moving_rad_s: float = ff.MOVING_RAD_S, pair_tol_rad: float = ff.PAIR_TOL_RAD, patience: int = 2,
-                 min_improvement: float = 0.10) -> None:
+                 dwell_s: float = 0.3, moving_rad_s: float = BENCH_MOVING_RAD_S, pair_tol_rad: float = BENCH_PAIR_TOL_RAD,
+                 patience: int = 2, min_improvement: float = 0.10) -> None:
         self.space = space
         self.drives = tuple(str(d) for d in drives)
         if tuple(space.joint_names) != self.drives:
