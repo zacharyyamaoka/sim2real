@@ -382,7 +382,12 @@ def select(picked: Mapping[str, Any], config: CalibrationConfig | None = None) -
         for rid in options(tid).setup:
             if rid not in setup:
                 setup.append(rid)
-                why[rid] = f"setup: the {tid} type always wants it before it is fitted (sim2real.calibration.options.SETUP)"
+                # WHY two texts (gap C): a configure step sets the device before anything is fitted; a tune (PID tuna) runs after the fits
+                # it requires and is judged on what it gains, never against a hidden truth
+                why[rid] = (f"setup (tune): the {tid} type always wants it (sim2real.calibration.options.SETUP); it picks its settings "
+                            "for closed-loop performance after the fits it requires, graded on the performance it gains, never against a "
+                            f"hidden truth; {_recovery_words(rid, level)}" if catalog[rid].kind == "tune" else
+                            f"setup: the {tid} type always wants it before it is fitted (sim2real.calibration.options.SETUP)")
     for rid in list(setup):
         reason = _filter(catalog[rid], config)
         if reason:
@@ -414,6 +419,16 @@ def select(picked: Mapping[str, Any], config: CalibrationConfig | None = None) -
     # the budget's time and money: drop the lowest-ranked until it fits (refused when strict)
     chosen, setup, over = _fit_budget(chosen, setup, config, rank)
     dropped.update(over)
+    # a tune never runs on a plant nothing fitted (gap C): one whose required parameter is still to find and no planned routine finds is
+    # dropped, naming what it lacks (a name the picked models do not carry stays assumed at its prior, as on a rig)
+    covered_now = {c for rid in chosen for c in covers[rid]}
+    for rid in list(setup):
+        lacking = _starved(catalog[rid], chosen_models, wanted, covered_now)
+        if lacking:
+            setup.remove(rid)
+            why.pop(rid, None)
+            dropped[rid] = (f"starved: nothing planned finds {', '.join(lacking)}, which it requires (a tune never runs on a plant nothing "
+                            "fitted; their routines' reasons are under uncovered)")
     for rid in chosen:
         if rid not in why:
             alts = [a for a in eligible if a != rid and set(covers[a]) & set(covers[rid])]
@@ -436,18 +451,34 @@ def select(picked: Mapping[str, Any], config: CalibrationConfig | None = None) -
             by = sorted({o for o in chosen for c in covers[rid] if c in covers[o]}, key=rank)
             dropped[rid] = (f"not needed: {', '.join(by)} already cover{'s' if len(by) == 1 else ''} what it identifies here"
                             if by else "not needed")
+    configures = {rid: _configured_keys(catalog[rid], chosen_models) for rid in setup}
     uncovered = []
     for inst, _tid, name in parameters:
         if (inst, name) in covered:
             continue
         rids = [rid for rid, cs in covers_all.items() if (inst, name) in cs]
-        if not rids:
+        tunes = [rid for rid in setup if catalog[rid].kind == "tune" and f"{inst}.{name}" in configures[rid]]
+        if tunes:
+            # WHY still uncovered (gap C): a tune picks a setting for performance, it recovers no hidden value; the device's own config
+            # receipt says what it runs now, and the tune proposes the change
+            uncovered.append((inst, name, f"not identified: read from the device's config receipt (a servo's board config); "
+                                          f"{', '.join(tunes)} (tune) proposes new values for closed-loop performance"))
+        elif not rids:
             uncovered.append((inst, name, "no catalog routine identifies it yet"))
         else:
             uncovered.append((inst, name, "its routines were dropped: " + "; ".join(f"{rid} ({dropped.get(rid, 'not chosen')})" for rid in rids)))
-    configures = {rid: _configured_keys(catalog[rid], chosen_models) for rid in setup}
     return Selection(parameters, tuple(chosen), tuple(setup), {rid: covers[rid] for rid in chosen} | {rid: () for rid in setup},
                      why, tuple(dropped.items()), tuple(uncovered), configures, level)
+
+
+def _starved(r, picked: Mapping[str, tuple[str, str]], wanted: set[tuple[str, str]], covered: set[tuple[str, str]]) -> list[str]:
+    """A catalog tune's required parameters, on the instances it configures, that are still to find (not known) and that no planned routine
+    finds: its keys, or [] (not a tune, or nothing it requires is missing)."""
+    if r.kind != "tune":
+        return []
+    types = {dm.CARD_TYPE.get(c.card) for c in r.configures}
+    return [f"{inst}.{name}" for inst, (tid, _m) in picked.items() if tid in types for name in r.requires
+            if (inst, name) in wanted and (inst, name) not in covered]
 
 
 def _refuse_gated_include(rid: str, gate: str | None) -> None:
@@ -1023,6 +1054,10 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
             reason = "excluded (CalibrationConfig.exclude)"
         elif cat is not None and (_setting_drop(cat, config.budget) or _equipment_drop(cat.equipment, config.budget)):
             reason = _setting_drop(cat, config.budget) or _equipment_drop(cat.equipment, config.budget)
+        elif callable(getattr(r, "unavailable", None)) and r.unavailable():
+            # WHY by name (gap C): a routine whose back end this machine lacks (PID tuna, imported only when it runs) leaves the schedule
+            # saying so, rather than failing mid-calibration
+            reason = r.unavailable()
         elif tuple(getattr(r, "identifies", ())) and all(k in config.known for k in r.identifies) and not getattr(r, "configures", ()):
             reason = "known: every parameter it identifies here is in CalibrationConfig.known"
         if reason and r.id in config.include:

@@ -835,7 +835,9 @@ class RealRunner:
                         "submission": str(submission.folder) if submission is not None else data.meta.get("submission")})
         handle = PipelineHandle(module, d, self.workers, rung)
         hooks = {} if on_step is None else {"on_step": on_step, "collected": "recorded" if data is not None else "measured"}
-        fit, steps, handed = twin_module._play_routines(routines, played, values, handle, servo=servo.id, **hooks)
+        settings, proposals = {}, {}   # what a configure / tune step chose (gap C): settings, never values
+        fit, steps, handed = twin_module._play_routines(routines, played, values, handle, servo=servo.id, settings=settings,
+                                                        proposals=proposals, **hooks)
         # WHY after the seal: the fit never sees it; real hardware has none (rows ungraded); a refit asks no transport, so none either
         ruler = dict(transport.ruler() or {}) if transport is not None else {}
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
@@ -862,7 +864,7 @@ class RealRunner:
                  "found": {f"{servo.id}.{name}": fit.values[k][name] for name in fit.values[k] if name in fit.ci95.get(k, {})}} for k in fit.values]
         state = {"d": d, "plan": plan, "submission": submission, "recording": recording, "measured": measured, "fit": fit, "ruler": ruler,
                  "model": model, "rung": rung, "module": module, "servo": servo, "noise": noise, "fits": fits, "noise_level": "real",
-                 "transport": transport_name, "routines": steps}
+                 "transport": transport_name, "routines": steps, "settings": settings, "proposals": proposals}
         held = {}
         if data is not None:
             state.update(data=data, purposes=purposes)
@@ -1094,6 +1096,7 @@ def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: A
     fitted.intervals_ = {r["name"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
     fitted.rungs_ = calibration.rungs
     fitted.calibration_ = calibration
+    fitted.settings_, fitted.proposals_ = dict(state.get("settings", {})), dict(state.get("proposals", {}))
     fitted.submission_ = state["submission"]
     fitted.runs_ = state["measured"]
     fitted.data_ = data if data is not None else held_runs(twin.description.id, planned, state)

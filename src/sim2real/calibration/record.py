@@ -122,7 +122,8 @@ class CalibrationRecord:
         the step that found it (none: a structural constant of the twin's rung, or a value whose step was not in the plan). Both backends
         record through it since 2026-11-18 (on='real' plays the same schedule; records written before that by the removed from_sysid, plan
         source "sysid", still load through from_dict). WHY onto from_rig's shape: one code path writes every sim2real.calibration/1 record."""
-        owner = {key: step["routine"] for step in routines for key in step.get("found", {})}
+        # WHY a step's configures keys own no row (gap C): a tune's settings are not model values, whatever key the description gives them
+        owner = {key: step["routine"] for step in routines for key in step.get("found", {}) if key not in step.get("configures", ())}
         rows = [{**r, "routine": owner.get(r["key"])} for r in calibration["rows"]]
         steps = [_routine_row(s) for s in routines]
         seam = {"rig": twin, "backend": calibration.get("backend", "sim"), "model": calibration.get("model", ""),
@@ -151,14 +152,16 @@ def _routine_row(step: Mapping[str, Any]) -> dict:
 
 
 def _plan_from_steps(steps: Sequence[Mapping[str, Any]], description: Any, twin: str | None) -> dict:
-    """A plan for routines that already ran (no CalibrationPlan kept): routine-likes carrying what ran (id, identifies, and adjusts as
-    what they found beyond it), described by their catalog declarations, in the order they ran."""
+    """A plan for routines that already ran (no CalibrationPlan kept): routine-likes carrying what ran (id, identifies, the settings a
+    configure / tune step wrote, and adjusts as what else they found), described by their catalog declarations, in the order they ran."""
     from .config import CalibrationConfig  # noqa: PLC0415
     from .plan import _steps, _totals  # noqa: PLC0415
 
     names = {f"{i.id}.{n}": n for i in description.instances for n in i.parameters} if description is not None else {}
+    # WHY configures only where the step names it: a step row without one leaves the catalog to speak for the routine, as before
     items = [SimpleNamespace(id=s["routine"], identifies=tuple(s.get("identifies", ())),
-                             adjusts=tuple(sorted(set(s.get("found", {})) - set(s.get("identifies", ()))))) for s in steps]
+                             adjusts=tuple(sorted(set(s.get("found", {})) - set(s.get("identifies", ())) - set(s.get("configures", ())))),
+                             **({"configures": tuple(s["configures"])} if s.get("configures") else {})) for s in steps]
     ran_ids = tuple(s["routine"] for s in steps)
     try:
         out, assumed, source = _steps(items, ["rig"] * len(items), names, CalibrationConfig())

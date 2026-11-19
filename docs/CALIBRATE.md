@@ -36,8 +36,9 @@ Every routine writes values onto a model. They come in four kinds, and when noth
 
 1. **configure** sets a value on the device, such as a joint zero or an exposure lock. It writes settings, not model parameters.
 2. **fit** matches a model to reality, such as friction or mass. The catalog's word for it is `identify`; pages print "fit".
-3. **tune** optimizes a metric where there is no real reference to match, such as PID gains, or a camera's exposure, gain and frame
-   rate for ArUco corner accuracy. Like configure, it writes the settings it picks.
+3. **tune** optimizes a metric where there is no real reference to match, such as PID gains (`pid.pidtuna`, since 2026-11-18), or a
+   camera's exposure, gain and frame rate for ArUco corner accuracy. Like configure, it writes the settings it picks, but it only proposes
+   them: they never become the values later routines fit with (see "Tune steps write settings").
 4. **measure** is a gauge. It reads a metric or a calibration constant.
 
 A fifth kind, `use`, consumes a calibration at run time and identifies nothing. It runs last.
@@ -389,7 +390,7 @@ python -m sim2real.tracking.calibrate_wandb --sync FOLDER     # or --all; --dry-
 | `identifies` | the keys it claims |
 | `runs` | how many runs it played |
 | `seconds` | its wall time in this run |
-| `found` | `{key: value}`, everything it set, including values it set for the twin without claiming them (its adjusts) |
+| `found` | `{key: value}`, everything it set, including values it set for the twin without claiming them (its adjusts) and the settings a configure / tune step chose (they own no parameter row) |
 | `rounds`, `converged`, `stopped` | optional (a rig's run carries them, gap A2): each round `{k, runs, found}`, whether it converged (None: one round), why it stopped; see "Rounds" |
 
 ### Per plan step
@@ -606,6 +607,35 @@ installed by a pin move; none came from a routine, and none has a stop rule.
   integrated-servo pick never gets it in its cover; `arm.dynamics_excitation` and `servo.dynamics_regression` are its alternatives.
 - **Install:** `robot_trajectories` is the `trajectories` extra (`uv sync --extra trajectories`); it has no remote yet, so the extra
   resolves on the workstation and in a cloud cut that carries it.
+
+## Tune steps write settings: `pid.pidtuna`
+
+A tune picks settings for a metric; it recovers no hidden value. Since 2026-11-18 (gap C, docs/decision-pidtuna-tune-2026-11-18.md) PID
+tuna is one: the catalog's `pid.pidtuna` is kind `tune`, every integrated servo wants it once it is fitted (`options.SETUP`), and
+sim2real runs it as `sim2real.calibration.PidTune`.
+
+- **Where it runs:** after the fits it requires (`armature_kg_m2`, `frictionloss_nm`; it reads the gravity, damping, command delay and
+  Stribeck drop where found). The SIM tier tunes the board's kp and kd on a pidtuna ServoSim of the **fitted** twin, under the fitted
+  model's feed-forward held fixed: no robot time, no hands (wall time 0 s). Its pools are the twin's workers, closed when it is done.
+- **What it writes:** settings. A step's configures keys land in its record row's `found` and in `fitted.settings_` (`{key: value}`, in
+  run order), and each later routine sees them as its handle's `settings`. A tune's never enter the values a later routine fits with, the
+  values the twin replays at (`runner.state["values"]`) or `fitted.values_`, and they own no parameter row: the runs were made at the gains
+  the board ran, and a proposal is not a write. A **configure** step's outputs do enter the values: it set the device, so what follows
+  runs at it.
+- **The proposal:** a fit result with a `proposal` attribute keeps it in `fitted.proposals_[routine id]`. PidTune's is pidtuna's gains
+  document (schema `pidtuna/gains-1`: the board keys to set, before and after on held-out tapes) plus the feed-forward it was tuned under.
+  Nothing writes a board.
+- **Integrator off:** PID tuna is handed the board with ilimit 0 (its ki kept, the integrator switched off): PD + feed-forward only.
+- **The planner:** a tune joins the plan, never the cover; the gains stay in `Selection.uncovered` ("read from the device's config
+  receipt; pid.pidtuna (tune) proposes new values"); `exclude=` and a deployed-only budget drop it by name; on the catalog path a tune
+  whose required parameter nothing planned finds is dropped (`starved: ...`); on a rig a routine whose back end this machine lacks
+  (`unavailable()`: pidtuna not importable, `SIM2REAL_PIDTUNA` unset) is dropped by name.
+- **CAN 11:** the pendulum's schedule runs it third, after `servo.dynamics_regression`, on the board as the deployment record states it
+  (kp 200, kd 4 N·m/rev, ki 16000, ilimit 0.5) in the rack's envelope. `CalibrationConfig(exclude=("pid.pidtuna",))` leaves it out.
+- **The grade:** performance gained, never a recovered value. `tests/test_pid_tune_routine.py` tunes on handed values 0 / 1 / 3 times the
+  dynamics fit's tolerance from a moved hidden CAN 11 and compares the delivered controller's cost (stop p90 and tracking RMS, each over
+  the board's as-found controller) with the best admissible PD + feed-forward on the true model: regret <= 0.15 passes. The ladder is
+  `sysid/results/routine_ladders/pid.pidtuna.json`.
 
 ## Errors
 

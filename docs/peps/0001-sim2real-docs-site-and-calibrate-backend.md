@@ -44,7 +44,8 @@ site in robotmsgs.com's shape documents all of it from the same registries. It k
 - **A declared `requires` always beats the stage.** Example: the camera's ArUco tuning (a tune routine) runs before the bundle
   adjustment (a fit) that requires its exposure.
 - Follow-up, not done here: re-kind `pid.pidtuna` (`use`) and `camera.exposure_for_task` (`configure`) as `tune`. Changing an existing
-  value needs its own decision (cards/CONTRACT.md: additive only).
+  value needs its own decision (cards/CONTRACT.md: additive only). Done for `pid.pidtuna` on 2026-11-18 (gap C,
+  docs/decision-pidtuna-tune-2026-11-18.md); `camera.exposure_for_task` is still `configure`.
 
 ## 3. A routine is collect + fit
 

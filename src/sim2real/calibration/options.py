@@ -6,8 +6,8 @@ of options in case people do different things").
     options("camera")   # TypeOptions(type='camera', models=('M2.measurement.exposure_latency', ...), routines=(...), setup=('camera.exposure_lock',))
 
 Derived from the type registry (cards/domain.py: its model ladder and the routines that identify its parameters), so there is no second
-registry. The one thing the registry cannot say is which configure / tune routines a type ALWAYS wants before it is fitted; that is the one
-explicit dict below, SETUP.
+registry. The one thing the registry cannot say is which configure / tune routines a type ALWAYS wants; that is the one explicit dict
+below, SETUP (a configure step sets the device before anything is fitted; a tune runs after the fits it requires).
 """
 
 from __future__ import annotations
@@ -22,10 +22,13 @@ from . import recovery as rec
 # WHY explicit (PEP 0001 §5): "always wants" is a designer's call, not something a ladder implies. The camera locks its exposure under the
 # deployment's lights before anything is fitted (bam_camera_calibration); an ArUco marker is read best by a camera whose exposure, gain and
 # fps were tuned for corner accuracy (PEP 0001 §9). camera.exposure_for_aruco and the aruco_marker type arrive with the aruco lane; until
-# they are in the catalog, options() drops the id it cannot find there and says so in TypeOptions.missing.
+# they are in the catalog, options() drops the id it cannot find there and says so in TypeOptions.missing. An integrated servo has its
+# board's gains tuned by PID tuna on the fitted twin once its inertia and friction are found (gap C; Zach, 2026-11-17: "PID Tuna is the
+# backend for one of the routines"): a tune, so it joins the plan, never the cover, and runs after the fits it requires.
 SETUP: dict[str, tuple[str, ...]] = {
     "camera": ("camera.exposure_lock",),
     "aruco_marker": ("camera.exposure_for_aruco",),
+    "integrated_servo": ("pid.pidtuna",),
 }
 
 

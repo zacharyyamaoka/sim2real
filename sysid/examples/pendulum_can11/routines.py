@@ -4,7 +4,7 @@ internall mabye that does .generate_schedule() -> CalibrationSchedule ... a stat
     import sim2real
     from sim2real.calibration import plan
     twin = sim2real.examples.pendulum_can11()        # or RobotTwin.from_robot_description(station_description(11))
-    plan(twin).summary()                             # 1. servo.backlash_reversals_camera  2. servo.dynamics_regression
+    plan(twin).summary()                             # 1. servo.backlash_reversals_camera  2. servo.dynamics_regression  3. pid.pidtuna
     fitted = twin.calibrate(on="sim")                # plays exactly those steps, in that order; fitted.plan_ is that plan
 
 The steps, each a registered catalog routine (src/sim2real/cards/calibration.py), each the pipeline's own code (pipeline.py), never
@@ -13,6 +13,8 @@ re-derived here:
 1. servo.backlash_reversals_camera   the gear gap from (motor encoder - link camera) over every train row (pipeline.gear_gap)
 2. servo.dynamics_regression         one inverse-dynamics regression over every train run, every rung of the servo card's ladder (M0, M2,
                                      M3, M4), M4 on the rows where the gear is in contact at step 1's gap (pipeline.identify)
+3. pid.pidtuna                       PID tuna on the fitted twin, no robot time (sim2real.calibration.PidTune, gap C): the board's kp and kd
+                                     as settings (fitted.settings_), never model values; dropped by name where pidtuna cannot be imported
 
 WHY the planning half of the one-click seam and not a rig.py (2026-11-17): sim2real.rig.load_rig() turns a rig.py into a RigRunner, and the
 pendulum's proven path is twin.SimRunner (the real backend, sim2real.real, plays the same pipeline on the rack; its eval grades the rung
@@ -31,7 +33,9 @@ from __future__ import annotations
 import json
 import warnings
 
+from sim2real import paths
 from sim2real import rig as seam
+from sim2real.calibration.pid_tune import PidTune
 from sysid import RESULTS_DIR
 
 EXAMPLE = "pendulum_can11"
@@ -106,6 +110,26 @@ class DynamicsRegression:
         return Ladder(found, fit)
 
 
+# CAN 11's board as the rack runs it, for PID tuna (step 3). WHY these numbers: the envelope a tune may move the pendulum in and the torque
+# limit are bam_ws bam_pid_tunning's CAN 11 rung (src/core/mdp/setup/bam_pid_tunning/src/bam_pid_tunning/plants/rack_truths.py: travel 0.3
+# rad about its -0.35 rad origin, 2 rad/s, 2.85 N.m; 0.7135 N.m/A x 4 A); the gains are read from the deployment record when it runs
+RECORD = ("records", "one-dof-test-rack", "deployment.json")
+CAN_ID = 11
+ENVELOPE = {"travel_rad": 0.3, "max_speed_rad_s": 2.0, "max_torque_nm": 2.85, "origin_rad": -0.35}
+TORQUE_LIMIT_NM = 2.854
+COMMAND_RATE_HZ = 100.0
+
+
+def board_servo():
+    """CAN 11 as its board runs today, a pidtuna Servo: the deployment record's gains (kp 200, kd 4 N.m/rev, ki 16000, ilimit 0.5 on
+    2026-10-29) in the rack's envelope. Built when step 3 runs, so planning never imports pidtuna."""
+    from pidtuna import config, types  # noqa: PLC0415  (PidTune.fit has put pidtuna on the path)
+
+    component = config.load_component(paths.RACK_TWIN.joinpath(*RECORD), CAN_ID)
+    return config.servo_from_component(component, envelope=types.Envelope(**ENVELOPE), torque_limit_nm=TORQUE_LIMIT_NM,
+                                       command_rate_hz=COMMAND_RATE_HZ)
+
+
 class Routines:
     """What the planner reads from a RigBackend (sim2real.rig): `name`, `parameters()` (each key with the routine that identifies it and its
     tolerance from sysid/acceptance.json) and `routines()`."""
@@ -120,7 +144,7 @@ class Routines:
                                     title=key.split(".", 1)[1]) for key, routine in owner.items())
 
     def routines(self) -> tuple:
-        return (GapFromReversals(), DynamicsRegression())
+        return (GapFromReversals(), DynamicsRegression(), PidTune(SERVO, servo=board_servo, can_id=CAN_ID))
 
 
 def schedule() -> Routines:

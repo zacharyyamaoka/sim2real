@@ -811,13 +811,26 @@ ROUTINES = (
          oracle_note="not implemented: a C-mount line or hyperspectral camera needs it; the RealSense is fixed focus"),
 
     # --- PID ----------------------------------------------------------------------------------------------------------------------
+    # WHY kind "tune", re-kinded from "use" (2026-11-18, docs/decision-pidtuna-tune-2026-11-18.md; Zach, 2026-11-11: PID tuning is
+    # "calibration or like tune beacuse there is not a real to reference it off of"): the planner schedules a tune after the fits it
+    # requires; a "use" routine it never reaches. WHY 0 s: what runs today is the SIM tier, PID tuna on the fitted twin, no robot time
+    # (the BENCH tier, its tapes played on the joint, is the follow-up the decision names)
     routine("pid.pidtuna", "PID gains from the identified model, then measured tuning (pidtuna)", "pid", (), "bench",
-         Q(1800, "s", ESTIMATE), Q(600, "s", ESTIMATE), (),
-         "the identified model, then steps and sweeps on the joint", "the closed loop's band", 1,
-         "pidtuna: an analytic start from the identified plant, a bandwidth search and its gates; it proposes gains, never writes a board",
-         kind="use",
-         code=(CodeHome(PIDTUNA, "src/pidtuna/tune.py"),), status="implemented",
-         oracle_note="not in the sysid ladder: tuning chooses gains and recovers no hidden value; its grade is the closed loop's (pidtuna's gates)"),
+         Q(0, "s", "the SIM tier tunes on the fitted twin; no robot time"),
+         Q(0, "s", "the SIM tier tunes on the fitted twin; no robot time"), (),
+         "the identified model, then steps and sweeps on the fitted twin (pidtuna's ServoSim)", "the closed loop's band", 1,
+         "pidtuna: an analytic start from the fitted plant, a bandwidth search and its gates on the fitted twin, under the fitted model's "
+         "feed-forward held fixed; it proposes the board's kp and kd, never writes a board",
+         kind="tune", configures=(C("servo", "kp_nm_rad", "kd_nm_s_rad"),),
+         code=(CodeHome(PIDTUNA, "src/pidtuna/tune.py"),
+               CodeHome(SIM2REAL, "src/sim2real/calibration/pid_tune.py",
+                        note="PidTune: the runnable wrapper, sim2real -> pidtuna one way")),
+         status="implemented",
+         oracle_note="not in the sysid ladder: tuning picks gains and recovers no hidden value; graded on the performance it gains "
+                     "against the best PD + feed-forward on a moved hidden CAN 11 (regret <= 0.15) by tests/test_pid_tune_routine.py; "
+                     "ladder routine_ladders/pid.pidtuna.json",
+         requires=("armature_kg_m2", "frictionloss_nm"),
+         uses=("gravity_nm", "gravity_bottom_rad", "damping_nm_s_rad", "command_delay_s", "friction_stribeck_drop_nm")),
 
     # --- the conveyor belt's geometry (2026-11-11, additive; sim2real.cards.conveyor_belt holds their tolerances) -----------------------
     # WHY no sysid oracle: their hidden-truth proof is sim2real.sim.conveyor_belt's MuJoCo twin (tests/test_conveyor_belt.py, 5 seeds),

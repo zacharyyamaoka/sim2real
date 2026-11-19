@@ -305,11 +305,13 @@ def _plain(value):
 @dataclass(frozen=True)
 class PipelineHandle:
     """What a tracer routine's fit may use (the third argument of fit(measured, values, twin)): the pipeline the runner plays, its sysid
-    description, the twin's cap on every pool and the rung the twin runs. Never the truth."""
+    description, the twin's cap on every pool, the rung the twin runs and `settings`, what the configure / tune steps before it chose (their
+    own channel, gap C). Never the truth."""
     module: Any
     description: Any
     workers: int
     rung: str
+    settings: Mapping[str, float] = field(default_factory=dict)
 
 
 # the run ids a tracer routine names (sysid/examples/<id>/routines.py: TRAIN, one recorded session), each with the split of a measurement
@@ -354,7 +356,9 @@ def _tracer_data(twin_id: str, planned, measured, noise: dict, *, truth_moved: M
 
 
 def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, Any]], values: dict[str, float], handle: PipelineHandle, *,
-                   servo: str, on_step: Callable[[dict], None] | None = None, collected: str = "measured") -> tuple[Any, list[dict], dict[str, str]]:
+                   servo: str, on_step: Callable[[dict], None] | None = None, collected: str = "measured",
+                   settings: dict[str, float] | None = None,
+                   proposals: dict[str, Any] | None = None) -> tuple[Any, list[dict], dict[str, str]]:
     """Play the planned routines in order over what was measured: each reads the runs it names from `played` (by run id), fits them sealed
     from the hidden truth, and hands what it found to the ones after it through `values` (updated in place). Returns (fit, steps, handed):
     the rung ladder one routine returned (routines.Ladder.fit), the steps as they ran (the record's routines) and, by parameter name, the
@@ -365,11 +369,17 @@ def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, An
 
     `on_step` (gap E: calibrate(callbacks=)) is handed each step as its fit finishes, before the next routine runs: {routine, identifies,
     runs (the run ids it read), collected (`collected`: "measured", or "recorded" on a refit from held runs), collect_s, fit_s, seconds,
-    found {key: {value, ci95, method, unit}}, round}; the unit is the sysid description's nominal unit."""
+    found {key: {value, ci95, method, unit}}, round}; the unit is the sysid description's nominal unit.
+
+    A configure / tune step's configures keys fill `settings` (in place; a tune's never reach `values`, sim2real.rig._settle), each later
+    fit sees them as handle.settings, and a fit result's `proposal` fills `proposals` {routine id: proposal} (gap C)."""
     from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
+    from .rig import _settle  # noqa: PLC0415
 
     _refuse_rounds(routines, "this loop plays each routine once over what was measured")   # the routines a runner resolved itself, too
     *_, hidden = _sysid()
+    settings = {} if settings is None else settings
+    proposals = {} if proposals is None else proposals
     rung = handle.rung
     estimates, steps, fit, ladder = {}, [], None, None
     # WHY the planned routines in the planned order and nothing else (Zach, 2026-11-17: the schedule is "a static description of the
@@ -383,22 +393,32 @@ def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, An
         if missing:
             raise CalibrationPlanError(f"{routine.id} plays runs {missing}; the world played {sorted(played)}")
         data = {name: run_data for run in runs for name, run_data in played[run.id].items()}
+        configures = tuple(getattr(routine, "configures", ()))
         fitting = time.monotonic()
         with hidden.sealed():
-            found = routine.fit(data, dict(values), handle)
+            found = routine.fit(data, dict(values), dataclasses.replace(handle, settings=dict(settings)))
         fit_s = time.monotonic() - fitting
-        extra = sorted(set(found) - set(routine.identifies))
+        extra = sorted(set(found) - set(routine.identifies) - set(configures))
         if extra:
-            raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies})")
+            raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies}, "
+                           f"configures: {configures})")
         for key, estimate in found.items():
+            if key in configures and key not in routine.identifies:
+                continue  # a setting: _settle below (gap C)
             estimates[key] = (routine.id, estimate)
             if estimate.value is not None and math.isfinite(estimate.value):
                 values[key] = float(estimate.value)
+        _settle(routine, found, values, settings)
+        if getattr(found, "proposal", None) is not None:
+            proposals[routine.id] = found.proposal
         if getattr(found, "fit", None) is not None:
             fit, ladder = found.fit, routine.id
-        steps.append({"routine": routine.id, "identifies": list(routine.identifies), "runs": len(data),
-                      "seconds": round(time.monotonic() - began, 1),
-                      "found": {k: (None if e.value is None else float(e.value)) for k, e in found.items()}})
+        step = {"routine": routine.id, "identifies": list(routine.identifies), "runs": len(data),
+                "seconds": round(time.monotonic() - began, 1),
+                "found": {k: (None if e.value is None else float(e.value)) for k, e in found.items()}}
+        if configures:
+            step["configures"] = list(configures)   # WHY (gap C): the record names no parameter row's owner from a setting
+        steps.append(step)
         if on_step is not None:
             # WHY here, inside the loop (gap E, ruler 1): a dashboard sees each step as it finishes, while the next fit is still running
             on_step({"routine": routine.id, "identifies": list(routine.identifies), "runs": list(dict.fromkeys(run.id for run in runs)),
@@ -553,8 +573,10 @@ class SimRunner:
         # WHY workers passed (2026-11-17): without it the pendulum's identify() polishes friction on its default 8-worker pool, which
         # opened 8 processes beside the powered arm at host load 35; the runner's workers caps every pool it opens (tests/test_workers_cap.py)
         handle = PipelineHandle(module, d, self.workers, rung)
+        settings, proposals = {}, {}
         fit, steps, handed = _play_routines(routines, played, values, handle, servo=servo.id, on_step=on_step,
-                                            collected="recorded" if data is not None else "measured")
+                                            collected="recorded" if data is not None else "measured", settings=settings,
+                                            proposals=proposals)
         ruler = json.loads(hidden.path(self.description.id).read_text(encoding="utf-8"))["truth"]  # world.json as committed: the ruler
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
                                               "method": handed.get(name, fit.methods[rung])} for name, value in fit.values[rung].items()}
@@ -573,7 +595,8 @@ class SimRunner:
         fits = [{"rung": k, "model": dm.RUNG_MODELS.get((card, k), (k,))[0],
                  "found": {f"{servo.id}.{name}": fit.values[k][name] for name in fit.values[k] if name in fit.ci95.get(k, {})}} for k in fit.values]
         state = {"d": d, "plan": plan, "measured": measured, "fit": fit, "ruler": ruler, "model": model, "rung": rung, "module": module,
-                 "servo": servo, "noise": noise, "fits": fits, "noise_level": noise_level, "routines": steps, "measure_seconds": measure_s}
+                 "servo": servo, "noise": noise, "fits": fits, "noise_level": noise_level, "routines": steps, "measure_seconds": measure_s,
+                 "settings": settings, "proposals": proposals}
         held = {"train_runs": len(plan.train), "held_out_runs": len(plan.held_out)}
         if data is not None:
             # WHY counted from the data on a refit: grown data holds more runs than the pipeline's plan names, and the summary says what was fitted
@@ -854,7 +877,10 @@ class RobotTwin:
             # world; built anew it lost an injected world, and a refit of a refit read the last fit's values as its priors
             fitted.runner = self.runner.with_state(state)
             fitted.data_ = state.get("data")
-            fitted.values_ = calibration.values
+            # WHY the description's priors beside the fitted values (gap C): values_ is the model the twin runs at, so a key nothing fitted
+            # keeps its prior; a tune's setting is never one of them (settings_)
+            fitted.values_ = {**{k: v for k, v in self.description.values().items() if v is not None}, **calibration.values}
+            fitted.settings_, fitted.proposals_ = dict(state.get("settings", {})), dict(state.get("proposals", {}))
             fitted.intervals_ = {r["key"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
             fitted.rungs_ = {step["routine"]: step["found"] for step in calibration.routines}
             fitted.calibration_ = calibration
@@ -896,6 +922,8 @@ class RobotTwin:
         fitted.intervals_ = {k: tuple(r["ci95"]) for k, r in ((r["name"], r) for r in calibration.rows) if r["ci95"]}
         fitted.rungs_ = calibration.rungs
         fitted.calibration_ = calibration
+        # what the configure / tune steps chose (gap C): settings, never values_; {} from a runner that reports none
+        fitted.settings_, fitted.proposals_ = dict(state.get("settings", {})), dict(state.get("proposals", {}))
         # WHY only when the runner reports the routines it played (2026-11-12): a record lists what actually ran; a runner that hands back
         # no state (tests/test_one_click.py stubs it) has nothing honest to record, so plan_ / record_ stay None rather than a plan not played
         if not {"routines", "noise", "measured"} <= set(state):

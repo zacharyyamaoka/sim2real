@@ -33,6 +33,13 @@ identifies) the drives' `frictionloss_nm` and `damping_nm_s_rad`, so no integrat
 `servo.dynamics_regression` each gain one alternative (`arm.feedforward_bench`), their only change; `domain_v3.json` and
 `sysid/results/calibration_routines.json` are regenerated. Decision: `docs/decision-feedforward-bench-2026-11-18.md`.
 
+Since 2026-11-18 (a value change by decision, gap C): `pid.pidtuna` is re-kinded `use` -> `tune`. It identifies nothing, configures the
+`servo` card's `kp_nm_rad` and `kd_nm_s_rad`, requires `armature_kg_m2` and `frictionloss_nm`, uses the gravity, its bottom, the damping,
+the command delay and the Stribeck drop, and its wall and operator time are 0 s (the SIM tier tunes on the fitted twin: no robot time);
+its code gains `src/sim2real/calibration/pid_tune.py` (sim2real's `PidTune`) and its grade is `routine_ladders/pid.pidtuna.json`.
+`domain_v3.json` and `sysid/results/calibration_routines.json` are regenerated. Only PID tuning is re-kinded: the IK fine-tune stays
+`use`. Decision: `docs/decision-pidtuna-tune-2026-11-18.md`.
+
 ## Rules of the road
 
 - **One import.** `sys.path` holds the repo root; then `from type_cards import registry as reg`. Everything below is a name on `reg`
@@ -199,7 +206,8 @@ parameters ... what are the methods we have to calibrate those parameters". A pa
 the record two ways to find the same parameter are compared by. Decision record: `docs/decision-calibration-routines-2026-11-07.md`.
 
 - **What it identifies**: `identifies`, a tuple of `Identifies(card, rung, parameters)`, each name a parameter of that rung (`kind="use"`
-  routines, the IK fine-tune and PID tuning, identify nothing; `kind="measure"` is a gauge, the rack's camera dwell stop ruler).
+  routines, the IK fine-tune, identify nothing, and so do `configure` and `tune` routines, which write settings: `pid.pidtuna` tunes the
+  servo's gains since 2026-11-18; `kind="measure"` is a gauge, the rack's camera dwell stop ruler).
 - **Both directions**: routine -> parameters is `routine.identifies` (`routine.identifies_parameter(card, name)`); parameter -> routines
   is `reg.routines_identifying(card, parameter)`, and `reg.parameter_routines()` is the whole index, `{card: {parameter: [routine ids]}}`
   over every parameter of every ladder (`[]` where nothing reaches it yet).

@@ -300,10 +300,12 @@ class Score:
 
 
 class TwinHandle:
-    """What a fit may play: the rig's twin at candidate values, replaying recorded commands, noise-free. Never the truth."""
+    """What a fit may play: the rig's twin at candidate values, replaying recorded commands, noise-free. Never the truth. ``settings``:
+    every setting the configure / tune steps before it chose ({key: value}, in run order), their own channel (gap C)."""
 
-    def __init__(self, rig, workers: int) -> None:
+    def __init__(self, rig, workers: int, settings: Mapping[str, float] | None = None) -> None:
         self._rig, self.workers = rig, workers
+        self.settings = dict(settings or {})
 
     def predict(self, measured: Mapping[str, Any], values: Mapping[str, float]) -> Mapping[str, Any]:
         return self._rig.predict(measured, values, workers=self.workers)
@@ -333,6 +335,13 @@ class Stop:
 class Routine(Protocol):
     id: str                                        # a cards.calibration ROUTINES id
     identifies: tuple[str, ...]                    # the parameter keys its fit returns as found (held to the truth)
+    # optional: kind: str                          # cards.schema ROUTINE_KINDS; not declared: the catalog's for its id
+    # optional: configures: tuple[str, ...]        # the device-setting keys a configure / tune step writes (gap C). A CONFIGURE step's
+    #                                              # reach the values (what follows runs at them); a TUNE's are settings only: in the
+    #                                              # step's found, state["settings"] (fitted.settings_) and the handle's `settings`,
+    #                                              # never the values later routines fit with or the twin replays at, never graded. A fit
+    #                                              # result with a `proposal` attribute (pidtuna's board change) lands in state["proposals"]
+    # optional: unavailable() -> str | None         # why it cannot run on this machine (plan() drops it, naming this), or None
     # optional: adjusts: tuple[str, ...]           # keys it SETS for the twin without claiming them (a chain's masses on their visible
     #                                              # subspace): the twin uses them, their rows stay "not identified"
     # optional: commands_read: tuple[str, ...]     # the keys its runs' commands are made from; the schedule (sim2real.calibration.plan)
@@ -387,6 +396,31 @@ def _inside_tolerance(found: Mapping[str, Estimate], identifies: Sequence[str], 
             return None
         words.append(f"{key} ±{half:.3g} within {limit:.3g}")
     return f"every 95 % interval inside its tolerance ({'; '.join(words)})"
+
+
+def _kind(routine: Any) -> str:
+    """A routine's kind: its own `kind`, else the catalog's for its id, else "identify"."""
+    kind = getattr(routine, "kind", None)
+    if kind is None:
+        from .cards import registry as reg  # noqa: PLC0415
+
+        kind = next((r.kind for r in reg.ROUTINES if r.id == routine.id), "identify")
+    return str(kind)
+
+
+def _settle(routine: Any, found: Mapping[str, Estimate], values: dict[str, float], settings: dict[str, float]) -> None:
+    """A step's configures keys (gap C): every one into `settings`; a configure step's into `values` too (later runs run at what it set), a
+    tune's never (it proposes; the runs were made at the gains the device ran, so the twin fits and replays at those)."""
+    configures = set(getattr(routine, "configures", ()))
+    if not configures:
+        return
+    tune = _kind(routine) == "tune"
+    for key, estimate in found.items():
+        if key not in configures or estimate.value is None or not math.isfinite(estimate.value):
+            continue
+        settings[key] = float(estimate.value)
+        if not tune:
+            values[key] = float(estimate.value)
 
 
 def _floats(found: Mapping[str, Estimate]) -> dict[str, float | None]:
@@ -705,6 +739,8 @@ class RigRunner:
         answers = dict(serves or {})
         estimates: dict[str, Estimate] = {}
         adjusted: dict[str, Estimate] = {}
+        settings: dict[str, float] = {}   # what configure / tune steps chose, in run order (gap C); a tune's never reach `values`
+        proposals: dict[str, Any] = {}    # {routine id: the proposal its fit result carried} (a tune's board change)
         steps, trained = [], set()
         played: dict[str, dict[str, Any]] = {}    # run id -> {recording key: recording}: every recording that answers it
         served: dict[str, tuple[str, Run]] = {}   # run id -> (the routine that first played it, the run as it was played)
@@ -729,7 +765,8 @@ class RigRunner:
         for routine in sequence:
             timing: dict | None = {} if on_step is not None else None
             step = self._play_routine(routine, values, play=play, played=played, served=served, shown=shown.get(routine.id), params=params,
-                                      known=known, estimates=estimates, adjusted=adjusted, hidden=hidden, timing=timing)
+                                      known=known, estimates=estimates, adjusted=adjusted, hidden=hidden, timing=timing, settings=settings,
+                                      proposals=proposals)
             trained.update(run_id for done in step["rounds"] for run_id in done["runs"])
             trained.update(key for done in step["rounds"] for run_id in done["runs"] for key in played[run_id])
             steps.append(step)
@@ -757,26 +794,32 @@ class RigRunner:
                                      round(time.monotonic() - started, 1))
         state = {"values": values, "nominal": {k: v for k, v in nominal.items() if v is not None}, "world_values": world_values, "noise": noise,
                  "trained": trained, "calibration": calibration,
-                 "played": {key: recording for group in played.values() for key, recording in group.items()}, "serves": answers}
+                 "played": {key: recording for group in played.values() for key, recording in group.items()}, "serves": answers,
+                 "settings": settings, "proposals": proposals}
         return calibration, state
 
     def _play_routine(self, routine: Routine, values: dict[str, float], *, play: Callable[[Routine, Sequence[Run]], None],
                       played: Mapping[str, Mapping[str, Any]], served: dict[str, tuple[str, Run]], shown: Any, params: Mapping[str, Parameter],
                       known: Mapping[str, float], estimates: dict[str, Estimate], adjusted: dict[str, Estimate], hidden: Any,
-                      timing: dict | None = None) -> dict:
+                      timing: dict | None = None, settings: dict[str, float] | None = None,
+                      proposals: dict[str, Any] | None = None) -> dict:
         """One routine, round by round: collect (`play` puts the runs no routine has played yet into `played`, {run id: {recording key:
         recording}}), fit SEALED on every recording of every run it has asked for so far (keyed by recording key: a run recorded in two
         sessions is two recordings), and, for a routine that comes back for more (next_runs), stop on its own converged(), else when every 95 %
         interval is inside its tolerance, else at max_rounds, else when next_runs() asks for nothing; runs(), next_runs() and converged()
         run outside the seal. What it finds reaches `values` (and `estimates` / `adjusted`) after each round, so the next round's runs are
-        made after the last fit. Returns its step row: routine, identifies, runs (distinct, every round), seconds, found (the last fit),
-        rounds [{k, runs, found}], converged (None: it plays one round) and stopped. `timing` (a dict, or None) is filled with what a step
-        event adds (gap E): collect_s and fit_s summed over its rounds, the run ids it read and played, the last fit's Estimates, seconds.
+        made after the last fit. A configure / tune step's configures keys go to `settings` (_settle: a tune's never reach `values`), and
+        a fit result's `proposal` to `proposals` (gap C). Returns its step row: routine, identifies, runs (distinct, every round), seconds,
+        found (the last fit), rounds [{k, runs, found}], converged (None: it plays one round) and stopped (and configures, when it has
+        any). `timing` (a dict, or None) is filled with what a step event adds (gap E): collect_s and fit_s summed over its rounds, the
+        run ids it read and played, the last fit's Estimates, seconds.
 
         WHY rounds inside one routine, refitted on every run so far (Zach, Daily Note 2026-11-18: "a routine should include datacollection
         and fitting steps, and then iterating things that all goes into it"): each round adds data and the fit always sees all of it, so
         what stops it is the data's own spread, and a round that adds no new run is refused by name rather than spinning to its cap."""
         began = time.monotonic()
+        settings = {} if settings is None else settings
+        configures = tuple(getattr(routine, "configures", ()))
         cap = _round_cap(routine)
         runs = list(routine.runs(dict(values)))
         _held_to_schedule(routine.id, runs, shown, served)
@@ -800,21 +843,28 @@ class RigRunner:
             _say(f"{label}: {len(runs)} runs ({len(fresh)} played) in {time.monotonic() - began:.0f} s; fitting on {len(measured)}")
             mark = time.monotonic()
             with hidden.sealed():
-                found = dict(routine.fit(measured, dict(values), TwinHandle(self.rig, self.workers)))
+                result = routine.fit(measured, dict(values), TwinHandle(self.rig, self.workers, settings))
+            found = dict(result)
             fit_s += time.monotonic() - mark
             adjusts = tuple(getattr(routine, "adjusts", ()))
-            extra = sorted(set(found) - set(routine.identifies) - set(adjusts))
+            extra = sorted(set(found) - set(routine.identifies) - set(adjusts) - set(configures))
             if extra:
-                raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies}, adjusts: {adjusts})")
+                raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies}, "
+                               f"adjusts: {adjusts}, configures: {configures})")
             for key, estimate in found.items():
                 if key in known:
                     continue  # fixed by the caller: never overwritten, never graded
                 if key in routine.identifies:
                     estimates[key] = estimate
+                elif key in configures:
+                    continue  # a setting: _settle below (gap C), never an estimate or a value the twin is set to
                 else:
                     adjusted[key] = estimate
                 if estimate.value is not None and math.isfinite(estimate.value):
                     values[key] = float(estimate.value)
+            _settle(routine, {k: e for k, e in found.items() if k not in known}, values, settings)
+            if proposals is not None and getattr(result, "proposal", None) is not None:
+                proposals[routine.id] = result.proposal
             history.append(Round(k, tuple(runs), dict(found)))
             if cap is None:
                 converged, stopped = None, "ran once"
@@ -845,9 +895,13 @@ class RigRunner:
         if timing is not None:
             timing.update(collect_s=collect_s, fit_s=fit_s, runs=list(so_far), played=fresh_ids, found=dict(found),
                           seconds=time.monotonic() - began)
-        return {"routine": routine.id, "identifies": list(routine.identifies), "runs": len(so_far), "seconds": round(time.monotonic() - began, 1),
-                "found": _floats(found), "rounds": [{"k": r.k, "runs": [run.id for run in r.runs], "found": _floats(r.found)} for r in history],
-                "converged": converged, "stopped": stopped}
+        row = {"routine": routine.id, "identifies": list(routine.identifies), "runs": len(so_far),
+               "seconds": round(time.monotonic() - began, 1), "found": _floats(found),
+               "rounds": [{"k": r.k, "runs": [run.id for run in r.runs], "found": _floats(r.found)} for r in history],
+               "converged": converged, "stopped": stopped}
+        if configures:
+            row["configures"] = list(configures)   # WHY (gap C): the record names no parameter row's owner from a setting
+        return row
 
     @staticmethod
     def _rows(params: Mapping[str, Parameter], nominal, ruled, estimates) -> list[dict]:
