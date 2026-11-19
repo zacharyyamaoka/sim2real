@@ -205,7 +205,7 @@ def test_the_nominal_world_plays_the_descriptions_gravity_and_inertia(pendulum):
     import numpy as np  # noqa: PLC0415
 
     dense = np.zeros((model.nv, model.nv))
-    mujoco.mj_fullM(model, dense, data.qM)
+    mujoco.mj_fullM(model, data, dense)
     assert dense[0, 0] == pytest.approx(values["can11.armature_kg_m2"], rel=1e-9)   # the lumped inertia about the hinge
     assert model.dof_damping[0] == pytest.approx(values["can11.damping_nm_s_rad"])
     assert model.dof_frictionloss[0] == pytest.approx(values["can11.frictionloss_nm"])
