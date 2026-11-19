@@ -817,9 +817,10 @@ ROUTINES = (
     # positive): what runs today is the SIM tier, PID tuna on the fitted twin, so the time is the tune's compute, measured on a cloud VM,
     # and "no robot time" is runs() being empty (the BENCH tier, its tapes played on the joint, is the follow-up the decision names)
     routine("pid.pidtuna", "PID gains from the identified model, then measured tuning (pidtuna)", "pid", (), "bench",
-         Q(3, "s", "measured: one PidTune.fit of CAN 11 on its fitted twin (the SIM tier, 2 workers) in 3.24 s, its whole pytest session, "
-                   "on a cloud VM (d15425264, 2026-11-19; the slow grade's three fits with its bench, 21.27 s, on the same VM); compute "
-                   "only, no robot time"),
+         Q(3, "s", "compute: PID tuna on the fitted twin (the SIM tier), no robot time; about 3 s, not yet timed on its own: on a cloud "
+                   "VM (d15425264, 2026-11-19, sim2real 68c567f, pidtuna main 33bfce3, 2 workers) a probe's whole pytest session around one "
+                   "PidTune.fit of CAN 11 took 3.24 s, imports and a second pool included, at world.json's values on an empty dataset, and "
+                   "the slow grade's three fits with its bench 21.27 s"),
          Q(0, "s", "the SIM tier tunes on the fitted twin; no robot time, no hands"), (),
          "the identified model, then steps and sweeps on the fitted twin (pidtuna's ServoSim)", "the closed loop's band", 1,
          "pidtuna: an analytic start from the fitted plant, a bandwidth search and its gates on the fitted twin, under the fitted model's "

@@ -6065,15 +6065,15 @@
    "setting": "bench",
    "status": "implemented",
    "wall_time": {
-    "value": 0.0,
+    "value": 3.0,
     "unit": "s",
-    "source": "the SIM tier tunes on the fitted twin; no robot time",
+    "source": "compute: PID tuna on the fitted twin (the SIM tier), no robot time; about 3 s, not yet timed on its own: on a cloud VM (d15425264, 2026-11-19, sim2real 68c567f, pidtuna main 33bfce3, 2 workers) a probe's whole pytest session around one PidTune.fit of CAN 11 took 3.24 s, imports and a second pool included, at world.json's values on an empty dataset, and the slow grade's three fits with its bench 21.27 s",
     "note": ""
    },
    "operator_time": {
     "value": 0.0,
     "unit": "s",
-    "source": "the SIM tier tunes on the fitted twin; no robot time",
+    "source": "the SIM tier tunes on the fitted twin; no robot time, no hands",
     "note": ""
    },
    "equipment": [],
