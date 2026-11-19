@@ -27,6 +27,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import graphlib
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -410,8 +411,56 @@ def _fit_budget(chosen: list[str], setup: list[str], config: CalibrationConfig, 
     return keep, setup, over
 
 
-def _spend(decls: Sequence[Declaration]) -> tuple[float, float]:
-    """Summed wall time; equipment $ over the distinct items (one caliper serves every routine that needs it)."""
+def _length(run: Any) -> float | None:
+    """A run's known robot time: the longest it can take (Run.robot_seconds()[1]: its command's, else its seconds), or None (unknown)."""
+    bounds = run.robot_seconds() if callable(getattr(run, "robot_seconds", None)) else None
+    return None if bounds is None else float(bounds[1])
+
+
+def _counted_once(walls: Sequence[float], runs: Sequence[Sequence[Any] | None] | None) -> tuple[float, float]:
+    """(wall time, run time) of steps with these declared wall times playing these runs (one entry per step; None = not bound, or no
+    preview at the priors). Wall time is each step's own time, its declared wall time less the known length of the distinct runs it plays
+    (floored at 0), plus every distinct run's known length once; run time is that last sum. A step whose runs are None keeps its whole
+    time, and a run of unknown length is never guessed (its step keeps that share), so nothing is ever counted short.
+
+    WHY once (gap T; Zach, Daily Note 2026-11-17: the schedule is "a static description of the routines that will be run"): the runner
+    plays a run two steps share once (rig.RigRunner's `played`; the tracer measures the schedule once), so what the schedule says a
+    calibration costs is what playing it costs. CAN 11's two steps read the same 771.8 s of train runs: 1972 s, not 2744 s."""
+    if runs is None:
+        return float(sum(walls)), 0.0
+    lengths: dict[str, float] = {}
+    own = 0.0
+    for wall, step_runs in zip(walls, runs, strict=True):
+        if step_runs is None:
+            own += wall
+            continue
+        mine = 0.0
+        for run in _distinct(step_runs):
+            length = _length(run)
+            if length is not None:
+                lengths.setdefault(run.id, length)
+                mine += length
+        own += max(0.0, wall - mine)
+    return own + sum(lengths.values()), sum(lengths.values())
+
+
+def _one_length(ids: Sequence[str], runs: Sequence[Sequence[Any] | None]) -> None:
+    """Refuse one run id given two known lengths (a declaration bug: the totals would not know which one plays), naming the id."""
+    seen: dict[str, tuple[float, str]] = {}
+    for rid, step_runs in zip(ids, runs, strict=True):
+        for run in step_runs or ():
+            length = _length(run)
+            if length is None:
+                continue
+            first, by = seen.setdefault(run.id, (length, rid))
+            if not math.isclose(first, length, rel_tol=0.0, abs_tol=1e-9):
+                raise CalibrationPlanError(f"run id {run.id!r} has two lengths, {first:g} s from {by} and {length:g} s from {rid}: one run has "
+                                           "one length; give one of them another id")
+
+
+def _spend(decls: Sequence[Declaration], runs: Sequence[Sequence[Any] | None] | None = None) -> tuple[float, float]:
+    """Wall time, each run the steps share counted once (_counted_once; runs=None: the summed wall times); equipment $ over the distinct
+    items (one caliper serves every routine that needs it)."""
     catalog = _catalog()
     items: dict[str, float] = {}
     loose = 0.0
@@ -422,14 +471,14 @@ def _spend(decls: Sequence[Declaration]) -> tuple[float, float]:
             continue
         for e in r.equipment:
             items[e] = float(reg.EQUIPMENT[e].cost.value or 0.0)
-    return sum(d.wall_time_s for d in decls), sum(items.values()) + loose
+    return _counted_once([d.wall_time_s for d in decls], runs)[0], sum(items.values()) + loose
 
 
-def _check_strict(decls: Sequence[Declaration], config: CalibrationConfig) -> None:
+def _check_strict(decls: Sequence[Declaration], config: CalibrationConfig, runs: Sequence[Sequence[Any] | None] | None = None) -> None:
     if not config.strict:
         return
     budget = config.budget
-    wall, usd = _spend(decls)
+    wall, usd = _spend(decls, runs)
     if budget.max_wall_time_s is not None and wall > budget.max_wall_time_s:
         raise CalibrationPlanError(f"the plan's wall time is {wall:.0f} s, over the budget's max_wall_time_s {budget.max_wall_time_s:g} s "
                                    f"(strict=True refuses instead of dropping routines): {', '.join(d.id for d in decls)}")
@@ -480,8 +529,10 @@ class PlanStep:
 class CalibrationSchedule:
     """What calibrate() runs, in order, and what it leaves out: a static object to look at before anything runs. `ids`: the routine ids in
     run order. `dropped`: [(routine, why)]. `uncovered`: [(instance, name, why)]. `assumed`: [(routine, name, why)], a requirement no planned
-    routine provides, held at its prior. `source`: "planner" (the declared order) or "config.order". `totals`: wall_time_s,
-    operator_time_s, equipment_usd.
+    routine provides, held at its prior. `source`: "planner" (the declared order) or "config.order". `totals`: wall_time_s (each step's
+    own time plus each run its steps share counted ONCE, as the runner plays it; a step's row still says what it costs alone),
+    run_time_s (the known robot time of the runs planned at the priors, each counted once; 0.0 when no step is bound), operator_time_s,
+    equipment_usd.
 
     On a twin that ships its routines, each step also holds its runs bound at the priors (PlanStep.runs, each a sim2real.rig.Run with its
     typed command) and says whether its commands are known now, made after an earlier step runs (from what the routine declares its
@@ -528,8 +579,11 @@ class CalibrationSchedule:
         return out
 
     def summary(self) -> str:
+        run_time = self.totals.get("run_time_s") or 0   # WHY get: a plan dict written before 2026-11-18 has no run_time_s
+        runs = f" ({run_time:.0f} s of runs, each played once)" if run_time > 0 else ""
         lines = [f"plan ({self.source}, recovery at {self.level}): {len(self.steps)} routines, "
-                 f"{self.totals['wall_time_s']:.0f} s wall, {self.totals['operator_time_s']:.0f} s hands-on, ${self.totals['equipment_usd']:,.0f} equipment"]
+                 f"{self.totals['wall_time_s']:.0f} s wall{runs}, {self.totals['operator_time_s']:.0f} s hands-on, "
+                 f"${self.totals['equipment_usd']:,.0f} equipment"]
         for k, s in enumerate(self.steps, 1):
             lines.append(f"  {k}. {s.routine:34s} {KIND_WORDS.get(s.kind, s.kind):9s} {s.setting:8s} {s.why_here}")
             words = _schedule_words(s)
@@ -581,7 +635,7 @@ def _runs_words(runs: Sequence[Any], shown: int = 4) -> str:
 
 def _schedule_words(step: PlanStep) -> str:
     """The step's line of the schedule in summary()."""
-    whole = "no preview at the priors (its runs() needs a value no prior states): its time is counted whole"
+    whole = f"no preview at the priors (its runs() needs a value no prior states): {step.routine}'s time is counted whole in the totals"
     if step.status == "fit only":
         return "fit only: no runs of its own"
     if step.status == "known now":
@@ -592,10 +646,24 @@ def _schedule_words(step: PlanStep) -> str:
     return ""
 
 
-def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping[str, str], known: Mapping[str, float]) -> tuple[PlanStep, ...]:
+def _runs_at(routine: Any, rid: str, priors: Mapping[str, float]) -> tuple[Any, ...] | None:
+    """A routine's runs at the priors (its first call: plan() binds with it), or None when there is no preview (LookupError / OSError: its
+    runs() reads a value no prior states, or a file this machine does not hold). Any other exception propagates, naming the routine."""
+    try:
+        return tuple(routine.runs(dict(priors)))
+    except (LookupError, OSError):
+        return None
+    except Exception as caught:
+        caught.add_note(f"raised by {rid}'s runs() at the priors, while plan() bound its schedule")
+        raise
+
+
+def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping[str, str], known: Mapping[str, float],
+          first: Mapping[int, tuple[Any, ...] | None] | None = None) -> tuple[PlanStep, ...]:
     """Each step's runs at the priors and its status (see CalibrationSchedule). Each routine's runs() is called twice at the priors: once to
-    bind, once to check it is static. Refused: runs() that change between the two calls; one run id bound to two different runs; a run id
-    shared by a known-now step and a made-after step (once the earlier step has run, the two differ under one id).
+    bind (`first`: {id(routine object): its runs at the priors} already read by _plan_rig for the budget, so that call is not repeated),
+    once to check it is static. Refused: runs() that change between the two calls; one run id bound to two different runs; a run id
+    with a command shared by a known-now step and a made-after step (once the earlier step has run, the two commands differ under one id).
 
     WHY from the declaration and never by probing runs() at moved values (Zach, 2026-11-17: "routines can almost like declare depencies on
     what they require to run ahead of time so you can ... atuomaticaly generate the schedule"): a routine says what its commands read
@@ -617,13 +685,7 @@ def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping
         reads = step.requires if declared is None else _expand(tuple(declared), names, written)
         reads = [k for k in reads if k not in known]
         after = tuple(dict.fromkeys(steps[j].routine for j in range(i) for k in reads if k in writes[j]))
-        try:
-            runs = tuple(routine.runs(dict(priors)))
-        except (LookupError, OSError):
-            runs = None   # no preview: its commands need a value no prior states (or a file this machine does not hold)
-        except Exception as caught:
-            caught.add_note(f"raised by {step.routine}'s runs() at the priors, while plan() bound its schedule")
-            raise
+        runs = first[id(routine)] if first is not None and id(routine) in first else _runs_at(routine, step.routine, priors)
         if runs is not None:
             again = tuple(routine.runs(dict(priors)))
             if not _same_runs(runs, again):
@@ -641,7 +703,10 @@ def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping
             if not _same_run(run, other):
                 raise CalibrationPlanError(f"run id {run.id!r} is bound to two different runs, by {by} and by {step.routine} (another command, "
                                            "spec, split or length): one run id is one command; give one of them another id")
-            if (by_status == "made after") != (status == "made after"):
+            # WHY only a run with a command (gap T, 2026-11-18): what goes wrong is that once the earlier step has run the two COMMANDS
+            # differ under one id. A run with no command (a log, or what the rig's spec says) has none an earlier fit could move: it is one
+            # run both steps read, played once, as the runner holds it (rig._held_to_schedule compares the commands under an id)
+            if getattr(run, "command", None) is not None and (by_status == "made after") != (status == "made after"):
                 late, early = (step.routine, by) if status == "made after" else (by, step.routine)
                 raise CalibrationPlanError(f"run id {run.id!r} is shared by {early}, known now, and {late}, whose commands are made after "
                                            f"an earlier step runs: they agree at the priors, but once that step has run the two commands "
@@ -756,8 +821,13 @@ def _steps(items: Sequence[Any], sources: Sequence[str], names: Mapping[str, str
 
 
 def _totals(steps: Sequence[PlanStep]) -> dict:
-    wall, usd = _spend([declaration(s.routine_object) for s in steps])
-    return {"wall_time_s": wall, "operator_time_s": sum(s.operator_time_s for s in steps), "equipment_usd": usd}
+    """The plan's totals from its steps' bound runs (PlanStep.runs; an unbound step, a catalog stand-in or a record of what ran, keeps its
+    whole wall time, so such plans keep the per-step sum and run_time_s 0.0)."""
+    decls = [declaration(s.routine_object) for s in steps]
+    runs = [s.runs for s in steps]
+    wall, usd = _spend(decls, runs)
+    return {"wall_time_s": wall, "run_time_s": _counted_once([d.wall_time_s for d in decls], runs)[1],
+            "operator_time_s": sum(s.operator_time_s for s in steps), "equipment_usd": usd}
 
 
 def _custom(config: CalibrationConfig) -> dict[str, Any]:
@@ -840,7 +910,17 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         else:
             keep.append(r)
             keep_sources.append(src)
-    _check_strict([declaration(r) for r in keep], config)
+    # the priors each step's runs are bound at: the description's stated values, the caller's known values on top (what the runner starts from)
+    priors = {**{k: float(v) for k, v in description.values().items() if v is not None}, **config.known}
+    # WHY read here, once per kept routine, and handed to _bind (gap T): the budget and the strict refusal count a run two steps share once,
+    # as the runner plays it, so they need the runs before anything is dropped for time; a routine the config already dropped is never asked
+    first = {id(r): _runs_at(r, r.id, priors) for r in keep if callable(getattr(r, "runs", None))}
+
+    def runs_of(routines: Sequence[Any]) -> list[tuple[Any, ...] | None]:
+        return [first.get(id(r)) for r in routines]
+
+    _one_length([r.id for r in keep], runs_of(keep))
+    _check_strict([declaration(r) for r in keep], config, runs_of(keep))
     budget = config.budget
     # WHY drop from the end of the declared order: a routine late in the order needs the earlier ones, never the reverse
     source_of = {id(r): src for r, src in zip(keep, keep_sources)}
@@ -848,7 +928,7 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         keep = order(keep, names)
         keep_sources = [source_of[id(r)] for r in keep]
     while keep and (budget.max_wall_time_s is not None or budget.max_equipment_usd is not None):
-        wall, usd = _spend([declaration(r) for r in keep])
+        wall, usd = _spend([declaration(r) for r in keep], runs_of(keep))
         too_long = budget.max_wall_time_s is not None and wall > budget.max_wall_time_s
         too_dear = budget.max_equipment_usd is not None and usd > budget.max_equipment_usd
         if not (too_long or too_dear):
@@ -858,9 +938,7 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         dropped.append((last.id, f"outside the budget: the plan's wall time {wall:.0f} s is over max_wall_time_s {budget.max_wall_time_s:g} s"
                         if too_long else f"outside the budget: the plan's equipment ${usd:,.0f} is over max_equipment_usd"))
     steps, assumed, source = _steps(keep, keep_sources, names, config)
-    # the priors each step's runs are bound at: the description's stated values, the caller's known values on top (what the runner starts from)
-    priors = {**{k: float(v) for k, v in description.values().items() if v is not None}, **config.known}
-    steps = _bind(steps, priors, names, config.known)
+    steps = _bind(steps, priors, names, config.known, first)
     gone = {rid: why for rid, why in dropped}
     uncovered = []
     for p in rig.parameters():

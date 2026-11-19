@@ -25,8 +25,9 @@ SETTINGS = ("bench", "deployed")    # cards.schema.SETTINGS; a routine's "both" 
 @dataclass(frozen=True)
 class Budget:
     """What a run may spend. `settings`: where routines may run (a routine that runs "both" fits either). `max_wall_time_s`: the plan's
-    summed wall time (each routine's set-up included; operator time is a share of it). `max_equipment_usd`: the distinct equipment the
-    plan needs, each item counted once. None = no limit."""
+    wall time, counted once: each routine's own time (its set-up included; operator time is a share of it) plus each run counted once
+    however many routines read it, as the runner plays it (the plan's totals["wall_time_s"]). `max_equipment_usd`: the distinct equipment
+    the plan needs, each item counted once. None = no limit."""
     settings: tuple[str, ...] = SETTINGS
     max_wall_time_s: float | None = None
     max_equipment_usd: float | None = None

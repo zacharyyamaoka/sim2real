@@ -110,7 +110,7 @@ A frozen dataclass with a JSON round trip (`to_dict()` / `from_dict()`). Pass it
 | `order` | an explicit order of routine ids. It is refused if it runs a routine before one it `requires` or `refines` after, naming the key |
 | `level` | which noise level (`0x`, `1x`, `3x`, `10x`) the metric reads; default `1x` |
 | `noise` | a number (every term at that level) or a NoiseModel's dict. Passing it here and in `calibrate(noise=)` is refused |
-| `budget` | `Budget(settings, max_wall_time_s, max_equipment_usd)`. Over budget, the lowest-ranked routines are dropped |
+| `budget` | `Budget(settings, max_wall_time_s, max_equipment_usd)`. Over budget, the lowest-ranked routines are dropped. `max_wall_time_s` is held to the plan's counted-once wall time (see "The schedule": a run two routines share is counted once) |
 | `strict` | over budget → refuse with `CalibrationPlanError` instead of dropping |
 | `seed` | the noise model's seed for this run |
 | `routines` | per-routine options, set with `config.with_routine(id, **options)`. They reach a **copy** of the routine. An option the routine does not have raises `KeyError` |
@@ -138,7 +138,17 @@ that ships its routines (a rig on the one-click seam, or the pendulum's `routine
   its commands are made from); without it, the keys it `requires` that an earlier step writes. A known value makes nothing wait.
 - **calibrate() is held to it.** A known-now step must play exactly the runs shown, or calibrate() refuses it by name before it plays
   (a routine whose commands read more than it declares is caught there). `runs()` must give the same runs for the same values, a run id
-  means one command, and an id shared by a known-now and a made-after step is refused at plan time.
+  means one command, and an id with a command shared by a known-now and a made-after step is refused at plan time (a run with no
+  command, a log or what the rig's spec says, has nothing an earlier fit could move: both steps read it, and it plays once).
+- **What it costs: a shared run is counted once** (gap T, 2026-11-18). The runner plays a run two steps share once, so the totals do too:
+  `totals["wall_time_s"]` is each step's own time (its declared wall time less the known length of the runs it plays, floored at 0) plus
+  every distinct run's known length once, and `totals["run_time_s"]` is that run time: the runs planned at the priors, each counted once.
+  A run's length is `run.robot_seconds()[1]` (the longest it can take). A step's own row (`wall_time_s`) still says what it costs alone.
+  Nothing is counted short: a run of unknown length leaves its step's share in place, a step with no preview (its runs need an earlier
+  fit) keeps its whole time and `summary()` says "counted whole", and a plan with no runs to read (catalog stand-ins, a record of what ran)
+  keeps the per-step sum and `run_time_s` 0. One run id given two known lengths is refused by the id. `Budget.max_wall_time_s` and the
+  strict refusal compare against this counted-once time. On CAN 11 the two steps read the same 771.8 s of train runs: 1972 s (771.8 + 600
+  + 600 of set-up), where the per-step sum said 2744 s.
 - **Seeing it.** `schedule.runs` holds the runs known now (each once), `schedule.previews` a made-after step's runs at the priors.
   `summary()` adds one line per step (`known now: ...`, `commands made after <step> runs; preview at the priors: ...`, `fit only`), and
   `to_dict()["schedule"]` one row per step (`routine`, `status`, `commands_after`, `runs`: each `{id, split, command, seconds, preview}`),
@@ -159,7 +169,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 - `collect()` plans each routine's runs from the priors (plus `known`), because nothing has been fitted yet when the data is logged.
 - The exception is a made-after step: `collect()` fits the steps it waits for as it goes, so it is recorded the way a replay builds it,
   and `calibrate(data=)` replays it without measuring and without a mismatch.
-- A run that two routines share is played once.
+- A run that two routines share is played once, and counted once in the plan's totals (`run_time_s`; see "The schedule").
 - If a fit then asks for a run the data does not hold, it raises `CalibrationPlanError` naming the run.
 
 ## The record: `sim2real.calibration/1`
@@ -175,7 +185,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `written` | the day the record was written (ISO date) |
 | `seconds` | how long the run took |
 | `noise` | the noise model it was played at (each term, its level, seed and sources) |
-| `plan` | the plan that ran: `twin`, `source` (`"planner"` or `"config.order"`; `"sysid"` marks a pendulum on='real' record written before 2026-11-18, whose plan listed the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals`, and `schedule` (the schedule's rows, above) when a step was bound. On a real record `totals` are the planner's estimates (the rack's own time is the submission's `minutes`) and `level` is the planner's noise level, not the hardware's |
+| `plan` | the plan that ran: `twin`, `source` (`"planner"` or `"config.order"`; `"sysid"` marks a pendulum on='real' record written before 2026-11-18, whose plan listed the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` (`wall_time_s` with each shared run counted once, `run_time_s`, `operator_time_s`, `equipment_usd`; records written before 2026-11-18 carry no `run_time_s`), and `schedule` (the schedule's rows, above) when a step was bound. On a real record `totals` are the planner's estimates (the rack's own time is the submission's `minutes`) and `level` is the planner's noise level, not the hardware's |
 | `parameters` | one row per parameter (below) |
 | `routines` | one row per routine as it ran (below) |
 | `passed` | every graded value within its tolerance, and at least one graded |

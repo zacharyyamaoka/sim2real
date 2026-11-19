@@ -99,8 +99,10 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   known now, made after an earlier step runs, or it is fit only. `.runs` (known now), `.previews` (made after), `.summary()`,
   `.to_dict()["schedule"]`. See docs/CALIBRATE.md, "The schedule".
 - **Never:** plays anything. It calls each routine's `runs()` twice at the priors (to bind, and to check it is static).
-- **Raises:** `CalibrationPlanError` for `runs()` that change between two calls, one run id bound to two different runs, or a run id a
-  known-now and a made-after step share.
+- **Raises:** `CalibrationPlanError` for `runs()` that change between two calls, one run id bound to two different runs or given two
+  known lengths, or a run id with a command that a known-now and a made-after step share.
+- **Totals:** `totals["wall_time_s"]` counts a run its steps share once (each step's own time plus each run's known length once) and
+  `totals["run_time_s"]` is that run time; the budget compares against it. See docs/CALIBRATE.md, "The schedule".
 
 ### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None, config=None, data=None, transport=None) -> RobotTwin`
 
