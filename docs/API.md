@@ -240,20 +240,22 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 
 - PID tuna as the tune routine `pid.pidtuna` (gap C, docs/decision-pidtuna-tune-2026-11-18.md): a schedule step that tunes the board's
   kp and kd on the twin the steps before it fitted, under the fitted model's feed-forward held fixed. No run on the robot
-  (`runs()` is empty; operator time 0 s; its wall time is the catalog's, the tune's compute on the fitted twin, 3 s measured on a
+  (`runs()` is empty; operator time 0 s; its wall time is the catalog's, the tune's compute on the fitted twin, about 3 s from a
   cloud VM); it requires `<instance>.armature_kg_m2` and `<instance>.frictionloss_nm`.
 - `servo`: the board as it runs today, a pidtuna `Servo` (its gains are the as-found controller), or a zero-argument callable that builds
   one when the routine runs. `goal`: a pidtuna `Objective` (None: one repeat). `can_id`: checked against the servo's.
 - `fit(measured, values, twin)` returns the settings `{<instance>.kp_nm_rad, <instance>.kd_nm_s_rad}` (`sim2real.rig.Estimate`) with
   `.proposal`, pidtuna's gains document plus the feed-forward. It hands PID tuna the board with its integrator off (ilimit 0), caps
-  every pool at `twin.workers` and closes it when done.
+  every pool at `twin.workers` and closes it when done. The document is written against the board as it runs: `board_set` carries
+  `servo.pid_position.ilimit: 0` with kp and kd, and `board_before` / `as_found` hold the board's own ilimit.
 - `unavailable()`: why it cannot run here (pidtuna not importable), or None; the planner drops it by name. Importing sim2real never
   imports pidtuna.
 
 ### `fitted.settings_` and `fitted.proposals_`
 
 - `settings_`: `{key: value}`, every setting a configure / tune step chose, in run order; `{}` when none. A tune's settings never enter
-  `values_` (which holds the model: fitted values, and on a rig the description's prior for a key nothing fitted).
+  `values_` (which holds the model: fitted values, and on a rig a `CalibrationConfig.known` key at its known number, basis `chosen`, and
+  the description's prior for a key nothing fitted or fixed).
 - `proposals_`: `{routine id: proposal}` for every step whose fit result carried one (PidTune's board change).
 
 ### `sim2real.fit.feedforward.fit(measured, regressor, *, inertial=None, prior=None, prior_sigma=None, moving_rad_s=0.02, groups=None, pair_tol_rad=0.02) -> FeedforwardFit`

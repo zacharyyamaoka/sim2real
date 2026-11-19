@@ -616,7 +616,7 @@ sim2real runs it as `sim2real.calibration.PidTune`.
 
 - **Where it runs:** after the fits it requires (`armature_kg_m2`, `frictionloss_nm`; it reads the gravity, damping, command delay and
   Stribeck drop where found). The SIM tier tunes the board's kp and kd on a pidtuna ServoSim of the **fitted** twin, under the fitted
-  model's feed-forward held fixed: no robot time, no hands (its wall time is compute: 3 s for CAN 11 on a cloud VM, 2 workers). Its
+  model's feed-forward held fixed: no robot time, no hands (its wall time is compute: about 3 s for CAN 11 on a cloud VM, 2 workers, from a probe session; the catalog source says what was timed). Its
   pools are the twin's workers, closed when it is done.
 - **What it writes:** settings. A step's configures keys land in its record row's `found` and in `fitted.settings_` (`{key: value}`, in
   run order), and each later routine sees them as its handle's `settings`. A tune's never enter the values a later routine fits with, the
@@ -627,6 +627,9 @@ sim2real runs it as `sim2real.calibration.PidTune`.
   document (schema `pidtuna/gains-1`: the board keys to set, before and after on held-out tapes) plus the feed-forward it was tuned under.
   Nothing writes a board.
 - **Integrator off:** PID tuna is handed the board with ilimit 0 (its ki kept, the integrator switched off): PD + feed-forward only.
+  The proposal is written against the board as it runs, so its `board_set` carries `servo.pid_position.ilimit: 0` beside kp and kd,
+  and `board_before` / `as_found` state the board's real ilimit (0.5 on CAN 11). Its `before` score is the as-found kp and kd with
+  the integrator off (`before_scored_as`).
 - **The planner:** a tune joins the plan, never the cover; the gains stay in `Selection.uncovered` ("read from the device's config
   receipt; pid.pidtuna (tune) proposes new values"); `exclude=` and a deployed-only budget drop it by name; on the catalog path a tune
   whose required parameter nothing planned finds is dropped (`starved: ...`); on a rig a routine whose back end this machine lacks

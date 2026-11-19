@@ -878,8 +878,13 @@ class RobotTwin:
             fitted.runner = self.runner.with_state(state)
             fitted.data_ = state.get("data")
             # WHY the description's priors beside the fitted values (gap C): values_ is the model the twin runs at, so a key nothing fitted
-            # keeps its prior; a tune's setting is never one of them (settings_)
-            fitted.values_ = {**{k: v for k, v in self.description.values().items() if v is not None}, **calibration.values}
+            # keeps its prior; a tune's setting is never one of them (settings_). WHY the caller's known values over the priors: the twin
+            # runs and replays a CalibrationConfig.known key at that number (the runner's state["values"]), so values_ says so too
+            priors = {k: v for k, v in self.description.values().items() if v is not None}
+            known = {k: Value(float(number), getattr(priors.get(k), "unit", None), basis=Basis.CHOSEN,
+                              source="known: fixed by the caller (CalibrationConfig.known)")
+                     for k, number in (config.known if config is not None else {}).items()}
+            fitted.values_ = {**priors, **known, **calibration.values}
             fitted.settings_, fitted.proposals_ = dict(state.get("settings", {})), dict(state.get("proposals", {}))
             fitted.intervals_ = {r["key"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
             fitted.rungs_ = {step["routine"]: step["found"] for step in calibration.routines}

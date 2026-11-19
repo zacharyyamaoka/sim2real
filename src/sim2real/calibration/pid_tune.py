@@ -143,13 +143,18 @@ class PidTune:
             return None
         return f"pidtuna cannot be imported here (no installed package, no checkout at {paths.PIDTUNA}: set SIM2REAL_PIDTUNA)"
 
-    def _board(self, types, model):
+    def _as_run(self):
+        """The board as it runs today (the servo, built now when it is a callable), checked against can_id."""
         servo = self.servo() if callable(self.servo) else self.servo
         if servo is None:
             raise ValueError(f"{ROUTINE} needs servo=: the board as it runs today (a pidtuna Servo, or a callable that builds one), whose "
                              "gains are the as-found controller")
         if self.can_id is not None and servo.can_id not in (None, self.can_id):
             raise ValueError(f"{ROUTINE}: can_id {self.can_id} names another board than the servo's ({servo.can_id})")
+        return servo
+
+    def _board(self, types, model, servo):
+        """The board PID tuna plays: `servo` (as it runs) with its integrator off and the fitted plant as its priors."""
         gains = servo.gains
         if gains.ki:
             # WHY ilimit 0 (bam_ws 9de804493; Zach, 2026-11-13: PD + feed-forward only on a real arm, never an integrator): moteus holds the
@@ -167,7 +172,8 @@ class PidTune:
         analytic = _pidtuna_module("pidtuna.analytic")
         config = _pidtuna_module("pidtuna.config")
         model = _plant_model(types, values, self.instance)
-        servo = self._board(types, model)
+        as_run = self._as_run()
+        servo = self._board(types, model, as_run)
         static = float(values[f"{self.instance}.frictionloss_nm"])
         speed = values.get(f"{self.instance}.friction_stribeck_speed_rad_s")
         delay = values.get(f"{self.instance}.command_delay_s")
@@ -201,7 +207,13 @@ class PidTune:
                   + (", the as-found kp and kd" if verdict.get("kept_as_found") else ""))
         found = {f"{self.instance}.kp_nm_rad": Estimate(float(gains.kp), None, method),
                  f"{self.instance}.kd_nm_s_rad": Estimate(float(gains.kd), None, method)}
-        proposal = {**config.gains_document(tuning, servo), "feedforward": dataclasses.asdict(feedforward), "tier": "sim"}
+        # WHY the document against the board as it RUNS, not the ilimit-0 copy PID tuna played (Zach, 2026-11-13: PD + feed-forward only):
+        # pidtuna writes into board_set only what differs from servo.gains, so against the copy the change dropped ilimit 0 and a reviewer
+        # applying board_set left the board's integrator on (ki with ilimit 0.5); against the board as it runs, board_set carries
+        # servo.pid_position.ilimit 0 and board_before / as_found state what the board runs today
+        proposal = {**config.gains_document(tuning, dataclasses.replace(servo, gains=as_run.gains)),
+                    "feedforward": dataclasses.asdict(feedforward), "tier": "sim",
+                    "before_scored_as": "the as-found kp and kd with the integrator off (ilimit 0): PID tuna plays PD + feed-forward only"}
         return Tuned(found, proposal)
 
 
