@@ -1,5 +1,5 @@
 """calibrate(on="real") for one station (CAN 11, the pendulum): plan -> emit a rack submission -> a transport plays it -> the runs come back
-as robot_msgs JointTrajectory through tools/run_files.py -> the existing identify() fits them (sim2real.real; docs/CALIBRATE.md "on='real'").
+as robot_msgs JointTrajectory through tools/run_files.py -> the schedule's routines fit them (sim2real.real; docs/CALIBRATE.md "on='real'").
 
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real/src /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -p no:cacheprovider /home/bam/sim2real/tests/test_real_backend.py
     env -u VIRTUAL_ENV SIM2REAL_SLOW=1 PYTHONPATH=/home/bam/sim2real/src /home/bam/bam_ws/src/dev/bam_rack_twin/.venv/bin/python -m pytest -q -s -p no:cacheprovider /home/bam/sim2real/tests/test_real_backend.py
@@ -502,7 +502,14 @@ def test_on_real_over_the_twin_recovers_the_sealed_truth_and_returns_a_calibrati
     assert record["backend"] == "real" and record["passed"] is True and record["failing"] == []
     assert {p["key"] for p in record["parameters"] if p["pass"] is True} == set(rules["parameters"])
     assert all(p["true"] == truth[p["key"]] for p in record["parameters"]), "graded against world.json as committed"
-    assert record["noise"]["transport"] == "twin" and record["plan"]["source"] == "sysid"
+    # R1, a ruler change agreed with the One-click session (2026-11-18): the real run plays the SAME schedule the sim path shows
+    # (plan(twin): servo.backlash_reversals_camera -> servo.dynamics_regression), so its record names the planner's plan. Before this,
+    # the line read `record["plan"]["source"] == "sysid"`: on="real" ran identify() in one call and recorded sysid's model levels; its
+    # intent - the record says honestly which plan produced these values - is kept, now pointing at the schedule that actually ran.
+    assert record["noise"]["transport"] == "twin" and record["plan"]["source"] == "planner"
+    schedule = sim2real.calibration.plan(twin)
+    assert fitted.plan_.ids == schedule.ids and fitted.plan_.source == "planner"
+    assert [s["routine"] for s in record["plan"]["steps"]] == list(schedule.ids) == [r["routine"] for r in record["routines"]]
     assert fitted.parameters["can11"]["gravity_nm"].source.startswith(f"sim2real calibrate · on=real · {cal.rung} · ")
     report = fitted.eval()
     print(report.summary(), flush=True)
