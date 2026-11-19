@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>W2 Arm Dashboard</title>
+<style>
+:root{--bg:#fafafa;--fg:#1a1a1a;--muted:#666}
+@media (prefers-color-scheme:dark){:root{--bg:#141517;--fg:#eee;--muted:#aaa}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:1280px;margin:0 auto;padding:20px 16px}
+h1{font-size:22px;margin:0 0 6px} p{margin:4px 0 14px;color:var(--muted)}
+video,img{width:100%;height:auto;border-radius:8px;display:block}
+ol{color:var(--muted);font-size:15px}
+</style></head><body><main>
+<h1>W2 must-meet #2 · arm dashboards (A→B speed ladder, bam_fb_v2)</h1>
+<p>49 s, recorded headlessly on 2026-11-18. Three captioned segments:</p>
+<ol>
+<li>The A-to-B speed ladder report: Hero (the real arm on the OBSBOT, 5 → 10 → 11 PPM, all complete, no trip), then Summary (real beside twin per rung; the 1 mm gate on the set-leg stops).</li>
+<li>Rerun at the top rung (11 PPM): J2 / C1 position, target vs friction twin vs real encoders, then the scorecard and the error traces vs the commanded profile.</li>
+<li>W&amp;B "Real SPPM · A→B ladder" across rungs, rendered from W&amp;B API data (run <code>a2b-ladder-summary</code>; the headless browser was not signed in to Forge): 3 real rungs, 2 passing the 1 mm gate; top real rung top (11.0 PPM) · 0.15 rev/s at 94.9 mm/s, gate 0.97 mm. Twin only until they fly: a2b_short_top, a2b_short_top_nocap, a2b_top_nocap.</li>
+</ol>
+<video autoplay muted loop playsinline controls poster="media/w2-arm-dashboard-2026-11-19/still-7.png">
+<source src="media/w2-arm-dashboard-2026-11-19/w2-arm-dashboard.mp4" type="video/mp4">
+<img src="media/w2-arm-dashboard-2026-11-19/w2-arm-dashboard.gif" alt="Arm dashboards walkthrough (GIF fallback)">
+</video>
+<p><a href="media/w2-arm-dashboard-2026-11-19/w2-arm-dashboard.gif">GIF fallback</a> · W&amp;B project: <a href="https://forge.coreweave.com/wandb/zach-yamaoka-independent/Real%20SPPM%20%C2%B7%20A%E2%86%92B%20ladder">Real SPPM · A→B ladder</a> · ladder report: <code>/home/bam/bam_ws/reports/media/a2b-speed-ladder-2026-11-18/index.html</code></p>
+</main></body></html>
