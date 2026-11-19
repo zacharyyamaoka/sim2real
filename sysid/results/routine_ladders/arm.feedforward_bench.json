@@ -1,0 +1,54 @@
+{
+ "generated_by": "tests/test_feedforward_rounds.py",
+ "levels": {
+  "0x": {
+   "converged": true,
+   "friction_error_nm": 0.004660954656064087,
+   "gravity_error_nm": 0.004618098321469644,
+   "pass": true,
+   "rounds": 2,
+   "stopped": "converged: \u0394G 0.00267 N\u00b7m < 0.05 N\u00b7m between rounds 1 and 2, and the worst held-out cell residual 0.0287 N\u00b7m <= 0.1 N\u00b7m over all 12 cells",
+   "worst_error_over_tolerance": 0.04660954656064087
+  },
+  "10x": {
+   "converged": false,
+   "friction_error_nm": 0.020898564646578466,
+   "gravity_error_nm": 0.011685967526342544,
+   "pass": true,
+   "rounds": 3,
+   "stopped": "no improvement in 2 rounds: the worst held-out cell residual over the cells both fits held went 0.59 -> 0.605 (6 cells), 0.642 -> 0.685 (12 cells) N\u00b7m (each round must cut it by 10%; now 0.685 N\u00b7m over all 12 cells, tolerance 0.1 N\u00b7m), \u0394G 0.0124 N\u00b7m",
+   "worst_error_over_tolerance": 0.20898564646578466
+  },
+  "1x": {
+   "converged": true,
+   "friction_error_nm": 0.0059693653977904715,
+   "gravity_error_nm": 0.005998192290716853,
+   "pass": true,
+   "rounds": 2,
+   "stopped": "converged: \u0394G 0.00429 N\u00b7m < 0.05 N\u00b7m between rounds 1 and 2, and the worst held-out cell residual 0.0571 N\u00b7m <= 0.1 N\u00b7m over all 12 cells",
+   "worst_error_over_tolerance": 0.05998192290716853
+  },
+  "3x": {
+   "converged": false,
+   "friction_error_nm": 0.01387584627414229,
+   "gravity_error_nm": 0.006359786223486985,
+   "pass": true,
+   "rounds": 3,
+   "stopped": "no improvement in 2 rounds: the worst held-out cell residual over the cells both fits held went 0.14 -> 0.159 (6 cells), 0.159 -> 0.152 (12 cells) N\u00b7m (each round must cut it by 10%; now 0.152 N\u00b7m over all 12 cells, tolerance 0.1 N\u00b7m), \u0394G 0.00147 N\u00b7m",
+   "worst_error_over_tolerance": 0.1387584627414229
+  }
+ },
+ "provenance": {
+  "code_sha256": [
+   "97740a614790f8df31e0c94f0b2b025f4ca78d59a477b1c310fde52b03e90489",
+   "e80bea96a3e7810b11c53c3c8f8879b63a0f3462fc4463427617f0c9f2a0cb2d"
+  ],
+  "test_sha256": "1bd597016bf12a99cd586c77b88c201b1a508afcbaf4c9fed94973c4d27b48cc"
+ },
+ "routine": "arm.feedforward_bench",
+ "schema": "sim2real.routine_ladder/1",
+ "tolerance": {
+  "friction_nm": 0.1,
+  "gravity_nm": 0.1
+ }
+}
