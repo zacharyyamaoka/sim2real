@@ -198,8 +198,9 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 - `collect()` plans each routine's runs from the priors (plus `known`), because nothing has been fitted yet when the data is logged.
 - The exception is a made-after step: `collect()` fits the steps it waits for as it goes, so it is recorded the way a replay builds it,
   and `calibrate(data=)` replays it without measuring and without a mismatch.
-- A routine with rounds is fitted as it goes too (each round is made after the last fit): the data holds every round's runs, and
-  `calibrate(data=)` replays the same rounds by run id.
+- A routine with rounds is fitted as it goes too (each round is made after the last fit), and so are the earlier steps whose found
+  values its fit reads (`requires`, `uses`, `refines`), so its fit sees in `collect()` what a replay hands it: the data holds every
+  round's runs, and `calibrate(data=)` replays the same rounds, with the same commands, by run id.
 - A run that two routines share is played once, and counted once in the plan's totals (`run_time_s`; see "The schedule").
 - If a fit then asks for a run the data does not hold, it raises `CalibrationPlanError` naming the run.
 

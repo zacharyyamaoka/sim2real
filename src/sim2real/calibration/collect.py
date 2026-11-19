@@ -9,9 +9,9 @@ the runs; calibrate(data=) fits them. WHY collect plans each routine's runs from
 nothing has been fitted yet when the data is logged. The one exception is a step the schedule shows made after an earlier one (its commands
 are made from what that step finds: the dynamics tapes in the homed frame): collect fits the steps it waits for as it goes, so the
 made-after step is recorded the way a replay will build it, and calibrate(data=) replays without measuring and without a mismatch. A
-routine that comes back for more (next_runs: rounds) is fitted as it goes too, since each round's runs are made after the last fit; the
-data then holds every round's runs, and calibrate(data=) replays the same rounds by run id. A run a fit asks for that the data does not
-hold is refused by name, never re-measured.
+routine that comes back for more (next_runs: rounds) is fitted as it goes too, since each round's runs are made after the last fit, and so
+are the earlier steps whose found values its fit reads; the data then holds every round's runs, and calibrate(data=) replays the same
+rounds, with the same commands, by run id. A run a fit asks for that the data does not hold is refused by name, never re-measured.
 
 This module also holds the planner's side of RobotTwin.calibrate (fit_rig), so twin.py's hook stays a few lines.
 """
@@ -62,15 +62,20 @@ class _Recorder:
 
 
 def _fitted_online(planned: CalibrationPlan) -> set[str]:
-    """The steps collect fits as it goes: every step some made-after step's commands wait for (PlanStep.commands_after), and the earlier
-    steps whose found values those fits read (requires, uses, refines), so each is fitted on what a replay hands it."""
+    """The steps collect fits as it goes: every step some made-after step's commands wait for (PlanStep.commands_after), every routine that
+    comes back for more (next_runs), and the earlier steps whose found values those fits read (requires, uses, refines), so each is fitted
+    on what a replay hands it."""
     steps = list(planned.steps)
     at = {s.routine: k for k, s in enumerate(steps)}
     writes = []
     for s in steps:
         d = declaration(s.routine_object)
         writes.append(set(d.identifies + d.configures + d.adjusts))
-    online = {rid for s in steps for rid in s.commands_after}
+    # WHY an iterating step seeds the closure too (gap A2, fix round 1): its later rounds are made after its own fit, so that fit must
+    # see in collect exactly what a replay hands it; an earlier step it reads left unfitted here would leave those keys at the priors,
+    # and the replay would rebuild a round under the same run id with a different command (the same reason as a made-after step)
+    iterating = {s.routine for s in steps if callable(getattr(s.routine_object, "next_runs", None))}
+    online = {rid for s in steps for rid in s.commands_after} | iterating
     todo = list(online)
     while todo:
         k = at[todo.pop()]
