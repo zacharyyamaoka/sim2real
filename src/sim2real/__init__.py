@@ -11,7 +11,7 @@ The site, dashboards and catalog are app folders beside this package, not in it.
 sim2real.metrics never loads cards.
 """
 
-FRONT_DOOR = ("RobotTwin", "examples", "real")
+FRONT_DOOR = ("RobotTwin", "examples", "real", "preflight")
 
 
 def __getattr__(name: str):
@@ -27,4 +27,8 @@ def __getattr__(name: str):
         # WHY import_module, not `from . import examples`: that form asks this __getattr__ for the attribute first, and recurses.
         # `real` is the real backend's transports (sim2real.real.RackTransport, TwinTransport; 2026-11-15)
         return importlib.import_module(f"{__name__}.{name}")
+    if name == "preflight":  # sim2real.preflight(fitted), step 8: the module, callable as its function (src/sim2real/preflight.py)
+        import importlib  # noqa: PLC0415
+
+        return importlib.import_module(f"{__name__}.preflight")
     raise AttributeError(f"module 'sim2real' has no attribute {name!r}")

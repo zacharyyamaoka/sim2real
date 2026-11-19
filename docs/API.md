@@ -149,6 +149,20 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   - `ValueError` when a run it would score was used for training. It refuses rather than filtering it out.
 - **Renamed:** this was `eval_twin()` until 2026-11-11, and `eval()` until 2026-11-17 (Zach's sketch `twin.evaluate()`; Keras' `model.evaluate()`; PyTorch's `.eval()` means inference mode). `eval()` stays as its alias.
 
+### `sim2real.preflight(fitted, *, soak_s=6.0, workers=1) -> Preflight`
+
+- **What it does:** step 8 of Zach's 2026-11-19 pipeline, "preflight / wear-in before shipping". It checks a fitted twin before its values ship, in sim only. It returns a frozen `Preflight`: `.checks`, each a `Check(id, title, passed, value, limit, unit, why)`; `.passed`, true when every blocking check is `True`; `.summary()`; and `.to_dict()`, which is JSON-ready. A check's `passed` is `None` when it could not be checked, and `why` says why. `None` never counts as a pass.
+- **The checks:**
+  - `record_matches_description`: every value carries a unit and a source; every key the schedule (`plan_`) identifies has a fitted value in the record (`record_`); and the record names this twin, with the description's units.
+  - `gains_within_board_limits`: the kp, kd and ki the twin would ship. These come from a tune step's `settings_` and `proposals_` if one ran. Otherwise they come from the description's kp/kd priors, and failing those from the board as it runs today (the description's joint plus the unit's deployment record). The gains must lie inside the board's as-found gains × pidtuna's admissible range (`pidtuna.types.Envelope`, 0.25–2×). The loop must be PD only: ki 0, or ilimit 0.
+  - `torque_margin`: the peak torque over the soak, and over the fit's recorded runs when it holds them, must stay under the motor's datasheet peak × the gear ratio × 0.97. These come from the twin's robotparts parts (`dist/site/v2/parts/<id>.json`). A gearbox whose own peak is lower sets the cap instead. The check reports the margin in %.
+  - `sim_soak`: a `robot_trajectories.burn_in_wiggle`, then a 1.5 s hold, played on the rack twin at the fitted values, under the gains it would ship and the fitted feed-forward. It fails on NaN, on a runner guard trip (travel, overspeed, the proven window), or if the joint has not settled by the end of the hold. It also fails if the stop error exceeds the unit's `servo.stop_error.dx` gate (cards deployments), or on a torque-cap hit (the house cap, or the board's current ceiling).
+  - `schedule_complete` (informational, never blocks): passes when nothing the record needed was dropped, left uncovered or assumed by `plan_`. When a routine was dropped only because `Budget.equipment` lacks its kit, the result is `None` and names the missing items.
+- **Runs:** in bam_rack_twin's venv, like `pendulum_can11()`. `workers` caps the soak's replay pool. CAN 11 takes about 3 s.
+- **Never:** touches hardware, or writes anything except the rack twin's scene cache.
+- **Raises:** `RuntimeError` on an unfitted twin, with the same wording `evaluate()` uses.
+- **Today on CAN 11:** a fit with no tune step ships the board's as-found gains, ki 16000 with ilimit 0.5. That integrator fails both the gains check and the soak: stop error 0.51°, and 3.4 N·m against the board's 2.93 N·m ceiling. A tune's PD passes every blocking check (`tests/test_preflight.py`). The tune lands with gap C (`claude/l10-c`).
+
 ### `sim2real.calibration.Ledger(root=None, *, beside_submission=False)`
 
 - **What it is:** a calibration's local ledger, a callback (gap E). Each calibration it hears opens a new folder under `root`
