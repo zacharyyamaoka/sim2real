@@ -52,6 +52,27 @@ def _pidtuna_module(name: str):
     return importlib.import_module(name)
 
 
+def _close(servo_sim, plant) -> None:
+    """Shut the process pool the tune played on, now, so its workers exit instead of idling until the interpreter does: through the
+    public ``ServoSim.close()``, else through servo_sim's own pool registry, the one ``close()`` empties (the pool for this sim's
+    worker count, waited for)."""
+    close = getattr(plant, "close", None)
+    if callable(close):
+        close()
+        return
+    # WHY the registry fallback: pidtuna main has no ServoSim.close() yet (it waits on the local branch claude/l10-servosim-close,
+    # 30d01e9, until the peer's v2 lanes settle), and a tune beside the powered arm must not leave its workers sitting there
+    pools = getattr(servo_sim, "_POOLS", None)
+    if not isinstance(pools, dict):
+        warnings.warn("this pidtuna has neither ServoSim.close() nor servo_sim._POOLS: the tune's pool idles until the interpreter "
+                      "exits", stacklevel=3)
+        return
+    for workers in [plant.workers] if plant.workers else list(pools):
+        pool = pools.pop(workers, None)
+        if pool is not None:
+            pool.shutdown(wait=True, cancel_futures=True)
+
+
 class Tuned(dict):
     """What a tune returns: {key: sim2real.rig.Estimate} for each setting it proposes, and ``proposal``, the reviewable board change it
     was made from (pidtuna's gains document, schema pidtuna/gains-1, plus the feed-forward it was tuned under and the tier)."""
@@ -170,11 +191,7 @@ class PidTune:
             # about the joint
             tuning = importlib.import_module("pidtuna.tune").tune(servo, plant, objective, feedforward=feedforward, seed=seed, oracle=False)
         finally:
-            close = getattr(plant, "close", None)
-            if callable(close):
-                close()
-            else:
-                warnings.warn("this pidtuna has no ServoSim.close(): the tune's pool idles until the interpreter exits", stacklevel=2)
+            _close(servo_sim, plant)
         gains = tuning.gains[servo.name]
         verdict = tuning.verdicts.get(servo.name, {})
         wn, zeta = verdict.get("wn_tuned"), verdict.get("zeta_tuned")

@@ -38,7 +38,7 @@ are regenerated in the same change, never hand-edited.
 | a configure step's outputs still enter the values | a configure sets the device (an exposure lock, a counts-per-metre), so what follows runs at it | — |
 | a fit result's `proposal` lands in `fitted.proposals_` | the board change (pidtuna's gains document, schema `pidtuna/gains-1`, plus the feed-forward and tier) is what a person reviews and writes | — |
 | the wrapper hands PID tuna the board with its integrator off: the board's ki kept, ilimit 0 (bam_ws 9de804493) | no integrator on the arm (Zach, 2026-11-13); moteus holds the integral to +-ilimit, so ilimit 0 switches it off whatever ki is, and a runner cannot change ki per command | — |
-| sim2real -> pidtuna one way, imported only when the routine runs; pools capped at the twin's workers and closed when it is done (`ServoSim.close()`, a local pidtuna commit) | PID tuna stays its own tool; no idle workers beside the powered arm | — |
+| sim2real -> pidtuna one way, imported only when the routine runs; pools capped at the twin's workers and closed when it is done (`ServoSim.close()`, a local pidtuna commit; until pidtuna main has it, servo_sim's own pool registry, the one `close()` empties) | PID tuna stays its own tool; no idle workers beside the powered arm | — |
 | CAN 11's one-click schedule runs it third, after `servo.dynamics_regression` (`sysid/examples/pendulum_can11/routines.py`), on the board as the deployment record states it in the rack's envelope | every pendulum calibration then proposes gains for the joint it just fitted; `CalibrationConfig(exclude=("pid.pidtuna",))` leaves it out | remove the third step |
 
 ## The grade: performance gained, never a recovered value
