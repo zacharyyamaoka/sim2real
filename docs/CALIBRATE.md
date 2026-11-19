@@ -557,7 +557,10 @@ feedback_share(effort, fed, moving)    # RMS(effort - feedforward) / RMS(effort)
      on the pose graph's edges, the worst held-out cell residual is within `tolerance_nm` and no cell is empty;
    - `"no improvement in {patience} rounds: …"` (not converged) when every cell is collected, that residual is still over `tolerance_nm`
      and `patience` rounds in a row cut it by less than `min_improvement` (10 %), each cut read over the cells both fits held (round 1
-     holds the slow band only): a model that cannot explain the data;
+     holds the slow band only). The held-out residual has stopped falling: either at the bench's noise floor, where the fit can still
+     be right (the ladder's 3x and 10x stop here with gravity within 0.006 / 0.012 N·m of the truth, while the residual sits at 0.15 /
+     0.69 N·m), or because the model cannot explain the data. Read the gravity and friction rows, not this line alone; and set
+     `tolerance_nm` above the bench's residual floor, or the step never reports converged;
    - otherwise the runner stops it, not converged, at `max_rounds`.
 
    **Set `first` to the slow band**, a strict part of the grid, so round 1 on the prior costs less arm time. The default `first=None`
@@ -590,10 +593,15 @@ installed by a pin move; none came from a routine, and none has a stop rule.
 | the gated hold pushes, J2 / C1 | arm-hold | nothing: holds never enter this fit |
 
 - **Bench vs deployed.** Bench is this routine, submitted through rackq once the twin passes. Deployed is the same fit over the
-  production runs the twin holds (`calibrate(data=)`), with PID tuna's learned feedforward as a drift canary.
+  production runs the twin holds (`calibrate(data=)`), with PID tuna's learned feedforward as a drift canary. A dataset grown by
+  session hands the fit a run recorded twice as `X` and `X@<session>`; the routine reads both as run `X`, in X's cell, so its rounds
+  find their fits and a held-out cell leaves out every session's recording of it (since 2026-11-19).
 - **What has landed:** the routine, its fit, its catalog row and its sim proof on the toy arm (FF-1), then its rounds (FF-2), graded
   by their ladder (step 4). **Next:** the CAN 11 pendulum and the `bam_fb_v2` rig on the one-click seam, twin first (FF-3). **Still blocking a real-arm run:** the `bam_fb_v2` rig on the
-  seam, the friction twin's 20ad gate (it fails today), and Kt, which nothing measures and which reads exactly like a mass scale.
+  seam, the friction twin's 20ad gate (it fails today), Kt, which nothing measures and which reads exactly like a mass scale, and the
+  bench log's torque: it must be the board's torque averaged over each host period, not its first tick under a held target, or
+  `damping_nm_s_rad` picks up kp·qd·(about half a host period), which no fit tells from friction (the toy logs the average since
+  d315971; its first tick read +0.135 / +0.090 N·m·s/rad of viscous friction that is not there).
 - **The catalog row** identifies `link_inertials` (`arm_subassembly` M2, `arm_6dof` M3) and refines the drives' friction, so an
   integrated-servo pick never gets it in its cover; `arm.dynamics_excitation` and `servo.dynamics_regression` are its alternatives.
 - **Install:** `robot_trajectories` is the `trajectories` extra (`uv sync --extra trajectories`); it has no remote yet, so the extra

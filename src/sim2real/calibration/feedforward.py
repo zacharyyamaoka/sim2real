@@ -28,7 +28,9 @@ still waits on ΔG (one fit so far, or ΔG >= ``delta_nm``), it re-collects the 
 It stops converged when, after two rounds or more, the gravity of the last two fits differs by less than ``delta_nm`` on the pose graph
 (ΔG), the worst held-out cell residual is within ``tolerance_nm`` and no cell is empty; it stops NOT converged when, with every cell
 collected and that residual still over ``tolerance_nm``, ``patience`` rounds in a row cut it (over the cells both fits held) by less than
-``min_improvement`` (relative: a model that cannot explain the data), or at ``max_rounds``. The runner says which in the step's ``stopped``.
+``min_improvement`` (relative: the residual has stopped falling, either at the bench's noise floor, where the fit may still recover the
+truth, as the ladder's 3x and 10x do, or because the model cannot explain the data), or at ``max_rounds``. The runner says which in the
+step's ``stopped``. So ``tolerance_nm`` must sit above the bench's held-out residual floor, or the step never reports converged.
 WHY the residual and ΔG and never the 95 % intervals alone (the runner's default stop): at noise 0 every interval is tight after round 1
 while the fast band is still empty, and a stop rule must read only what the bench reads too (no hidden truth). Graded by
 tests/test_feedforward_rounds.py and its committed ladder sysid/results/routine_ladders/arm.feedforward_bench.json (0x / 1x / 3x / 10x on
@@ -96,7 +98,10 @@ class FeedforwardBench:
     weakens with speed). The rounds (module docstring): ``max_rounds`` (the runner's cap), ``tolerance_nm`` (a cell's held-out residual),
     ``delta_nm`` (ΔG between rounds), ``per_round`` (cells a later round may collect; None: no cap), ``patience`` and ``min_improvement``
     (the no-improvement stop). ``moving_rad_s`` / ``pair_tol_rad``: the fit's row rules at the bench's defaults, 0.1 rad/s (5.7°/s) and 0.05
-    rad (2.9°) (BENCH_MOVING_RAD_S, BENCH_PAIR_TOL_RAD: why, beside them)."""
+    rad (2.9°) (BENCH_MOVING_RAD_S, BENCH_PAIR_TOL_RAD: why, beside them). A bench's log must carry the board's torque averaged over each
+    host period, not its first tick: a held target lets q move on, so the first tick reads about kp·qd·(half a host period) over what the
+    plant feels (4.5 ms of a 10 ms period on the toy), an apparent viscous term no fit over (q, qd, effort) tells from friction, and
+    ``damping_nm_s_rad`` picks it up (+0.135 / +0.090 N·m·s/rad on the toy, whose ruler logs the average since d315971)."""
 
     id = "arm.feedforward_bench"
     FRICTION = ("frictionloss_nm", "damping_nm_s_rad")
@@ -311,14 +316,23 @@ class FeedforwardBench:
     # --- what it finds
 
     def fit(self, measured: Mapping[str, Any], values: Mapping[str, float], twin: Any = None) -> dict[str, Estimate]:
-        """fit.feedforward.fit over ``measured`` (held out by cell), the prior the values runs() was handed. ``twin`` is not played: the
-        twin's part (its inertial term) is the ``inertial`` the routine was built with."""
+        """fit.feedforward.fit over ``measured`` (held out by cell), the prior the values runs() was handed. ``measured`` is keyed by
+        recording: a run recorded in two sessions comes as ``X`` and ``X@<session>`` (a grown dataset, calibration.collect), both read
+        as run ``X``, so both sit in X's cell. ``twin`` is not played: the twin's part (its inertial term) is the ``inertial`` the routine
+        was built with."""
+        from .collect import _base  # noqa: PLC0415  (WHY at call time: collect imports the planner; this module stays a leaf)
+
+        # WHY each recording by the run it answers (L8 review, the joint bug with gap D): the runner hands a refit on fitted.data_ + more
+        # every recording of each run, X and X@<session>. Keyed by recording, _fits() (which reads run ids) found no fit and refused the
+        # refit after round 1, and leaving cell c out kept the other session's recording of c, so the held-out residual read low and
+        # converged() could claim convergence early. The session suffix is the only rename a dataset makes to this routine's keys
+        run_of = {key: _base(str(key)) for key in measured}
         prior = self._prior if self._prior is not None else {k: float(values[k]) for k in self.gravity_keys}
         found = ff.fit(measured, self.regressor, inertial=self.inertial, prior=np.array([prior[k] for k in self.gravity_keys]),
                        prior_sigma=self.prior_sigma, moving_rad_s=self.moving_rad_s,
-                       groups={run_id: self._cells.get(run_id, run_id) for run_id in measured}, pair_tol_rad=self.pair_tol_rad)
+                       groups={key: self._cells.get(run, run) for key, run in run_of.items()}, pair_tol_rad=self.pair_tol_rad)
         self.fits_.append(found)
-        self._fit_of[frozenset(str(run_id) for run_id in measured)] = found
+        self._fit_of[frozenset(run_of.values())] = found
         worst = max(found.residual_nm)
         method = (f"{self.id}: gravity on the regressor + Coulomb and net viscous friction per drive, least squares over {found.rows} "
                   f"moving rows of {len(found.runs)} paired transfers (holds never rows); held-out residual by cell {worst:.3g} N.m")

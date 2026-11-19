@@ -184,6 +184,8 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   `robot_trajectories.trapezoidal_velocity(..., back_to_start=True)` call in `Run.command`, its cell in `Run.spec["cell"]`, its
   `channels["feedforward_effort"]` made from `values`.
 - **`fit(measured, values, twin)`:** `{key: Estimate}` from `sim2real.fit.feedforward.fit` (below); each fit is kept in `fits_`.
+  `measured` is keyed by recording: a run a grown dataset holds twice, `X` and `X@<session>`, is read as run `X` both times, in X's cell
+  (held out together).
 - **`with_feedforward(command, values)`:** the command with its feedforward channel at `values`: gravity + Coulomb (smoothed at most
   tanh(v / 0.05)) + net viscous + the twin's `inertial(q, qd, qdd)`, the one curve the fit installs.
 - **Needs:** the `trajectories` extra (`robot_trajectories`, imported only when runs are made).
@@ -200,7 +202,8 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
       `delta_nm` on the pose graph's edges (ΔG), the worst held-out cell residual is within `tolerance_nm` and no cell is empty;
     - `Stop("no improvement in {patience} rounds: …")`, not converged, when every cell is collected, that residual is still over
       `tolerance_nm` and none of the last `patience` rounds cut it by `min_improvement` (relative, 10 %), each cut read over the cells
-      both fits held;
+      both fits held. The residual has stopped falling, at the bench's noise floor (where the fit may still be right: the ladder's 3x
+      and 10x) or because the model cannot explain the data; `tolerance_nm` must sit above that floor for the step to converge;
     - `None`: the next round.
   - **The runner's own stop**, not converged: "max_rounds {max_rounds} reached: it did not converge" (its other, "next_runs() asked for
     nothing more", no longer comes: `next_runs` re-collects while `converged` waits).
