@@ -25,6 +25,16 @@ can ship. Before the values reach a board, the twin is held to four blocking che
    schedule the fit played (plan_.dropped / uncovered / assumed, with their reasons). A routine dropped only because Budget.equipment lacks
    its kit is None, naming the items: the plan's equipment gate, not a fault of the twin.
 
+A nominal-world twin (sim2real.nominal: RobotTwin.from_robot_description of a description no sysid world binds) is checked per servo the
+world drives, through the world itself (NominalRig): the gains it would ship are a tune's settings_ / proposals_, else the world's own board
+loop (the description's stated kp / kd, or its default 5 Hz loop), ki 0 (the world's loop is PD); their limits are the description's
+declared kp / kd interval, else pidtuna's admissible range about that loop (the gains the fit was played under). The soak is a
+burn_in_wiggle per servo (the others held) inside the envelope the fit's tapes spanned, then a hold, on the description's MJCF at the
+FITTED values under those gains and the fitted model's feed-forward, the command clipped at the cap; its stop gate is the strictest
+servo.stop_error.dx any deployment card declares (a nominal twin names no unit). Each servo's cap is its motor's datasheet peak x its
+gearbox ratio x 0.97, or an integrated servo's own datasheet peak (at its output) x 0.97 (robotparts' built part, else its user/ part
+datasheet); the envelope is the soak's peak commanded torque.
+
 What it reads, and from where, is each check's `why`. It writes nothing but the rack twin's scene cache (~/.cache/sim2real/sysid/scenes,
 the pipeline's own). `workers` caps the soak's replay pool (1 replays in this process).
 """
@@ -107,6 +117,9 @@ def preflight(fitted, *, soak_s: float = 6.0, workers: int = 1) -> Preflight:
     if not getattr(fitted, "fitted", False):
         raise RuntimeError("preflight needs a fitted twin: fitted = twin.calibrate(...), then sim2real.preflight(fitted)")
     started = time.monotonic()
+    rig = _nominal_rig(fitted)
+    if rig is not None:
+        return _preflight_nominal(fitted, rig, soak_s=soak_s, started=started)
     unit = _Unit.of(fitted)
     gains, shipped = _gains(fitted, unit)
     cap = _torque_cap(fitted, unit)
@@ -498,6 +511,302 @@ def _soak(fitted, unit: _Unit, shipped: dict | None, cap: dict, *, soak_s: float
                      f"{measured}. Played: {played}"), peak
     return Check("sim_soak", title, True, value, limit, "",
                  f"{measured}, inside the stop gate {math.degrees(gate[0]):.3f}° ({gate[1]}); settled; no guard. Played: {played}"), peak
+
+
+# --- 2-4 on a nominal-world twin (sim2real.nominal), per servo the world drives ------------------------------------------------------------
+
+STILL_RAD_S = 0.03                 # "still" when no pipeline states it (the tracer path's fallback for MOVING_RAD_S)
+TRAVEL_MARGIN_RAD = 0.15           # the travel guard past the soak's window (bam_rack_twin replay_schedule's reach + 0.15 rad)
+
+
+def _nominal_rig(fitted):
+    """The twin's NominalRig when its runner plays a nominal world (sim2real.nominal), else None (the tracer path)."""
+    rig = getattr(getattr(fitted, "runner", None), "rig", None)
+    if rig is None:
+        return None
+    from .nominal import NominalRig  # noqa: PLC0415
+
+    return rig if isinstance(rig, NominalRig) else None
+
+
+def _preflight_nominal(fitted, rig, *, soak_s: float, started: float) -> Preflight:
+    servos = rig.servos
+    shipped = {s.instance: _nominal_shipped(fitted, rig, s) for s in servos}
+    gains = _nominal_gains(fitted, rig, shipped)
+    caps = {s.instance: _servo_cap(fitted, s.instance) for s in servos}
+    soak, peaks = _nominal_soak(fitted, rig, shipped, caps, soak_s=soak_s)
+    checks = (_record(fitted, _Unit()), gains, _nominal_torque(caps, peaks), soak, _schedule(fitted))
+    return Preflight(fitted.description.id, checks, round(time.monotonic() - started, 2))
+
+
+def _nominal_shipped(fitted, rig, servo) -> dict:
+    """{kp_nm_rad, kd_nm_s_rad, ki_nm_rad_s, ilimit_nm, source} the servo would ship on a nominal twin."""
+    i = servo.instance
+    settings = getattr(fitted, "settings_", None) or {}
+    if f"{i}.kp_nm_rad" in settings and f"{i}.kd_nm_s_rad" in settings:
+        tuned = _proposed(fitted, _Unit(servo=i)) or {}
+        # WHY ki 0 where the proposal states none: the nominal world's board loop is PD (sim2real.nominal), there is no board ki to keep
+        ki = float(tuned.get("ki", 0.0))
+        ilimit = tuned.get("ilimit", 0.0) if "ki" in tuned else 0.0
+        return {"kp_nm_rad": float(settings[f"{i}.kp_nm_rad"]), "kd_nm_s_rad": float(settings[f"{i}.kd_nm_s_rad"]), "ki_nm_rad_s": ki,
+                "ilimit_nm": ilimit, "source": "the tune step's proposal (fitted.settings_ kp, kd; fitted.proposals_ ki, ilimit)"}
+    params = fitted.description.instance(i).parameters
+    ki, ilimit = params.get("ki_nm_rad_s"), params.get("ilimit_nm")
+    return {"kp_nm_rad": float(servo.kp), "kd_nm_s_rad": float(servo.kd), "ki_nm_rad_s": 0.0 if ki is None else float(ki),
+            "ilimit_nm": 0.0 if ilimit is None else float(ilimit),
+            "source": f"no tune step having run, {rig.gains_source(i)}; ki " + ("0: the world's loop is PD" if ki is None else "as stated")}
+
+
+def _nominal_gains(fitted, rig, shipped: Mapping[str, dict]) -> Check:
+    title = "the kp / kd / ki it would ship are inside the board's range, PD only (ki 0, or ilimit 0)"
+    gain_unit = "N·m/rad, N·m·s/rad, N·m/(rad·s), N·m"
+    value = {i: {k: g[k] for k in ("kp_nm_rad", "kd_nm_s_rad", "ki_nm_rad_s", "ilimit_nm")} for i, g in shipped.items()}
+    scale = _gain_range()
+    problems, limit = [], {}
+    for s in rig.servos:
+        g = shipped[s.instance]
+        ki, ilimit = g["ki_nm_rad_s"], g["ilimit_nm"]
+        if ki != 0.0 and ilimit != 0.0:
+            problems.append(f"{s.instance}: ki {ki:g} N·m/(rad·s) with ilimit {ilimit} integrates: the real arm runs PD + feed-forward only "
+                            "(ki 0, or ilimit 0)")
+        if scale is None:
+            continue
+        # WHY about the world's own loop: it is the board config the fit was played under, the nominal twin's "gains known to be safe"
+        # (pidtuna Envelope's guard is relative to the as-found gains; a nominal twin has no board record, its loop stands in for it)
+        (kp_lo, kp_hi), (kd_lo, kd_hi) = scale
+        limit[s.instance] = {"kp_nm_rad": [s.kp * kp_lo, s.kp * kp_hi], "kd_nm_s_rad": [s.kd * kd_lo, s.kd * kd_hi], "ki_nm_rad_s": 0.0}
+        for name in ("kp_nm_rad", "kd_nm_s_rad"):
+            low, high = limit[s.instance][name]
+            if not low <= g[name] <= high:
+                problems.append(f"{s.instance}: {name.split('_')[0]} {g[name]:.4g} is outside [{low:.4g}, {high:.4g}]")
+    sources = "; ".join(dict.fromkeys(f"{i}: {g['source']}" for i, g in shipped.items()))
+    where = (f"limits: pidtuna's admissible range {scale[0]} (kp) / {scale[1]} (kd) about each servo's nominal-world loop "
+             f"(no board record; neither robotparts nor the description declares a gain limit)") if scale else ""
+    if problems:
+        return Check("gains_within_board_limits", title, False, value, limit or None, gain_unit,
+                     f"{'; '.join(problems)}. Shipped: {sources}" + (f"; {where}" if where else ""))
+    if scale is None:
+        return Check("gains_within_board_limits", title, None, value, None, gain_unit,
+                     "could not be checked: no gain limit is declared (no board record on a nominal twin, none in robotparts or the "
+                     f"description, and pidtuna, which holds the admissible range, cannot be imported here); PD only holds. Shipped: {sources}")
+    worded = ", ".join(f"{i} kp {g['kp_nm_rad']:.4g} N·m/rad, kd {g['kd_nm_s_rad']:.4g} N·m·s/rad" for i, g in shipped.items())
+    return Check("gains_within_board_limits", title, True, value, limit, gain_unit,
+                 f"{worded}: inside the range; no integrator. Shipped: {sources}; {where}")
+
+
+def _datasheet(part: str, name: str) -> tuple[float, str, str] | None:
+    """(value, unit, where) of a part's spec: robotparts' built part (dist/site/v2/parts/<id>.json), else its user/ part datasheet
+    (user/parts/**/<id>/parameters.json, the chosen row), else None."""
+    built = _spec(part, name)
+    if built is not None:
+        return built[0], built[1], f"{Path(*PARTS, part)}.json"
+    for sheet in sorted(Path(paths.ROBOTPARTS, "user", "parts").rglob(f"{part}/parameters.json")):
+        try:
+            rows = json.loads(sheet.read_text(encoding="utf-8")).get("rows", [])
+        except (OSError, ValueError):
+            continue
+        for row in rows:
+            chosen = row.get("chosen")
+            if row.get("id") == name and isinstance(chosen, Mapping) and chosen.get("value") is not None:
+                try:
+                    return float(chosen["value"]), row.get("unit", ""), f"{sheet.relative_to(paths.ROBOTPARTS)} ({chosen.get('source', '')})"
+                except (TypeError, ValueError):
+                    return None
+    return None
+
+
+def _servo_cap(fitted, instance: str) -> dict:
+    """The servo's torque cap: its motor child's datasheet peak x its gearbox's ratio x 0.97 (the tracer path's _torque_cap), or, an
+    integrated servo with no motor child, its own part's datasheet peak at the output x 0.97 (the gear is inside: the ratio is in the peak)."""
+    children = [i for i in fitted.description.instances if i.parent == instance]
+    if any(i.type == "bldc_motor" for i in children):
+        return _torque_cap(fitted, _Unit(servo=instance))
+    part = fitted.description.instance(instance).part
+    if part is None:
+        return {"why": f"{instance} names no robotparts part (and no motor child), so no datasheet peak"}
+    peak = _datasheet(part, "peak_torque")
+    if peak is None or peak[1] != "N·m":
+        return {"why": f"robotparts carries no datasheet peak torque in N·m for {instance}'s part {part} (looked in "
+                       f"{Path(paths.ROBOTPARTS, *PARTS)} and user/parts/**/{part}/parameters.json)"}
+    cap = peak[0] * HOUSE_CAP_FRACTION
+    return {"cap_nm": cap, "house_nm": cap, "motor": part, "motor_peak_nm": peak[0], "gearbox": None, "ratio": 1.0, "gearbox_peak_nm": None,
+            "why": f"{part} peak {peak[0]:g} N·m at its output ({peak[2]}) x {HOUSE_CAP_FRACTION} = {cap:.4g} N·m"}
+
+
+def _nominal_torque(caps: Mapping[str, dict], peaks: Mapping[str, float] | None) -> Check:
+    title = "the peak torque over the planned envelope stays under the cap (datasheet peak x ratio x 0.97)"
+    unknown = {i: c["why"] for i, c in caps.items() if "cap_nm" not in c}
+    if not peaks:
+        known = {i: c for i, c in caps.items() if "cap_nm" in c}
+        first = next(iter(known.values()), None)
+        return Check("torque_margin", title, None, None, None if first is None else first["cap_nm"], "N·m",
+                     "could not be checked: no envelope (the soak did not run)" + "".join(f"; {i}: cap {c['why']}" for i, c in caps.items()))
+    rows, worst = [], None
+    for i, cap in caps.items():
+        if "cap_nm" not in cap or peaks.get(i) is None:
+            continue
+        margin = 100.0 * (cap["cap_nm"] - peaks[i]) / cap["cap_nm"]
+        rows.append(f"{i} peak {peaks[i]:.3f} N·m against {cap['cap_nm']:.3f} N·m ({cap['why']}): margin {margin:.1f} %")
+        if worst is None or margin < worst[0]:
+            worst = (margin, i, peaks[i], cap["cap_nm"])
+    over = worst is not None and worst[0] <= 0.0
+    if over or not unknown:
+        if worst is None:
+            return Check("torque_margin", title, None, None, None, "N·m", "could not be checked: no servo has both a cap and a soak peak")
+        return Check("torque_margin", title, not over, round(worst[2], 6), round(worst[3], 9), "N·m",
+                     f"the soak's peak commanded torque per servo: {'; '.join(rows)}"
+                     + "".join(f"; {i}: could not be checked, {why}" for i, why in unknown.items()))
+    return Check("torque_margin", title, None, None if worst is None else round(worst[2], 6), None if worst is None else round(worst[3], 9),
+                 "N·m", "could not be checked: " + "; ".join(f"{i}: {why}" for i, why in unknown.items())
+                 + (f"; checked: {'; '.join(rows)}" if rows else ""))
+
+
+def _strictest_stop_gate() -> tuple[float, str] | None:
+    """(rad, source) of the strictest servo.stop_error.dx target any deployment card declares (sim2real/cards/deployments/*.py): a
+    nominal twin names no unit, so its stop gate is the house's tightest joint share, never a looser guess."""
+    import pkgutil  # noqa: PLC0415
+
+    from .cards import deployments  # noqa: PLC0415
+
+    best = None
+    for info in pkgutil.iter_modules(deployments.__path__):
+        try:
+            record = importlib.import_module(f"{deployments.__name__}.{info.name}").record
+        except (ImportError, AttributeError):
+            continue
+        for limit in record.limits:
+            if limit.diagnostic == STOP_DIAGNOSTIC and limit.target is not None and (best is None or limit.target < best[0]):
+                best = (float(limit.target), f"sim2real/cards/deployments/{info.name}.py, {limit.device} ({limit.source})")
+    return None if best is None else (best[0] / 1000.0, f"the strictest {STOP_DIAGNOSTIC} any deployment card declares: {best[1]}")
+
+
+def _nominal_wiggle(rig, soak_s: float):
+    """robot_trajectories.burn_in_wiggle over every servo the world drives (each in turn, the others held at their start pose) inside the
+    envelope the fit's tapes spanned, at the board rate, enough whole sweeps for `soak_s`, then a hold: (t, q, qd, qdd), joints as columns."""
+    import numpy as np  # noqa: PLC0415
+
+    if importlib.util.find_spec("robot_trajectories") is None and str(ROBOT_TRAJECTORIES / "src") not in sys.path:
+        sys.path.append(str(ROBOT_TRAJECTORIES / "src"))
+    rt = importlib.import_module("robot_trajectories")
+    from robot_msgs.trajectory import JointLimits  # noqa: PLC0415
+
+    from .nominal import BOARD_HZ  # noqa: PLC0415
+
+    servos, envelope = rig.servos, rig.tape_envelope()
+    n = len(servos)
+    limits = JointLimits(joint_names=tuple(s.joint for s in servos), min_position=np.array([e["low_rad"] for e in envelope]),
+                         max_position=np.array([e["high_rad"] for e in envelope]), max_velocity=np.array([e["speed_rad_s"] for e in envelope]),
+                         max_acceleration=np.array([e["accel_rad_s2"] for e in envelope]), position_kind=("software",) * n)
+    space = rt.JointSpace.from_limits(limits, home=[s.q0 for s in servos], rate_hz=BOARD_HZ,
+                                      source="the nominal world's train tapes' envelope (NominalRig.tape_envelope)")
+    motion = rt.burn_in_wiggle(space, sweeps=1)
+    sweeps = max(1, math.ceil(soak_s / max(float(motion.t[-1]), 1e-9)))
+    if sweeps > 1:
+        motion = rt.burn_in_wiggle(space, sweeps=sweeps)
+    t = np.asarray(motion.t, float)
+    q = np.asarray(motion.positions, float).reshape(t.size, n)
+    qd = np.asarray(motion.velocities, float).reshape(t.size, n)
+    qdd = (np.asarray(motion.accelerations, float).reshape(t.size, n) if motion.accelerations is not None else np.gradient(qd, t, axis=0))
+    hold = np.arange(1, int(round(HOLD_S * BOARD_HZ)) + 1) / BOARD_HZ
+    return (np.concatenate([t, t[-1] + hold]), np.vstack([q, np.repeat(q[-1:], hold.size, axis=0)]),
+            np.vstack([qd, np.zeros((hold.size, n))]), np.vstack([qdd, np.zeros((hold.size, n))]), envelope)
+
+
+def _nominal_soak(fitted, rig, shipped: Mapping[str, dict], caps: Mapping[str, dict], *, soak_s: float) -> tuple[Check, dict | None]:
+    import mujoco  # noqa: PLC0415
+    import numpy as np  # noqa: PLC0415
+
+    title = "a burn-in wiggle on the fitted twin: no NaN or instability, settled inside its stop gate, no torque-cap hit"
+    values = {k: float(v) for k, v in fitted.description.values().items() if v is not None}
+    bad = sorted(k for k, v in values.items() if not math.isfinite(v))
+    if bad:
+        return Check("sim_soak", title, False, None, None, "", f"the fitted values {bad} are not finite: nothing to soak"), None
+    try:
+        model = rig.model_at(values)
+    except ValueError as error:
+        return Check("sim_soak", title, False, None, None, "", f"the fitted twin refused to build: {error}"), None
+    try:
+        t, q_ref, qd_ref, qdd_ref, envelope = _nominal_wiggle(rig, soak_s)
+    except Exception as error:  # noqa: BLE001
+        return Check("sim_soak", title, None, None, None, "", f"could not be checked: burn_in_wiggle could not be made ({type(error).__name__}: "
+                     f"{error}; robot_trajectories at {ROBOT_TRAJECTORIES})"), None
+    servos = rig.servos
+    names = [s.instance for s in servos]
+    qadr, dadr = np.array([s.qpos for s in servos]), np.array([s.dof for s in servos])
+    kp = np.array([shipped[i]["kp_nm_rad"] for i in names])
+    kd = np.array([shipped[i]["kd_nm_s_rad"] for i in names])
+    cap = np.array([caps[i].get("cap_nm", np.inf) for i in names])
+    # the feed-forward the twin would ship with (the real arm runs PD + feed-forward): the fitted model's rigid-body torque at the
+    # reference, M(q) qdd + C(q, qd) qd + g(q) (MuJoCo's RNE), plus its viscous damping and kinetic Coulomb (frictionloss) at the reference
+    scratch = mujoco.MjData(model)
+    rne = np.zeros(model.nv)
+    ff = np.empty_like(q_ref)
+    damping, friction = model.dof_damping[dadr], model.dof_frictionloss[dadr]
+    for k in range(t.size):
+        scratch.qpos[:] = model.qpos0
+        scratch.qpos[qadr] = q_ref[k]
+        scratch.qvel[:] = 0.0
+        scratch.qvel[dadr] = qd_ref[k]
+        mujoco.mj_forward(model, scratch)
+        scratch.qacc[:] = 0.0
+        scratch.qacc[dadr] = qdd_ref[k]
+        mujoco.mj_rne(model, scratch, 1, rne)
+        ff[k] = rne[dadr] + damping * qd_ref[k] + friction * np.sign(qd_ref[k])
+    data = mujoco.MjData(model)
+    data.qpos[:] = model.qpos0
+    data.qpos[qadr] = q_ref[0]
+    mujoco.mj_forward(model, data)
+    q, qd, tau = (np.empty_like(q_ref) for _ in range(3))
+    with np.errstate(all="ignore"):
+        for k in range(t.size):
+            q[k], qd[k] = data.qpos[qadr], data.qvel[dadr]
+            tau[k] = kp * (q_ref[k] - q[k]) + kd * (qd_ref[k] - qd[k]) + ff[k]
+            # WHY clipped at the cap: the board saturates its command there; the hit itself fails the soak below
+            data.qfrc_applied[dadr] = np.clip(tau[k], -cap, cap)
+            mujoco.mj_step(model, data, nstep=rig.substeps)
+    finite = bool(np.isfinite(q).all() and np.isfinite(qd).all() and np.isfinite(tau).all())
+    error = q - q_ref
+    tail = slice(-max(1, int(round(SETTLE_S / float(np.median(np.diff(t)))))), None)
+    window = {i: (e["low_rad"] - TRAVEL_MARGIN_RAD, e["high_rad"] + TRAVEL_MARGIN_RAD) for i, e in zip(names, envelope)}
+    per = (lambda a: {i: float(a[j]) for j, i in enumerate(names)}) if finite else (lambda a: None)
+    peak = per(np.abs(tau).max(axis=0)) if finite else None
+    stop = per(np.abs(error[-1])) if finite else None
+    settle = per(np.abs(qd[tail]).max(axis=0)) if finite else None
+    gate = _strictest_stop_gate()
+    value = {"seconds": round(float(t[-1]), 3), "hold_s": HOLD_S, "peak_torque_nm": peak, "stop_error_rad": stop,
+             "max_tracking_error_rad": per(np.abs(error).max(axis=0)) if finite else None,
+             "rms_tracking_error_rad": per(np.sqrt(np.mean(error ** 2, axis=0))) if finite else None, "settle_speed_rad_s": settle,
+             "kp_nm_rad": per(kp), "kd_nm_s_rad": per(kd)}
+    limit = {"stop_error_rad": None if gate is None else gate[0], "settle_speed_rad_s": STILL_RAD_S,
+             "torque_cap_nm": {i: caps[i].get("cap_nm") for i in names}, "travel_rad": {i: list(w) for i, w in window.items()}}
+    problems = []
+    if not finite:
+        problems.append("NaN or infinity in the soak")
+    else:
+        for j, i in enumerate(names):
+            low, high = window[i]
+            if q[:, j].min() < low or q[:, j].max() > high:
+                problems.append(f"{i}: travel guard tripped: left [{math.degrees(low):.1f}°, {math.degrees(high):.1f}°] (the tapes' window "
+                                f"+ {math.degrees(TRAVEL_MARGIN_RAD):.1f}°)")
+            if settle[i] > STILL_RAD_S:
+                problems.append(f"{i}: not settled: still moving {math.degrees(settle[i]):.2f}°/s in the last {SETTLE_S:g} s of the hold "
+                                f"(still is under {math.degrees(STILL_RAD_S):.2f}°/s)")
+            if gate is not None and stop[i] > gate[0]:
+                problems.append(f"{i}: stop error {math.degrees(stop[i]):.3f}° over the stop gate {math.degrees(gate[0]):.3f}°")
+            if math.isfinite(cap[j]) and peak[i] >= cap[j]:
+                problems.append(f"{i}: torque-cap hit: peak commanded {peak[i]:.3f} N·m >= the cap {cap[j]:.3f} N·m")
+    played = (f"burn_in_wiggle (robot_trajectories) per servo, the others held, inside the fit's tapes' envelope, {t[-1] - HOLD_S:.1f} s and "
+              f"a {HOLD_S:g} s hold, on {Path(fitted.description.model).name} at the fitted values (NominalRig.model_at) under the shipped "
+              f"PD at {1.0 / (rig.substeps * model.opt.timestep):.0f} Hz, the fitted model's feed-forward, the command clipped at the cap")
+    if problems:
+        return Check("sim_soak", title, False, value, limit, "", f"{'; '.join(problems)}. Played: {played}"), peak
+    measured = "; ".join(f"{i} tracking max {math.degrees(value['max_tracking_error_rad'][i]):.3f}°, stop {math.degrees(stop[i]):.3f}°, "
+                         f"peak {peak[i]:.3f} N·m" for i in names)
+    if gate is None:
+        return Check("sim_soak", title, None, value, limit, "", f"could not be checked: no deployment card declares a stop gate "
+                     f"({STOP_DIAGNOSTIC}); {measured}. Played: {played}"), peak
+    return Check("sim_soak", title, True, value, limit, "",
+                 f"{measured}; inside the stop gate {math.degrees(gate[0]):.3f}° ({gate[1]}); settled; no guard. Played: {played}"), peak
 
 
 # --- 5. the schedule the fit played (informational) -----------------------------------------------------------------------------------------

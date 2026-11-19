@@ -344,6 +344,45 @@ class NominalRig:
                                  f"hinge, {link:.6g} kg·m², with its centre of mass where gravity_nm puts it")
             model.dof_armature[s.dof] = total - link
 
+    # ---- read-only accessors (sim2real.preflight reads the world through these)
+
+    @property
+    def servos(self) -> tuple[_Servo, ...]:
+        """The joints the world drives, in its order: instance, MJCF joint, addresses, the board loop's kp / kd, the tapes' start pose."""
+        return self._servos
+
+    @property
+    def substeps(self) -> int:
+        """MuJoCo steps per board tick (1 / (BOARD_HZ x the MJCF's timestep))."""
+        return self._substeps
+
+    def gains_source(self, instance: str) -> str:
+        """Where the board loop's kp / kd for `instance` come from: the description's stated kp_nm_rad / kd_nm_s_rad, or the default loop."""
+        params = self.description.instance(instance).parameters
+        stated = [n for n in ("kp_nm_rad", "kd_nm_s_rad") if params.get(n) is not None]
+        if len(stated) == 2:
+            return f"the description's stated {instance}.kp_nm_rad / kd_nm_s_rad (the nominal world's board loop)"
+        default = (f"the nominal world's default board loop ({LOOP_HZ:g} Hz, damping ratio {LOOP_ZETA:g} on the joint's nominal inertia; "
+                   f"sim2real.nominal LOOP_HZ)")
+        return default if not stated else f"{instance}.{stated[0]} as stated, the other from {default}"
+
+    def tape_envelope(self) -> tuple[dict[str, float], ...]:
+        """Per servo (the world's order), the envelope its train tapes span: position low / high (rad), peak |speed| (rad/s) and peak
+        |acceleration| (rad/s², a finite difference at the board rate): the motion the fit identified the twin over."""
+        import numpy as np  # noqa: PLC0415
+
+        lows, highs, speeds, accels = [], [], [], []
+        for run in self._train:
+            t = np.arange(int(round(float(run.spec["seconds"]) * BOARD_HZ))) / BOARD_HZ
+            q, qd = _tape(run.spec, t)
+            lows.append(q.min(axis=0))
+            highs.append(q.max(axis=0))
+            speeds.append(np.abs(qd).max(axis=0))
+            accels.append(np.abs(np.gradient(qd, t, axis=0)).max(axis=0))
+        low, high, speed, accel = (np.min(lows, axis=0), np.max(highs, axis=0), np.max(speeds, axis=0), np.max(accels, axis=0))
+        return tuple({"low_rad": float(low[k]), "high_rad": float(high[k]), "speed_rad_s": float(speed[k]), "accel_rad_s2": float(accel[k])}
+                     for k in range(len(self._servos)))
+
     def truth(self) -> dict[str, float]:
         """The world's hidden truth: the description's nominal value of every identified key."""
         return {k: float(self._nominal[k]) for k in self._identified}
