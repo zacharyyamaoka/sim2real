@@ -32,7 +32,7 @@ import hashlib
 import json
 import os
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -336,11 +336,13 @@ def collect(twin: Any, config: CalibrationConfig | None = None) -> CalibrationDa
 
 
 def fit_rig(twin: Any, *, move_truth: Mapping[str, float] | None = None, noise: Any = None, config: CalibrationConfig | None = None,
-            data: CalibrationData | None = None) -> tuple[Any, dict, CalibrationPlan]:
+            data: CalibrationData | None = None, on_plan: Callable[[CalibrationPlan], None] | None = None,
+            on_step: Callable[[dict], None] | None = None) -> tuple[Any, dict, CalibrationPlan]:
     """RobotTwin.calibrate's planner side on a rig: plan (or take the data's plan), resolve the noise, and run the rig's runner over the
     planned routines in the planned order, measuring or reading the recorded runs (each run id answered by every recording `serves` maps
     to it), held to the schedule (a known-now step plays exactly the runs it shows). Returns (RigCalibration, state, plan); state["data"]
-    is what the fitted twin holds (data_): all of `data` when it was given, else the very recordings the fit played."""
+    is what the fitted twin holds (data_): all of `data` when it was given, else the very recordings the fit played. `on_plan` (gap E) is
+    handed the schedule right before the runner plays it; `on_step` reaches the runner only when given (a stub runner sees no new keyword)."""
     runner = _rig_runner(twin)
     if data is not None:
         check_data(data, twin.description.id, on="sim", move_truth=move_truth)
@@ -351,9 +353,13 @@ def fit_rig(twin: Any, *, move_truth: Mapping[str, float] | None = None, noise: 
         noise = data.noise
     resolved = resolve_noise(runner, noise, config)
     # WHY only the training runs reach the runner: a held-out recording never answers a run a fit asks for
-    served = {} if data is None else {"serves": {k: v for k, v in data.serves.items() if k in data.runs}}
+    extra = {} if data is None else {"serves": {k: v for k, v in data.serves.items() if k in data.runs}}
+    if on_step is not None:
+        extra["on_step"] = on_step
+    if on_plan is not None:
+        on_plan(planned)
     calibration, state = runner.calibrate(model=twin.model, truth=move_truth, noise=resolved, routines=list(planned.routines),
-                                          measured=None if data is None else dict(data.runs), known=config.known, schedule=planned, **served)
+                                          measured=None if data is None else dict(data.runs), known=config.known, schedule=planned, **extra)
     if data is None and "played" in state:
         data = recorded(twin, planned, state["played"], state["noise"].to_dict(), known=config.known, truth_moved=move_truth, config=config,
                         world=state.get("world_values"))

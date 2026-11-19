@@ -14,6 +14,7 @@ Plain constants: nothing is read, created or checked at import.
 | ``SIM2REAL_RACK_DIR`` | $SIM2REAL_RIG_DATA/rack_2026-11-10 | the One Dof Test Rack's session folder |
 | ``SIM2REAL_SCHEDULES`` | $SIM2REAL_RIG_DATA/schedules | the frozen schedules |
 | ``SIM2REAL_REAL_RUNS`` | $SIM2REAL_RIG_DATA/sim2real_real | where ``calibrate(on="real")``'s rack submissions and their sessions go (sim2real.real) |
+| ``SIM2REAL_CALIBRATIONS`` | ~/.local/share/sim2real/calibrations | where a sim calibration's ledger goes when it keeps one (sim2real.calibration.Ledger; a rack calibration's sits beside its submission) |
 | ``CAD2ROBOT_BUNDLE_CACHE`` | ~/.cache/cad2robot-build/bundles | git-archived cad2robot/1 bundles, ``<ref>/<subdir>`` (shared with bam_ws) |
 | ``SIM2REAL_CAD_EXPORTER`` | /home/bam/cad-exporter | the clone the bundles are archived from when the cache lacks one |
 | ``SIM2REAL_ROBOT_MODELS`` / ``_IO_DIAGNOSTICS`` / ``_ROBOTPARTS`` / ``_PIDTUNA`` / ``_DATA_UI`` / ``_DATA_RECORDER`` | /home/bam/<repo> | sibling repos |
@@ -38,6 +39,7 @@ RIG_DATA = env_path("SIM2REAL_RIG_DATA", "/archive/datasets/bam_rig")
 RACK_DIR = env_path("SIM2REAL_RACK_DIR", RIG_DATA / "rack_2026-11-10")
 SCHEDULES = env_path("SIM2REAL_SCHEDULES", RIG_DATA / "schedules")
 REAL_RUNS = env_path("SIM2REAL_REAL_RUNS", RIG_DATA / "sim2real_real")
+CALIBRATIONS = env_path("SIM2REAL_CALIBRATIONS", Path.home() / ".local" / "share" / "sim2real" / "calibrations")
 BUNDLE_CACHE = env_path("CAD2ROBOT_BUNDLE_CACHE", Path.home() / ".cache" / "cad2robot-build" / "bundles")
 CAD_EXPORTER = env_path("SIM2REAL_CAD_EXPORTER", "/home/bam/cad-exporter")
 ROBOT_MODELS = env_path("SIM2REAL_ROBOT_MODELS", "/home/bam/robot_models")

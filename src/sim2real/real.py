@@ -79,6 +79,7 @@ from robot_msgs.space import Basis, Value
 
 from . import paths
 from . import twin as twin_module
+from ._json import _json_default
 from .cards import registry as reg
 from .cards import servo_gates as targets
 from .metrics.gate import at_least, gate
@@ -759,13 +760,20 @@ class RealRunner:
         return SimRunner(self.description, workers=self.workers).schedule()
 
     def calibrate(self, *, model: str, transport: Transport | None, strict: bool = True,
-                  routines: Sequence[Any] | None = None, data: Any = None) -> tuple[Calibration, dict]:
+                  routines: Sequence[Any] | None = None, data: Any = None, on_step: Callable[[dict], None] | None = None,
+                  on_collect: Callable[[dict], None] | None = None, on_submission: Callable[..., None] | None = None,
+                  on_pending: Callable[[Any, BaseException], None] | None = None) -> tuple[Calibration, dict]:
         """`routines`: the planned sequence (sim2real.calibration.plan(twin).routines), else the example's own routines in their declared
         order, as SimRunner.calibrate. The rack plays one submission (the pipeline's run schedule plus its floor repeats); the routines then
         fit the train runs that came back, in order, through the sim's own loop (twin._play_routines), each sealed from the hidden truth.
 
         `data` (rack runs a twin holds, a sim2real.calibration.CalibrationData of backend "real"): nothing is emitted or played and no
-        transport is asked anything; the routines refit the held train runs, and eval judges on the held held-out and floor runs."""
+        transport is asked anything; the routines refit the held train runs, and eval judges on the held held-out and floor runs.
+
+        The hooks (gap E: calibrate(callbacks=)), each called only when given: `on_submission(folder, emitted=)` once emit has written the
+        submission, before the rack plays it (a refit names the submission its runs came from); `on_pending(submission, RunsPending)` when
+        the rack has runs still to play, before it is raised; `on_collect` once with what came back; `on_step` each step as its fit
+        finishes (twin._play_routines)."""
         from .calibration.plan import CalibrationPlanError, order  # noqa: PLC0415
 
         twin_module._refuse_rounds(routines, "the rack plays one submission")
@@ -788,6 +796,8 @@ class RealRunner:
             # WHY no emit, no play, no ingest (gap D; Zach, 2026-11-18: "So on any dataset... now I should be able to just like better fit
             # the models no?"): the runs are already held, so a refit spends no rack time; each keeps the file it was read from (meta files)
             submission, recording, purposes = None, None, {k: data.serves.get(k, k) for k in (*data.runs, *data.held_out)}
+            if on_submission is not None and data.meta.get("submission"):
+                on_submission(data.meta["submission"], emitted=False)
             measured = _ingested(data)
             played = twin_module._played_from_data(data)
             noise = dict(data.noise or {})
@@ -804,15 +814,28 @@ class RealRunner:
             joint = servo.binds.get("joint") or module.JOINT
             submission = emit(self.description.id, plan, transport.folder(self.description.id, plan.digest),
                               can_id=int(servo.binds.get("station")), joint=joint)
-            recording = transport.play(submission)
+            if on_submission is not None:
+                on_submission(submission.folder, emitted=True)
+            try:
+                recording = transport.play(submission)
+            except RunsPending as pending:
+                if on_pending is not None:
+                    on_pending(submission, pending)   # WHY before it is raised: a ledger ends "pending" naming the submission, never "error"
+                raise
             _, _, station = module._rack()
             measured = ingest(recording, submission, station=station, module=module, strict=strict)
             played, purposes = twin_module._played_from(measured), None
             noise = {"transport": transport.name, **dict(recording.noise)}
             moved = dict(recording.meta.get("truth_moved") or {})
             transport_name = transport.name
+        if on_collect is not None:
+            on_collect({"collected": "recorded" if data is not None else "measured", "seconds": time.monotonic() - started,
+                        "runs": {"train": len(measured.train), "held_out": len(measured.held_out), "floor": len(measured.floor)},
+                        "missing": len(measured.missing), "refused": len(measured.refused),
+                        "submission": str(submission.folder) if submission is not None else data.meta.get("submission")})
         handle = PipelineHandle(module, d, self.workers, rung)
-        fit, steps, handed = twin_module._play_routines(routines, played, values, handle, servo=servo.id)
+        hooks = {} if on_step is None else {"on_step": on_step, "collected": "recorded" if data is not None else "measured"}
+        fit, steps, handed = twin_module._play_routines(routines, played, values, handle, servo=servo.id, **hooks)
         # WHY after the seal: the fit never sees it; real hardware has none (rows ungraded); a refit asks no transport, so none either
         ruler = dict(transport.ruler() or {}) if transport is not None else {}
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
@@ -1030,14 +1053,19 @@ def _unfillable(routines: Sequence[Any], values: Mapping[str, float], fills: set
     return out
 
 
-def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: Any = None):
+def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: Any = None, on_plan: Callable[[Any], None] | None = None,
+              on_step: Callable[[dict], None] | None = None, on_collect: Callable[[dict], None] | None = None,
+              on_submission: Callable[..., None] | None = None, on_pending: Callable[[Any, BaseException], None] | None = None):
     """RobotTwin.calibrate(on="real")'s body: a NEW, fitted twin carrying the calibrated values, plan_ (the schedule plan(twin) shows, the
     one that ran), record_ (sim2real.calibration/1, backend "real"), submission_ and runs_ (what the transport sent back and what could not
     be used) and data_ (the runs it holds: held_runs). On a real record, plan.totals are the planner's estimates (the rack's own time is
     submission_.minutes) and plan.level is the planner's noise level, not the hardware's.
 
     `data` (rack runs a twin holds, checked by RobotTwin.calibrate): the refit plays nothing, its plan is the data's, its submission_ is
-    None and its data_ is all of `data`."""
+    None and its data_ is all of `data`.
+
+    The on_* hooks (gap E; RobotTwin.calibrate and main pass them only when there are callbacks, sim2real.calibration.callbacks.Watch):
+    `on_plan(schedule)` before anything is emitted, so a ledger holds the schedule before the rack moves; the rest are RealRunner.calibrate's."""
     from .calibration.config import CalibrationConfig  # noqa: PLC0415
     from .calibration.plan import plan as schedule_of  # noqa: PLC0415
     from .calibration.record import CalibrationRecord  # noqa: PLC0415
@@ -1052,6 +1080,10 @@ def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: A
     priors = twin.runner.description
     runner = RealRunner(priors, workers=twin.runner.workers)
     given = {} if data is None else {"data": data}
+    given.update({name: hook for name, hook in (("on_step", on_step), ("on_collect", on_collect), ("on_submission", on_submission),
+                                                ("on_pending", on_pending)) if hook is not None})
+    if on_plan is not None:
+        on_plan(planned)
     calibration, state = runner.calibrate(model=twin.model, transport=transport, strict=strict, routines=list(planned.routines), **given)
     servo = runner.typed().id
     fitted = RobotTwin.__new__(RobotTwin)
@@ -1122,18 +1154,6 @@ def _utc(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _json_default(value):
-    if isinstance(value, (np.floating, np.integer)):
-        return value.item()
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, (tuple, set)):
-        return list(value)
-    if isinstance(value, Path):
-        return str(value)
-    raise TypeError(f"not JSON serialisable: {type(value).__name__}")
-
-
 # --- one command ------------------------------------------------------------------------------------------------------------------------
 
 
@@ -1141,7 +1161,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """python -m sim2real.real: the real calibration of one station as one command. A dry run unless --execute (the rack transport writes
     the submission and its dry run, prints the session command and exits 0); once the sessions' runs are in --out it fits them, evaluates
     the fitted twin and writes calibration.json (sim2real.calibration/1 with eval's gates) and eval.json beside the submission.
-    --transport twin plays the same command path on the rack twin at the sealed hidden truth (no hardware anywhere)."""
+    --transport twin plays the same command path on the rack twin at the sealed hidden truth (no hardware anywhere). Its ledger follows
+    SIM2REAL_TRACK as calibrate() does (unset: a ledger beside the submission, <out>/calibrate/<stamp>/; off: none; wandb: and its W&B copy)."""
     parser = argparse.ArgumentParser(prog="python -m sim2real.real", description=main.__doc__)
     parser.add_argument("--twin", default="pendulum_can11", choices=("pendulum_can11",), help="the station's twin (sim2real.examples)")
     parser.add_argument("--transport", default="rack", choices=("rack", "twin"))
@@ -1168,14 +1189,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error("--move-truth is the twin transport's (real hardware has no truth to move)")
         transport = RackTransport(out, execute=args.execute, adapter=args.adapter)
     twin = getattr(sim2real.examples, args.twin)(workers=args.workers)
+    from .calibration.callbacks import Watch, resolve_callbacks  # noqa: PLC0415
+
+    # WHY resolved as RobotTwin.calibrate resolves them, and the hooks passed only when there are callbacks: one rule for both doors
+    callbacks = resolve_callbacks(None, backend="real")
+    watch = Watch(callbacks, twin, "real") if callbacks else None
     try:
-        fitted = calibrate(twin, transport, strict=not args.partial)
+        try:
+            fitted = calibrate(twin, transport, strict=not args.partial, **(watch.real_hooks() if watch is not None else {}))
+        except BaseException as caught:
+            if watch is not None:
+                watch.error(caught)   # a RunsPending already ended it "pending"
+            raise
     except RunsPending as pending:
         print(pending, flush=True)
         return 0
     except RackRefused as refused:
         print(refused, flush=True)
         return 2
+    if watch is not None:
+        watch.end(fitted)   # and fitted.callbacks_, so the eval below lands in the same ledger
     print(fitted.runs_.summary(), flush=True)
     print(fitted.calibration_.summary(), flush=True)
     report = fitted.eval()

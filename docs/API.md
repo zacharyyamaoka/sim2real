@@ -104,7 +104,7 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 - **Totals:** `totals["wall_time_s"]` counts a run its steps share once (each step's own time plus each run's known length once) and
   `totals["run_time_s"]` is that run time; the budget compares against it. See docs/CALIBRATE.md, "The schedule".
 
-### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None, config=None, data=None, transport=None) -> RobotTwin`
+### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None, config=None, data=None, transport=None, callbacks=None) -> RobotTwin`
 
 - **What it does:** returns a NEW, fitted twin. It plays the routines on the simulator against a hidden truth that the fit never sees, in the order their declarations give (`sim2real.calibration.plan`; docs/CALIBRATE.md).
 - **The learned values end in `_`** (scikit-learn's convention): `values_`, `intervals_`, `rungs_` and `calibration_`. `fitted.parameters` carries them as Values.
@@ -116,9 +116,10 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 - **`move_truth={key: value}`:** moves hidden values for one run while the ruler stays put. It's the mutation test: a moved truth must turn red.
 - **`noise`:** rigs only. `None` is the rig's measured 1×, a number scales every term, or pass a `sim2real.rig.NoiseModel`.
 - **`on="real", transport=...`** (the pendulum tracer, `sim2real.real`): plans the same schedule plus its five floor repeats, writes them as a rack submission, lets the transport play it, reads the runs back through `tools/run_files.py` and fits them through the routines `plan(twin)` shows, in the same loop the sim plays, each sealed (a planned run the submission cannot fill is refused before emit). `fitted.plan_` is that plan and the record's plan source is `"planner"`. `RackTransport(out)` is a dry run that raises `RunsPending` with the session command; `RackTransport(out, execute=True, adapter=...)` starts the rack's session runner only when every refusal check passes; `TwinTransport()` plays it on the rack twin at the sealed hidden truth. The record is `backend: "real"`; on hardware its rows are ungraded and eval's gates (T1 floor, T2 twinned, held-out fidelity) judge the twin. See docs/CALIBRATE.md, "on='real'".
-- **Never:** writes anything on `on="sim"`. On `on="real"` it writes only the submission its transport is given a folder for, and it never touches hardware itself: a transport plays (`RackTransport` hands the plan to the rack's own session runner, and only with `execute=True`).
+- **`callbacks=[...]`** (gap E, since 2026-11-18; Keras's `fit(callbacks=)`): told the schedule, each step as its fit finishes, the fitted twin and, through `fitted.callbacks_`, `evaluate()`'s gates. `sim2real.calibration.Ledger()` keeps a local ledger (events.jsonl, schedule.json, calibration.json, eval.json; one folder per calibration); `sim2real.tracking.calibrate_wandb.WandbLogger(ledger)` copies it to W&B, live. `None` reads `SIM2REAL_TRACK` (`off` | `ledger` | `wandb`; unset: nothing on the sim, a ledger beside the submission on the rack); `callbacks=[]` wins over everything. A callback never changes or stops the fit: one that raises is detached with a `RuntimeWarning`. See docs/CALIBRATE.md, "Watching a calibration".
+- **Never:** writes anything on `on="sim"` unless given a callback (or `SIM2REAL_TRACK=ledger|wandb`). On `on="real"` it writes the submission its transport is given a folder for and, by default, the calibration's ledger beside it (`<submission>/calibrate/<stamp>/`; `SIM2REAL_TRACK=off` writes none), and it never touches hardware itself: a transport plays (`RackTransport` hands the plan to the rack's own session runner, and only with `execute=True`).
 - **Raises:**
-  - `ValueError` for an unknown `on` or for `truth` other than `"sealed"`;
+  - `ValueError` for an unknown `on` or for `truth` other than `"sealed"`, and for a `SIM2REAL_TRACK` other than `off`, `ledger` or `wandb` (it names the three); `TypeError` for `callbacks` that is not a list or tuple;
   - `TypeError` for `on="real"` without a transport (it names `RackTransport` and `TwinTransport`); `RunsPending`, `RackRefused` and `IngestError` from `sim2real.real` on the rack path;
   - `NotImplementedError` for `noise=` on the tracer;
   - `KeyError` for a `move_truth` key the world doesn't have;
@@ -141,11 +142,37 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 ### `fitted.evaluate() -> TwinReport | RigReport` (alias `fitted.eval()`)
 
 - **What it does:** scores the fitted twin on held-out runs only and returns error ÷ floor and the gates.
-- **Never:** writes anything or touches hardware.
+- **Reports** to the callbacks its calibration kept (`fitted.callbacks_`, `()` by default): a `Ledger` appends an `evaluate` line and writes eval.json in that calibration's folder. A twin built without `callbacks_` reports to none.
+- **Never:** touches hardware, or writes anything but its callbacks' ledger.
 - **Raises:**
   - `RuntimeError` on an unfitted twin;
   - `ValueError` when a run it would score was used for training. It refuses rather than filtering it out.
 - **Renamed:** this was `eval_twin()` until 2026-11-11, and `eval()` until 2026-11-17 (Zach's sketch `twin.evaluate()`; Keras' `model.evaluate()`; PyTorch's `.eval()` means inference mode). `eval()` stays as its alias.
+
+### `sim2real.calibration.Ledger(root=None, *, beside_submission=False)`
+
+- **What it is:** a calibration's local ledger, a callback (gap E). Each calibration it hears opens a new folder under `root`
+  (`<UTC stamp>-<twin id>`; `root` None: `$SIM2REAL_CALIBRATIONS`, else `~/.local/share/sim2real/calibrations`, read when the calibration
+  begins): `events.jsonl` (every event, appended and fsynced as it happens), `schedule.json`, `calibration.json` (the record, rewritten
+  with eval's gates) and `eval.json`. SI throughout. `beside_submission` (a rack calibration's default) opens it under
+  `<submission>/calibrate/` once emit has written the submission. `ledger.folder` is the latest calibration's folder,
+  `ledger.folder_of(calibration_id)` any one's.
+- **Events:** `sim2real.calibration.EVENTS_SCHEMA` (`sim2real.calibration-events/1`), kinds `schedule`, `collect`, `step`, `done`,
+  `evaluate`, `error`, `pending`, `callback_error`. See docs/CALIBRATE.md, "Watching a calibration".
+- **`sim2real.calibration.Callback`:** the hooks as no-ops (subclassing is optional: hooks are looked up by name).
+- **`sim2real.calibration.resolve_callbacks(callbacks, *, backend="sim")`:** what `calibrate()` reports to: a list as given, else
+  `SIM2REAL_TRACK`'s. Writes nothing and never imports wandb.
+
+### `sim2real.tracking.calibrate_wandb.WandbLogger(ledger, *, project=None, entity=..., wandb_dir=None)`
+
+- **What it is:** the live W&B copy of a `Ledger` (gap E): one run per calibration (`job_type` `calibrate`), the rows `records(folder)`
+  rebuilds from the ledger alone, angles in degrees. It requires the ledger it copies. `project` None: the twin's deployment's
+  (app/registry.json) or rig's (`tracking.rigs.RIGS`) project; a twin with neither logs nowhere. A W&B that will not start costs one
+  warning (the calibration detaches it) and no retry.
+- **Also there:** `records(folder)` (the run, rebuilt from the files), `row(event)` (one history row, pure), `project_for(twin_id)`,
+  `follow(folder, *, project=None, idle_s=600, poll_s=2)` and the CLI `python -m sim2real.tracking.calibrate_wandb --follow FOLDER |
+  --sync FOLDER... | --all [--dry-run] | --show FOLDER`.
+- **Needs:** the `tracking` extra (wandb), imported only when it talks to W&B.
 
 ### `sim2real.calibration.FeedforwardBench(*, space, poses, grid, drives, gravity_keys, regressor, first=None, inertial=None, prior_sigma=None, dwell_s=0.3)`
 

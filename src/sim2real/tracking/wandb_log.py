@@ -17,7 +17,8 @@ run also carries the whole tree, every node's five questions and the curriculum 
 Nothing is recomputed: every number is the result tree's own (verdicts(), tables(), Node fields). wandb and wandb-workspaces are imported
 only inside the functions that talk to W&B (the `tracking` extra), so sim2real never depends on them.
 
-Layer: like result.py, right of every folder (tests/test_layers.py); nothing in sim2real imports this module.
+Layer: like result.py, right of every folder (tests/test_layers.py); nothing in sim2real imports this module at load (a calibration's
+ledger reads code_version lazily, and calibrate_wandb.py, the ledger's W&B copy, reuses run_id, push and _table_rows; gap E, 2026-11-18).
 """
 
 from __future__ import annotations

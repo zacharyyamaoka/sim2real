@@ -279,7 +279,9 @@ def run_cell(cell: Cell, *, workers: int = 6, out: Path | None = None) -> dict:
     try:
         with patch:
             t0 = time.monotonic()
-            fitted = twin.calibrate(on="sim", truth="sealed", noise=noise)
+            # WHY callbacks=[] (gap E): a stress ladder calls calibrate() per cell, and SIM2REAL_TRACK=ledger|wandb in the shell must not
+            # write a ledger (or a W&B run) per cell
+            fitted = twin.calibrate(on="sim", truth="sealed", noise=noise, callbacks=[])
             t1 = time.monotonic()
             report = (fitted.eval if hasattr(fitted, "eval") else fitted.eval_twin)()
             t2 = time.monotonic()

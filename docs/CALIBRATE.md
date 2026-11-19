@@ -266,6 +266,71 @@ better = fitted.calibrate(data=grown)              # fits every recording of eve
 - **Not built yet** (each its own leg, red tests first): saving and loading a dataset (by reference, pointing at the run files rather
   than copying them), turning the 1-DOF campaign rounds into a dataset by query, a keep-if-better rule for lifelong refits.
 
+## Watching a calibration: callbacks, the ledger, W&B
+
+`calibrate(callbacks=[...])` reports the run as it goes (gap E; Zach, Daily Note 2026-11-17: "As that calibration is running you will see
+like the results in weights and biases, or etc. you can visually see once it has been calibrated and how it improves"). A local ledger
+comes first; W&B is only ever a copy of it (house rule: W&B is a copy of a local ledger; "W&B is just a visualizer for the dat").
+
+```python
+from sim2real.calibration import Ledger
+from sim2real.tracking.calibrate_wandb import WandbLogger
+
+ledger = Ledger()                                              # one folder per calibration under $SIM2REAL_CALIBRATIONS
+fitted = twin.calibrate(on="sim", callbacks=[ledger])           # ledger.folder fills line by line while it runs
+fitted.evaluate()                                               # its gates land in the same folder (fitted.callbacks_)
+fitted = twin.calibrate(callbacks=[ledger, WandbLogger(ledger)])   # plus the live W&B copy (an unpowered host or a cloud VM)
+```
+
+- **The hooks** (duck-typed: a callback implements only the ones it wants; `sim2real.calibration.Callback` lists them as no-ops):
+  `on_calibrate_begin(event, *, schedule, twin)`, `on_collect_end(event)`, `on_step_end(event)`, `on_calibrate_end(event, *, fitted)`,
+  `on_calibrate_error(event)` (kind `error` or `pending`), `on_evaluate_end(event, *, report, fitted)`, `on_callback_error(event)`, and
+  `on_submission(event)` (the rack's submission folder, before it plays; never a ledger line).
+- **The events** (`sim2real.calibration-events/1`; every one carries `schema`, `kind`, `calibration` (its id), `twin`, `utc` and `t`,
+  seconds since the calibration began):
+  - `schedule`: the schedule about to run (`schedule.to_dict()`), the backend, the model, the config and the sim2real commit (`code`);
+  - `collect` (the tracer and the rack): what was played up front, before the first fit (the tracer's world measures every run at once;
+    the rack's ingest says what came back, missing and refused). `seconds` on the tracer is labelled "world measure": it includes the
+    held-out and repeat draws;
+  - `step`, one per planned routine, sent as its fit finishes (`live: true`): `index` (its place in the schedule), `routine`, `runs`
+    (the run ids it read), `played` (a rig: the ones it measured or read fresh; a run two steps share is played once, by the first),
+    `collected` (`measured`, or `recorded` on `calibrate(data=)`), `collect_s` and `fit_s` (unrounded), `seconds`, `found`
+    {key: {value, ci95, method, unit}} in SI, and `round` (a routine with rounds also carries `rounds`, `converged`, `stopped`);
+  - `done`: `passed`, `failing`, `seconds` and the parameter rows (key, unit, nominal, true, recovered, ci95, error, tolerance, pass);
+  - `evaluate`: `passed`, the gates (id, title, value, rule, passed, source) and `compare`, before -> after per metric;
+  - `error` (the calibration raised), `pending` (the rack has runs still to play; it names the submission), `callback_error` (a hook
+    raised: the callback is detached with one `RuntimeWarning` and the calibration goes on unchanged).
+- **The ledger's folder** (`<UTC stamp>-<twin id>`): `events.jsonl` (each event appended, flushed and fsynced as it happens),
+  `schedule.json`, `calibration.json` (the `sim2real.calibration/1` record, rewritten with eval's gates) and `eval.json`. Values stay SI.
+  One `Ledger` used for several calibrations opens a folder each, and each event lands in its own calibration's folder.
+- **Defaults.** A sim calibration writes nothing unless asked (sweeps call it hundreds of times). A rack calibration (`on="real"`, and
+  `python -m sim2real.real`) keeps a ledger beside its submission, `<submission>/calibrate/<stamp>/`: the schedule is on disk before
+  the rack plays, each step lands as its fit finishes, and runs still to be played end it `pending`. `SIM2REAL_TRACK` overrides both:
+  `off` (no ledger), `ledger`, `wandb` (a ledger and its live W&B copy); any other value is refused by name. `callbacks=[]` wins over
+  everything. `SIM2REAL_CALIBRATIONS` is where a sim ledger goes (default `~/.local/share/sim2real/calibrations`). The test suite runs
+  with `SIM2REAL_TRACK=off` (tests/conftest.py).
+- **Observers never guard.** A callback that raises is detached (one warning, one `callback_error` line) and never changes the fit; a
+  calibration that fails still raises, after its ledger ends `error`; a fitted twin built without callbacks still evaluates.
+- **The W&B copy** (`sim2real.tracking.calibrate_wandb`): one run per calibration, id `run_id("calibrate", <calibration id>)`,
+  `job_type` `calibrate`, group `calibrate · <twin>`, in the twin's deployment's project (app/registry.json: CAN 11 goes to
+  "Sim2Real · 1-DOF rack") or its rig's (`sim2real.tracking.rigs.RIGS`); a twin with neither logs nowhere unless a project is given.
+  History rows: the schedule, one per step (`found/<instance>/<name>` with `/ci95_lo` and `/ci95_hi`), the outcome
+  (`calibration/passed`, `recovery/<instance>/<name>/{pass,error}`), the evaluation (`eval/passed`, `gate/<id>/passed` beside
+  `gate/<id>/value`, `eval/<metric>/{before,after,factor}`). Angles are shown in degrees there and only there (Zach, 2026-11-11): a key
+  in rad is logged as `<name>_deg` (`_rad` becomes `_deg`, `_rad_s` becomes `_deg_s`). A W&B that will not start costs one warning
+  and no retry; the ledger stays whole.
+- **On the powered rig's host** keep wandb-core out of the calibration: run with the default ledger (or `SIM2REAL_TRACK=ledger`) and follow
+  it from a capped, low-priority process, or sync it afterwards:
+
+```bash
+systemd-run --user --scope -p MemoryMax=1G nice -n 19 taskset -c 2-5,16,17 python -m sim2real.tracking.calibrate_wandb --follow FOLDER
+python -m sim2real.tracking.calibrate_wandb --sync FOLDER     # or --all; --dry-run says what it would push
+```
+
+  The live copy, the follower and `--sync` log exactly the rows `records(folder)` rebuilds from the files alone. `--sync` writes a run
+  W&B lacks; a run W&B holds short of its ledger (a live copy that died) is replayed whole under a fresh id and the partial run marked
+  superseded, never deleted. Decision record: docs/decision-calibrate-wandb-2026-11-18.md.
+
 ## The record: `sim2real.calibration/1`
 
 `fitted.record_.to_dict()`. The frozen example is `tests/fixtures/calibration_record_v1.json`: the UR wrist's real run in this shape.

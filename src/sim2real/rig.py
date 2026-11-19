@@ -577,6 +577,23 @@ def _held_to_schedule(routine_id: str, runs: Sequence[Run], step: Any, served: d
                                        "run id is one command")
 
 
+def _raw_step(step: Mapping[str, Any], timing: Mapping[str, Any], params: Mapping[str, Parameter], collected: str) -> dict:
+    """What RigRunner.calibrate hands on_step for one routine (gap E): its step row's names, plus the split of its time, the runs it read
+    and played, and each found value with its interval, method and the unit its Parameter states (SI, never converted)."""
+    found = {}
+    for key, estimate in timing["found"].items():
+        ci = estimate.ci95
+        found[key] = {"value": None if estimate.value is None else float(estimate.value),
+                      "ci95": None if not ci else [float(ci[0]), float(ci[1])], "method": estimate.method,
+                      "unit": params[key].unit if key in params else None}
+    raw = {"routine": step["routine"], "identifies": list(step["identifies"]), "runs": list(timing["runs"]), "played": list(timing["played"]),
+           "collected": collected, "collect_s": timing["collect_s"], "fit_s": timing["fit_s"], "seconds": timing["seconds"], "found": found,
+           "round": step["rounds"][-1]["k"] if step.get("rounds") else 0}
+    if step.get("converged") is not None:
+        raw.update(rounds=[dict(r) for r in step["rounds"]], converged=step["converged"], stopped=step["stopped"])
+    return raw
+
+
 # --- the runner ----------------------------------------------------------------------------------------------------------------------------
 
 
@@ -646,7 +663,8 @@ class RigRunner:
 
     def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None, noise=None, routines: Sequence[Routine] | None = None,
                   measured: Mapping[str, Any] | None = None, known: Mapping[str, float] | None = None,
-                  schedule: Any = None, serves: Mapping[str, str] | None = None) -> tuple[RigCalibration, dict]:
+                  schedule: Any = None, serves: Mapping[str, str] | None = None,
+                  on_step: Callable[[dict], None] | None = None) -> tuple[RigCalibration, dict]:
         """`routines`: the planned sequence (sim2real.calibration.plan: ordered, substituted, option copies), else the rig's own.
         `measured`: pre-collected runs {recording key: measurement} (sim2real.calibration.collect, a fitted twin's data_); a planned run it
         holds nothing for is refused and the rig's measure is never called. `serves` {recording key: the run id it answers}: a key with no
@@ -654,7 +672,10 @@ class RigRunner:
         recorded on two days is two recordings). `known`: {key: value} fixed for every routine (CalibrationConfig.known). `schedule`: the
         CalibrationSchedule the routines were planned in; a step it shows known now must play exactly the runs it shows, or it is refused
         by name before anything of it is played. The state carries `played` ({recording key: recording}, every one the fits read, in play
-        order) and `serves`."""
+        order) and `serves`. `on_step` (gap E: calibrate(callbacks=)) is handed each routine's step as it finishes, before the next one
+        runs: {routine, identifies, runs (the distinct run ids it read, every round), played (the ones it measured or read fresh),
+        collected ("measured" | "recorded"), collect_s, fit_s, seconds, found {key: {value, ci95, method, unit}} (the last fit, the unit
+        the rig's Parameter states), round (its last round's k), and a routine with rounds' rounds / converged / stopped}."""
         from robot_msgs.space import Basis, Value  # noqa: PLC0415
 
         started = time.monotonic()
@@ -706,11 +727,14 @@ class RigRunner:
                 played.update({run.id: {run.id: out[run.id]} for run in fresh})
 
         for routine in sequence:
+            timing: dict | None = {} if on_step is not None else None
             step = self._play_routine(routine, values, play=play, played=played, served=served, shown=shown.get(routine.id), params=params,
-                                      known=known, estimates=estimates, adjusted=adjusted, hidden=hidden)
+                                      known=known, estimates=estimates, adjusted=adjusted, hidden=hidden, timing=timing)
             trained.update(run_id for done in step["rounds"] for run_id in done["runs"])
             trained.update(key for done in step["rounds"] for run_id in done["runs"] for key in played[run_id])
             steps.append(step)
+            if on_step is not None:
+                on_step(_raw_step(step, timing, params, "recorded" if recorded is not None else "measured"))
         rows = self._rows(params, nominal, ruled, estimates)
         ran = {r.id for r in sequence}
         for row in rows:
@@ -738,14 +762,16 @@ class RigRunner:
 
     def _play_routine(self, routine: Routine, values: dict[str, float], *, play: Callable[[Routine, Sequence[Run]], None],
                       played: Mapping[str, Mapping[str, Any]], served: dict[str, tuple[str, Run]], shown: Any, params: Mapping[str, Parameter],
-                      known: Mapping[str, float], estimates: dict[str, Estimate], adjusted: dict[str, Estimate], hidden: Any) -> dict:
+                      known: Mapping[str, float], estimates: dict[str, Estimate], adjusted: dict[str, Estimate], hidden: Any,
+                      timing: dict | None = None) -> dict:
         """One routine, round by round: collect (`play` puts the runs no routine has played yet into `played`, {run id: {recording key:
         recording}}), fit SEALED on every recording of every run it has asked for so far (keyed by recording key: a run recorded in two
         sessions is two recordings), and, for a routine that comes back for more (next_runs), stop on its own converged(), else when every 95 %
         interval is inside its tolerance, else at max_rounds, else when next_runs() asks for nothing; runs(), next_runs() and converged()
         run outside the seal. What it finds reaches `values` (and `estimates` / `adjusted`) after each round, so the next round's runs are
         made after the last fit. Returns its step row: routine, identifies, runs (distinct, every round), seconds, found (the last fit),
-        rounds [{k, runs, found}], converged (None: it plays one round) and stopped.
+        rounds [{k, runs, found}], converged (None: it plays one round) and stopped. `timing` (a dict, or None) is filled with what a step
+        event adds (gap E): collect_s and fit_s summed over its rounds, the run ids it read and played, the last fit's Estimates, seconds.
 
         WHY rounds inside one routine, refitted on every run so far (Zach, Daily Note 2026-11-18: "a routine should include datacollection
         and fitting steps, and then iterating things that all goes into it"): each round adds data and the fit always sees all of it, so
@@ -757,18 +783,25 @@ class RigRunner:
         so_far: dict[str, Run] = {}
         history: list[Round] = []
         found: dict[str, Estimate] = {}
+        collect_s = fit_s = 0.0
+        fresh_ids: list[str] = []
         while True:
             k = len(history)
             # WHY played once: a run two routines both read (the dynamics fit's chirps are the delay scan's) is one physical run, its data
             # shared; a later round reads every earlier round's runs from `played`, never measuring them again
             fresh = [run for run in runs if run.id not in played]
+            mark = time.monotonic()
             play(routine, fresh)
+            collect_s += time.monotonic() - mark
+            fresh_ids += [run.id for run in fresh]
             so_far.update((run.id, run) for run in runs)
             measured = {key: recording for run_id in so_far for key, recording in played[run_id].items()}
             label = routine.id if cap is None else f"{routine.id} round {k}"
             _say(f"{label}: {len(runs)} runs ({len(fresh)} played) in {time.monotonic() - began:.0f} s; fitting on {len(measured)}")
+            mark = time.monotonic()
             with hidden.sealed():
                 found = dict(routine.fit(measured, dict(values), TwinHandle(self.rig, self.workers)))
+            fit_s += time.monotonic() - mark
             adjusts = tuple(getattr(routine, "adjusts", ()))
             extra = sorted(set(found) - set(routine.identifies) - set(adjusts))
             if extra:
@@ -809,6 +842,9 @@ class RigRunner:
                                            "runs with new ids, or () to stop")
             _held_to_schedule(routine.id, runs, None, served)   # one run id is one command, across rounds too
         _say(f"{routine.id}: done in {time.monotonic() - began:.0f} s" + ("" if cap is None else f", {len(history)} rounds ({stopped})"))
+        if timing is not None:
+            timing.update(collect_s=collect_s, fit_s=fit_s, runs=list(so_far), played=fresh_ids, found=dict(found),
+                          seconds=time.monotonic() - began)
         return {"routine": routine.id, "identifies": list(routine.identifies), "runs": len(so_far), "seconds": round(time.monotonic() - began, 1),
                 "found": _floats(found), "rounds": [{"k": r.k, "runs": [run.id for run in r.runs], "found": _floats(r.found)} for r in history],
                 "converged": converged, "stopped": stopped}
