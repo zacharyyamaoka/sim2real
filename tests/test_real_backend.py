@@ -105,6 +105,10 @@ def played(submission, tmp_path_factory):
     return SimpleNamespace(submission=small, recording=transport.play(small), keep=keep, transport=transport)
 
 
+def recovered_values(fitted) -> dict:
+    return {k: float(v) for k, v in fitted.values_.items() if v is not None}
+
+
 # --- the front door's edges ------------------------------------------------------------------------------------------------------------
 
 
@@ -118,9 +122,13 @@ def test_on_real_refuses_what_it_cannot_honour(robot, tmp_path):
     transport = real.TwinTransport(root=tmp_path)
     with pytest.raises(ValueError, match="TwinTransport\\(move_truth"):
         robot.calibrate(on="real", transport=transport, move_truth=MOVED)
-    for steer in ({"noise": 1.0}, {"config": object()}, {"data": object()}):
+    # R2, a ruler change agreed with the One-click session (2026-11-18): on="real" still refuses what it cannot honour (noise= and
+    # config= are the seam's), but data= now means "refit the rack runs this twin holds" (gap D), so only a non-CalibrationData is refused.
+    for steer in ({"noise": 1.0}, {"config": object()}):
         with pytest.raises(NotImplementedError, match="one-click seam"):
             robot.calibrate(on="real", transport=transport, **steer)
+    with pytest.raises(TypeError, match="CalibrationData"):
+        robot.calibrate(on="real", transport=transport, data=object())
     with pytest.raises(ValueError, match="real backend"):
         robot.calibrate(on="sim", transport=transport)
     assert list(tmp_path.iterdir()) == [], "a refused call writes nothing"
@@ -527,6 +535,22 @@ def test_on_real_over_the_twin_recovers_the_sealed_truth_and_returns_a_calibrati
     print(f"twinned (T2, encoder) on the twin's world: {gates['twinned'].value} ({'pass' if gates['twinned'].passed else 'FAIL'})", flush=True)
     with_eval = fitted.record_.with_evaluation(report.to_dict()).to_dict()
     assert {g["id"] for g in with_eval["evaluation"]["gates"]} == {"floor", "twinned", "held_out_fidelity"}
+    # R2 (iii), agreed with the One-click session: data=<CalibrationData> refits the held rack runs and plays NOTHING - no emit, no
+    # transport, no new files - and the refit says it came from the data it was handed (the same sessions), not from a fresh rack run.
+    before = sorted(str(p.relative_to(tmp_path)) for p in tmp_path.rglob("*"))
+
+    def _reached_the_rack(*_args, **_kwargs):
+        raise AssertionError("a refit from held rack runs reached the rack")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(real, "emit", _reached_the_rack)
+        patch.setattr(real.TwinTransport, "play", _reached_the_rack)
+        patch.setattr(real.RackTransport, "play", _reached_the_rack)
+        refit = twin.calibrate(on="real", data=fitted.data_)
+    assert sorted(str(p.relative_to(tmp_path)) for p in tmp_path.rglob("*")) == before, "a refit writes no submission"
+    assert refit.data_.sessions == fitted.data_.sessions, "the refit holds the runs it was handed, no new session"
+    assert refit.record_.to_dict()["backend"] == "real"
+    assert recovered_values(refit) == pytest.approx(recovered_values(fitted))
 
 
 @pytest.mark.skipif(not SLOW, reason="the whole CAN 11 schedule on the twin takes tens of minutes: SIM2REAL_SLOW=1")
