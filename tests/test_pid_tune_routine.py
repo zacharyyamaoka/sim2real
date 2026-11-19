@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import builtins
 import hashlib
+import importlib
 import importlib.util
 import json
 import math
@@ -139,7 +140,9 @@ def test_pid_tuna_is_a_tune_routine_that_configures_the_feedback_gains_and_ident
     homes = {h.path for h in r.code}
     assert "src/pidtuna/tune.py" in homes and "src/sim2real/calibration/pid_tune.py" in homes, homes
     assert f"routine_ladders/{ROUTINE}.json" in r.oracle_note, r.oracle_note
-    assert r.wall_time.value == 0 and "fitted twin" in r.wall_time.source, ("what runs today: the SIM tier, no robot time", r.wall_time)
+    # WHY > 0 (ruler owner, 2026-11-19): type_cards/tests/test_routines.py holds every routine's wall time positive; the SIM tier's
+    # time is compute on the fitted twin, and "no robot time" is pinned by runs() being empty (below), not by a zero
+    assert r.wall_time.value > 0 and "fitted twin" in r.wall_time.source, ("the SIM tier: compute on the fitted twin", r.wall_time)
     assert ROUTINE in {x.id for x in reg.routines_tuning("servo")}
     assert reg.routine("kinematics.ik_fine_tune").kind == "use", "only PID tuning is re-kinded"
 
@@ -243,7 +246,7 @@ def test_the_wrapper_declares_a_tune_that_plays_no_robot_time():
     assert {f"can11.{s}" for s in GAINS} <= set(d.configures), d.configures
     assert {f"can11.{s}" for s in REQUIRES} <= set(d.requires) or REQUIRES <= set(d.requires), d.requires
     assert tuple(routine.runs({})) == (), "the SIM tier tunes on the fitted plant: no run on the robot"
-    assert d.wall_time_s == 0.0 and d.operator_time_s == 0.0, "no robot time, no hands"
+    assert d.wall_time_s > 0.0 and d.operator_time_s == 0.0, "compute on the fitted twin (runs() is empty: no robot time), no hands"
 
 
 def test_importing_the_wrapper_imports_no_pidtuna_and_pidtuna_imports_no_sim2real():
@@ -554,7 +557,7 @@ def test_the_pendulums_one_click_schedule_tunes_pid_after_the_dynamics_fit(pendu
     assert step.kind == "tune" and "servo.dynamics_regression" in step.after, step
     assert schedule.ids.index(ROUTINE) > schedule.ids.index("servo.dynamics_regression")
     assert step.source == "rig" and callable(getattr(step.routine_object, "fit", None)), "a step that can run, not a catalog stand-in"
-    assert step.wall_time_s == 0.0, "tunes on the fitted twin: no robot time"
+    assert step.wall_time_s > 0.0 and tuple(step.routine_object.runs({})) == (), "tunes on the fitted twin: compute time, no robot run"
     assert {"can11.kp_nm_rad", "can11.kd_nm_s_rad"} <= set(step.identifies)
     without = cal.plan(pendulum, cal.CalibrationConfig(exclude=(ROUTINE,)))
     assert ROUTINE not in without.ids and any(r == ROUTINE and "excluded" in w for r, w in without.dropped)
@@ -732,12 +735,15 @@ def test_grade_pid_tuna_on_a_hidden_can11_against_the_oracle(bench, monkeypatch)
 
     from sim2real.calibration.pid_tune import PidTune  # noqa: PLC0415
 
-    import pidtuna.tune as backend  # noqa: PLC0415  (on the path: the bench fixture put it there)
+    # WHY by module name (ruler owner, 2026-11-19): pidtuna v2's package exports the tune FUNCTION as pidtuna.tune, so the attribute
+    # path gets the function, not the module whose tune() the watch below replaces (the bench fixture put pidtuna on the path)
+    backend = importlib.import_module("pidtuna.tune")
 
-    delivered, opened = [], []
+    delivered, opened, held = [], [], []
     original_tune, original_pool = backend.tune, bench.pt.servo_sim._pool
 
     def watched_tune(*args, **kwargs):
+        held.append(kwargs.get("feedforward"))  # the feed-forward PID tuna held fixed: the ruler grades with it, never the wrapper's word
         result = original_tune(*args, **kwargs)
         delivered.append(result)
         return result
@@ -772,7 +778,11 @@ def test_grade_pid_tuna_on_a_hidden_can11_against_the_oracle(bench, monkeypatch)
             guard.setattr(Path, "read_text", guarded_read)
             found = PidTune(instance="can11", servo=bench.servo).fit({}, dict(handed), SimpleNamespace(workers=WORKERS))
         assert len(delivered) == ran + 1, "the backend is PID tuna: pidtuna.tune.tune ran once per fit"
-        tuned = delivered[-1].tuned
+        # WHY rebuilt here (ruler owner, 2026-11-19): pidtuna v2 returns Tuning (gains per joint), not v1's TuneResult.tuned; the graded
+        # controller is the gains PID tuna delivered plus the feed-forward it was handed, both read off the backend call itself
+        (gains,) = delivered[-1].gains.values()
+        assert isinstance(held[-1], bench.pt.types.Feedforward), ("the tune held a fitted feed-forward fixed", held[-1])
+        tuned = bench.pt.types.Controller(gains, held[-1], label="tuned")
         assert set(found) <= declared, sorted(set(found) - declared)
         assert tuned.gains.ilimit == 0.0, "PD + feed-forward only: PID tuna was handed the board with its integrator off"
         assert found["can11.kp_nm_rad"].value == pytest.approx(tuned.gains.kp, rel=1e-9), "the gains written are the gains PID tuna delivered"
