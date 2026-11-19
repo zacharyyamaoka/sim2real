@@ -221,6 +221,8 @@ class Calibration:
 
     def summary(self) -> str:
         how = f"transport={self.plan['transport']!r}" if self.plan.get("transport") else "truth='sealed'"
+        if self.plan.get("data_sessions"):
+            how += f", data= ({len(self.plan['data_sessions'])} sessions held, nothing measured)"
         head = (f"calibrate(on={self.backend!r}, {how}): {self.plan['train_runs']} train runs fitted rungs {', '.join(self.rungs)}"
                 + (f" through {' -> '.join(self.plan['routines'])}" if self.plan.get("routines") else "")
                 + f"; the fitted twin runs {self.model} ({self.rung}); {self.seconds:.0f} s")
@@ -318,6 +320,36 @@ def _played_from(measured) -> dict[str, Mapping[str, Any]]:
     """A measurement's runs by the run ids the routines name ({"train": measured.train}). WHY one function for both backends: the sim's
     world and the rack's ingest fill the same split, so a routine reads the same runs on either."""
     return {run_id: getattr(measured, split) for run_id, split in PLAYED_SPLITS.items()}
+
+
+# a held-out run's second camera draw (the sim's floor, Measured.repeat) is held as "<run>/repeat", serving "repeat"
+REPEAT = "/repeat"
+
+
+def _answered(data, run_id: str, *, held: bool = False) -> dict[str, Any]:
+    """{recording key: recording} of every recording in `data` that answers `run_id` (the training runs, or with `held` the held-out ones)."""
+    pool = data.held_out if held else data.runs
+    return {k: pool[k] for k in data.answering(run_id) if k in pool}
+
+
+def _played_from_data(data) -> dict[str, Mapping[str, Any]]:
+    """What a refit from held runs plays: every training recording that answers each run id the routines name, the run ids nothing
+    answers left out (so the executor refuses a routine that asks for one by name, never fitting it on nothing)."""
+    played = {run_id: _answered(data, run_id) for run_id in PLAYED_SPLITS}
+    return {run_id: runs for run_id, runs in played.items() if runs}
+
+
+def _tracer_data(twin_id: str, planned, measured, noise: dict, *, truth_moved: Mapping[str, float] | None = None):
+    """The runs a tracer fit read and the ones kept to judge it, as the CalibrationData the fitted twin holds: one key per run, `serves`
+    naming "train", "held_out" or "repeat" (the held-out run's second camera draw, the floor)."""
+    from .calibration.collect import CalibrationData, session_id  # noqa: PLC0415
+
+    held = {**dict(measured.held_out), **{f"{name}{REPEAT}": run for name, run in dict(getattr(measured, "repeat", {}) or {}).items()}}
+    serves = {**{k: "train" for k in measured.train}, **{k: "held_out" for k in measured.held_out},
+              **{f"{k}{REPEAT}": "repeat" for k in (getattr(measured, "repeat", {}) or {})}}
+    session = session_id(twin_id, planned.ids, noise, truth_moved=dict(truth_moved or {}))
+    return CalibrationData(runs=dict(measured.train), plan=planned, noise=dict(noise), meta={"twin": twin_id, "backend": "sim", "session": session},
+                           held_out=held, serves=serves)
 
 
 def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, Any]], values: dict[str, float], handle: PipelineHandle, *,
@@ -436,11 +468,14 @@ class SimRunner:
         return d
 
     def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None,
-                  routines: Sequence[Any] | None = None) -> tuple[Calibration, dict]:
+                  routines: Sequence[Any] | None = None, data: Any = None) -> tuple[Calibration, dict]:
         """`routines`: the planned sequence (sim2real.calibration.plan(twin).routines: ordered, substituted, option copies), else the
         example's own routines in their declared order. The world plays the schedule once (pipeline RealWorld.measure: train, held-out
         and the floor's repeat draws); each routine then reads the runs it names and fits them sealed, in order, each seeing what the ones
-        before it found. One of them must return the rung ladder (routines.Ladder: servo.dynamics_regression), the twin's model."""
+        before it found. One of them must return the rung ladder (routines.Ladder: servo.dynamics_regression), the twin's model.
+
+        `data` (a sim2real.calibration.CalibrationData: a fitted twin's data_, grown or not): the world is never played; the train, held-out
+        and repeat runs are the recordings that serve them, every session's, keyed by recording key so no run overwrites another by name."""
         from .calibration.plan import order  # noqa: PLC0415
 
         _refuse_rounds(routines, "the pendulum tracer's world plays its schedule once")
@@ -451,17 +486,30 @@ class SimRunner:
         model = model or dm.current_models(servo.type)[0].id
         rung = self._rung(servo.type, model)
         plan = module.plan(d)
-        real = module.RealWorld(d, workers=self.workers)
         moved = dict(truth or {})
-        unknown = sorted(set(moved) - set(real.truth))
-        if unknown:
-            raise KeyError(f"no hidden value {unknown} in {self.description.id}'s world (it has {sorted(real.truth)})")
-        real.truth = {**real.truth, **moved}  # the world plays the moved values; RealWorld.twin reads .truth
-        # the noise the world plays (world.json's block at the ladder's scale, as RealWorld loaded it): the record's `noise`
-        scale = getattr(hidden, "_NOISE_SCALE", [1.0])[-1]
-        noise = {**real.noise, "level": scale, "seed": real.seed,
-                 "sources": {name: f"sysid/examples/{self.description.id}/world.json noise block x{scale:g} (sysid.hidden.load)" for name in real.noise}}
-        measured = real.measure(plan)
+        if data is not None:
+            if moved:
+                raise ValueError("move_truth with data= is refused: recorded runs were drawn at the truth they were drawn at")
+            # WHY the world is never built: a refit reads only what was recorded, and what it was recorded at is the data's own noise
+            measured = module.Measured(train=_answered(data, "train"), held_out=_answered(data, "held_out", held=True),
+                                       repeat={k.replace(REPEAT, "", 1): v for k, v in _answered(data, "repeat", held=True).items()})
+            noise = dict(data.noise) if data.noise else {"sources": {"all": "recorded runs whose noise their data does not state"}}
+            level = noise.get("level")
+            noise_level = f"{level:g}x" if isinstance(level, (int, float)) else "recorded"
+            played = _played_from_data(data)
+        else:
+            real = module.RealWorld(d, workers=self.workers)
+            unknown = sorted(set(moved) - set(real.truth))
+            if unknown:
+                raise KeyError(f"no hidden value {unknown} in {self.description.id}'s world (it has {sorted(real.truth)})")
+            real.truth = {**real.truth, **moved}  # the world plays the moved values; RealWorld.twin reads .truth
+            # the noise the world plays (world.json's block at the ladder's scale, as RealWorld loaded it): the record's `noise`
+            scale = getattr(hidden, "_NOISE_SCALE", [1.0])[-1]
+            noise = {**real.noise, "level": scale, "seed": real.seed,
+                     "sources": {name: f"sysid/examples/{self.description.id}/world.json noise block x{scale:g} (sysid.hidden.load)" for name in real.noise}}
+            noise_level = f"{scale:g}x"
+            measured = real.measure(plan)
+            played = _played_from(measured)
         measure_s = round(time.monotonic() - started, 1)
         shipped = self.schedule()
         if routines is None:
@@ -475,7 +523,7 @@ class SimRunner:
         # WHY workers passed (2026-11-17): without it the pendulum's identify() polishes friction on its default 8-worker pool, which
         # opened 8 processes beside the powered arm at host load 35; the runner's workers caps every pool it opens (tests/test_workers_cap.py)
         handle = PipelineHandle(module, d, self.workers, rung)
-        fit, steps, handed = _play_routines(routines, _played_from(measured), values, handle, servo=servo.id)
+        fit, steps, handed = _play_routines(routines, played, values, handle, servo=servo.id)
         ruler = json.loads(hidden.path(self.description.id).read_text(encoding="utf-8"))["truth"]  # world.json as committed: the ruler
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
                                               "method": handed.get(name, fit.methods[rung])} for name, value in fit.values[rung].items()}
@@ -494,11 +542,16 @@ class SimRunner:
         fits = [{"rung": k, "model": dm.RUNG_MODELS.get((card, k), (k,))[0],
                  "found": {f"{servo.id}.{name}": fit.values[k][name] for name in fit.values[k] if name in fit.ci95.get(k, {})}} for k in fit.values]
         state = {"d": d, "plan": plan, "measured": measured, "fit": fit, "ruler": ruler, "model": model, "rung": rung, "module": module,
-                 "servo": servo, "noise": noise, "fits": fits, "noise_level": f"{scale:g}x", "routines": steps, "measure_seconds": measure_s}
+                 "servo": servo, "noise": noise, "fits": fits, "noise_level": noise_level, "routines": steps, "measure_seconds": measure_s}
+        held = {"train_runs": len(plan.train), "held_out_runs": len(plan.held_out)}
+        if data is not None:
+            # WHY counted from the data on a refit: grown data holds more runs than the pipeline's plan names, and the summary says what was fitted
+            state["data"] = data
+            held = {"train_runs": len(measured.train), "held_out_runs": len(measured.held_out), "data_sessions": list(data.sessions)}
         return Calibration("sim", model, rung, values, {k: dict(v) for k, v in fit.values.items()}, rows, moved,
                            round(time.monotonic() - started, 1),
-                           {"train_runs": len(plan.train), "held_out_runs": len(plan.held_out), "digest": plan.digest,
-                            "coverage_train_pct": plan.coverage["train"]["pct"], "routines": [s["routine"] for s in steps]}), state
+                           {**held, "digest": plan.digest, "coverage_train_pct": plan.coverage["train"]["pct"],
+                            "routines": [s["routine"] for s in steps]}), state
 
     def eval(self) -> TwinReport:
         if not self.state:
@@ -510,6 +563,9 @@ class SimRunner:
         leaked = sorted({r["run"] for r in s["plan"].held_out if r["split"] != "held_out" or r["run"] in s["measured"].train})
         if leaked:
             raise ValueError(f"eval scores held-out runs only; these are training runs: {leaked[:5]}")
+        if not getattr(s["measured"], "held_out", None):
+            raise ValueError("eval needs held-out runs, and the runs this twin was fitted on hold none (calibrate(data=) with no held_out): "
+                             "a twin is judged only on runs its fit never read")
         scores = s["module"].score(s["d"], s["plan"], s["fit"], s["measured"], workers=self.workers)
         doc = s["module"].assemble(s["d"], s["plan"], s["fit"], scores, truth=s["ruler"])
         ratios = {k: v["ratio"] for k, v in scores["models"].items()}
@@ -688,9 +744,11 @@ class RobotTwin:
         moves named hidden values for one run, the ruler unchanged (its mutation test; on the real backend it is the transport's).
         `noise` (a rig on the one-click seam only): None = the rig's measured 1x, a number = every term at that level, or a
         sim2real.rig.NoiseModel. `config` (a sim2real.calibration.CalibrationConfig) steers the run: models, known values, exclusions, an
-        order, the budget, per-routine options, injected routines (PEP 0001 §6). `data` (sim2real.calibration.collect(twin)) fits recorded
-        runs without measuring. The routines run in the planned order (sim2real.calibration.plan); the fitted twin carries it as plan_ and
-        the run as record_ (sim2real.calibration/1, docs/CALIBRATE.md)."""
+        order, the budget, per-routine options, injected routines (PEP 0001 §6). `data` (a sim2real.calibration.CalibrationData:
+        collect(twin), or a fitted twin's data_, grown with `+`) refits recorded runs without measuring, from the description's priors, on
+        the backend that recorded them (on='real', data= plays nothing on the rack). The routines run in the planned order
+        (sim2real.calibration.plan); the fitted twin carries it as plan_, the run as record_ (sim2real.calibration/1, docs/CALIBRATE.md)
+        and the runs it was fitted on as data_ (all of `data` when given, else the very recordings its fit read)."""
         if on not in BACKENDS:
             raise ValueError(f"on must be one of {BACKENDS}, not {on!r}")
         if truth != "sealed":
@@ -699,9 +757,11 @@ class RobotTwin:
             return self._calibrate_real(transport, move_truth=move_truth, noise=noise, config=config, data=data)
         if transport is not None:
             raise ValueError("transport= is the real backend's (on='real'); on='sim' plays the simulator itself")
-        if _is_rig(self.runner):
-            from .rig import RigRunner  # noqa: PLC0415
+        if data is not None:
+            from .calibration.collect import check_data  # noqa: PLC0415
 
+            check_data(data, self.description.id, on="sim", move_truth=move_truth)
+        if _is_rig(self.runner):
             from .calibration.collect import fit_rig  # noqa: PLC0415
             from .calibration.record import CalibrationRecord  # noqa: PLC0415
 
@@ -709,7 +769,10 @@ class RobotTwin:
             fitted = RobotTwin.__new__(RobotTwin)
             fitted.description = self.description.with_values(_identified(calibration, calibration.model))
             fitted.model, fitted.models = self.model, self.models
-            fitted.runner = RigRunner(self.description, self.runner.rig, workers=self.runner.workers, state=state)
+            # WHY the loaded twin's runner, fitted (gap D): its description and world, so every refit starts from the same priors in the same
+            # world; built anew it lost an injected world, and a refit of a refit read the last fit's values as its priors
+            fitted.runner = self.runner.with_state(state)
+            fitted.data_ = state.get("data")
             fitted.values_ = calibration.values
             fitted.intervals_ = {r["key"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
             fitted.rungs_ = {step["routine"]: step["found"] for step in calibration.routines}
@@ -717,14 +780,12 @@ class RobotTwin:
             fitted.plan_ = plan
             fitted.record_ = CalibrationRecord.from_rig(calibration.to_dict(), description=self.description, plan=plan)
             return fitted
-        if data is not None:
-            raise NotImplementedError("data= fits recorded runs on a rig on the one-click seam (sim2real.calibration.collect); the pendulum "
-                                      "tracer's world plays its schedule itself (recorded runs reach it through on='real')")
         if noise is not None:
             raise NotImplementedError("the pendulum tracer sets its noise through sysid's ladder (sysid.world.noise_scale), not calibrate(noise=)")
         from .calibration.config import CalibrationConfig  # noqa: PLC0415
         from .calibration.record import CalibrationRecord  # noqa: PLC0415
 
+        explicit = config is not None
         config = config if config is not None else CalibrationConfig()
         # WHY refused by name rather than ignored: the tracer's config steers which routines run and in what order (plan()); what fixes a
         # value, picks a rung or sets a noise reaches it another way, not yet through the config
@@ -737,14 +798,16 @@ class RobotTwin:
         # WHY plan first and play exactly its routines (Zach, 2026-11-17: "robottwin.calibrate() internall mabye that does
         # .generate_schedule() -> CalibrationSchedule and then you can pass that to something thats gonna like dispatch/execute it"): the
         # schedule plan(twin) shows is the one that runs, and the fitted twin carries it as plan_
-        planned = self.generate_schedule(config)
-        calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, routines=list(planned.routines))
+        planned = data.plan if (data is not None and not explicit) else self.generate_schedule(config)
+        given = {} if data is None else {"data": data}   # WHY only when given: a runner (or its stub) that predates data= still runs
+        calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, routines=list(planned.routines), **given)
         servo = self.runner.typed().id
         fitted = RobotTwin.__new__(RobotTwin)
         fitted.description = self.description.with_values(_identified(calibration, calibration.rung, lambda name: f"{servo}.{name}"))
         fitted.model, fitted.models = self.model, self.models
-        # WHY the runner keeps the loaded description: the sim pipeline reads its priors from the manifest and refuses edited values
-        fitted.runner = SimRunner(self.description, workers=self.runner.workers, state=state)
+        # WHY the runner keeps the loaded description (the runner's, so a fitted twin's refit keeps it too, gap D): the sim pipeline reads
+        # its priors from the manifest and refuses edited values, and a fitted twin's own description is edited
+        fitted.runner = SimRunner(self.runner.description, workers=self.runner.workers, state=state)
         fitted.values_ = calibration.values
         fitted.intervals_ = {k: tuple(r["ci95"]) for k, r in ((r["name"], r) for r in calibration.rows) if r["ci95"]}
         fitted.rungs_ = calibration.rungs
@@ -752,8 +815,10 @@ class RobotTwin:
         # WHY only when the runner reports the routines it played (2026-11-12): a record lists what actually ran; a runner that hands back
         # no state (tests/test_one_click.py stubs it) has nothing honest to record, so plan_ / record_ stay None rather than a plan not played
         if not {"routines", "noise", "measured"} <= set(state):
-            fitted.plan_ = fitted.record_ = None
+            fitted.plan_ = fitted.record_ = fitted.data_ = None
             return fitted
+        fitted.data_ = data if data is not None else _tracer_data(self.description.id, planned, state["measured"], state["noise"],
+                                                                  truth_moved=move_truth)
         fitted.plan_ = planned
         fitted.record_ = CalibrationRecord.from_schedule(calibration.to_dict(), routines=state["routines"], plan=planned, noise=state["noise"],
                                                          twin=self.description.id, description=self.description)
@@ -761,22 +826,37 @@ class RobotTwin:
 
     def _calibrate_real(self, transport, *, move_truth=None, noise=None, config=None, data=None) -> RobotTwin:
         """on='real' (sim2real.real.calibrate): plan, emit the rack submission, play it through `transport`, ingest the runs as
-        JointTrajectory, fit them through the schedule's routines (plan(twin), the same loop the sim plays). WHY each refusal names the way
-        through: the real backend plays the pendulum tracer's schedule on recorded runs, so what steers a rig (config, data, noise) has no
+        JointTrajectory, fit them through the schedule's routines (plan(twin), the same loop the sim plays). With `data` (rack runs a twin
+        holds: a fitted twin's data_) it refits them and plays nothing: no transport, no submission, no emit. WHY each refusal names the way
+        through: the real backend plays the pendulum tracer's schedule on recorded runs, so what steers a rig (config, noise) has no
         meaning here yet, and the truth to move is the transport's world, never the backend's."""
         if _is_rig(self.runner):
             raise NotImplementedError(f"on='real' runs the pendulum tracer's pipeline on the rack (sim2real.real); {self.description.id}'s rig "
                                       "on the one-click seam has no rack transport yet")
+        if data is not None:
+            from .calibration.collect import check_data  # noqa: PLC0415
+
+            check_data(data, self.description.id, on="real", move_truth=move_truth)
+            if config is not None or noise is not None:
+                raise NotImplementedError("config= and noise= steer a rig on the one-click seam; on='real', data= refits the held rack runs "
+                                          "through the schedule they were fitted by, at the noise they were recorded at")
+            if transport is not None:
+                # WHY refused, never half-used: a transport plays, and data= means "refit what is held, play nothing"
+                raise ValueError("on='real', data= refits the rack runs this twin holds and plays nothing: drop transport= (or drop data= to "
+                                 "play a fresh submission)")
+            from . import real  # noqa: PLC0415
+
+            return real.calibrate(self, None, data=data)
         if transport is None:
             raise TypeError("calibrate(on='real') plays the schedule through a transport: sim2real.real.RackTransport(out) for the One Dof "
                             "Test Rack (writes the rack submission and dry-runs it; only RackTransport(out, execute=True, adapter=...) starts "
                             "the rack's session runner), or sim2real.real.TwinTransport() for the rack twin at a sealed hidden truth")
         if move_truth:
             raise ValueError("on='real' has no truth to move: the world is the transport's (sim2real.real.TwinTransport(move_truth=...))")
-        if config is not None or data is not None or noise is not None:
-            raise NotImplementedError("config=, data= and noise= steer a rig on the one-click seam; on='real' plays the schedule plan(twin) "
-                                      "shows with its default config, over the runs the rack sends back (its noise is the hardware's: "
-                                      "eval()'s floor measures it)")
+        if config is not None or noise is not None:
+            raise NotImplementedError("config= and noise= steer a rig on the one-click seam; on='real' plays the schedule plan(twin) shows "
+                                      "with its default config, over the runs the rack sends back (its noise is the hardware's: eval()'s "
+                                      "floor measures it); data= refits rack runs a twin already holds")
         from . import real  # noqa: PLC0415
 
         return real.calibrate(self, transport)

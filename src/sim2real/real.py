@@ -758,11 +758,14 @@ class RealRunner:
         real plans the same schedule (plan(fitted)), never the catalog's stand-ins."""
         return SimRunner(self.description, workers=self.workers).schedule()
 
-    def calibrate(self, *, model: str, transport: Transport, strict: bool = True,
-                  routines: Sequence[Any] | None = None) -> tuple[Calibration, dict]:
+    def calibrate(self, *, model: str, transport: Transport | None, strict: bool = True,
+                  routines: Sequence[Any] | None = None, data: Any = None) -> tuple[Calibration, dict]:
         """`routines`: the planned sequence (sim2real.calibration.plan(twin).routines), else the example's own routines in their declared
         order, as SimRunner.calibrate. The rack plays one submission (the pipeline's run schedule plus its floor repeats); the routines then
-        fit the train runs that came back, in order, through the sim's own loop (twin._play_routines), each sealed from the hidden truth."""
+        fit the train runs that came back, in order, through the sim's own loop (twin._play_routines), each sealed from the hidden truth.
+
+        `data` (rack runs a twin holds, a sim2real.calibration.CalibrationData of backend "real"): nothing is emitted or played and no
+        transport is asked anything; the routines refit the held train runs, and eval judges on the held held-out and floor runs."""
         from .calibration.plan import CalibrationPlanError, order  # noqa: PLC0415
 
         twin_module._refuse_rounds(routines, "the rack plays one submission")
@@ -781,22 +784,37 @@ class RealRunner:
             routines = order(shipped.routines(), names)
         # the values each routine sees: the description's priors, then what each routine before it found
         values = {k: float(v) for k, v in self.description.values().items() if v is not None}
-        # WHY before emit (Zach's rule that robot time is earned): a planned step asking for a run the submission does not carry would fail
-        # only after the rack spent its minutes; refuse it here, before anything is written or played
-        fills = {run_id for run_id, split in twin_module.PLAYED_SPLITS.items() if getattr(plan, split, None)}
-        unfillable = _unfillable(routines, values, fills, names)
-        if unfillable:
-            raise CalibrationPlanError(f"on='real' refused before the rack moves: {'; '.join(unfillable)}; the submission fills "
-                                       f"{sorted(fills) or 'no run id'} (twin.PLAYED_SPLITS over the pipeline's splits)")
-        joint = servo.binds.get("joint") or module.JOINT
-        submission = emit(self.description.id, plan, transport.folder(self.description.id, plan.digest), can_id=int(servo.binds.get("station")),
-                          joint=joint)
-        recording = transport.play(submission)
-        _, _, station = module._rack()
-        measured = ingest(recording, submission, station=station, module=module, strict=strict)
+        if data is not None:
+            # WHY no emit, no play, no ingest (gap D; Zach, 2026-11-18: "So on any dataset... now I should be able to just like better fit
+            # the models no?"): the runs are already held, so a refit spends no rack time; each keeps the file it was read from (meta files)
+            submission, recording, purposes = None, None, {k: data.serves.get(k, k) for k in (*data.runs, *data.held_out)}
+            measured = _ingested(data)
+            played = twin_module._played_from_data(data)
+            noise = dict(data.noise or {})
+            moved = dict(data.meta.get("truth_moved") or {})
+            transport_name = data.meta.get("transport")
+        else:
+            # WHY before emit (Zach's rule that robot time is earned): a planned step asking for a run the submission does not carry would
+            # fail only after the rack spent its minutes; refuse it here, before anything is written or played
+            fills = {run_id for run_id, split in twin_module.PLAYED_SPLITS.items() if getattr(plan, split, None)}
+            unfillable = _unfillable(routines, values, fills, names)
+            if unfillable:
+                raise CalibrationPlanError(f"on='real' refused before the rack moves: {'; '.join(unfillable)}; the submission fills "
+                                           f"{sorted(fills) or 'no run id'} (twin.PLAYED_SPLITS over the pipeline's splits)")
+            joint = servo.binds.get("joint") or module.JOINT
+            submission = emit(self.description.id, plan, transport.folder(self.description.id, plan.digest),
+                              can_id=int(servo.binds.get("station")), joint=joint)
+            recording = transport.play(submission)
+            _, _, station = module._rack()
+            measured = ingest(recording, submission, station=station, module=module, strict=strict)
+            played, purposes = twin_module._played_from(measured), None
+            noise = {"transport": transport.name, **dict(recording.noise)}
+            moved = dict(recording.meta.get("truth_moved") or {})
+            transport_name = transport.name
         handle = PipelineHandle(module, d, self.workers, rung)
-        fit, steps, handed = twin_module._play_routines(routines, twin_module._played_from(measured), values, handle, servo=servo.id)
-        ruler = dict(transport.ruler() or {})  # WHY after the seal: the fit never sees it; real hardware has none (rows ungraded)
+        fit, steps, handed = twin_module._play_routines(routines, played, values, handle, servo=servo.id)
+        # WHY after the seal: the fit never sees it; real hardware has none (rows ungraded); a refit asks no transport, so none either
+        ruler = dict(transport.ruler() or {}) if transport is not None else {}
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
                                               "method": handed.get(name, fit.methods[rung])} for name, value in fit.values[rung].items()}
         rows = result.parameter_rows(self.description.id, d, ruler, recovered)
@@ -810,7 +828,8 @@ class RealRunner:
             unit = d.nominal[key].unit if key in d.nominal else None
             ci = fit.ci95[rung].get(name)
             values[name] = None if value is None else Value(float(value), unit, basis=Basis.MEASURED,
-                                                           measured_by=f"sim2real.RobotTwin.calibrate(on='real', transport={transport.name}), {model}",
+                                                           measured_by=(f"sim2real.RobotTwin.calibrate(on='real', transport={transport_name}), {model}"
+                                                                        if data is None else f"sim2real.RobotTwin.calibrate(on='real', data=), {model}"),
                                                            source=handed.get(name, fit.methods[rung]),
                                                            notes=f"95 % interval [{ci[0]:.6g}, {ci[1]:.6g}]" if ci else "")
         card = ORACLE_CARD[servo.type]
@@ -818,16 +837,20 @@ class RealRunner:
 
         fits = [{"rung": k, "model": dm.RUNG_MODELS.get((card, k), (k,))[0],
                  "found": {f"{servo.id}.{name}": fit.values[k][name] for name in fit.values[k] if name in fit.ci95.get(k, {})}} for k in fit.values]
-        noise = {"transport": transport.name, **dict(recording.noise)}
         state = {"d": d, "plan": plan, "submission": submission, "recording": recording, "measured": measured, "fit": fit, "ruler": ruler,
                  "model": model, "rung": rung, "module": module, "servo": servo, "noise": noise, "fits": fits, "noise_level": "real",
-                 "transport": transport.name, "routines": steps}
-        calibration = Calibration("real", model, rung, values, {k: dict(v) for k, v in fit.values.items()}, rows,
-                                  dict(recording.meta.get("truth_moved") or {}), round(time.monotonic() - started, 1),
+                 "transport": transport_name, "routines": steps}
+        held = {}
+        if data is not None:
+            state.update(data=data, purposes=purposes)
+            held = {"data_sessions": list(data.sessions)}
+        calibration = Calibration("real", model, rung, values, {k: dict(v) for k, v in fit.values.items()}, rows, moved,
+                                  round(time.monotonic() - started, 1),
                                   {"train_runs": len(measured.train), "held_out_runs": len(measured.held_out), "floor_runs": len(measured.floor),
-                                   "digest": plan.digest, "transport": transport.name, "submission": str(submission.folder),
+                                   "digest": plan.digest, "transport": transport_name,
+                                   "submission": str(submission.folder) if submission is not None else data.meta.get("submission"),
                                    "missing": dict(measured.missing), "refused": dict(measured.refused),
-                                   "coverage_train_pct": plan.coverage["train"]["pct"], "routines": [s["routine"] for s in steps]})
+                                   "coverage_train_pct": plan.coverage["train"]["pct"], "routines": [s["routine"] for s in steps], **held})
         return calibration, state
 
     def eval(self) -> RealReport:
@@ -836,7 +859,8 @@ class RealRunner:
         _, _, result, _ = _sysid()
         s = self.state
         module, measured, fit = s["module"], s["measured"], s["fit"]
-        purpose = {r["run"]: r["purpose"] for r in s["submission"].runs}
+        # a refit from held runs has no submission: each held run's purpose is what it serves (gap D)
+        purpose = s.get("purposes") or {r["run"]: r["purpose"] for r in s["submission"].runs}
         # WHY refused, not filtered (sklearn's leakage rule, as SimRunner.eval): only runs the plan held out may judge the twin
         leaked = sorted(n for n in measured.held_out if purpose.get(n) != "held_out" or n in measured.train)
         if leaked:
@@ -941,6 +965,39 @@ def _sysid_cards():
     return cards
 
 
+# --- the runs a twin fitted on the rack holds (gap D) -------------------------------------------------------------------------------------
+
+
+def held_runs(twin_id: str, planned, state: Mapping[str, Any]):
+    """What a twin fitted on the rack holds (its data_): one key per run that came back usable, the train runs to fit and the held-out and
+    floor runs apart (never fitted), `serves` naming each one's purpose, and `meta` the twin, the backend ("real"), the transport, the
+    submission folder (whose name is the session), the schedule digest, the file each run was read from, what was refused and missing."""
+    from .calibration.collect import CalibrationData  # noqa: PLC0415
+
+    measured, submission, recording = state["measured"], state["submission"], state["recording"]
+    serves = {**{n: "train" for n in measured.train}, **{n: "held_out" for n in measured.held_out}, **{n: "floor" for n in measured.floor}}
+    meta = {"twin": twin_id, "backend": "real", "session": Path(submission.folder).name, "transport": state["transport"],
+            "submission": str(submission.folder), "schedule_digest": submission.digest, "files": dict(measured.files),
+            "refused": dict(measured.refused), "missing": dict(measured.missing)}
+    if recording is not None and recording.meta.get("truth_moved"):
+        meta["truth_moved"] = dict(recording.meta["truth_moved"])  # the twin transport's mutation test: a refit says so too
+    return CalibrationData(runs=dict(measured.train), plan=planned, noise=dict(state["noise"]), meta=meta,
+                           held_out={**dict(measured.held_out), **dict(measured.floor)}, serves=serves)
+
+
+def _ingested(data) -> Ingested:
+    """Held rack runs back as the Ingested the fit and eval read: every recording that serves train, held_out and floor (each session's,
+    by its key), the files they came from, and what the sessions refused or missed."""
+    def serving(purpose: str, pool: Mapping[str, Any]) -> dict[str, Any]:
+        return {k: pool[k] for k in data.answering(purpose) if k in pool}
+
+    files = dict(data.meta.get("files") or {})
+    keys = (*data.runs, *data.held_out)
+    return Ingested(train=serving("train", data.runs), held_out=serving("held_out", data.held_out), floor=serving("floor", data.held_out),
+                    missing=dict(data.meta.get("missing") or {}), refused=dict(data.meta.get("refused") or {}), skipped=(),
+                    files={k: files[k] for k in keys if k in files})
+
+
 # --- the front door's hook ------------------------------------------------------------------------------------------------------------
 
 
@@ -969,11 +1026,14 @@ def _unfillable(routines: Sequence[Any], values: Mapping[str, float], fills: set
     return out
 
 
-def calibrate(twin, transport: Transport, *, strict: bool = True):
+def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: Any = None):
     """RobotTwin.calibrate(on="real")'s body: a NEW, fitted twin carrying the calibrated values, plan_ (the schedule plan(twin) shows, the
     one that ran), record_ (sim2real.calibration/1, backend "real"), submission_ and runs_ (what the transport sent back and what could not
-    be used). On a real record, plan.totals are the planner's estimates (the rack's own time is submission_.minutes) and plan.level is the
-    planner's noise level, not the hardware's."""
+    be used) and data_ (the runs it holds: held_runs). On a real record, plan.totals are the planner's estimates (the rack's own time is
+    submission_.minutes) and plan.level is the planner's noise level, not the hardware's.
+
+    `data` (rack runs a twin holds, checked by RobotTwin.calibrate): the refit plays nothing, its plan is the data's, its submission_ is
+    None and its data_ is all of `data`."""
     from .calibration.config import CalibrationConfig  # noqa: PLC0415
     from .calibration.plan import plan as schedule_of  # noqa: PLC0415
     from .calibration.record import CalibrationRecord  # noqa: PLC0415
@@ -982,20 +1042,25 @@ def calibrate(twin, transport: Transport, *, strict: bool = True):
     # WHY plan first and play exactly its routines, as on='sim' (Zach, 2026-11-17: "robottwin.calibrate() internall mabye that does
     # .generate_schedule() -> CalibrationSchedule and then you can pass that to something thats gonna like dispatch/execute it"): one
     # schedule is shown, and it is the one the rack's runs are fitted by
-    planned = schedule_of(twin, CalibrationConfig())
-    runner = RealRunner(twin.description, workers=twin.runner.workers)
-    calibration, state = runner.calibrate(model=twin.model, transport=transport, strict=strict, routines=list(planned.routines))
+    planned = data.plan if data is not None else schedule_of(twin, CalibrationConfig())
+    # WHY the twin's runner's description (gap D): it is the loaded twin's priors on a fitted twin too (whose own description is edited, and
+    # the pipeline refuses edited priors), so a twin fitted on the rack refits from the same priors
+    priors = twin.runner.description
+    runner = RealRunner(priors, workers=twin.runner.workers)
+    given = {} if data is None else {"data": data}
+    calibration, state = runner.calibrate(model=twin.model, transport=transport, strict=strict, routines=list(planned.routines), **given)
     servo = runner.typed().id
     fitted = RobotTwin.__new__(RobotTwin)
     fitted.description = twin.description.with_values(_identified(calibration, calibration.rung, lambda name: f"{servo}.{name}"))
     fitted.model, fitted.models = twin.model, twin.models
-    fitted.runner = RealRunner(twin.description, workers=runner.workers, state=state)
+    fitted.runner = RealRunner(priors, workers=runner.workers, state=state)
     fitted.values_ = calibration.values
     fitted.intervals_ = {r["name"]: tuple(r["ci95"]) for r in calibration.rows if r["ci95"]}
     fitted.rungs_ = calibration.rungs
     fitted.calibration_ = calibration
     fitted.submission_ = state["submission"]
     fitted.runs_ = state["measured"]
+    fitted.data_ = data if data is not None else held_runs(twin.description.id, planned, state)
     fitted.plan_ = planned
     fitted.record_ = CalibrationRecord.from_schedule(calibration.to_dict(), routines=state["routines"], plan=planned, noise=state["noise"],
                                                      twin=twin.description.id, description=twin.description)

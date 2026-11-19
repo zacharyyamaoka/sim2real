@@ -639,14 +639,22 @@ class RigRunner:
 
     # ---- calibrate
 
+    def with_state(self, state: Mapping) -> RigRunner:
+        """The same runner (description, rig, workers and world) holding a fitted state: a fitted twin's. WHY the loaded twin's description
+        and world (gap D): every refit then starts from the same priors in the same world, generation after generation."""
+        return RigRunner(self.description, self.rig, workers=self.workers, world=self._world, state=state)
+
     def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None, noise=None, routines: Sequence[Routine] | None = None,
                   measured: Mapping[str, Any] | None = None, known: Mapping[str, float] | None = None,
-                  schedule: Any = None) -> tuple[RigCalibration, dict]:
+                  schedule: Any = None, serves: Mapping[str, str] | None = None) -> tuple[RigCalibration, dict]:
         """`routines`: the planned sequence (sim2real.calibration.plan: ordered, substituted, option copies), else the rig's own.
-        `measured`: pre-collected runs {run id: measurement} (sim2real.calibration.collect); a planned run missing from it is refused and
-        the rig's measure is never called. `known`: {key: value} fixed for every routine (CalibrationConfig.known). `schedule`: the
+        `measured`: pre-collected runs {recording key: measurement} (sim2real.calibration.collect, a fitted twin's data_); a planned run it
+        holds nothing for is refused and the rig's measure is never called. `serves` {recording key: the run id it answers}: a key with no
+        entry answers its own id; a fit is handed every recording that answers each run it asks for, keyed by recording key (a run
+        recorded on two days is two recordings). `known`: {key: value} fixed for every routine (CalibrationConfig.known). `schedule`: the
         CalibrationSchedule the routines were planned in; a step it shows known now must play exactly the runs it shows, or it is refused
-        by name before anything of it is played."""
+        by name before anything of it is played. The state carries `played` ({recording key: recording}, every one the fits read, in play
+        order) and `serves`."""
         from robot_msgs.space import Basis, Value  # noqa: PLC0415
 
         started = time.monotonic()
@@ -673,30 +681,35 @@ class RigRunner:
         known = {k: float(v) for k, v in (known or {}).items()}
         values.update(known)
         recorded = None if measured is None else dict(measured)  # WHY a name of its own: the loop below rebinds `measured` per routine
+        answers = dict(serves or {})
         estimates: dict[str, Estimate] = {}
         adjusted: dict[str, Estimate] = {}
         steps, trained = [], set()
-        played: dict[str, Any] = {}
+        played: dict[str, dict[str, Any]] = {}    # run id -> {recording key: recording}: every recording that answers it
         served: dict[str, tuple[str, Run]] = {}   # run id -> (the routine that first played it, the run as it was played)
         shown = {s.routine: s for s in getattr(schedule, "steps", ()) if s.status == "known now" and s.runs is not None}
         sequence = list(self.rig.routines() if routines is None else routines)
 
         def play(routine: Routine, fresh: Sequence[Run]) -> None:
-            """The fresh runs into `played`: read from the recorded data (a run it lacks is refused by name), else measured on the world."""
+            """The fresh runs into `played`: read from the recorded data, every recording that answers each (a run nothing answers is
+            refused by name), else measured on the world."""
             if fresh and recorded is not None:
-                missing = [run.id for run in fresh if run.id not in recorded]
+                found = {run.id: {k: recorded[k] for k in recorded if answers.get(k, k) == run.id} for run in fresh}
+                missing = [run_id for run_id, keys in found.items() if not keys]
                 if missing:
                     from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
 
                     raise CalibrationPlanError(f"{routine.id} plays runs {missing}, which the recorded data does not hold")
-                played.update({run.id: recorded[run.id] for run in fresh})
+                played.update(found)
             elif fresh:
-                played.update(self.rig.measure(fresh, world_values, noise, f"routine:{routine.id}", workers=self.workers))
+                out = self.rig.measure(fresh, world_values, noise, f"routine:{routine.id}", workers=self.workers)
+                played.update({run.id: {run.id: out[run.id]} for run in fresh})
 
         for routine in sequence:
             step = self._play_routine(routine, values, play=play, played=played, served=served, shown=shown.get(routine.id), params=params,
                                       known=known, estimates=estimates, adjusted=adjusted, hidden=hidden)
             trained.update(run_id for done in step["rounds"] for run_id in done["runs"])
+            trained.update(key for done in step["rounds"] for run_id in done["runs"] for key in played[run_id])
             steps.append(step)
         rows = self._rows(params, nominal, ruled, estimates)
         ran = {r.id for r in sequence}
@@ -719,14 +732,16 @@ class RigRunner:
         calibration = RigCalibration("sim", self.rig.name, model or self.default_model(), noise, fitted_values, estimates, rows, steps, moved,
                                      round(time.monotonic() - started, 1))
         state = {"values": values, "nominal": {k: v for k, v in nominal.items() if v is not None}, "world_values": world_values, "noise": noise,
-                 "trained": trained, "calibration": calibration}
+                 "trained": trained, "calibration": calibration,
+                 "played": {key: recording for group in played.values() for key, recording in group.items()}, "serves": answers}
         return calibration, state
 
     def _play_routine(self, routine: Routine, values: dict[str, float], *, play: Callable[[Routine, Sequence[Run]], None],
-                      played: Mapping[str, Any], served: dict[str, tuple[str, Run]], shown: Any, params: Mapping[str, Parameter],
+                      played: Mapping[str, Mapping[str, Any]], served: dict[str, tuple[str, Run]], shown: Any, params: Mapping[str, Parameter],
                       known: Mapping[str, float], estimates: dict[str, Estimate], adjusted: dict[str, Estimate], hidden: Any) -> dict:
-        """One routine, round by round: collect (`play` puts the runs no routine has played yet into `played`), fit SEALED on every run it
-        has asked for so far, and, for a routine that comes back for more (next_runs), stop on its own converged(), else when every 95 %
+        """One routine, round by round: collect (`play` puts the runs no routine has played yet into `played`, {run id: {recording key:
+        recording}}), fit SEALED on every recording of every run it has asked for so far (keyed by recording key: a run recorded in two
+        sessions is two recordings), and, for a routine that comes back for more (next_runs), stop on its own converged(), else when every 95 %
         interval is inside its tolerance, else at max_rounds, else when next_runs() asks for nothing; runs(), next_runs() and converged()
         run outside the seal. What it finds reaches `values` (and `estimates` / `adjusted`) after each round, so the next round's runs are
         made after the last fit. Returns its step row: routine, identifies, runs (distinct, every round), seconds, found (the last fit),
@@ -749,7 +764,7 @@ class RigRunner:
             fresh = [run for run in runs if run.id not in played]
             play(routine, fresh)
             so_far.update((run.id, run) for run in runs)
-            measured = {run_id: played[run_id] for run_id in so_far}
+            measured = {key: recording for run_id in so_far for key, recording in played[run_id].items()}
             label = routine.id if cap is None else f"{routine.id} round {k}"
             _say(f"{label}: {len(runs)} runs ({len(fresh)} played) in {time.monotonic() - began:.0f} s; fitting on {len(measured)}")
             with hidden.sealed():

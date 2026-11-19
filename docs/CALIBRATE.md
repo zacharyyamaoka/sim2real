@@ -228,6 +228,41 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 - A run that two routines share is played once, and counted once in the plan's totals (`run_time_s`; see "The schedule").
 - If a fit then asks for a run the data does not hold, it raises `CalibrationPlanError` naming the run.
 
+## The twin holds its data
+
+Every fitted twin holds the runs it was fitted on as `fitted.data_`, a `CalibrationData` (gap D; Zach, 2026-11-17: "I think its the
+RobotTwin that can kidna like hold all the dataset"). A later fit reads all of it:
+
+```python
+fitted = twin.calibrate(on="sim")                  # fitted.data_: the very recordings the fit read, each measured once
+refit = fitted.calibrate(data=fitted.data_)        # the same runs, the same values; nothing measured, nothing written
+grown = fitted.data_ + collect(twin, CalibrationConfig(seed=7))   # another session of the same schedule
+better = fitted.calibrate(data=grown)              # fits every recording of every session
+```
+
+- **What it holds.** All of `data` when the fit was given it, else the very recordings its fit read, one key per run. `runs` are the
+  runs a fit may read; `held_out` the runs kept only to judge it; `serves` {key: the run id it answers} (a rig's keys answer their own
+  run ids; the pendulum's answer `"train"`, `"held_out"`, `"repeat"` or `"floor"`); `data.answering(run_id)` names every key that answers
+  a run id. `meta` holds `twin`, `backend` (`"sim"` or `"real"`) and `session`; on the rack also the transport, the submission folder
+  (whose name is the session), the schedule digest, `files` (the file each run was read from), `refused` and `missing`.
+- **Refits start from the priors.** Every generation refits from the description's priors, so the same runs give the same values; a
+  fitted twin's runner keeps the loaded twin's description (and a rig's world).
+- **Growth is by session.** `data + more` (or `data.extend(more)`) returns a new dataset. A session already held is kept once, however
+  it comes back (`(a + b) + b` is `a + b`). The same run recorded in another session is kept beside the first as `<key>@<session>`,
+  answering the same run id, never overwriting it. A run no routine asks for is held and never fitted. `collect()` names its session
+  from the twin, the plan's routines and the noise (its seed in it), so the same session collected twice is recognised.
+- **The split rule.** A held-out run never becomes a training run: a dataset with a run in both `runs` and `held_out` is refused, and so
+  is joining two where a run is held out on one side and trained on on the other (compared by run name, the session suffix stripped).
+- **The sim/real rule.** Rack runs are never fitted on the sim (they would be graded against a hidden truth that did not make them):
+  `calibrate(on="sim", data=)` refuses `backend "real"` runs, naming `on='real'`, and one dataset never mixes the sim's draws with the
+  rack's recordings. Another twin's runs are refused, and so is `move_truth` with `data=` (recorded runs were drawn where they were drawn).
+- **On the rack.** `calibrate(on="real", data=fitted.data_)` refits held rack runs with no transport, no emit and no play; its
+  `submission_` is `None` and `eval()` judges it on the held held-out and floor runs.
+- **On the pendulum tracer.** `calibrate(data=)` never plays its world; the train, held-out and repeat runs are the recordings that
+  serve them, every session's. `eval()` refuses data that holds no held-out run.
+- **Not built yet** (each its own leg, red tests first): saving and loading a dataset (by reference, pointing at the run files rather
+  than copying them), turning the 1-DOF campaign rounds into a dataset by query, a keep-if-better rule for lifelong refits.
+
 ## The record: `sim2real.calibration/1`
 
 `fitted.record_.to_dict()`. The frozen example is `tests/fixtures/calibration_record_v1.json`: the UR wrist's real run in this shape.
@@ -468,8 +503,10 @@ installed by a pin move; none came from a routine, and none has a stop rule.
   stop cannot judge it), or a round that plays no new run.
 - `KeyError`: an option a routine does not have.
 - `ValueError`: noise given both to `calibrate(noise=)` and in `CalibrationConfig.noise`.
-- `NotImplementedError`: `data=`, or a `CalibrationConfig` with `known`, `models`, `noise` or `seed`, on the pendulum tracer (its
-  config picks, orders and excludes its routines only); a routine with rounds on the pendulum tracer or `on="real"`.
+- `NotImplementedError`: a `CalibrationConfig` with `known`, `models`, `noise` or `seed` on the pendulum tracer (its config picks,
+  orders and excludes its routines only); a routine with rounds on the pendulum tracer or `on="real"`.
+- `TypeError` / `ValueError` for `data=` (see "The twin holds its data"): not a `CalibrationData`; another twin's runs; rack runs on the
+  sim or sim draws on the rack; `move_truth` or `transport=` with `data=`; a held-out run turned training run.
 - `TypeError`: `calibrate(on="real")` without a transport (it names `RackTransport` and `TwinTransport`).
 - `RunsPending` (`sim2real.real`): the submission is written and dry-run, nothing has come back to fit; it carries the session commands.
 - `RackRefused` (`sim2real.real`): `RackTransport(execute=True)` refused before starting anything; `.refusals` says why.
