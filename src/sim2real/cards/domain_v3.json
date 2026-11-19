@@ -14104,12 +14104,21 @@
    "id": "pid.pidtuna",
    "title": "PID gains from the identified model, then measured tuning (pidtuna)",
    "package": "pid",
-   "kind": "use",
+   "kind": "tune",
    "setting": "bench",
    "status": "implemented",
    "identifies": [],
    "legacy_identifies": [],
-   "configures": []
+   "configures": [
+    {
+     "type": "integrated_servo",
+     "card": "servo",
+     "settings": [
+      "kp_nm_rad",
+      "kd_nm_s_rad"
+     ]
+    }
+   ]
   },
   {
    "id": "conveyor_belt.scale",

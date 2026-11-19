@@ -6061,19 +6061,19 @@
    "routine": "pid.pidtuna",
    "title": "PID gains from the identified model, then measured tuning (pidtuna)",
    "package": "pid",
-   "kind": "use",
+   "kind": "tune",
    "setting": "bench",
    "status": "implemented",
    "wall_time": {
-    "value": 1800.0,
+    "value": 0.0,
     "unit": "s",
-    "source": "estimate",
+    "source": "the SIM tier tunes on the fitted twin; no robot time",
     "note": ""
    },
    "operator_time": {
-    "value": 600.0,
+    "value": 0.0,
     "unit": "s",
-    "source": "estimate",
+    "source": "the SIM tier tunes on the fitted twin; no robot time",
     "note": ""
    },
    "equipment": [],
@@ -6085,10 +6085,10 @@
    },
    "identifies": [],
    "parameters_covered": 0,
-   "excitation": "the identified model, then steps and sweeps on the joint",
+   "excitation": "the identified model, then steps and sweeps on the fitted twin (pidtuna's ServoSim)",
    "coverage": "the closed loop's band",
    "repeats": 1,
-   "how": "pidtuna: an analytic start from the identified plant, a bandwidth search and its gates; it proposes gains, never writes a board",
+   "how": "pidtuna: an analytic start from the fitted plant, a bandwidth search and its gates on the fitted twin, under the fitted model's feed-forward held fixed; it proposes the board's kp and kd, never writes a board",
    "tests": [],
    "code": [
     {
@@ -6096,12 +6096,18 @@
      "path": "src/pidtuna/tune.py",
      "ref": "",
      "note": ""
+    },
+    {
+     "repo": "/home/bam/sim2real",
+     "path": "src/sim2real/calibration/pid_tune.py",
+     "ref": "",
+     "note": "PidTune: the runnable wrapper, sim2real -> pidtuna one way"
     }
    ],
    "oracle": {
     "status": "not checked",
     "checks": [],
-    "note": "not in the sysid ladder: tuning chooses gains and recovers no hidden value; its grade is the closed loop's (pidtuna's gates)"
+    "note": "not in the sysid ladder: tuning picks gains and recovers no hidden value; graded on the performance it gains against the best PD + feed-forward on a moved hidden CAN 11 (regret <= 0.15) by tests/test_pid_tune_routine.py; ladder routine_ladders/pid.pidtuna.json"
    },
    "recovery": {},
    "alternatives": [],
