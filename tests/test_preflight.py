@@ -293,9 +293,15 @@ def test_the_real_can11_fit_preflights():
     real = _loaded().calibrate(on="sim", callbacks=[])
     report = sim2real.preflight(real)
     print(report.summary())
+    tuned = bool(getattr(real, "settings_", None))
     for c in report.checks:
-        if c.id == "gains_within_board_limits" and not getattr(real, "settings_", None):
+        if c.id == "gains_within_board_limits" and not tuned:
             # no tune step on this main: the board's as-found ki 16000 with ilimit 0.5 integrates, and PD-only refuses it
             assert c.passed is False and "ki" in c.why, c
+        elif c.id == "sim_soak" and not tuned:
+            # WHY (ruler fix, found on the cheap fit before this ran): the soak plays what would ship, the integrating board, and CAN 11
+            # limit-cycles under ki 16000 (pipeline.py's docstring): its stop error and torque ceiling fail; the tune's PD passes
+            assert c.passed is False, c
         elif c.id in BLOCKING:
             assert c.passed is True, c
+    assert sim2real.preflight(_tuned(real) if not tuned else real).passed is True
