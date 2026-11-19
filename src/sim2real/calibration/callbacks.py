@@ -20,7 +20,8 @@ its ledger says so.
 
 WHY off by default on the sim and a ledger by default on the rack: the sim's calibrate() is called hundreds of times by sweeps and stress
 lanes (writing a folder each would flood the disk, and a W&B run each the free tier), and it documented "writes nothing"; a rack calibration
-spends robot time, so its ledger is kept beside its submission (``<submission>/calibrate/<stamp>/``) unless SIM2REAL_TRACK=off.
+spends robot time, so its ledger is kept beside its submission (``<submission>/calibrate/<stamp>/``) unless SIM2REAL_TRACK=off; a refit
+from held rack runs (``calibrate(on="real", data=)``) spends none and plays nothing, so it defaults as the sim does.
 
 WHY a ledger first and W&B a copy (house rule: W&B is a copy of a local ledger): the files hold everything a W&B run shows, so a run that
 never reached W&B, or died halfway, is rebuilt from them (sim2real.tracking.calibrate_wandb.records / --sync).
@@ -109,9 +110,9 @@ class Ledger(Callback):
     (every event, appended, flushed and fsynced as it happens), schedule.json (the schedule's to_dict()), calibration.json (the record,
     sim2real.calibration/1, rewritten with evaluate()'s gates) and eval.json (the report's to_dict()). SI units throughout, never converted.
 
-    `root` None: $SIM2REAL_CALIBRATIONS, else paths.CALIBRATIONS, read when a calibration begins. `beside_submission` (a rack calibration's
-    default): the folder opens under '<submission folder>/calibrate/' once emit has written the submission, before the rack plays it; the
-    lines before that wait in memory. `folder` is the latest calibration's folder. One Ledger reused for several calibrations opens one
+    `root` None: $SIM2REAL_CALIBRATIONS, else paths.CALIBRATIONS, read when a calibration begins. `beside_submission` (a fresh rack
+    calibration's default): the folder opens under '<submission folder>/calibrate/' once emit has written the submission, before the rack
+    plays it; the lines before that wait in memory. A refit from held runs emits nothing, so it opens under `root`. `folder` is the latest calibration's folder. One Ledger reused for several calibrations opens one
     folder each, and every event lands in its own calibration's folder (each event names its calibration), so a twin fitted earlier and
     evaluated later still writes beside its own steps."""
 
@@ -143,10 +144,10 @@ class Ledger(Callback):
         cid = event["calibration"]
         if cid not in self._waiting or not event.get("submission"):
             return
-        where = Path(event["submission"])
-        # WHY a refit's folder only when it exists: a refit from held runs names the submission they came from, which may be another
-        # machine's path; a fresh emit's folder is the one the rack is about to play, written or not
-        root = where / "calibrate" if (event.get("emitted") or where.is_dir()) else (self.root or calibrations_root())
+        # WHY only a fresh emit's folder (the one the rack is about to play): a refit from held runs names the submission they came from,
+        # and a refit plays nothing, so its ledger opens under the ledger's own root, never inside that held submission (lane D: a refit
+        # writes no files there)
+        root = Path(event["submission"]) / "calibrate" if event.get("emitted") else (self.root or calibrations_root())
         self._flush(event, root)
 
     def on_collect_end(self, event: dict) -> None:
@@ -243,8 +244,8 @@ class Ledger(Callback):
 def resolve_callbacks(callbacks: Any, *, backend: str = "sim") -> list:
     """The callbacks a calibration reports to. A list or tuple is taken as given (callbacks=[] wins over everything). None reads
     SIM2REAL_TRACK: "off" gives none; "ledger" a Ledger; "wandb" a Ledger and a WandbLogger copying it (sim2real.tracking.calibrate_wandb,
-    loaded here, lazily); unset or empty gives none on the sim and a Ledger beside the submission on the rack (backend "real"). Any other
-    value is refused by name. Resolving writes nothing (a ledger opens its folder when a calibration begins) and never imports wandb."""
+    loaded here, lazily); unset or empty gives none on the sim and a Ledger beside the submission on the rack (backend "real": a fresh
+    rack calibration; RobotTwin.calibrate resolves a refit from held runs as "sim"). Any other value is refused by name. Resolving writes nothing (a ledger opens its folder when a calibration begins) and never imports wandb."""
     if callbacks is not None:
         if not isinstance(callbacks, (list, tuple)):
             raise TypeError(f"callbacks is a list of callback objects (a Ledger, a WandbLogger, your own), not {type(callbacks).__name__}")
@@ -264,6 +265,21 @@ def resolve_callbacks(callbacks: Any, *, backend: str = "sim") -> list:
 
 
 # --- the dispatcher: builds each event once and hands it to every callback --------------------------------------------------------------
+
+
+def _with_ledgers(callbacks) -> list:
+    """The callbacks as given, plus the Ledger a copy (a WandbLogger: anything with a `.ledger` that keeps folders) copies when that ledger
+    is not in the list, inserted right before the copy. WHY (house rule: W&B is a copy of a local ledger): callbacks=[WandbLogger(ledger)]
+    alone would send every step, outcome and gate to W&B and none to the ledger, so W&B would hold rows no local file has."""
+    given = list(callbacks)
+    out: list = []
+    for callback in given:
+        ledger = getattr(callback, "ledger", None)
+        if (callable(getattr(ledger, "folder_of", None)) and not any(ledger is c for c in given)
+                and not any(ledger is c for c in out)):
+            out.append(ledger)
+        out.append(callback)
+    return out
 
 
 def _words(caught: BaseException) -> str:
@@ -319,7 +335,7 @@ class Watch:
     real.main build one when there are callbacks; the runners only ever see its plain functions (on_plan, on_step, ...)."""
 
     def __init__(self, callbacks, twin: Any, backend: str, *, config: Any = None, calibration: str | None = None, started: float | None = None):
-        self.alive = list(callbacks)
+        self.alive = _with_ledgers(callbacks)
         self.twin = twin
         self.twin_id = str(twin.description.id)
         self.backend = backend

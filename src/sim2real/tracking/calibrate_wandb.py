@@ -18,7 +18,8 @@ The run: id run_id("calibrate", <calibration id>) (stable: a replay of the same 
 "calibrate · <twin>". History, one row per ledger event in order: the schedule, one row per step (found values with their intervals), the
 outcome (the verdict, recovery per value), evaluate()'s gates (each value beside its verdict, before -> after per metric). WHY angles in
 degrees here and only here (Zach, 2026-11-11: angles shown to him in degrees, never rad): the ledger keeps SI; a key whose unit is rad
-(or mrad, rad/s) is logged as <name>_deg (<name>_deg_s), its _rad suffix replaced. The live copy, the follower and the replay share row(),
+(or mrad, rad/s) is logged as <name>_deg (<name>_deg_s), its _rad / _mrad suffix replaced, and evaluate()'s before/after as
+wandb_log's trend keys, eval/<metric>_before_deg beside eval/<metric>_after_deg. The live copy, the follower and the replay share row(),
 so all three log exactly the same rows.
 
 WHY a twin with no project logs nowhere (rather than to the hub "Sim2Real"): a toy or test twin is not a deployment, and the free plan's
@@ -93,15 +94,26 @@ def _num(value: Any) -> float | None:
     return float(value) if math.isfinite(value) else None
 
 
+def _bare(name: str, unit: str | None) -> tuple[str, str, float]:
+    """A stored name without its angle suffix, the suffix it is shown with and the factor to degrees: ("held_out_motor_mrad", "mrad") ->
+    ("held_out_motor", "_deg", 0.0573...); a name in any other unit is kept whole, with no suffix and factor 1. WHY every stored angle
+    suffix is dropped, not only the unit's own: a degree key never carries "_rad" or "_mrad" beside "_deg" (Zach, 2026-11-11)."""
+    if unit not in ANGLES:
+        return name, "", 1.0
+    suffix, stored, factor = ANGLES[unit]
+    for ending in (stored, "_rad_s", "_mrad", "_rad"):
+        if name.endswith(ending):
+            return name[: -len(ending)], suffix, factor
+    return name, suffix, factor
+
+
 def _shown(key: str, unit: str | None) -> tuple[str, float]:
     """A parameter key as a W&B path and the factor its value is shown with: "toy.offset" in rad -> ("toy/offset_deg", 57.29...)."""
     instance, _, name = str(key).partition(".")
     if not name:
         instance, name = "", instance
-    factor = 1.0
-    if unit in ANGLES:
-        suffix, stored, factor = ANGLES[unit]
-        name = name[: -len(stored)] + suffix if name.endswith(stored) else name + suffix
+    bare, suffix, factor = _bare(name, unit)
+    name = bare + suffix
     return (f"{instance}/{name}" if instance else name), factor
 
 
@@ -157,10 +169,13 @@ def row(event: Mapping[str, Any]) -> dict:
                     value = None
             out[f"gate/{g.get('id')}/value"] = _num(value)
         for name, m in (event.get("compare") or {}).items():
-            suffix, _, factor = ANGLES.get(m.get("unit"), ("", "", 1.0))
+            # WHY wandb_log's trend vocabulary (Twin/sim_real_before_deg beside Twin/sim_real_after_deg): a calibrate run's before/after
+            # reads like the deployment project's own; the stored angle suffix is replaced, so held_out_motor_mrad logs as
+            # eval/held_out_motor_before_deg, never eval/held_out_motor_mrad_deg/before
+            bare, suffix, factor = _bare(str(name), m.get("unit"))
             for part in ("before", "after", "floor"):
-                out[f"eval/{name}{suffix}/{part}"] = _scaled(m.get(part), factor)
-            out[f"eval/{name}{suffix}/factor"] = _num(m.get("factor"))
+                out[f"eval/{bare}_{part}{suffix}"] = _scaled(m.get(part), factor)
+            out[f"eval/{bare}_factor"] = _num(m.get("factor"))
     elif kind in ("error", "pending"):
         out[f"calibration/{kind}"] = 1
     else:
@@ -316,7 +331,8 @@ class _Copy:
 
 class WandbLogger:
     """The live W&B copy of a Ledger (a callback: list it after its ledger, callbacks=[ledger, WandbLogger(ledger)]). It requires the
-    Ledger it copies (W&B is a copy of a local ledger, so a live copy without one is refused) and opens it first if it is listed first.
+    Ledger it copies (W&B is a copy of a local ledger, so a live copy without one is refused) and opens it first if it is listed first;
+    listed alone, callbacks=[WandbLogger(ledger)], its ledger is added right before it, so every row W&B gets is in a local file first.
     `project` None: the twin's deployment's or rig's (project_for); a twin with neither gets none, which costs one callback_error and
     logs nothing. A W&B that will not start (no wandb, no network, no login) raises once in on_calibrate_begin: the calibration detaches
     the logger with one warning and never tries again; the ledger stays whole, and --sync copies it later. Mode is wandb's own

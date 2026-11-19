@@ -783,8 +783,8 @@ class RobotTwin:
 
         `callbacks` (gap E; Keras's fit(callbacks=)): objects told the schedule, each step as its fit finishes, the fitted twin and, through
         fitted.callbacks_, evaluate()'s gates (sim2real.calibration.Ledger: a local ledger; sim2real.tracking.calibrate_wandb.WandbLogger: its
-        W&B copy). None reads SIM2REAL_TRACK (off | ledger | wandb): unset, a sim calibration writes nothing and a rack calibration keeps a
-        ledger beside its submission; callbacks=[] wins over everything. A callback never changes or stops the fit (one that raises is
+        W&B copy). None reads SIM2REAL_TRACK (off | ledger | wandb): unset, a sim calibration (and a refit from held rack runs) writes
+        nothing and a fresh rack calibration keeps a ledger beside its submission; callbacks=[] wins over everything. A callback never changes or stops the fit (one that raises is
         detached with a warning); a calibration that fails still raises, after its ledger says so."""
         if on not in BACKENDS:
             raise ValueError(f"on must be one of {BACKENDS}, not {on!r}")
@@ -792,7 +792,10 @@ class RobotTwin:
             raise ValueError(f"calibrate fits against a sealed hidden truth (truth='sealed'), not {truth!r}")
         from .calibration.callbacks import Watch, resolve_callbacks  # noqa: PLC0415
 
-        resolved = resolve_callbacks(callbacks, backend=on)
+        # WHY a refit from held rack runs (on="real", data=) defaults as the sim does, to no ledger: it spends no robot time and plays
+        # nothing (lane D: "a refit writes no submission"), so it leaves no trail beside an old submission; SIM2REAL_TRACK=ledger or an
+        # explicit Ledger still opts in, under the ledger's own root
+        resolved = resolve_callbacks(callbacks, backend="real" if on == "real" and data is None else "sim")
         steer = {"move_truth": move_truth, "noise": noise, "config": config, "data": data, "transport": transport}
         if not resolved:
             # WHY exactly today's call with no callbacks: a stub runner, and every test that pins what a runner is handed, sees no new keyword

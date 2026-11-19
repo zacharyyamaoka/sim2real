@@ -282,6 +282,9 @@ fitted.evaluate()                                               # its gates land
 fitted = twin.calibrate(callbacks=[ledger, WandbLogger(ledger)])   # plus the live W&B copy (an unpowered host or a cloud VM)
 ```
 
+A `WandbLogger` listed without its ledger (`callbacks=[WandbLogger(ledger)]`) gets that ledger added right before it, so W&B never holds
+a row no local file has.
+
 - **The hooks** (duck-typed: a callback implements only the ones it wants; `sim2real.calibration.Callback` lists them as no-ops):
   `on_calibrate_begin(event, *, schedule, twin)`, `on_collect_end(event)`, `on_step_end(event)`, `on_calibrate_end(event, *, fitted)`,
   `on_calibrate_error(event)` (kind `error` or `pending`), `on_evaluate_end(event, *, report, fitted)`, `on_callback_error(event)`, and
@@ -305,7 +308,9 @@ fitted = twin.calibrate(callbacks=[ledger, WandbLogger(ledger)])   # plus the li
   One `Ledger` used for several calibrations opens a folder each, and each event lands in its own calibration's folder.
 - **Defaults.** A sim calibration writes nothing unless asked (sweeps call it hundreds of times). A rack calibration (`on="real"`, and
   `python -m sim2real.real`) keeps a ledger beside its submission, `<submission>/calibrate/<stamp>/`: the schedule is on disk before
-  the rack plays, each step lands as its fit finishes, and runs still to be played end it `pending`. `SIM2REAL_TRACK` overrides both:
+  the rack plays, each step lands as its fit finishes, and runs still to be played end it `pending`. A refit from held rack runs
+  (`on="real", data=`) plays nothing and spends no robot time, so it defaults as the sim does; asked for a ledger, it opens one under
+  `SIM2REAL_CALIBRATIONS`, never inside the old submission. `SIM2REAL_TRACK` overrides both:
   `off` (no ledger), `ledger`, `wandb` (a ledger and its live W&B copy); any other value is refused by name. `callbacks=[]` wins over
   everything. `SIM2REAL_CALIBRATIONS` is where a sim ledger goes (default `~/.local/share/sim2real/calibrations`). The test suite runs
   with `SIM2REAL_TRACK=off` (tests/conftest.py).
@@ -316,8 +321,10 @@ fitted = twin.calibrate(callbacks=[ledger, WandbLogger(ledger)])   # plus the li
   "Sim2Real · 1-DOF rack") or its rig's (`sim2real.tracking.rigs.RIGS`); a twin with neither logs nowhere unless a project is given.
   History rows: the schedule, one per step (`found/<instance>/<name>` with `/ci95_lo` and `/ci95_hi`), the outcome
   (`calibration/passed`, `recovery/<instance>/<name>/{pass,error}`), the evaluation (`eval/passed`, `gate/<id>/passed` beside
-  `gate/<id>/value`, `eval/<metric>/{before,after,factor}`). Angles are shown in degrees there and only there (Zach, 2026-11-11): a key
-  in rad is logged as `<name>_deg` (`_rad` becomes `_deg`, `_rad_s` becomes `_deg_s`). A W&B that will not start costs one warning
+  `gate/<id>/value`, and per metric `eval/<metric>_before`, `_after`, `_floor` and `_factor`, wandb_log's trend vocabulary). Angles
+  are shown in degrees there and only there (Zach, 2026-11-11): a key in rad is logged as `<name>_deg` (`_rad` and `_mrad` become
+  `_deg`, `_rad_s` becomes `_deg_s`), so the rack's `held_out_motor_mrad` logs as `eval/held_out_motor_before_deg` and
+  `eval/held_out_motor_after_deg`. A W&B that will not start costs one warning
   and no retry; the ledger stays whole.
 - **On the powered rig's host** keep wandb-core out of the calibration: run with the default ledger (or `SIM2REAL_TRACK=ledger`) and follow
   it from a capped, low-priority process, or sync it afterwards:
