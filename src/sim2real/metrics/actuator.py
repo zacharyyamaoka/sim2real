@@ -6,6 +6,8 @@
 - ``fidelity_ratios`` (gates T2 on q, T3 on tau): model error / floor per (model, tape class).
 - ``pair_parts`` / ``run_parts`` / ``rest_holds`` / ``rest_summary`` / ``split_ratios`` (T2's split): an error's moving part and hold
   part, where a model comes to rest against the real joint, and moves / floor's moving part and |hold offset| / floor's hold part.
+- ``feedback_share`` (performance, 2026-11-18, gap FF): the feedback torque's share of the command on moving rows, RMS(effort -
+  feedforward) / RMS(effort), pooled over drives; low means the feedforward carries the motion.
 
 Moved from RobotDx's stock checks (robotdx/diagnostics/stock/tracking.py and fidelity.py) on 2026-11-10 (Zach, proposal 2 step 4): the
 gates T1-T11 (bam_rack_twin acceptance) and RobotDx's stock checks were the same checks twice. The formulas live here once; RobotDx keeps
@@ -25,7 +27,7 @@ from robot_msgs.compare import error_stats
 from .series import center, pairwise_rms, rms
 
 __all__ = ["HOLD_SPEED_RAD_S", "PARTS", "tracking_statistic", "stops", "stop_summary", "floor", "fidelity_ratios", "pair_parts", "run_parts",
-           "rest_holds", "rest_summary", "split_ratios"]
+           "rest_holds", "rest_summary", "split_ratios", "feedback_share"]
 
 HOLD_SPEED_RAD_S = 0.02  # |commanded speed| at or under this is a hold (bam_rack_twin budget.HOLD_SPEED_RAD_S)
 PARTS = ("all", "moves", "holds")
@@ -79,6 +81,19 @@ def stop_summary(signed: Sequence[float], percentile: float = 90.0) -> dict[str,
     magnitudes = np.abs(np.array(signed))
     return {"value": float(np.percentile(magnitudes, percentile)), "n": len(signed), "median": float(np.median(magnitudes)),
             "max": float(magnitudes.max()), "mean_signed": float(np.mean(signed)), "worst": int(np.argmax(magnitudes))}
+
+
+def feedback_share(effort: np.ndarray, feedforward: np.ndarray, moving: np.ndarray) -> float:
+    """The feedback torque's share of the command on the ``moving`` rows: RMS(effort - feedforward) / RMS(effort), pooled over drives.
+    ``effort``: the torque the board applied, (N, J); ``feedforward``: what the command carried, (N, J); ``moving``: (N,) or (N, J) bool,
+    the caller's mask (a mask is the data adapter's, never a metric's). WHY (Zach, 2026-11-11): "we also want to see low feedback torque,
+    where most of it is coming from feedforward terms"; 0 is all feedforward, 1 is a feedforward that carries nothing."""
+
+    effort, feedforward = np.asarray(effort, float), np.asarray(feedforward, float)
+    mask = np.asarray(moving, bool)
+    if not mask.any():
+        raise ValueError("feedback_share needs at least one moving row")
+    return rms((effort - feedforward)[mask]) / rms(effort[mask])
 
 
 # --------------------------------------------------------------------------- the floor and fidelity: model vs real over real vs real

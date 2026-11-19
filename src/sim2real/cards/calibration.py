@@ -326,7 +326,8 @@ ROUTINES = (
          tests=("servo.full_schedule", "servo.plateaus", "servo.gravity", "servo.chirp"),
          code=(CodeHome(SIM2REAL, "sysid/examples/pendulum_can11/pipeline.py", note="identify()"),), status="implemented",
          oracle=("pendulum_can11:servo.dynamics_regression",),
-         alternatives=("servo.dynamometer", "servo.stock_quasistatic", "servo.live_reid_t10", "servo.breakaway_two_sided"),
+         alternatives=("servo.dynamometer", "servo.stock_quasistatic", "servo.live_reid_t10", "servo.breakaway_two_sided",
+                       "arm.feedforward_bench"),
          references=(refs.SWEVERS_1997, refs.ARMSTRONG_1994, refs.HOLLERBACH_2016),
          # WHY (PEP 0001; sysid/examples/ur_wrist_test_rig/rig.py Dynamics): its runs are planned in the homed frame, and it holds the
          # static term at the breakaway routine's value
@@ -557,7 +558,7 @@ ROUTINES = (
          tests=("arm_6dof.excitation",),
          code=(CodeHome(SIM2REAL, "sysid/arm.py", note="fit_dynamics"),), status="implemented",
          oracle=("ur5e:arm.dynamics_excitation", "ur5e_2f85:arm.dynamics_excitation"),
-         alternatives=("servo.dynamometer",),
+         alternatives=("servo.dynamometer", "arm.feedforward_bench"),
          references=(refs.SWEVERS_1997, refs.GAUTIER_1990, refs.ATKESON_1986)),
     routine("arm.backlash_gravity_sweep", "UR joint backlash from a gravity-crossing sweep (motor-side signals only)", "servo_dynamic.arm",
          (I("servo", "M4", "backlash_rad"),), "both",
@@ -983,4 +984,31 @@ ROUTINES = (
          references=(GARRIDO_2014,),
          # WHY after the lock (PEP 0001): camera.exposure_lock writes exposure and gain provisionally; this tune finds them for accuracy
          requires=("marker_ids",), refines=("exposure", "gain")),
+
+    # --- feedforward, bench (2026-11-18, additive; gap FF-1, docs/decision-feedforward-bench-2026-11-18.md) --------------------------
+    routine("arm.feedforward_bench", "Arm feedforward on the bench: gravity and friction from paired out-and-back transfers",
+         "servo_dynamic.arm", (I("arm_subassembly", "M2", "link_inertials"), I("arm_6dof", "M3", "link_inertials")), "bench",
+         Q(4 * 1500 + 600, "s", ESTIMATE, "up to 4 rounds of about 25 arm-minutes of paired transfers, and 600 s set-up; UNVERIFIED: no "
+                                          "bench run yet (the 14b refit used 11 harvested runs, 15c 43 stops runs)"),
+         Q(600, "s", ESTIMATE, "starting the session and watching its first round"), (),
+         "paired out-and-back trapezoidal transfers over a workspace pose graph at two or more speed bands, each one "
+         "robot_trajectories.trapezoidal_velocity(..., back_to_start=True) call, its feedforward channel at the current values",
+         "every edge x speed band of the pose graph (round 1 plays the first cells; later rounds fill empty or over-tolerance cells)", 1,
+         "least squares of the board's torque less the twin's inertial term on the gravity regressor Y(q) and, per drive, sign(qd) and qd "
+         "(Coulomb and a net viscous term), over moving rows only: holds never enter, and the way back over the same poses cancels the "
+         "friction; a ridge toward the prior the round was handed; 95 % from the covariance; the residual held out one cell at a time",
+         code=(CodeHome(SIM2REAL, "src/sim2real/calibration/feedforward.py", note="FeedforwardBench: the runs, the commanded feedforward"),
+               CodeHome(SIM2REAL, "src/sim2real/fit/feedforward.py", note="fit: the friction-cancelling estimator")),
+         status="implemented",
+         oracle_note="no sysid check: graded against a sealed toy arm's hidden truth on the one-click seam, the fit by "
+                     "tests/test_feedforward_bench.py and the rounds, the closed loop and the ladder by tests/test_feedforward_rounds.py "
+                     "(routine_ladders/arm.feedforward_bench.json); the bam_fb_v2 MuJoCo check is the next leg",
+         alternatives=("arm.dynamics_excitation", "servo.dynamics_regression"),
+         note="a port of bam_ws bam_pid_tunning docs/mass_refit, the one-off 14b / 15c refits behind today's measured masses; Kt is not "
+              "measured, and a Kt error reads exactly like a mass scale",
+         references=(refs.ATKESON_1986, refs.GAUTIER_1990, refs.ARMSTRONG_1994),
+         # WHY refines, not identifies, for the friction (the gap FF review, 2026-11-18): an integrated-servo-only pick must never get an
+         # arm routine in its cover; on an arm it runs after the routine that found the drives' friction and refits it as one curve with
+         # gravity. WHY uses the zeros: its transfers are planned in the homed frame (a soft edge: the prior serves)
+         uses=("joint_zero_offsets", "joint_offsets"), refines=("frictionloss_nm", "damping_nm_s_rad")),
 )
