@@ -222,3 +222,23 @@ def test_a_tune_inside_the_range_passes_the_gains(can11_fitted):
     gains = check(sim2real.preflight(tuned(can11_fitted, kp=1.3 * nominal_loop_kp(can11_fitted), kd=1.2 * nominal_loop_kd(can11_fitted)),
                                      soak_s=0.5), "gains_within_board_limits")
     assert gains.passed is True, gains
+
+
+# --- added after the first green (tests only; nothing above edited): the soak's mutation must fail for its OWN reason --------------------
+# WHY: CAN 11 at its default 5 Hz loop already fails the stop gate (Coulomb 0.83 N·m / kp 120 N·m/rad ~ 6.9 mrad of deadband against the
+# 3.6 mrad gate), so "the 20x soak is red" alone would pass a soak that ignored the inertia. These hold the mutation to a new reason and the
+# soak to a pass where the physics allows one.
+
+
+def test_the_20x_soak_fails_for_the_inertia_not_the_baseline(can11_fitted):
+    heavy = copy.copy(can11_fitted)
+    inertia = can11_fitted.description.instance("can11").parameters["armature_kg_m2"]
+    heavy.description = can11_fitted.description.with_values({"can11.armature_kg_m2": revalue(inertia, 20.0 * float(inertia))})
+    soak = check(sim2real.preflight(heavy), "sim_soak")
+    assert soak.passed is False and ("settle" in soak.why or "torque-cap" in soak.why), soak
+
+
+def test_a_2x_stiffer_tune_passes_every_blocking_check_on_can11(can11_fitted):
+    report = sim2real.preflight(tuned(can11_fitted, kp=2.0 * nominal_loop_kp(can11_fitted), kd=1.4 * nominal_loop_kd(can11_fitted)))
+    failing = {c.id: c.why for c in report.checks if c.id in BLOCKING and c.passed is not True}
+    assert not failing, failing
