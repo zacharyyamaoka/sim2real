@@ -118,7 +118,8 @@ class PidTune:
     kind: ClassVar[str] = "tune"
     identifies: ClassVar[tuple[str, ...]] = ()
     refines: ClassVar[tuple[str, ...]] = ()
-    wall_time_s: ClassVar[float] = 0.0
+    # WHY no wall_time_s here (2026-11-19): the catalog's (cards/calibration.py) is the one number, the SIM tier's compute on the fitted
+    # twin as a cloud grade measured it, and the planner's declaration reads it there; "no robot time" is runs() being empty
     operator_time_s: ClassVar[float] = 0.0
 
     @property
