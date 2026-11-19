@@ -186,10 +186,16 @@ class ToyArm:
         self.commands: dict[str, JointTrajectory] = {}
 
     def parameters(self):
-        out = [seam.Parameter(k, "N·m", ("abs", 0.05), "proposed (gap FF): half the fit's gravity tolerance", ROUTINE) for k in GRAVITY_KEYS]
+        fitted = set(self.routine.identifies)
+
+        def named(key):   # WHY: a key the routine under test leaves out of its model (the blind model's sin terms) names no routine
+            return (ROUTINE, "") if key in fitted else (None, "the routine under test leaves it out of its model")
+
+        out = [seam.Parameter(k, "N·m", ("abs", 0.05), "proposed (gap FF): half the fit's gravity tolerance", *named(k)) for k in GRAVITY_KEYS]
         for d in DRIVES:
-            out.append(seam.Parameter(f"{d}.frictionloss_nm", "N·m", ("abs", 0.03), "proposed (gap FF)", ROUTINE))
-            out.append(seam.Parameter(f"{d}.damping_nm_s_rad", "N·m·s/rad", ("abs", 0.05), "proposed (gap FF)", ROUTINE))
+            out.append(seam.Parameter(f"{d}.frictionloss_nm", "N·m", ("abs", 0.03), "proposed (gap FF)", *named(f"{d}.frictionloss_nm")))
+            out.append(seam.Parameter(f"{d}.damping_nm_s_rad", "N·m·s/rad", ("abs", 0.05), "proposed (gap FF)",
+                                      *named(f"{d}.damping_nm_s_rad")))
         return tuple(out)
 
     def noise(self):
@@ -271,12 +277,16 @@ def closed_loop(command, values, noise, rng, *, warm=0, gains=None):
         q = q + qd * DT
         log_q[i], log_qd[i], log_tau[i], log_ff[i] = q, qd, tau, ref_ff[k]
     keep = np.arange(0, len(t), HOST)
+    # WHY the board's torque averaged over each host period, not its first tick: the target is held for the period while q moves on, so the
+    # first tick sits kp x v x 4.5 ms over what the plant feels on average, an apparent viscous term (+0.135 / +0.090 N.m.s/rad) no fit over
+    # (q, qd, effort) can tell from friction (FF-2 fix round 1, cloud d07280523: at HOST=1 friction recovers within 0.005 N.m)
+    effort = np.add.reduceat(log_tau, keep, axis=0) / np.diff(np.append(keep, len(t)))[:, None]
     position = log_q[keep] + rng.normal(0.0, e["encoder_noise_rad"], (len(keep), 2))
     if e["encoder_quantum_rad"] > 0:
         position = np.round(position / e["encoder_quantum_rad"]) * e["encoder_quantum_rad"]
     return JointTrajectory(t=t[keep], joint_names=DRIVES, positions=position,
                            velocities=log_qd[keep] + rng.normal(0.0, e["velocity_noise_rad_s"], (len(keep), 2)),
-                           effort=log_tau[keep] + rng.normal(0.0, e["torque_noise_nm"], (len(keep), 2)),
+                           effort=effort + rng.normal(0.0, e["torque_noise_nm"], (len(keep), 2)),
                            channels={"feedforward_effort": log_ff[keep], "target_positions": ref_q[held[keep]]})
 
 
