@@ -27,6 +27,14 @@ schedule".
 | the plan's dict gains `schedule` rows only when a step is bound; `PlanStep.to_dict()` is unchanged | a catalog plan's dict and the record's frozen step rows (`sim2real.calibration/1`) stay as they were | — |
 | the pendulum's `TRAIN` keeps no command and carries `seconds` = `sysid/results/pendulum_can11.json` `schedule.train.seconds` (771.8 s) | the rack plays these runs (sysid's schedule), so they are never labelled recorded data; the length is read, never re-derived | `seconds=None` |
 
+## Addendum (2026-11-18, lane L3, gap T): which shared ids are refused
+
+The row "an id a known-now and a made-after step share is refused" now exempts one kind of run: one with no command and no spec,
+an id the rig reads as is (a log). Nothing an earlier fit could move goes into it, so both steps read one run and it plays once; T's
+counted-once totals need it (its toy's offset and gain steps share commandless runs). A run with a command or a spec stays refused:
+a spec can read a fitted value (the UR wrist's do), and at play time nothing compares specs (the runner serves a shared id from
+`played`, and `rig._held_to_schedule` compares only commands). Undo: drop the `moveable` test in `plan._bind`.
+
 ## Left for later lanes
 
 - Rounds (collect, fit, come back): `tests/test_calibration_rounds.py`, lane A2.

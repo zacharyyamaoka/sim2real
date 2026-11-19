@@ -138,8 +138,8 @@ that ships its routines (a rig on the one-click seam, or the pendulum's `routine
   its commands are made from); without it, the keys it `requires` that an earlier step writes. A known value makes nothing wait.
 - **calibrate() is held to it.** A known-now step must play exactly the runs shown, or calibrate() refuses it by name before it plays
   (a routine whose commands read more than it declares is caught there). `runs()` must give the same runs for the same values, a run id
-  means one command, and an id with a command shared by a known-now and a made-after step is refused at plan time (a run with no
-  command, a log or what the rig's spec says, has nothing an earlier fit could move: both steps read it, and it plays once).
+  means one command, and an id with a command or a spec shared by a known-now and a made-after step is refused at plan time (a run
+  with neither, a log the rig reads as is, has nothing an earlier fit could move: both steps read it, and it plays once).
 - **What it costs: a shared run is counted once** (gap T, 2026-11-18). The runner plays a run two steps share once, so the totals do too:
   `totals["wall_time_s"]` is each step's own time (its declared wall time less the known length of the runs it plays, floored at 0) plus
   every distinct run's known length once, and `totals["run_time_s"]` is that run time: the runs planned at the priors, each counted once.

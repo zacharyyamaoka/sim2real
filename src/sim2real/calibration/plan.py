@@ -663,7 +663,8 @@ def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping
     """Each step's runs at the priors and its status (see CalibrationSchedule). Each routine's runs() is called twice at the priors: once to
     bind (`first`: {id(routine object): its runs at the priors} already read by _plan_rig for the budget, so that call is not repeated),
     once to check it is static. Refused: runs() that change between the two calls; one run id bound to two different runs; a run id
-    with a command shared by a known-now step and a made-after step (once the earlier step has run, the two commands differ under one id).
+    with a command or a spec shared by a known-now step and a made-after step (once the earlier step has run, the two differ under one
+    id). Only a run with neither (an id the rig reads as is) is one run both steps read.
 
     WHY from the declaration and never by probing runs() at moved values (Zach, 2026-11-17: "routines can almost like declare depencies on
     what they require to run ahead of time so you can ... atuomaticaly generate the schedule"): a routine says what its commands read
@@ -703,14 +704,16 @@ def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping
             if not _same_run(run, other):
                 raise CalibrationPlanError(f"run id {run.id!r} is bound to two different runs, by {by} and by {step.routine} (another command, "
                                            "spec, split or length): one run id is one command; give one of them another id")
-            # WHY only a run with a command (gap T, 2026-11-18): what goes wrong is that once the earlier step has run the two COMMANDS
-            # differ under one id. A run with no command (a log, or what the rig's spec says) has none an earlier fit could move: it is one
-            # run both steps read, played once, as the runner holds it (rig._held_to_schedule compares the commands under an id)
-            if getattr(run, "command", None) is not None and (by_status == "made after") != (status == "made after"):
+            # WHY only a run with nothing an earlier fit could move is exempt (gap T, 2026-11-18): no command and no spec, an id the rig
+            # reads as is (a log). A run with a command or a spec (the UR wrist's specs read fitted values) differs under one id once the
+            # earlier step has run, and nothing catches it at play time: the runner serves a shared id from `played`, and
+            # rig._held_to_schedule compares only commands. So it stays refused here
+            moveable = getattr(run, "command", None) is not None or getattr(run, "spec", None) is not None
+            if moveable and (by_status == "made after") != (status == "made after"):
                 late, early = (step.routine, by) if status == "made after" else (by, step.routine)
                 raise CalibrationPlanError(f"run id {run.id!r} is shared by {early}, known now, and {late}, whose commands are made after "
-                                           f"an earlier step runs: they agree at the priors, but once that step has run the two commands "
-                                           f"differ under one id; give {late}'s run an id of its own")
+                                           f"an earlier step runs: they agree at the priors, but once that step has run the two runs "
+                                           f"(command or spec) differ under one id; give {late}'s run an id of its own")
         out.append(dataclasses.replace(step, runs=runs, status=status, commands_after=after))
     return tuple(out)
 
