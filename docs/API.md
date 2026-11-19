@@ -166,7 +166,7 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 ### `sim2real.tracking.calibrate_wandb.WandbLogger(ledger, *, project=None, entity=..., wandb_dir=None)`
 
 - **What it is:** the live W&B copy of a `Ledger` (gap E): one run per calibration (`job_type` `calibrate`), the rows `records(folder)`
-  rebuilds from the ledger alone, angles in degrees. It requires the ledger it copies; listed without it, `calibrate()` adds that ledger right before it. `project` None: the twin's deployment's
+  rebuilds from the ledger alone, angles in degrees. It requires the ledger it copies; listed without it (or before it), `calibrate()` puts that ledger right before it; its run opens once the ledger holds the calibration's folder, and a ledger that raises is detached together with it, so W&B never holds a row no local file has. `project` None: the twin's deployment's
   (app/registry.json) or rig's (`tracking.rigs.RIGS`) project; a twin with neither logs nowhere. A W&B that will not start costs one
   warning (the calibration detaches it) and no retry.
 - **Also there:** `records(folder)` (the run, rebuilt from the files), `row(event)` (one history row, pure), `project_for(twin_id)`,

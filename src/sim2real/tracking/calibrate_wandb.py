@@ -330,13 +330,16 @@ class _Copy:
 
 
 class WandbLogger:
-    """The live W&B copy of a Ledger (a callback: list it after its ledger, callbacks=[ledger, WandbLogger(ledger)]). It requires the
-    Ledger it copies (W&B is a copy of a local ledger, so a live copy without one is refused) and opens it first if it is listed first;
-    listed alone, callbacks=[WandbLogger(ledger)], its ledger is added right before it, so every row W&B gets is in a local file first.
+    """The live W&B copy of a Ledger (a callback: callbacks=[ledger, WandbLogger(ledger)]). It requires the Ledger it copies (W&B is a
+    copy of a local ledger, so a live copy without one is refused); listed before that ledger or without it, calibrate() puts the ledger
+    right before it, so every event reaches the ledger's file before W&B. A calibration's run opens only once its ledger holds that
+    calibration's folder (a rack ledger waits in memory until emit names the submission: the rows wait here too), and a ledger that
+    raises is detached together with this copy (Watch._detach), so W&B never holds a row no local file has.
     `project` None: the twin's deployment's or rig's (project_for); a twin with neither gets none, which costs one callback_error and
-    logs nothing. A W&B that will not start (no wandb, no network, no login) raises once in on_calibrate_begin: the calibration detaches
-    the logger with one warning and never tries again; the ledger stays whole, and --sync copies it later. Mode is wandb's own
-    (WANDB_MODE=offline on a cloud VM: the run lands under `wandb_dir`, `wandb sync` uploads it)."""
+    logs nothing. A W&B that will not start (no wandb, no network, no login) raises once, where the run opens (on_calibrate_begin, or on
+    the rack when the ledger's folder opens): the calibration detaches the logger with one warning and never tries again; the ledger stays
+    whole, and --sync copies it later. Mode is wandb's own (WANDB_MODE=offline on a cloud VM: the run lands under `wandb_dir`, `wandb
+    sync` uploads it)."""
 
     def __init__(self, ledger: Any, *, project: str | None = None, entity: str = ENTITY, wandb_dir: str | Path | None = None):
         if not (callable(getattr(ledger, "on_calibrate_begin", None)) and callable(getattr(ledger, "folder_of", None))):
@@ -344,24 +347,46 @@ class WandbLogger:
         self.ledger, self.project, self.entity = ledger, project, entity
         self.wandb_dir = None if wandb_dir is None else Path(wandb_dir)
         self._copies: dict[str, _Copy] = {}
+        self._held: dict[str, list[dict]] = {}   # a calibration's events while its ledger has no folder yet
 
     def on_calibrate_begin(self, event: dict, *, schedule: Any = None, twin: Any = None) -> None:
-        self.ledger.on_calibrate_begin(event, schedule=schedule, twin=twin)   # idempotent: the ledger's own call is then a no-op
+        self.ledger.on_calibrate_begin(event, schedule=schedule, twin=twin)   # idempotent: Watch has already called it
         project = self.project or project_for(event.get("twin"))
         if not project:
             raise ValueError(f"WandbLogger: twin {event.get('twin')!r} has no W&B project (no deployment in app/registry.json names its unit, "
                              "no rig in sim2real.tracking.rigs.RIGS is it); pass WandbLogger(ledger, project=...) to copy it anyway")
-        copy = _Copy(project, self.entity, self.wandb_dir)
-        folder = self.ledger.folder_of(event["calibration"])
-        copy.start(event, folder.name if folder is not None else "")
-        self._copies[event["calibration"]] = copy
-        copy.log(event)
+        self._copies[event["calibration"]] = _Copy(project, self.entity, self.wandb_dir)
+        self._held[event["calibration"]] = []
+        self._log(event)
 
     def _log(self, event: dict) -> _Copy | None:
-        copy = self._copies.get(event["calibration"])
-        if copy is not None:
+        """Log one event, or hold it while the ledger has no folder for its calibration; the copy once it is open, else None."""
+        cid = event["calibration"]
+        copy = self._copies.get(cid)
+        if copy is None:
+            return None
+        if cid not in self._held:
+            copy.log(event)
+            return copy
+        self._held[cid].append(event)
+        return self._release(cid)
+
+    def _release(self, cid: str) -> _Copy | None:
+        """Open the run and log the held events once the ledger holds this calibration's folder. WHY wait for the folder (house rule: W&B
+        is a copy of a local ledger): a rack ledger keeps its first lines in memory until emit names the submission; a run opened at the
+        schedule would hold a row no local file has if the process died, or the ledger failed to open its folder, before then."""
+        folder = self.ledger.folder_of(cid)
+        if folder is None or cid not in self._held:
+            return None
+        held = self._held.pop(cid)
+        copy = self._copies[cid]
+        copy.start(held[0], folder.name)
+        for event in held:
             copy.log(event)
         return copy
+
+    def on_submission(self, event: dict) -> None:
+        self._release(event["calibration"])   # the ledger has just opened its folder beside the submission (never a ledger line itself)
 
     def on_collect_end(self, event: dict) -> None:
         self._log(event)

@@ -15,8 +15,8 @@ WHY callbacks on calibrate() and not on CalibrationConfig (Keras's fit(callbacks
 record; an observer changes nothing about the fit, so it stays out of the record and out of the session id a dataset is grown by.
 
 WHY observers never guard (the module docstring of twin.py: "guards live in the runner, never in callbacks"): a hook that raises is detached
-with one RuntimeWarning and a ``callback_error`` line, and the calibration goes on unchanged; a calibration that fails still raises, after
-its ledger says so.
+with one RuntimeWarning and a ``callback_error`` line, and the calibration goes on unchanged (a ledger takes its W&B copy with it); a
+calibration that fails still raises, after its ledger says so.
 
 WHY off by default on the sim and a ledger by default on the rack: the sim's calibrate() is called hundreds of times by sweeps and stress
 lanes (writing a folder each would flood the disk, and a W&B run each the free tier), and it documented "writes nothing"; a rack calibration
@@ -132,7 +132,7 @@ class Ledger(Callback):
     def on_calibrate_begin(self, event: dict, *, schedule: Any = None, twin: Any = None) -> None:
         cid = event["calibration"]
         if cid in self._folders or cid in self._waiting:
-            return   # WHY idempotent: a WandbLogger listed before its ledger opens it first, and the ledger's own call is then a no-op
+            return   # WHY idempotent: a WandbLogger opens its ledger too (Watch puts the ledger first, so the logger's call is the no-op)
         if self.beside_submission:
             self._waiting[cid] = []
         else:
@@ -269,16 +269,20 @@ def resolve_callbacks(callbacks: Any, *, backend: str = "sim") -> list:
 
 
 def _with_ledgers(callbacks) -> list:
-    """The callbacks as given, plus the Ledger a copy (a WandbLogger: anything with a `.ledger` that keeps folders) copies when that ledger
-    is not in the list, inserted right before the copy. WHY (house rule: W&B is a copy of a local ledger): callbacks=[WandbLogger(ledger)]
-    alone would send every step, outcome and gate to W&B and none to the ledger, so W&B would hold rows no local file has."""
-    given = list(callbacks)
+    """The callbacks in their given order, except that the Ledger a copy (a WandbLogger: anything with a `.ledger` that keeps folders)
+    copies always comes right before its first copy: inserted there when the list lacks it, moved there when it is listed after it.
+    WHY (house rule: W&B is a copy of a local ledger): callbacks=[WandbLogger(ledger)] alone would send every step, outcome and gate to
+    W&B and none to the ledger, and [WandbLogger(ledger), ledger] would log each row to W&B before the ledger wrote it, so a ledger that
+    then failed (and was detached, with its copy: Watch._detach) would leave W&B holding a row no local file has."""
     out: list = []
-    for callback in given:
+    placed: list = []   # ledgers moved up before their copy, skipped where the caller listed them
+    for callback in callbacks:
+        if any(callback is p for p in placed):
+            continue
         ledger = getattr(callback, "ledger", None)
-        if (callable(getattr(ledger, "folder_of", None)) and not any(ledger is c for c in given)
-                and not any(ledger is c for c in out)):
+        if callable(getattr(ledger, "folder_of", None)) and not any(ledger is c for c in out):
             out.append(ledger)
+            placed.append(ledger)
         out.append(callback)
     return out
 
@@ -331,9 +335,10 @@ def _compare(report: Any) -> dict[str, dict]:
 
 class Watch:
     """Internal: one calibration's dispatcher. It builds each event exactly once (schema, kind, calibration id, twin, utc, t since the
-    calibration began, and the kind's fields), hands it to each live callback in list order through the hook its kind names, and detaches
-    a callback whose hook raises (one RuntimeWarning, one callback_error event to the callbacks still attached). RobotTwin.calibrate and
-    real.main build one when there are callbacks; the runners only ever see its plain functions (on_plan, on_step, ...)."""
+    calibration began, and the kind's fields), hands it to each live callback in list order (a copy's ledger first: _with_ledgers) through
+    the hook its kind names, and detaches a callback whose hook raises, with every copy of it when it is a ledger (one RuntimeWarning and
+    one callback_error event each, to the callbacks still attached). RobotTwin.calibrate and real.main build one when there are callbacks;
+    the runners only ever see its plain functions (on_plan, on_step, ...)."""
 
     def __init__(self, callbacks, twin: Any, backend: str, *, config: Any = None, calibration: str | None = None, started: float | None = None):
         self.alive = _with_ledgers(callbacks)
@@ -441,10 +446,14 @@ class Watch:
         return {"schema": EVENTS_SCHEMA, "kind": kind, "calibration": self.id, "twin": self.twin_id, "utc": _utc(),
                 "t": time.monotonic() - self.started, **fields}
 
+    def _attached(self, callback: Any) -> bool:
+        return any(callback is c for c in self.alive)
+
     def _call(self, hook: str, event: dict, **objects: Any) -> None:
         for callback in list(self.alive):
             method = getattr(callback, hook, None)
-            if not callable(method):
+            # WHY re-checked per callback: a copy detached along with its ledger earlier in this very event never gets the event
+            if not callable(method) or not self._attached(callback):
                 continue
             try:
                 method(event, **objects)
@@ -454,21 +463,36 @@ class Watch:
             failure = self._errors.pop(0)
             for callback in list(self.alive):
                 method = getattr(callback, "on_callback_error", None)
-                if not callable(method):
+                if not callable(method) or not self._attached(callback):
                     continue
                 try:
                     method(failure)
                 except Exception as caught:
                     self._detach(callback, "on_callback_error", caught)
 
-    def _detach(self, callback: Any, hook: str, caught: Exception) -> None:
-        if callback in self.alive:
-            self.alive.remove(callback)
+    def _detach(self, callback: Any, hook: str, caught: Exception, *, because: str | None = None) -> None:
+        """Detach one callback (by identity): one RuntimeWarning and one callback_error event. `because` (the failure of the ledger it
+        copies): it goes because that ledger went, and its warning and event say so."""
+        if not self._attached(callback):
+            return
+        self.alive = [c for c in self.alive if c is not callback]
         name = type(callback).__name__
-        warnings.warn(f"sim2real calibrate: callback {name}.{hook} raised {caught!r}; detached, the calibration goes on", RuntimeWarning,
-                      stacklevel=3)
+        if because is None:
+            why = _words(caught)
+            because = f"{name}.{hook} raised {why}"
+            warnings.warn(f"sim2real calibrate: callback {name}.{hook} raised {caught!r}; detached, the calibration goes on",
+                          RuntimeWarning, stacklevel=3)
+        else:
+            why = f"detached with the ledger it copies ({because})"
+            warnings.warn(f"sim2real calibrate: callback {name} {why}, so W&B never holds a row no local file has; the calibration goes on",
+                          RuntimeWarning, stacklevel=4)
         # WHY queued until this event has reached every callback: a ledger listed after the one that raised still writes the event first
-        self._errors.append(self._event("callback_error", callback=name, hook=hook, error=_words(caught)))
+        self._errors.append(self._event("callback_error", callback=name, hook=hook, error=why))
+        # WHY every copy of a detached ledger goes with it (house rule: W&B is a copy of a local ledger): with SIM2REAL_TRACK=wandb, an
+        # OSError in the ledger's append at step 3 would otherwise leave its WandbLogger logging steps 3.. that no local file has, and
+        # --sync could never rebuild them. Identity, not type: whatever copies this very ledger (`.ledger is` it), and copies of those.
+        for copy in [c for c in self.alive if getattr(c, "ledger", None) is callback]:
+            self._detach(copy, hook, caught, because=because)
 
 
 def _code() -> dict:

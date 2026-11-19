@@ -282,8 +282,11 @@ fitted.evaluate()                                               # its gates land
 fitted = twin.calibrate(callbacks=[ledger, WandbLogger(ledger)])   # plus the live W&B copy (an unpowered host or a cloud VM)
 ```
 
-A `WandbLogger` listed without its ledger (`callbacks=[WandbLogger(ledger)]`) gets that ledger added right before it, so W&B never holds
-a row no local file has.
+A `WandbLogger` listed without its ledger (`callbacks=[WandbLogger(ledger)]`) gets that ledger added right before it, and one listed
+before its ledger gets the ledger moved there, so every event reaches the ledger's file first; its run opens only once the ledger holds
+the calibration's folder (on the rack, once emit names the submission), and a ledger that raises is detached together with every
+callback copying it (`.ledger is` that ledger), each with its own warning and `callback_error` line. W&B never holds a row no local file
+has.
 
 - **The hooks** (duck-typed: a callback implements only the ones it wants; `sim2real.calibration.Callback` lists them as no-ops):
   `on_calibrate_begin(event, *, schedule, twin)`, `on_collect_end(event)`, `on_step_end(event)`, `on_calibrate_end(event, *, fitted)`,
@@ -314,7 +317,8 @@ a row no local file has.
   `off` (no ledger), `ledger`, `wandb` (a ledger and its live W&B copy); any other value is refused by name. `callbacks=[]` wins over
   everything. `SIM2REAL_CALIBRATIONS` is where a sim ledger goes (default `~/.local/share/sim2real/calibrations`). The test suite runs
   with `SIM2REAL_TRACK=off` (tests/conftest.py).
-- **Observers never guard.** A callback that raises is detached (one warning, one `callback_error` line) and never changes the fit; a
+- **Observers never guard.** A callback that raises is detached (one warning, one `callback_error` line; a ledger takes its copies along)
+  and never changes the fit; a
   calibration that fails still raises, after its ledger ends `error`; a fitted twin built without callbacks still evaluates.
 - **The W&B copy** (`sim2real.tracking.calibrate_wandb`): one run per calibration, id `run_id("calibrate", <calibration id>)`,
   `job_type` `calibrate`, group `calibrate · <twin>`, in the twin's deployment's project (app/registry.json: CAN 11 goes to
