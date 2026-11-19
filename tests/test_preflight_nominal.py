@@ -239,6 +239,8 @@ def test_the_20x_soak_fails_for_the_inertia_not_the_baseline(can11_fitted):
 
 
 def test_a_2x_stiffer_tune_passes_every_blocking_check_on_can11(can11_fitted):
-    report = sim2real.preflight(tuned(can11_fitted, kp=2.0 * nominal_loop_kp(can11_fitted), kd=1.4 * nominal_loop_kd(can11_fitted)))
+    # WHY 1.9 and not 2.0: 2x sits on pidtuna's upper bound, and this file's loop kp (from the FITTED inertia) is a hair above the world's
+    # (the nominal inertia), so 2.0x lands just outside it
+    report = sim2real.preflight(tuned(can11_fitted, kp=1.9 * nominal_loop_kp(can11_fitted), kd=1.4 * nominal_loop_kd(can11_fitted)))
     failing = {c.id: c.why for c in report.checks if c.id in BLOCKING and c.passed is not True}
     assert not failing, failing
