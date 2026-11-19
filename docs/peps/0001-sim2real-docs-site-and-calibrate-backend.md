@@ -116,6 +116,11 @@ their prior, never silently.
   - Unimplemented routines are never selected.
 - **`plan(twin_or_picked, config=None) -> CalibrationPlan`** answers "what would `calibrate()` run, in what order" without running
   anything. The site and a part designer use it.
+- **Since 2026-11-18 (gap B):** gates before the rank, in order: excluded → not implemented → setting → equipment you have
+  (`Budget.equipment`) → on the catalog path, a fit graded failing at `config.level` is never planned → known. A rig's own routines pass
+  the equipment gate (the catalog's items for their id) but not the status or recovery gates: a rig's routine is its implementation.
+  Setup routines are never recovery-gated. Including a gated routine is refused. The cover stays the minimal greedy cover by rank, and a
+  `why` names a better-ranked alternative honestly instead of "ranked ahead of" it. docs/CALIBRATE.md, "Picking".
 
 ## 6. CalibrationConfig: dependency injection
 
@@ -136,6 +141,11 @@ A frozen dataclass with a JSON round trip, the pattern `NoiseModel` already uses
 | `custom` | injected routine objects; they replace the rig's implementation of a registered id, and an unregistered id is refused |
 
 Per-routine options reach a **copy** of the routine. Unknown option names raise `KeyError`.
+
+**Since 2026-11-18 (gap B):** `Budget(settings, max_wall_time_s, max_equipment_usd, equipment=None)`. `equipment` is the equipment you
+have or can use (borrowed counts), as `cards/calibration.py` EQUIPMENT ids; `None` = no inventory (every item available, today's
+behaviour), an unknown id is refused. `max_equipment_usd` and `strict` cap what is still to buy (`totals["equipment_to_buy_usd"]`);
+`totals["equipment_usd"]` keeps its meaning. Zach, Daily Note 2026-11-17: "you can define what equipment you have, etc. etc..".
 
 ## 7. What calibrate() returns: `sim2real.calibration/1`
 

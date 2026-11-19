@@ -14,7 +14,7 @@ steered, so it must compare by value, never change under a run, and travel with 
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,26 +27,49 @@ class Budget:
     """What a run may spend. `settings`: where routines may run (a routine that runs "both" fits either). `max_wall_time_s`: the plan's
     wall time, counted once: each routine's own time (its set-up included; operator time is a share of it) plus each run counted once
     however many routines read it, as the runner plays it (the plan's totals["wall_time_s"]). `max_equipment_usd`: the distinct equipment
-    the plan needs, each item counted once. None = no limit."""
+    the plan still has to buy, each item counted once (what `equipment` lists is had already). None = no limit.
+
+    `equipment`: the equipment you have or can use (borrowed counts), as equipment ids of cards/calibration.py EQUIPMENT (an id it does
+    not hold is refused when a plan is made). A routine needing an item it does not list is dropped, naming the item. None (the default)
+    = no inventory: every item counts as available and is costed, today's behaviour; () = you have none.
+
+    WHY an inventory beside the $ cap (Zach, Daily Note 2026-11-17: "you can define what equipment you have, etc. etc.."; 2026-11-06:
+    "dynameter could be one... but if you don't have access to that..."): a $ cap alone plans a routine whose jig you lack whenever
+    the jig is cheap, and charges you again for kit already on the bench."""
     settings: tuple[str, ...] = SETTINGS
     max_wall_time_s: float | None = None
     max_equipment_usd: float | None = None
+    equipment: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "settings", tuple(self.settings))
         unknown = [s for s in self.settings if s not in SETTINGS]
         if unknown or not self.settings:
             raise ValueError(f"budget settings are a non-empty subset of {SETTINGS}, not {self.settings}")
+        if isinstance(self.equipment, str):
+            raise TypeError(f"Budget.equipment is a tuple of equipment ids (cards/calibration.py EQUIPMENT), not the string "
+                            f"{self.equipment!r}")
+        if self.equipment is not None:
+            object.__setattr__(self, "equipment", tuple(dict.fromkeys(str(e) for e in self.equipment)))
 
     def allows(self, setting: str) -> bool:
         return setting == "both" or setting in self.settings
 
+    def missing(self, equipment: Iterable[str]) -> tuple[str, ...]:
+        """The items of `equipment` that `self.equipment` does not list, in the order given; () with no inventory (None)."""
+        if self.equipment is None:
+            return ()
+        return tuple(e for e in dict.fromkeys(equipment) if e not in self.equipment)
+
     def to_dict(self) -> dict:
-        return {"settings": list(self.settings), "max_wall_time_s": self.max_wall_time_s, "max_equipment_usd": self.max_equipment_usd}
+        return {"settings": list(self.settings), "max_wall_time_s": self.max_wall_time_s, "max_equipment_usd": self.max_equipment_usd,
+                "equipment": None if self.equipment is None else list(self.equipment)}
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Budget:
-        return cls(tuple(data.get("settings", SETTINGS)), data.get("max_wall_time_s"), data.get("max_equipment_usd"))
+        equipment = data.get("equipment")
+        return cls(tuple(data.get("settings", SETTINGS)), data.get("max_wall_time_s"), data.get("max_equipment_usd"),
+                   None if equipment is None else tuple(equipment))
 
 
 @dataclass(frozen=True)
@@ -65,11 +88,14 @@ class CalibrationConfig:
 
     - `models`: {instance: model id}, a rung picked per part (the type's current model otherwise).
     - `known`: {key: value}, fixed: the routines that would only find these are dropped ("known") and every routine sees the value.
-    - `exclude`, `include`: routine ids kept out / brought in (a configure or tune routine included joins the plan's setup).
+    - `exclude`, `include`: routine ids kept out / brought in (a configure or tune routine included joins the plan's setup); including
+      a routine a gate drops (excluded, not implemented, setting, equipment, recovery, known) is refused, naming the gate.
     - `order`: an explicit order of routine ids; refused if it runs a routine before one it `requires` or `refines` after.
-    - `level`: the noise level ("0x", "1x", "3x", "10x") whose recovery ranks alternatives.
+    - `level`: the noise level ("0x", "1x", "3x", "10x") whose recovery ranks alternatives; a catalog fit graded failing at it is never
+      planned (a rig's own routines and setup routines are not gated on it).
     - `noise`: a number (every term at that level) or a NoiseModel's dict; refused if calibrate(noise=) is also given.
-    - `budget`: a Budget; `strict`: over budget -> refuse instead of dropping.
+    - `budget`: a Budget (where routines run, time, $ still to buy, the equipment you have); `strict`: over budget -> refuse instead of
+      dropping.
     - `seed`: the noise model's seed for this run.
     - `routines`: per-routine options ({id: RoutineOptions}), set with .with_routine(id, **options).
     - `custom`: injected routine objects: each replaces the rig's implementation of a registered id (cards/calibration.py ROUTINES);

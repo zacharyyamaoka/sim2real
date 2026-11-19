@@ -80,8 +80,27 @@ A requirement no planned routine provides is listed in the plan's `assumed`, hel
   `camera.exposure_lock`. An ArUco marker's is `camera.exposure_for_aruco`.
 - **Pick a model per part** with `select({instance: (type, model id)})`, or with `CalibrationConfig(models={instance: model id})`. A
   model holds every parameter of its family up to its rung.
-- **The routines are a minimal cover:** drop any one, and something only it covered goes uncovered. Setup routines are never part of
-  the cover.
+- **Gates first, then rank** (gap B, 2026-11-18). Each routine passes these gates, in this order, before it is ranked; the first
+  that drops it is its reason in `dropped`, and what only it would have found is `uncovered` with that reason:
+  1. not excluded (`CalibrationConfig.exclude`);
+  2. implemented (the catalog's status);
+  3. runs where the budget allows (`Budget.settings`);
+  4. needs only equipment you have or can use (`Budget.equipment`; Zach, Daily Note 2026-11-17: "you can define what equipment you
+     have, etc. etc.."): "needs output_clamp ($150), which Budget.equipment does not list". With no inventory (`equipment=None`, the
+     default) every item counts as available;
+  5. a fit (kind `identify`) graded failing at `CalibrationConfig.level` is never planned: "recovery at 1x fails (worst error 2.4 x
+     tolerance)". A routine nobody graded is still planned (it is "not graded": unknown stays unknown) and ranks after every passing
+     alternative;
+  6. not known (every parameter it finds is in `CalibrationConfig.known`).
+
+  Setup routines pass the same gates except recovery: a configure or tune routine is judged on what it sets, never on a recovery
+  ladder. Including a routine a gate drops is refused with `CalibrationPlanError`, naming the gate: `include` brings a routine in, it
+  never overrides a gate. The gate list is this session's default (decided 2026-11-18, not Zach's ruling); undo by reverting gap B's
+  commit.
+- **The routines are a minimal cover** of what passed the gates: drop any one, and something only it covered goes uncovered. Setup
+  routines are never part of the cover. A `why` says "ranked ahead of" only the alternatives that rank worse; a better-ranked
+  alternative the cover did not need is named in its own clause ("… ranks higher, but the minimal cover (the fewest routines) keeps
+  this one: it is the only planned routine for …").
 - **Between alternatives, the metric is:**
   1. recovery at the configured noise level: passing first, then not graded, then failing, each by its worst error ÷ tolerance;
   2. then wall time plus operator time;
@@ -90,12 +109,17 @@ A requirement no planned routine provides is listed in the plan's `assumed`, hel
 - **Recovery is read only through `sim2real.calibration.recovery`.** That is the same reader the docs site's tables use.
 - **An unimplemented routine is never picked.** It shows up in `dropped` with "not implemented".
 
-`select()` also says what it left out. `dropped` gives each routine with its reason: not implemented, excluded, outside the budget
-(its setting, wall time or equipment $), known, or not needed because another routine covers it. `uncovered` gives each parameter
-nothing picked identifies, with why.
+`select()` also says what it left out. `dropped` gives each routine with its reason: excluded, not implemented, outside the budget
+(its setting, wall time or equipment $ still to buy), equipment `Budget.equipment` does not list, recovery at the level fails, known,
+or not needed because another routine covers it. `uncovered` gives each parameter nothing picked identifies, with why.
 
-On a rig twin (one that ships `rig.py` on the one-click seam), the candidates are the rig's own routines: its designer already chose them.
-The config can still drop them (known, excluded, budget), substitute them (`custom`) or reorder them (`order`).
+On a rig twin (one that ships `rig.py` on the one-click seam, or the pendulum's `routines.py`), the candidates are the rig's own
+routines: its designer already chose them. The config can still drop them (known, excluded, budget, and the equipment gate, which reads
+the catalog's equipment for the routine's id), substitute them (`custom`) or reorder them (`order`). The status gate and the recovery
+gate do not apply there: a rig's routine is its implementation, and the grade on its id was measured on another implementation (Zach,
+2026-11-11: "In the spirit of black-box design, it's up to the designer of the part to provide ... the calibration options for its
+part"). The CAN 11 pendulum with `Budget(equipment=("camera_tags",))` keeps both steps; with `Budget(equipment=())` it drops
+`servo.backlash_reversals_camera` ("needs camera_tags ($325), …") and `can11.backlash_rad` is uncovered, held at its prior.
 
 ## CalibrationConfig
 
@@ -108,10 +132,10 @@ A frozen dataclass with a JSON round trip (`to_dict()` / `from_dict()`). Pass it
 | `known` | `{key: value}`: fixed. A routine that would only find known values is dropped as "known", and every routine sees the value |
 | `exclude`, `include` | routine ids kept out or brought in. An included configure or tune routine joins the setup |
 | `order` | an explicit order of routine ids. It is refused if it runs a routine before one it `requires` or `refines` after, naming the key |
-| `level` | which noise level (`0x`, `1x`, `3x`, `10x`) the metric reads; default `1x` |
+| `level` | which noise level (`0x`, `1x`, `3x`, `10x`) the metric reads, and the recovery gate: a catalog fit graded failing at it is never planned; default `1x` |
 | `noise` | a number (every term at that level) or a NoiseModel's dict. Passing it here and in `calibrate(noise=)` is refused |
-| `budget` | `Budget(settings, max_wall_time_s, max_equipment_usd)`. Over budget, the lowest-ranked routines are dropped. `max_wall_time_s` is held to the plan's counted-once wall time (see "The schedule": a run two routines share is counted once) |
-| `strict` | over budget → refuse with `CalibrationPlanError` instead of dropping |
+| `budget` | `Budget(settings, max_wall_time_s, max_equipment_usd, equipment)`. Over budget, the lowest-ranked routines are dropped. `max_wall_time_s` is held to the plan's counted-once wall time (see "The schedule": a run two routines share is counted once). Budget `equipment` is the equipment you have or can use (borrowed counts), as ids of `cards/calibration.py` EQUIPMENT: `None` (the default) = no inventory, every item available and costed; `()` = none. An id the catalog does not hold is refused. `max_equipment_usd` caps what is still to buy: the plan's `totals["equipment_to_buy_usd"]` leaves out what `equipment` lists, while `totals["equipment_usd"]` stays everything the plan needs. `budget.missing(items)` gives the items you lack |
+| `strict` | over budget (time, or equipment still to buy) → refuse with `CalibrationPlanError` instead of dropping. The setting and equipment gates always drop and say so |
 | `seed` | the noise model's seed for this run |
 | `routines` | per-routine options, set with `config.with_routine(id, **options)`. They reach a **copy** of the routine. An option the routine does not have raises `KeyError` |
 | `custom` | injected routine objects. Each replaces the rig's implementation of a registered id. An id that is not in `cards/calibration.py` is refused |
@@ -217,7 +241,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `written` | the day the record was written (ISO date) |
 | `seconds` | how long the run took |
 | `noise` | the noise model it was played at (each term, its level, seed and sources) |
-| `plan` | the plan that ran: `twin`, `source` (`"planner"` or `"config.order"`; `"sysid"` marks a pendulum on='real' record written before 2026-11-18, whose plan listed the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` (`wall_time_s` with each shared run counted once, `run_time_s`, `operator_time_s`, `equipment_usd`; records written before 2026-11-18 carry no `run_time_s`), and `schedule` (the schedule's rows, above) when a step was bound. On a real record `totals` are the planner's estimates (the rack's own time is the submission's `minutes`) and `level` is the planner's noise level, not the hardware's |
+| `plan` | the plan that ran: `twin`, `source` (`"planner"` or `"config.order"`; `"sysid"` marks a pendulum on='real' record written before 2026-11-18, whose plan listed the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` (`wall_time_s` with each shared run counted once, `run_time_s`, `operator_time_s`, `equipment_usd`, `equipment_to_buy_usd` (what `Budget.equipment` did not list; equal to `equipment_usd` with no inventory); records written before 2026-11-18 carry no `run_time_s` or `equipment_to_buy_usd`), and `schedule` (the schedule's rows, above) when a step was bound. On a real record `totals` are the planner's estimates (the rack's own time is the submission's `minutes`) and `level` is the planner's noise level, not the hardware's |
 | `parameters` | one row per parameter (below) |
 | `routines` | one row per routine as it ran (below) |
 | `passed` | every graded value within its tolerance, and at least one graded |

@@ -1,6 +1,10 @@
 """What calibrate() runs, and in what order (PEP 0001 §4-5): models picked per part give parameters, the catalog routines that identify them
 are selected by a metric, and the selected routines are ordered from what each declares it needs.
 
+The gates (``_filter``), each routine passes them before it is ranked, in this order: not excluded -> implemented -> runs where the budget
+allows -> needs only equipment you have (Budget.equipment) -> on the catalog path, a fit not graded failing at config.level -> not known.
+A dropped routine says which gate dropped it, and what only it would have found is uncovered with that reason.
+
     from sim2real.calibration import plan, select, order
     plan({"cam": ("camera", "M1.measurement.distortion")}).ids   # ('camera.exposure_lock', 'camera.intrinsics_charuco', ...)
     plan(twin).steps                                               # a rig twin: its own routines, in the declared order
@@ -237,9 +241,11 @@ def order(routines: Sequence[Any], names: Mapping[str, str] | None = None) -> li
 @dataclass(frozen=True)
 class Selection:
     """select()'s answer. `parameters`: (instance, type, name) to find (the picked models' parameters less the known). `routines`: a
-    minimal cover (drop any one and something only it covered goes uncovered). `setup`: the configure / tune routines the types always want
-    or the config includes; never part of the cover. `covers`: {routine: [(instance, name)]}. `why`: {routine: str}. `dropped`:
-    [(routine, why)]. `uncovered`: [(instance, name, why)]. `configures`: {setup routine: [keys it writes]}."""
+    minimal cover of the routines that pass every gate (drop any one and something only it covered goes uncovered). `setup`: the
+    configure / tune routines the types always want or the config includes; never part of the cover. `covers`: {routine: [(instance,
+    name)]}. `why`: {routine: str}. `dropped`: [(routine, why)], the gate that dropped it (excluded, not implemented, its setting,
+    equipment Budget.equipment does not list, recovery at the level fails, known), the budget, or not needed. `uncovered`: [(instance,
+    name, why)]. `configures`: {setup routine: [keys it writes]}."""
     parameters: tuple[tuple[str, str, str], ...]
     routines: tuple[str, ...]
     setup: tuple[str, ...]
@@ -263,10 +269,9 @@ def _picked(picked: Mapping[str, Any], config: CalibrationConfig) -> dict[str, t
 
 def _recovery_words(rid: str, level: str) -> str:
     entry = rec.recovery(rid, level)
-    if entry is None:
-        return f"recovery at {level} not graded"
-    worst = entry.get("worst_error_over_tolerance")
-    verdict = {True: "passes", False: "fails", None: "ungraded"}[entry.get("pass")]
+    passed = None if entry is None else entry.get("pass")
+    worst = None if entry is None else entry.get("worst_error_over_tolerance")
+    verdict = {True: "passes", False: "fails", None: "not graded"}[passed]
     return f"recovery at {level} {verdict}" + ("" if worst is None else f" (worst error {worst:.3g} x tolerance)")
 
 
@@ -276,12 +281,50 @@ def _setting_drop(r, budget) -> str | None:
     return f"outside the budget: it runs at the {r.setting} only and the budget allows {' / '.join(budget.settings)}"
 
 
+def _check_equipment(budget) -> None:
+    """Refuse an inventory id the catalog's EQUIPMENT does not hold, naming it: a misspelt item would otherwise drop, without a word,
+    every routine that needs the real one."""
+    unknown = [e for e in budget.equipment or () if e not in reg.EQUIPMENT]
+    if unknown:
+        raise CalibrationPlanError(f"Budget.equipment names {unknown}, which {CATALOG} EQUIPMENT does not hold (it holds "
+                                   f"{sorted(reg.EQUIPMENT)})")
+
+
+def _equipment_drop(items: Sequence[str], budget) -> str | None:
+    """The equipment gate: why a routine needing these catalog items is dropped, or None (the budget lists them all, or keeps no
+    inventory). WHY the catalog's items for the routine's id, on every path (a rig's routine and a custom one too): one source for the
+    gate and for the $ the plan counts."""
+    lacking = budget.missing(items)
+    if not lacking:
+        return None
+    needs = " and ".join(f"{e} (${float(reg.EQUIPMENT[e].cost.value or 0.0):,.0f})" for e in lacking)
+    return f"needs {needs}, which Budget.equipment does not list"
+
+
+def _recovery_drop(r, level: str) -> str | None:
+    """The recovery gate, for a catalog FIT: why one graded failing at `level` is dropped, or None (it passes, or nobody graded it: unknown
+    stays unknown, and the rank already puts it after every passing alternative). WHY a gate and not only the rank (Zach, 2026-11-11:
+    "recover the orginal values to within a tolerance"): ranked, a routine graded wrong at the config's noise level was still planned
+    whenever it was the only one left for a parameter. WHY fits only: a configure or tune routine is judged on what it sets, never on a
+    recovery ladder."""
+    if r.kind != "identify":
+        return None
+    entry = rec.recovery(r.id, level)
+    if entry is None or entry.get("pass") is not False:
+        return None
+    return f"{_recovery_words(r.id, level)}: a fit graded wrong at this noise level is never planned (CalibrationConfig.level)"
+
+
 def _filter(r, config: CalibrationConfig) -> str | None:
+    """The catalog path's gates, in order (the module docstring): the first that drops `r` (a catalog routine), else None. WHY this
+    order: the cheapest, most certain reason first, so a routine says the reason that holds whatever else changes (an excluded routine
+    is "excluded", not "needs a clamp"). The gate list is this session's default (2026-11-18), not Zach's ruling."""
     if r.id in config.exclude:
         return "excluded (CalibrationConfig.exclude)"
     if r.status == "not implemented":
         return f"not implemented ({CATALOG} status)"
-    return _setting_drop(r, config.budget)
+    return (_setting_drop(r, config.budget) or _equipment_drop(r.equipment, config.budget)
+            or _recovery_drop(r, config.level))
 
 
 def _configured_keys(r, picked: Mapping[str, tuple[str, str]]) -> tuple[str, ...]:
@@ -294,10 +337,13 @@ def _configured_keys(r, picked: Mapping[str, tuple[str, str]]) -> tuple[str, ...
 
 def select(picked: Mapping[str, Any], config: CalibrationConfig | None = None) -> Selection:
     """Models picked per part -> parameters -> routines (PEP 0001 §5). `picked`: {instance: (type, model id)} (or {instance: type} for
-    today's model); config.models overrides a pick. The metric between alternatives is options.routine_rank at config.level."""
+    today's model); config.models overrides a pick. Each routine passes the gates first (the module docstring; setup routines too), then
+    the metric between alternatives is options.routine_rank at config.level. Raises CalibrationPlanError for an equipment id the catalog
+    does not hold, or an included routine a gate drops."""
     config = config or CalibrationConfig()
     catalog = _catalog()
     level, budget = config.level, config.budget
+    _check_equipment(budget)
     rank = lambda rid: routine_rank(rid, level, budget.settings)  # noqa: E731
     chosen_models = _picked(picked, config)
     every = [(inst, tid, n) for inst, (tid, mid) in chosen_models.items() for n in dm.model(tid, mid).parameters]
@@ -323,7 +369,9 @@ def select(picked: Mapping[str, Any], config: CalibrationConfig | None = None) -
     for rid in config.include:
         if rid not in catalog:
             raise CalibrationPlanError(f"CalibrationConfig.include names {rid!r}, which is not a routine in {CATALOG}")
-        if catalog[rid].kind in ("configure", "tune"):
+        setup_kind = catalog[rid].kind in ("configure", "tune")
+        _refuse_gated_include(rid, dropped.get(rid) or (_filter(catalog[rid], config) if setup_kind else None))
+        if setup_kind:
             if rid not in setup:
                 setup.append(rid)
                 why[rid] = "setup: CalibrationConfig.include brings it in"
@@ -370,8 +418,18 @@ def select(picked: Mapping[str, Any], config: CalibrationConfig | None = None) -
         if rid not in why:
             alts = [a for a in eligible if a != rid and set(covers[a]) & set(covers[rid])]
             names = ", ".join(f"{i}.{n}" for i, n in covers[rid])
-            why[rid] = (f"identifies {names}; {_recovery_words(rid, level)}"
-                        + (f"; ranked ahead of {', '.join(sorted(alts, key=rank))}" if alts else "; the only routine left for it"))
+            # WHY split by rank (gap B): "ranked ahead of" named every alternative, so the clamp's why claimed it ranks ahead of the
+            # camera routine, which ranks better; a better-ranked alternative is named in a clause that says why this one is kept
+            worse = sorted((a for a in alts if rank(a) > rank(rid)), key=rank)
+            better = sorted((a for a in alts if rank(a) < rank(rid)), key=rank)
+            text = f"identifies {names}; {_recovery_words(rid, level)}"
+            if worse:
+                text += f"; ranked ahead of {', '.join(worse)}"
+            if better:
+                only = [f"{i}.{n}" for i, n in covers[rid] if not any((i, n) in covers[o] for o in chosen if o != rid)]
+                text += (f"; {', '.join(better)} rank{'s' if len(better) == 1 else ''} higher, but the minimal cover (the fewest routines) "
+                         "keeps this one" + (f": it is the only planned routine for {', '.join(only)}" if only else ""))
+            why[rid] = text if alts else text + "; the only routine left for it"
     covered = {c for rid in chosen for c in covers[rid]}
     for rid in eligible:
         if rid not in chosen and rid not in dropped:
@@ -392,6 +450,14 @@ def select(picked: Mapping[str, Any], config: CalibrationConfig | None = None) -
                      why, tuple(dropped.items()), tuple(uncovered), configures, level)
 
 
+def _refuse_gated_include(rid: str, gate: str | None) -> None:
+    """CalibrationConfig.include brings a routine in; it never overrides a gate. WHY refused and not ignored (gap B): an include that
+    silently fails to force leaves the caller believing the routine runs."""
+    if gate:
+        raise CalibrationPlanError(f"CalibrationConfig.include names {rid}, but a gate drops it: {gate}. Change what drops it (the budget, "
+                                   "exclude, known, level) or leave it out of include")
+
+
 def _fit_budget(chosen: list[str], setup: list[str], config: CalibrationConfig, rank) -> tuple[list[str], list[str], dict[str, str]]:
     budget = config.budget
     catalog = _catalog()
@@ -400,14 +466,15 @@ def _fit_budget(chosen: list[str], setup: list[str], config: CalibrationConfig, 
     _check_strict([decl[r] for r in chosen + setup], config)
     keep = list(chosen)
     for rid in sorted(chosen, key=rank, reverse=True):
-        wall, usd = _spend([decl[r] for r in keep + setup])
+        wall, usd = _spend([decl[r] for r in keep + setup], budget=budget)
         too_long = budget.max_wall_time_s is not None and wall > budget.max_wall_time_s
         too_dear = budget.max_equipment_usd is not None and usd > budget.max_equipment_usd
         if not (too_long or too_dear):
             break
         keep.remove(rid)
         over[rid] = (f"outside the budget: the plan's wall time {wall:.0f} s is over max_wall_time_s {budget.max_wall_time_s:g} s"
-                     if too_long else f"outside the budget: the plan's equipment ${usd:,.0f} is over max_equipment_usd ${budget.max_equipment_usd:,.0f}")
+                     if too_long else f"outside the budget: the plan's equipment to buy ${usd:,.0f} is over max_equipment_usd "
+                                      f"${budget.max_equipment_usd:,.0f}")
     return keep, setup, over
 
 
@@ -458,9 +525,9 @@ def _one_length(ids: Sequence[str], runs: Sequence[Sequence[Any] | None]) -> Non
                                            "one length; give one of them another id")
 
 
-def _spend(decls: Sequence[Declaration], runs: Sequence[Sequence[Any] | None] | None = None) -> tuple[float, float]:
-    """Wall time, each run the steps share counted once (_counted_once; runs=None: the summed wall times); equipment $ over the distinct
-    items (one caliper serves every routine that needs it)."""
+def _equipment_usd(decls: Sequence[Declaration], budget=None) -> float:
+    """Equipment $ over the distinct items (one caliper serves every routine that needs it); with a budget, only the items still to buy
+    (what budget.equipment lists is had already, never bought again). A routine the catalog does not hold counts its own equipment_usd."""
     catalog = _catalog()
     items: dict[str, float] = {}
     loose = 0.0
@@ -471,20 +538,28 @@ def _spend(decls: Sequence[Declaration], runs: Sequence[Sequence[Any] | None] | 
             continue
         for e in r.equipment:
             items[e] = float(reg.EQUIPMENT[e].cost.value or 0.0)
-    return _counted_once([d.wall_time_s for d in decls], runs)[0], sum(items.values()) + loose
+    have = set((budget.equipment if budget is not None else None) or ())
+    return sum(cost for e, cost in items.items() if e not in have) + loose
+
+
+def _spend(decls: Sequence[Declaration], runs: Sequence[Sequence[Any] | None] | None = None, budget=None) -> tuple[float, float]:
+    """Wall time, each run the steps share counted once (_counted_once; runs=None: the summed wall times); equipment $ over the distinct
+    items still to buy (_equipment_usd: with no budget, or no inventory, every item)."""
+    return _counted_once([d.wall_time_s for d in decls], runs)[0], _equipment_usd(decls, budget)
 
 
 def _check_strict(decls: Sequence[Declaration], config: CalibrationConfig, runs: Sequence[Sequence[Any] | None] | None = None) -> None:
     if not config.strict:
         return
     budget = config.budget
-    wall, usd = _spend(decls, runs)
+    wall, usd = _spend(decls, runs, budget)
     if budget.max_wall_time_s is not None and wall > budget.max_wall_time_s:
         raise CalibrationPlanError(f"the plan's wall time is {wall:.0f} s, over the budget's max_wall_time_s {budget.max_wall_time_s:g} s "
                                    f"(strict=True refuses instead of dropping routines): {', '.join(d.id for d in decls)}")
     if budget.max_equipment_usd is not None and usd > budget.max_equipment_usd:
-        raise CalibrationPlanError(f"the plan's equipment is ${usd:,.0f}, over the budget's max_equipment_usd ${budget.max_equipment_usd:,.0f} "
-                                   "(strict=True refuses instead of dropping routines)")
+        raise CalibrationPlanError(f"the plan's equipment to buy is ${usd:,.0f}, over the budget's max_equipment_usd "
+                                   f"${budget.max_equipment_usd:,.0f} (strict=True refuses instead of dropping routines; Budget.equipment "
+                                   "lists what you have)")
 
 
 # --- the plan -------------------------------------------------------------------------------------------------------------------------------
@@ -534,7 +609,8 @@ class CalibrationSchedule:
     routine provides, held at its prior. `source`: "planner" (the declared order) or "config.order". `totals`: wall_time_s (each step's
     own time plus each run its steps share counted ONCE, as the runner plays it; a step's row still says what it costs alone),
     run_time_s (the known robot time of the runs planned at the priors, each counted once; 0.0 when no step is bound), operator_time_s,
-    equipment_usd.
+    equipment_usd (the distinct equipment the plan needs), equipment_to_buy_usd (of it, what Budget.equipment does not list: what
+    max_equipment_usd caps; equal to equipment_usd with no inventory).
 
     On a twin that ships its routines, each step also holds its runs bound at the priors (PlanStep.runs, each a sim2real.rig.Run with its
     typed command) and says whether its commands are known now, made after an earlier step runs (from what the routine declares its
@@ -583,9 +659,11 @@ class CalibrationSchedule:
     def summary(self) -> str:
         run_time = self.totals.get("run_time_s") or 0   # WHY get: a plan dict written before 2026-11-18 has no run_time_s
         runs = f" ({run_time:.0f} s of runs, each played once)" if run_time > 0 else ""
+        to_buy = self.totals.get("equipment_to_buy_usd")   # WHY get: a plan dict written before 2026-11-18 has none
+        buy = f" (${to_buy:,.0f} to buy)" if to_buy is not None and to_buy != self.totals["equipment_usd"] else ""
         lines = [f"plan ({self.source}, recovery at {self.level}): {len(self.steps)} routines, "
                  f"{self.totals['wall_time_s']:.0f} s wall{runs}, {self.totals['operator_time_s']:.0f} s hands-on, "
-                 f"${self.totals['equipment_usd']:,.0f} equipment"]
+                 f"${self.totals['equipment_usd']:,.0f} equipment{buy}"]
         for k, s in enumerate(self.steps, 1):
             lines.append(f"  {k}. {s.routine:34s} {KIND_WORDS.get(s.kind, s.kind):9s} {s.setting:8s} {s.why_here}")
             words = _schedule_words(s)
@@ -856,14 +934,14 @@ def _steps(items: Sequence[Any], sources: Sequence[str], names: Mapping[str, str
     return tuple(steps), tuple(assumed), source
 
 
-def _totals(steps: Sequence[PlanStep]) -> dict:
+def _totals(steps: Sequence[PlanStep], budget=None) -> dict:
     """The plan's totals from its steps' bound runs (PlanStep.runs; an unbound step, a catalog stand-in or a record of what ran, keeps its
-    whole wall time, so such plans keep the per-step sum and run_time_s 0.0)."""
+    whole wall time, so such plans keep the per-step sum and run_time_s 0.0). equipment_usd is what the plan needs; equipment_to_buy_usd
+    leaves out what `budget`.equipment lists (no budget, or no inventory: the same number)."""
     decls = [declaration(s.routine_object) for s in steps]
-    runs = [s.runs for s in steps]
-    wall, usd = _spend(decls, runs)
-    return {"wall_time_s": wall, "run_time_s": _counted_once([d.wall_time_s for d in decls], runs)[1],
-            "operator_time_s": sum(s.operator_time_s for s in steps), "equipment_usd": usd}
+    wall, run_time = _counted_once([d.wall_time_s for d in decls], [s.runs for s in steps])
+    return {"wall_time_s": wall, "run_time_s": run_time, "operator_time_s": sum(s.operator_time_s for s in steps),
+            "equipment_usd": _equipment_usd(decls), "equipment_to_buy_usd": _equipment_usd(decls, budget)}
 
 
 def _custom(config: CalibrationConfig) -> dict[str, Any]:
@@ -906,13 +984,15 @@ def _plan_catalog(picked: Mapping[str, Any], config: CalibrationConfig, twin: st
             sources.append("catalog")
     items = _with_config_options(items, config, {r.id for r in items})
     steps, assumed, source = _steps(items, sources, names, config)
-    return CalibrationSchedule(tuple(s.routine for s in steps), steps, sel.dropped, sel.uncovered, assumed, source, _totals(steps), config.level, twin)
+    return CalibrationSchedule(tuple(s.routine for s in steps), steps, sel.dropped, sel.uncovered, assumed, source,
+                               _totals(steps, config.budget), config.level, twin)
 
 
 def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> CalibrationSchedule:
     """A twin that ships its routines: a rig on the one-click seam (twin.runner.rig), or the pendulum tracer's example routines (`rig`:
     what SimRunner.schedule() gives, the planner's half of a RigBackend: name, parameters(), routines())."""
     catalog = _catalog()
+    _check_equipment(config.budget)
     rig = twin.runner.rig if rig is None else rig
     description = twin.runner.description
     names = {f"{i.id}.{n}": n for i in description.instances for n in i.parameters}
@@ -935,12 +1015,18 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
     for r, src in zip(items, sources):
         cat = catalog.get(r.id)
         reason = None
+        # WHY no status gate and no recovery gate here (gap B): a rig's routine is its implementation (Zach, 2026-11-11: "In the spirit of
+        # black-box design, it's up to the designer of the part to provide ... the calibration options for its part"); the catalog's
+        # status and the recovery graded on its id describe another implementation, often on another rig. The equipment gate holds: the
+        # rig's routine needs the catalog's items for its id as much as any other implementation does
         if r.id in config.exclude:
             reason = "excluded (CalibrationConfig.exclude)"
-        elif cat is not None and _setting_drop(cat, config.budget):
-            reason = _setting_drop(cat, config.budget)
+        elif cat is not None and (_setting_drop(cat, config.budget) or _equipment_drop(cat.equipment, config.budget)):
+            reason = _setting_drop(cat, config.budget) or _equipment_drop(cat.equipment, config.budget)
         elif tuple(getattr(r, "identifies", ())) and all(k in config.known for k in r.identifies) and not getattr(r, "configures", ()):
             reason = "known: every parameter it identifies here is in CalibrationConfig.known"
+        if reason and r.id in config.include:
+            _refuse_gated_include(r.id, reason)
         if reason:
             dropped.append((r.id, reason))
         else:
@@ -968,7 +1054,7 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         keep = order(keep, names)
         keep_sources = [source_of[id(r)] for r in keep]
     while keep and (budget.max_wall_time_s is not None or budget.max_equipment_usd is not None):
-        wall, usd = _spend([declaration(r) for r in keep], runs_of(keep))
+        wall, usd = _spend([declaration(r) for r in keep], runs_of(keep), budget)
         too_long = budget.max_wall_time_s is not None and wall > budget.max_wall_time_s
         too_dear = budget.max_equipment_usd is not None and usd > budget.max_equipment_usd
         if not (too_long or too_dear):
@@ -976,7 +1062,8 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         last = keep.pop()
         keep_sources.pop()
         dropped.append((last.id, f"outside the budget: the plan's wall time {wall:.0f} s is over max_wall_time_s {budget.max_wall_time_s:g} s"
-                        if too_long else f"outside the budget: the plan's equipment ${usd:,.0f} is over max_equipment_usd"))
+                        if too_long else f"outside the budget: the plan's equipment to buy ${usd:,.0f} is over max_equipment_usd "
+                                         f"${budget.max_equipment_usd:,.0f}"))
     steps, assumed, source = _steps(keep, keep_sources, names, config)
     steps = _bind(steps, priors, names, config.known, first, rounds)
     gone = {rid: why for rid, why in dropped}
@@ -986,8 +1073,8 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
             name = names.get(p.key, p.key)
             inst = p.key[: -len(name) - 1] if p.key.endswith("." + name) else p.key
             uncovered.append((inst, name, f"its routine {p.routine} was dropped: {gone[p.routine]}"))
-    return CalibrationSchedule(tuple(s.routine for s in steps), steps, tuple(dropped), tuple(uncovered), assumed, source, _totals(steps),
-                           config.level, getattr(rig, "name", description.id))
+    return CalibrationSchedule(tuple(s.routine for s in steps), steps, tuple(dropped), tuple(uncovered), assumed, source,
+                               _totals(steps, config.budget), config.level, getattr(rig, "name", description.id))
 
 
 def plan(twin_or_picked: Any, config: CalibrationConfig | None = None) -> CalibrationSchedule:
