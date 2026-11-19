@@ -550,20 +550,20 @@ feedback_share(effort, fed, moving)    # RMS(effort - feedforward) / RMS(effort)
    `converged`, and `RigRunner` plays them. Round 1 is `first` (the slow band) on the prior's feedforward. Each later round
    (`next_runs(values, history)`) collects the grid's cells never collected, then the collected cells whose held-out residual (that cell
    left out of the last fit) is over `tolerance_nm`, worst first, at most `per_round` of them, as fresh runs `…/r{k}/…` whose commands
-   carry the last fit's feedforward. `converged(history, values)` says, in the step's `stopped`:
+   carry the last fit's feedforward. When every cell is collected and within `tolerance_nm` but `converged` still waits on ΔG (one fit so
+   far, or ΔG at or over `delta_nm`), it re-collects the collected cells, worst held-out residual first, at most `per_round`, so the next
+   round reads ΔG. `converged(history, values)` says, in the step's `stopped`:
    - `"converged: ΔG … N·m < delta_nm …"`, after two rounds or more, when the gravity of the last two fits differs by less than `delta_nm`
      on the pose graph's edges, the worst held-out cell residual is within `tolerance_nm` and no cell is empty;
    - `"no improvement in {patience} rounds: …"` (not converged) when every cell is collected, that residual is still over `tolerance_nm`
      and `patience` rounds in a row cut it by less than `min_improvement` (10 %), each cut read over the cells both fits held (round 1
      holds the slow band only): a model that cannot explain the data;
-   - otherwise the runner stops it, not converged, at `max_rounds` or when `next_runs` has nothing left to collect.
+   - otherwise the runner stops it, not converged, at `max_rounds`.
 
-   **Set `first` to the slow band**, a strict part of the grid. With the default `first=None` (the whole grid) round 1 collects every
-   cell, so a fit within `tolerance_nm` everywhere leaves `next_runs` nothing to collect: the step stops after ONE round, "next_runs()
-   asked for nothing more after round 1: it did not converge", though the fit is good (`converged` needs two fits to read ΔG). The same
-   stop comes at any later round whose cells all fit within `tolerance_nm` while ΔG is still at or over `delta_nm`. The default is
-   FF-1's and stays; re-collecting the worst cells while `converged` waits only on ΔG would close this, and is not built (it changes
-   the next-cells rule).
+   **Set `first` to the slow band**, a strict part of the grid, so round 1 on the prior costs less arm time. The default `first=None`
+   (the whole grid, FF-1's) works too: a fit within `tolerance_nm` everywhere after round 1 re-collects the worst cells in round 2 and
+   converges once ΔG reads under `delta_nm` (inside `max_rounds`). Before 2026-11-19 `next_runs` had nothing to collect there and the
+   step stopped after ONE round, "next_runs() asked for nothing more after round 1: it did not converge", though the fit was good.
 
    It reads the residual and ΔG, never only the 95 % intervals (the runner's default stop): at noise 0 every interval is tight after
    round 1 while the fast band is still empty. On a board's PD the routine fits with its bench row rules, not the fit's own 0.02 / 0.02:

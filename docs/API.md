@@ -191,8 +191,9 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   - **`max_rounds`** (4): the runner's cap on rounds.
   - **`next_runs(values, history)`:** round k >= 2. The grid's cells never collected, in grid order, then the collected cells whose
     held-out residual (the last fit's, that cell left out) is over `tolerance_nm` (N·m), worst first, at most `per_round` of them (None:
-    no cap). Each is a fresh run `…/r{k}/…` whose feedforward is made from `values`, the values after the last fit. `()` when no cell is
-    empty or over tolerance.
+    no cap). Each is a fresh run `…/r{k}/…` whose feedforward is made from `values`, the values after the last fit. When no cell is
+    empty or over tolerance but `converged` still waits (one fit so far, or ΔG at or over `delta_nm`), the collected cells again, worst
+    held-out residual first, at most `per_round`, so the next round reads ΔG. `()` only once `converged` has an answer.
   - **`converged(history, values)`:** its own stop, in place of the runner's default (every 95 % interval inside its tolerance). It
     returns one of:
     - `"converged: ΔG … N·m < delta_nm …"`, after two rounds or more, when the gravity of the last two fits differs by less than
@@ -201,12 +202,11 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
       `tolerance_nm` and none of the last `patience` rounds cut it by `min_improvement` (relative, 10 %), each cut read over the cells
       both fits held;
     - `None`: the next round.
-  - **The runner's own stops**, both not converged: "max_rounds {max_rounds} reached: it did not converge" and "next_runs() asked for
-    nothing more after round {k}: it did not converge".
-  - **Set `first` to the slow band.** With the default `first=None` (the whole grid) round 1 collects every cell, so a fit within
-    `tolerance_nm` everywhere leaves `next_runs` nothing to collect and the step stops after ONE round, "did not converge", though the
-    fit is good: `converged` needs two fits to read ΔG. The same stop comes at any later round whose cells all fit within tolerance while
-    ΔG is still at or over `delta_nm`.
+  - **The runner's own stop**, not converged: "max_rounds {max_rounds} reached: it did not converge" (its other, "next_runs() asked for
+    nothing more", no longer comes: `next_runs` re-collects while `converged` waits).
+  - **`first`:** a bench sets it to the slow band, so round 1 on the prior costs less arm time. With the default `first=None` (the whole
+    grid) a fit within `tolerance_nm` everywhere still converges: round 2 re-collects the worst cells for the second fit `converged`
+    needs to read ΔG (since 2026-11-19; before, the step stopped after ONE round, "did not converge").
 - **Row rules:** the routine fits with the bench's defaults, `moving_rad_s=0.1` (5.7°/s) and `pair_tol_rad=0.05` (2.9°), not `fit()`'s
   own 0.02 / 0.02 (1.1°/s, 1.1°) below. On a board's PD, speed noise reads a hold as moving, and the two legs part by the tracking
   error. Why, measured: docs/CALIBRATE.md "Feedforward, bench" step 4.

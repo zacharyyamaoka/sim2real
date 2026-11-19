@@ -21,17 +21,18 @@ sim2real.fit.feedforward.fit over the runs measured, with the prior the values r
 the prior twice), held out by cell.
 
 The rounds (FF-2), on gap A2's protocol, which sim2real.rig.RigRunner plays: round 1 is ``first`` (the slow band, on the prior's
-feedforward; pass it: with the default, the whole grid, a good fit stops after one round not converged, see the class); each later
-round collects the grid's cells never collected, then the collected cells whose held-out residual (that cell left out of the last fit)
-is over ``tolerance_nm``, worst first, at most ``per_round`` of them, as fresh runs (``.../r{k}/...``) whose commands
-carry the last fit's feedforward. It stops converged when, after two rounds or more, the gravity of the last two fits differs by less than
-``delta_nm`` on the pose graph (ΔG), the worst held-out cell residual is within ``tolerance_nm`` and no cell is empty; it stops NOT converged
-when, with every cell collected and that residual still over ``tolerance_nm``, ``patience`` rounds in a row cut it (over the cells both fits
-held) by less than ``min_improvement`` (relative: a model that cannot explain the data), when nothing is left to collect, or at
-``max_rounds``. The runner says which in the step's ``stopped``. WHY the residual and ΔG and never the
-95 % intervals alone (the runner's default stop): at noise 0 every interval is tight after round 1 while the fast band is still empty, and
-a stop rule must read only what the bench reads too (no hidden truth). Graded by tests/test_feedforward_rounds.py and its committed ladder
-sysid/results/routine_ladders/arm.feedforward_bench.json (0x / 1x / 3x / 10x on the closed-loop toy arm).
+feedforward; default the whole grid); each later round collects the grid's cells never collected, then the collected cells whose held-out
+residual (that cell left out of the last fit) is over ``tolerance_nm``, worst first, at most ``per_round`` of them, as fresh runs
+(``.../r{k}/...``) whose commands carry the last fit's feedforward; when every cell is collected and within ``tolerance_nm`` but the stop
+still waits on ΔG (one fit so far, or ΔG >= ``delta_nm``), it re-collects the collected cells, worst residual first, at most ``per_round``.
+It stops converged when, after two rounds or more, the gravity of the last two fits differs by less than ``delta_nm`` on the pose graph
+(ΔG), the worst held-out cell residual is within ``tolerance_nm`` and no cell is empty; it stops NOT converged when, with every cell
+collected and that residual still over ``tolerance_nm``, ``patience`` rounds in a row cut it (over the cells both fits held) by less than
+``min_improvement`` (relative: a model that cannot explain the data), or at ``max_rounds``. The runner says which in the step's ``stopped``.
+WHY the residual and ΔG and never the 95 % intervals alone (the runner's default stop): at noise 0 every interval is tight after round 1
+while the fast band is still empty, and a stop rule must read only what the bench reads too (no hidden truth). Graded by
+tests/test_feedforward_rounds.py and its committed ladder sysid/results/routine_ladders/arm.feedforward_bench.json (0x / 1x / 3x / 10x on
+the closed-loop toy arm).
 
 Layer: like rig.py and twin.py, right of every folder; robot_trajectories (the ``trajectories`` extra) is imported only when runs are made.
 """
@@ -86,16 +87,16 @@ def _cell(cell: Any, poses: int) -> Cell:
 class FeedforwardBench:
     """The routine (a sim2real.rig Routine; see the module docstring). ``space``: a robot_trajectories JointSpace over ``drives``;
     ``poses``: (P, J) joint positions; ``grid``: every cell the routine may collect; ``first``: round 1's cells (default the grid). A bench
-    sets ``first`` to the slow band, a strict part of the grid: with the default round 1 collects every cell, so a fit within
-    ``tolerance_nm`` everywhere leaves next_runs() nothing to collect and the runner stops after ONE round, "did not converge", though the
-    fit is good (converged() needs two fits to read ΔG). The same stop comes at any later round whose cells all fit within ``tolerance_nm``
-    while ΔG is still >= ``delta_nm``. ``gravity_keys``: the twin's keys for theta, in the regressor's order; ``regressor(q)``: (N, J) ->
-    (N, J, P); ``inertial(q, qd, qdd)``: (N, J), the twin's inertial term (the commands carry it, the fit removes it). ``prior_sigma``: the
-    ridge toward the values handed to runs() (theta's units; None: no ridge). Each drive's friction is its ``frictionloss_nm`` (Coulomb)
-    and ``damping_nm_s_rad`` (NET viscous: negative where friction weakens with speed). The rounds (module docstring): ``max_rounds`` (the
-    runner's cap), ``tolerance_nm`` (a cell's held-out residual), ``delta_nm`` (ΔG between rounds), ``per_round`` (cells a later round may
-    collect; None: no cap), ``patience`` and ``min_improvement`` (the no-improvement stop). ``moving_rad_s`` / ``pair_tol_rad``: the fit's
-    row rules at the bench's defaults, 0.1 rad/s (5.7°/s) and 0.05 rad (2.9°) (BENCH_MOVING_RAD_S, BENCH_PAIR_TOL_RAD: why, beside them)."""
+    sets ``first`` to the slow band, a strict part of the grid (round 1 on the prior then costs less arm time). With the default a fit
+    within ``tolerance_nm`` everywhere still converges: converged() needs two fits to read ΔG, so next_runs() re-collects the worst cells
+    for the second (and does so at any later round whose cells all fit while ΔG is still >= ``delta_nm``). ``gravity_keys``: the twin's keys
+    for theta, in the regressor's order; ``regressor(q)``: (N, J) -> (N, J, P); ``inertial(q, qd, qdd)``: (N, J), the twin's inertial term
+    (the commands carry it, the fit removes it). ``prior_sigma``: the ridge toward the values handed to runs() (theta's units; None: no
+    ridge). Each drive's friction is its ``frictionloss_nm`` (Coulomb) and ``damping_nm_s_rad`` (NET viscous: negative where friction
+    weakens with speed). The rounds (module docstring): ``max_rounds`` (the runner's cap), ``tolerance_nm`` (a cell's held-out residual),
+    ``delta_nm`` (ΔG between rounds), ``per_round`` (cells a later round may collect; None: no cap), ``patience`` and ``min_improvement``
+    (the no-improvement stop). ``moving_rad_s`` / ``pair_tol_rad``: the fit's row rules at the bench's defaults, 0.1 rad/s (5.7°/s) and 0.05
+    rad (2.9°) (BENCH_MOVING_RAD_S, BENCH_PAIR_TOL_RAD: why, beside them)."""
 
     id = "arm.feedforward_bench"
     FRICTION = ("frictionloss_nm", "damping_nm_s_rad")
@@ -115,10 +116,8 @@ class FeedforwardBench:
         poses.setflags(write=False)
         self.poses = poses
         self.grid = tuple(_cell(c, len(poses)) for c in grid)
-        # WHY first=None still means the whole grid (FF-1's public default, kept): changing it would move round 1 for every caller. Since
-        # the rounds (FF-2) that default stops a good fit after one round, "did not converge" (class docstring), so a bench passes the
-        # slow band. Closing it in code (re-collect the worst cells while converged() waits only on ΔG) changes the plan's next-cells
-        # rule: that is the FF session's / Zach's call, not this lane's
+        # WHY first=None still means the whole grid (FF-1's public default, kept): changing it would move round 1 for every caller. A good
+        # fit on it no longer stops after one round "did not converge": next_runs() re-collects the worst cells so converged() reads ΔG
         self.first = self.grid if first is None else tuple(_cell(c, len(poses)) for c in first)
         self.gravity_keys = tuple(str(k) for k in gravity_keys)
         self.regressor, self.inertial = regressor, inertial
@@ -195,8 +194,9 @@ class FeedforwardBench:
         cells never collected first, in grid order, then the collected cells whose held-out residual (the last fit's, that cell left out)
         is over ``tolerance_nm``, worst first; at most ``per_round`` of them. Each is a fresh run, ``…/r{k}/…`` for round k (1 = runs()),
         its feedforward made from ``values``: the runner hands the values after the last fit, so the board runs the latest model while it
-        collects. () when nothing is empty or over tolerance: the runner then stops, not converged (with ``first`` the whole
-        grid, that is right after round 1: the class docstring)."""
+        collects. When nothing is empty or over tolerance but converged() still waits (one fit so far, or ΔG >= ``delta_nm``), the
+        collected cells again, worst residual first (a NaN residual first), at most ``per_round``. () only when converged() has an
+        answer: the runner stops on that first, so it never asks then."""
         self._needs(values)
         if not history:
             return ()
@@ -207,6 +207,13 @@ class FeedforwardBench:
         # WHY sorted on the residual alone (stable): ties keep the order they were collected in, so a round is the same for the same data
         over = sorted((cell for cell in collected if residual[cell] > self.tolerance_nm), key=lambda cell: -residual[cell])
         cells = (empty + over)[: self.per_round]
+        # WHY re-collect when every cell fits but converged() still waits (orchestrator's call on the L8 review, 2026-11-19): converged()
+        # needs two fits to read ΔG, and with nothing empty or over tolerance this returned (), so a good fit on first = the whole grid
+        # (or any round whose cells all fit while ΔG >= delta_nm) ended "did not converge". The worst cells first: their fresh runs are the
+        # data most likely to move the fit, so the next ΔG is the hardest read of whether it has stopped changing; per_round caps the arm
+        # time as for any later round, and a round is never empty (collected holds round 1's cells)
+        if not cells and self.converged(history, values) is None:
+            cells = sorted(collected, key=lambda cell: -residual[cell] if math.isfinite(residual[cell]) else -math.inf)[: self.per_round]
         return tuple(self._run(cell, len(history) + 1, values) for cell in cells)
 
     def converged(self, history: Sequence[Any], values: Mapping[str, float] | None = None) -> str | Stop | None:
