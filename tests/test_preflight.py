@@ -253,11 +253,13 @@ def test_a_value_with_its_source_stripped_turns_the_record_red(golden):
 
 def test_a_soak_on_an_unstable_parameter_turns_the_soak_red(golden):
     unstable = copy.copy(golden)
-    damping = golden.parameters["can11"]["damping_nm_s_rad"]
-    # a damping far below zero: the hinge feeds energy in faster than the board's kd takes it out
-    unstable.description = golden.description.with_values({"can11.damping_nm_s_rad": revalue(damping, -50.0)})
+    inertia = golden.parameters["can11"]["armature_kg_m2"]
+    # WHY an inertia 20x the fit and not a negative damping: the twin clamps damping at 0 (pipeline.twin), so a negative one mutates
+    # nothing. Under the same kp and kd the loop's damping ratio falls to ~0.03: it rings, saturates and has not settled when the hold ends
+    unstable.description = golden.description.with_values({"can11.armature_kg_m2": revalue(inertia, 20.0 * float(inertia))})
     soak = check(sim2real.preflight(unstable), "sim_soak")
     assert soak.passed is False, soak
+    assert "settle" in soak.why or "guard" in soak.why, soak
 
 
 def test_a_schedule_short_of_equipment_is_unknown_naming_the_items(golden, loaded):
