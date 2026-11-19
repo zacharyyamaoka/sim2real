@@ -558,6 +558,13 @@ feedback_share(effort, fed, moving)    # RMS(effort - feedforward) / RMS(effort)
      holds the slow band only): a model that cannot explain the data;
    - otherwise the runner stops it, not converged, at `max_rounds` or when `next_runs` has nothing left to collect.
 
+   **Set `first` to the slow band**, a strict part of the grid. With the default `first=None` (the whole grid) round 1 collects every
+   cell, so a fit within `tolerance_nm` everywhere leaves `next_runs` nothing to collect: the step stops after ONE round, "next_runs()
+   asked for nothing more after round 1: it did not converge", though the fit is good (`converged` needs two fits to read ΔG). The same
+   stop comes at any later round whose cells all fit within `tolerance_nm` while ΔG is still at or over `delta_nm`. The default is
+   FF-1's and stays; re-collecting the worst cells while `converged` waits only on ΔG would close this, and is not built (it changes
+   the next-cells rule).
+
    It reads the residual and ΔG, never only the 95 % intervals (the runner's default stop): at noise 0 every interval is tight after
    round 1 while the fast band is still empty. On a board's PD the routine fits with its bench row rules, not the fit's own 0.02 / 0.02:
    a moving row is |qd| >= 0.1 rad/s (5.7°/s; speed noise makes a hold read as moving and enter with a random sign) and the two legs pair

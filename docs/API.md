@@ -174,20 +174,42 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   --sync FOLDER... | --all [--dry-run] | --show FOLDER`.
 - **Needs:** the `tracking` extra (wandb), imported only when it talks to W&B.
 
-### `sim2real.calibration.FeedforwardBench(*, space, poses, grid, drives, gravity_keys, regressor, first=None, inertial=None, prior_sigma=None, dwell_s=0.3)`
+### `sim2real.calibration.FeedforwardBench(*, space, poses, grid, drives, gravity_keys, regressor, first=None, inertial=None, prior_sigma=None, tolerance_nm=0.10, delta_nm=0.05, max_rounds=4, per_round=None, dwell_s=0.3, moving_rad_s=0.1, pair_tol_rad=0.05, patience=2, min_improvement=0.10)`
 
 - **What it is:** the routine `arm.feedforward_bench` (since 2026-11-18): a rig hands it to its runner, and `calibrate()` plays its runs and
   its fit. It fits an arm's gravity (theta, linear in the twin's `regressor(q) -> (N, J, P)`) and each drive's Coulomb (`frictionloss_nm`)
   and net viscous (`damping_nm_s_rad`) friction. `identifies` is `gravity_keys` plus those two keys per drive, and so is `commands_read`:
   its feedforward channel is made from them, so the schedule shows its commands made after any earlier step that finds one of them.
-- **`runs(values)`:** one run per cell of `first` (an edge of the `poses` graph at a speed fraction), each ONE
+- **`runs(values)`:** round 1: one run `…/r1/e{i}-{j}/v{f}` per cell of `first` (an edge of the `poses` graph at a speed fraction), each ONE
   `robot_trajectories.trapezoidal_velocity(..., back_to_start=True)` call in `Run.command`, its cell in `Run.spec["cell"]`, its
   `channels["feedforward_effort"]` made from `values`.
 - **`fit(measured, values, twin)`:** `{key: Estimate}` from `sim2real.fit.feedforward.fit` (below); each fit is kept in `fits_`.
 - **`with_feedforward(command, values)`:** the command with its feedforward channel at `values`: gravity + Coulomb (smoothed at most
   tanh(v / 0.05)) + net viscous + the twin's `inertial(q, qd, qdd)`, the one curve the fit installs.
 - **Needs:** the `trajectories` extra (`robot_trajectories`, imported only when runs are made).
-- **Rounds** (collect, fit, come back for what is missing) are not built yet: gap FF-2.
+- **Rounds** (since 2026-11-19, gap FF-2, on gap A2's protocol; `RigRunner` plays them, docs/CALIBRATE.md "Feedforward, bench" step 4):
+  - **`max_rounds`** (4): the runner's cap on rounds.
+  - **`next_runs(values, history)`:** round k >= 2. The grid's cells never collected, in grid order, then the collected cells whose
+    held-out residual (the last fit's, that cell left out) is over `tolerance_nm` (N·m), worst first, at most `per_round` of them (None:
+    no cap). Each is a fresh run `…/r{k}/…` whose feedforward is made from `values`, the values after the last fit. `()` when no cell is
+    empty or over tolerance.
+  - **`converged(history, values)`:** its own stop, in place of the runner's default (every 95 % interval inside its tolerance). It
+    returns one of:
+    - `"converged: ΔG … N·m < delta_nm …"`, after two rounds or more, when the gravity of the last two fits differs by less than
+      `delta_nm` on the pose graph's edges (ΔG), the worst held-out cell residual is within `tolerance_nm` and no cell is empty;
+    - `Stop("no improvement in {patience} rounds: …")`, not converged, when every cell is collected, that residual is still over
+      `tolerance_nm` and none of the last `patience` rounds cut it by `min_improvement` (relative, 10 %), each cut read over the cells
+      both fits held;
+    - `None`: the next round.
+  - **The runner's own stops**, both not converged: "max_rounds {max_rounds} reached: it did not converge" and "next_runs() asked for
+    nothing more after round {k}: it did not converge".
+  - **Set `first` to the slow band.** With the default `first=None` (the whole grid) round 1 collects every cell, so a fit within
+    `tolerance_nm` everywhere leaves `next_runs` nothing to collect and the step stops after ONE round, "did not converge", though the
+    fit is good: `converged` needs two fits to read ΔG. The same stop comes at any later round whose cells all fit within tolerance while
+    ΔG is still at or over `delta_nm`.
+- **Row rules:** the routine fits with the bench's defaults, `moving_rad_s=0.1` (5.7°/s) and `pair_tol_rad=0.05` (2.9°), not `fit()`'s
+  own 0.02 / 0.02 (1.1°/s, 1.1°) below. On a board's PD, speed noise reads a hold as moving, and the two legs part by the tracking
+  error. Why, measured: docs/CALIBRATE.md "Feedforward, bench" step 4.
 
 ### `sim2real.fit.feedforward.fit(measured, regressor, *, inertial=None, prior=None, prior_sigma=None, moving_rad_s=0.02, groups=None, pair_tol_rad=0.02) -> FeedforwardFit`
 
