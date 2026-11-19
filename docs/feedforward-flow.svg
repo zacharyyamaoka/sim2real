@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 480" width="1000" height="480" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12">
+  <title>arm.feedforward_bench: collect, fit, check, iterate, grade</title>
+  <desc>The bench feedforward routine's loop (gap FF, 2026-11-18). Part 1 (FF-1) lands collect, fit and check; part 2 (FF-2) the rounds; the grade is the rulers'.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #64748b; stroke-width: 1.2; }
+      .now { fill: #ecfdf5; stroke: #059669; }
+      .next { fill: #eff6ff; stroke: #2563eb; stroke-dasharray: 5 3; }
+      .grade { fill: #fffbeb; stroke: #b45309; }
+      .head { font-weight: 600; font-size: 13px; fill: #0f172a; }
+      .body { fill: #334155; }
+      .tag { font-size: 10.5px; fill: #64748b; }
+      .edge { stroke: #475569; stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1000" height="480" fill="#ffffff"/>
+  <text x="24" y="30" class="head" font-size="15">arm.feedforward_bench — collect → fit → check → iterate → grade</text>
+  <text x="24" y="48" class="tag">solid green: lands in FF-1 · dashed blue: FF-2 (rounds) · amber: graded by the rulers, never by the code under test</text>
+
+  <!-- the cells -->
+  <rect x="24" y="72" width="150" height="128" rx="8" class="box"/>
+  <text x="36" y="94" class="head">Cells</text>
+  <text x="36" y="114" class="body">a pose graph;</text>
+  <text x="36" y="130" class="body">cell = (edge, speed)</text>
+  <text x="36" y="150" class="body">round 1 plays first,</text>
+  <text x="36" y="166" class="body">the grid waits</text>
+  <text x="36" y="188" class="tag">FeedforwardBench(...)</text>
+
+  <!-- collect -->
+  <rect x="196" y="72" width="250" height="128" rx="8" class="box now"/>
+  <text x="208" y="94" class="head">1 · Collect</text>
+  <text x="208" y="114" class="body">one trapezoidal_velocity call</text>
+  <text x="208" y="130" class="body">per cell, back_to_start=True:</text>
+  <text x="208" y="146" class="body">out and back on the same poses</text>
+  <text x="208" y="166" class="body">its command carries the</text>
+  <text x="208" y="182" class="body">feedforward at the given values</text>
+
+  <!-- fit -->
+  <rect x="468" y="72" width="250" height="128" rx="8" class="box now"/>
+  <text x="480" y="94" class="head">2 · Fit</text>
+  <text x="480" y="114" class="body">moving rows only (holds never)</text>
+  <text x="480" y="130" class="body">τ − inertial = Y(q)·θ</text>
+  <text x="480" y="146" class="body">  + Fc·sign(q̇) + b·q̇ per drive</text>
+  <text x="480" y="166" class="body">the way back cancels friction;</text>
+  <text x="480" y="182" class="body">ridge toward the round's prior</text>
+
+  <!-- check -->
+  <rect x="740" y="72" width="236" height="128" rx="8" class="box now"/>
+  <text x="752" y="94" class="head">3 · Check</text>
+  <text x="752" y="114" class="body">held-out residual: leave one</text>
+  <text x="752" y="130" class="body">cell out at a time, never half</text>
+  <text x="752" y="146" class="body">a pair; block means of 25 rows</text>
+  <text x="752" y="166" class="body">one-way or detour runs refused</text>
+  <text x="752" y="182" class="body">("both directions")</text>
+
+  <path d="M174,136 L194,136" class="edge"/>
+  <path d="M446,136 L466,136" class="edge"/>
+  <path d="M718,136 L738,136" class="edge"/>
+
+  <!-- iterate -->
+  <rect x="468" y="236" width="508" height="92" rx="8" class="box next"/>
+  <text x="480" y="258" class="head">4 · Iterate (FF-2)</text>
+  <text x="480" y="278" class="body">next round: empty cells first, then cells over tolerance,</text>
+  <text x="480" y="294" class="body">its commands made from the last fit</text>
+  <text x="480" y="314" class="body">stops, saying which: converged · no improvement · max_rounds</text>
+  <path d="M858,200 L858,234" class="edge"/>
+  <path d="M468,282 L321,282 L321,202" class="edge"/>
+  <text x="330" y="274" class="tag">round k+1</text>
+
+  <!-- grade -->
+  <rect x="24" y="356" width="460" height="104" rx="8" class="box grade"/>
+  <text x="36" y="378" class="head">5a · Grade: recovery (sim, sealed truth)</text>
+  <text x="36" y="398" class="body">gravity on held-out poses, friction at ± each speed,</text>
+  <text x="36" y="414" class="body">against a hidden truth the fit never reads;</text>
+  <text x="36" y="430" class="body">the CAD prior fails the same ruler</text>
+  <text x="36" y="450" class="tag">tests/test_feedforward_bench.py · tests/feedforward_toy.py</text>
+
+  <rect x="506" y="356" width="470" height="104" rx="8" class="box grade"/>
+  <text x="518" y="378" class="head">5b · Grade: performance (closed loop, FF-2)</text>
+  <text x="518" y="398" class="body">feedback share and tracking: fitted FF ≤ ½ of CAD FF,</text>
+  <text x="518" y="414" class="body">on transfers it never played;</text>
+  <text x="518" y="430" class="body">FB only and FF only reported beside them</text>
+  <text x="518" y="450" class="tag">metrics.actuator.feedback_share · tests/test_feedforward_rounds.py</text>
+  <path d="M722,328 L722,354" class="edge"/>
+</svg>

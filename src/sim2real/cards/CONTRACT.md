@@ -27,6 +27,12 @@ time_offset / line_scan (identify camera_rgb extrinsics, arm_6dof base_frame, ca
 speed_setup (configure, not implemented); four equipment items (`belt_charuco_acm`, `divot_board`, `probe_ball_tip`, `belt_load`).
 `conveyor.radius_tracker` gains one alternative (`conveyor_belt.scale`), its only change.
 
+Since 2026-11-18 (additive, gap FF-1, the bench feedforward): `arm.feedforward_bench` joins `ROUTINES` (bench, identify, implemented, no
+equipment; package `servo_dynamic.arm`): it identifies `link_inertials` on `arm_subassembly` M2 and `arm_6dof` M3 and refines (never
+identifies) the drives' `frictionloss_nm` and `damping_nm_s_rad`, so no integrated-servo cover changes. `arm.dynamics_excitation` and
+`servo.dynamics_regression` each gain one alternative (`arm.feedforward_bench`), their only change; `domain_v3.json` and
+`sysid/results/calibration_routines.json` are regenerated. Decision: `docs/decision-feedforward-bench-2026-11-18.md`.
+
 ## Rules of the road
 
 - **One import.** `sys.path` holds the repo root; then `from type_cards import registry as reg`. Everything below is a name on `reg`

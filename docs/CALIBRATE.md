@@ -341,6 +341,68 @@ Before `--execute`, three things the dry run cannot settle: the fit needs `runs/
 of record are built from that tree's record, so its board knobs must be CAN 11's live ones (the campaign raised max_current to 19.4 A and
 recorded kp 400 / kd 8 on 11-15); and the session's own config and frame checks still run before anything moves.
 
+## Feedforward, bench: `arm.feedforward_bench`
+
+A routine that fits an arm's feedforward, gravity and friction, the way Zach asked for it (Daily Note 2026-11-18: "I basically just want
+to do .calibrate() and then for the feedforward model to be fit as accurately as possible"). A rig hands it to its runner like any other
+routine; `calibrate()` plays its runs and its fit. Decision: `docs/decision-feedforward-bench-2026-11-18.md`. The flow, in one picture:
+`docs/feedforward-flow.svg`.
+
+```python
+from sim2real.calibration import FeedforwardBench
+from sim2real.fit import feedforward
+from sim2real.metrics.actuator import feedback_share
+
+routine = FeedforwardBench(space=space, poses=poses, grid=grid, first=first, drives=("j2", "c1"), gravity_keys=keys,
+                           regressor=regressor, inertial=inertial)        # space: a robot_trajectories JointSpace over the drives
+runs = routine.runs(values)            # one robot_trajectories.trapezoidal_velocity(..., back_to_start=True) per cell, feedforward attached
+found = routine.fit(measured, values, twin)    # {key: Estimate}: theta, and each drive's frictionloss_nm / damping_nm_s_rad
+routine.fits_[-1].residual_by_group    # the held-out residual, one cell left out at a time
+feedback_share(effort, fed, moving)    # RMS(effort - feedforward) / RMS(effort) on moving rows: low = the feedforward carries the motion
+```
+
+**The loop** (collect → fit → check → iterate → grade):
+
+1. **Collect.** A cell is an edge of a workspace pose graph at one speed band. Each run is ONE trajectory-library call,
+   `trapezoidal_velocity(space, target, start=, velocity_fraction=, dwell_s=, back_to_start=True)`: out along the edge and back over the
+   same poses. Its command carries `channels["feedforward_effort"]`, the feedforward at the values the round was handed
+   (`with_feedforward`), so the board runs the current model while collecting.
+2. **Fit** (`sim2real.fit.feedforward.fit`). Rows are moving samples only (|qd| >= 0.02 rad/s on that drive): a hold rests anywhere inside
+   static friction, so it bounds gravity and never equals it. The target is the board's torque less the twin's inertial term; the columns
+   are the twin's gravity regressor Y(q) and, per drive, sign(qd) and qd. The way back cancels the friction. Friction is one curve,
+   Coulomb (`frictionloss_nm`) plus a NET viscous term (`damping_nm_s_rad`, negative where friction weakens with speed). A ridge pulls
+   toward the prior the round was handed when `prior_sigma` is given; 95 % intervals come from the covariance.
+3. **Check.** The residual is held out one cell at a time (never one run of a pair) and is systematic: per drive, the RMS of the held-out
+   residual's means over blocks of 25 moving rows, so torque noise averages out and model error does not. A run that goes one way, or
+   comes back along another path, is refused by name ("needs both directions over the same poses").
+4. **Iterate** (part 2, `tests/test_feedforward_rounds.py`). Each later round collects only empty or over-tolerance cells, with commands
+   made from the last fit, and stops when the fit stops changing, stops improving, or reaches its cap, saying which.
+5. **Grade, twice.** Recovery of a sealed hidden truth in sim (the toy arm `tests/feedforward_toy.py`; the CAD prior fails the same
+   ruler), then performance: the fitted feedforward must at least halve the feedback share and the tracking error of the CAD feedforward,
+   with FB only and FF only reported beside them (part 2's closed loop).
+
+**Where the arm's feedforward stands today** (as the gap FF review found it, 2026-11-18). Every term below was calibrated by one-off
+scripts in bam_ws `src/core/mdp/setup/bam_pid_tunning/docs/` over runs harvested from picks and experiments, checked on held-out runs and
+installed by a pin move; none came from a routine, and none has a stop rule.
+
+| term | where it runs | what calibrates it in sim2real |
+|---|---|---|
+| measured-mass gravity, J2 / C1 and the wrist | the 15c mass file (re-pick), the lumped five-bar compensation (arm-hold, stops) | `arm.feedforward_bench` (this), on the `bam_fb_v2` rig: FF-3 |
+| J1's gravity law, A sin(q − hang) | two laws live, within 0.19 N·m of each other | the same fit, once the rig's regressor carries J1 (FF-3) |
+| J2 / C1 Coulomb, 0.70 / 0.78 N·m | a bench constant, never refit on `bam_fb_v2` | `arm.feedforward_bench` refines it (one curve with gravity) |
+| the inertial term | the trajectory, from the CAD masses | nothing yet: the fit takes the twin's inertial term as given |
+| the gated hold pushes, J2 / C1 | arm-hold | nothing: holds never enter this fit |
+
+- **Bench vs deployed.** Bench is this routine, submitted through rackq once the twin passes. Deployed is the same fit over the
+  production runs the twin holds (`calibrate(data=)`), with PID tuna's learned feedforward as a drift canary.
+- **What lands now (FF-1):** the routine, its fit, its catalog row and its sim proof on the toy arm. **Next:** rounds (FF-2), then the CAN 11
+  pendulum and the `bam_fb_v2` rig on the one-click seam, twin first (FF-3). **Still blocking a real-arm run:** the `bam_fb_v2` rig on the
+  seam, the friction twin's 20ad gate (it fails today), and Kt, which nothing measures and which reads exactly like a mass scale.
+- **The catalog row** identifies `link_inertials` (`arm_subassembly` M2, `arm_6dof` M3) and refines the drives' friction, so an
+  integrated-servo pick never gets it in its cover; `arm.dynamics_excitation` and `servo.dynamics_regression` are its alternatives.
+- **Install:** `robot_trajectories` is the `trajectories` extra (`uv sync --extra trajectories`); it has no remote yet, so the extra
+  resolves on the workstation and in a cloud cut that carries it.
+
 ## Errors
 
 - `CalibrationCycleError` (a `ValueError`): the declarations' hard edges form a cycle.

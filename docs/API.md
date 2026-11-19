@@ -144,6 +144,33 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   - `ValueError` when a run it would score was used for training. It refuses rather than filtering it out.
 - **Renamed:** this was `eval_twin()` until 2026-11-11, and `eval()` until 2026-11-17 (Zach's sketch `twin.evaluate()`; Keras' `model.evaluate()`; PyTorch's `.eval()` means inference mode). `eval()` stays as its alias.
 
+### `sim2real.calibration.FeedforwardBench(*, space, poses, grid, drives, gravity_keys, regressor, first=None, inertial=None, prior_sigma=None, dwell_s=0.3)`
+
+- **What it is:** the routine `arm.feedforward_bench` (since 2026-11-18): a rig hands it to its runner, and `calibrate()` plays its runs and
+  its fit. It fits an arm's gravity (theta, linear in the twin's `regressor(q) -> (N, J, P)`) and each drive's Coulomb (`frictionloss_nm`)
+  and net viscous (`damping_nm_s_rad`) friction. `identifies` is `gravity_keys` plus those two keys per drive.
+- **`runs(values)`:** one run per cell of `first` (an edge of the `poses` graph at a speed fraction), each ONE
+  `robot_trajectories.trapezoidal_velocity(..., back_to_start=True)` call in `Run.command`, its cell in `Run.spec["cell"]`, its
+  `channels["feedforward_effort"]` made from `values`.
+- **`fit(measured, values, twin)`:** `{key: Estimate}` from `sim2real.fit.feedforward.fit` (below); each fit is kept in `fits_`.
+- **`with_feedforward(command, values)`:** the command with its feedforward channel at `values`: gravity + Coulomb (smoothed at most
+  tanh(v / 0.05)) + net viscous + the twin's `inertial(q, qd, qdd)`, the one curve the fit installs.
+- **Needs:** the `trajectories` extra (`robot_trajectories`, imported only when runs are made).
+- **Rounds** (collect, fit, come back for what is missing) are not built yet: gap FF-2.
+
+### `sim2real.fit.feedforward.fit(measured, regressor, *, inertial=None, prior=None, prior_sigma=None, moving_rad_s=0.02, groups=None, pair_tol_rad=0.02) -> FeedforwardFit`
+
+- **What it does:** least squares of the board's torque less `inertial` on `[Y(q) | per drive sign(qd), qd]` over moving rows only (holds
+  never enter), with a ridge toward `prior` when `prior_sigma` is given.
+- **Returns:** `FeedforwardFit(theta, theta_ci95, coulomb, damping, residual_nm, residual_by_group, rows, runs)` with `gravity(regressor,
+  q)`, `friction_torque(qd)` and `torque(regressor, q, qd, qdd, inertial=)`. The residual is held out one `groups` entry (a cell) at a time.
+- **Raises:** `ValueError` naming the run and "both directions" when a run does not go out and come back over the same poses.
+
+### `sim2real.metrics.actuator.feedback_share(effort, feedforward, moving) -> float`
+
+- RMS(effort − feedforward) / RMS(effort) on the `moving` rows, pooled over drives: the feedback torque's share of the command (0 = all
+  feedforward).
+
 ### Also on a twin
 
 - **`twin.fitted`:** a bool.

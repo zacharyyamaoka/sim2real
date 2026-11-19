@@ -6715,7 +6715,8 @@
    ],
    "note": "",
    "routines": [
-    "arm.dynamics_excitation"
+    "arm.dynamics_excitation",
+    "arm.feedforward_bench"
    ]
   },
   {
@@ -14435,6 +14436,38 @@
      ]
     }
    ]
+  },
+  {
+   "id": "arm.feedforward_bench",
+   "title": "Arm feedforward on the bench: gravity and friction from paired out-and-back transfers",
+   "package": "servo_dynamic.arm",
+   "kind": "identify",
+   "setting": "bench",
+   "status": "implemented",
+   "identifies": [
+    {
+     "type": "rigid_body_chain",
+     "model": "M0.dynamics.rigid",
+     "parameter": "link_inertials"
+    }
+   ],
+   "legacy_identifies": [
+    {
+     "card": "arm_subassembly",
+     "rung": "M2",
+     "parameters": [
+      "link_inertials"
+     ]
+    },
+    {
+     "card": "arm_6dof",
+     "rung": "M3",
+     "parameters": [
+      "link_inertials"
+     ]
+    }
+   ],
+   "configures": []
   }
  ],
  "parameter_routines": {
@@ -14467,7 +14500,8 @@
    ],
    "joint_zero_drift_rad_per_sqrt_h": [],
    "link_inertials": [
-    "arm.dynamics_excitation"
+    "arm.dynamics_excitation",
+    "arm.feedforward_bench"
    ],
    "joint_compliance": [],
    "compliance_wear_per_nm_rev": []
