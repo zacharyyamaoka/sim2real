@@ -553,17 +553,19 @@ feedback_share(effort, fed, moving)    # RMS(effort - feedforward) / RMS(effort)
    carry the last fit's feedforward. `converged(history, values)` says, in the step's `stopped`:
    - `"converged: ΔG … N·m < delta_nm …"`, after two rounds or more, when the gravity of the last two fits differs by less than `delta_nm`
      on the pose graph's edges, the worst held-out cell residual is within `tolerance_nm` and no cell is empty;
-   - `"no improvement in {patience} rounds: …"` (not converged) when `patience` rounds in a row cut that residual by less than
-     `min_improvement` (10 %): a model that cannot explain the data;
+   - `"no improvement in {patience} rounds: …"` (not converged) when every cell is collected, that residual is still over `tolerance_nm`
+     and `patience` rounds in a row cut it by less than `min_improvement` (10 %), each cut read over the cells both fits held (round 1
+     holds the slow band only): a model that cannot explain the data;
    - otherwise the runner stops it, not converged, at `max_rounds` or when `next_runs` has nothing left to collect.
 
    It reads the residual and ΔG, never only the 95 % intervals (the runner's default stop): at noise 0 every interval is tight after
    round 1 while the fast band is still empty. On a board's PD the routine fits with its bench row rules, not the fit's own 0.02 / 0.02:
-   a moving row is |qd| >= 0.1 rad/s (speed noise makes a hold read as moving and enter with a random sign) and the two legs pair within
-   0.05 rad (they part by the tracking error; at 0.02 rad the closed-loop toy's first round on the CAD prior was refused). Both are
-   constructor options (`moving_rad_s`, `pair_tol_rad`). The ladder, `sysid/results/routine_ladders/arm.feedforward_bench.json`, is the test
-   file's closed-loop run at 0x / 1x / 3x / 10x (written on a cloud VM with `SIM2REAL_SLOW=1 SIM2REAL_WRITE_LADDERS=1`, carrying the
-   sha256 of both feedforward modules and of the test); the planner's recovery reads it.
+   a moving row is |qd| >= 0.1 rad/s (5.7°/s; speed noise makes a hold read as moving and enter with a random sign) and the two legs pair
+   within 0.05 rad (2.9°; they part by the tracking error; at 0.02 rad the closed-loop toy's first round on the CAD prior was refused).
+   Both are constructor options (`moving_rad_s`, `pair_tol_rad`). The ladder, `sysid/results/routine_ladders/arm.feedforward_bench.json`,
+   is the test file's closed-loop run at 0x / 1x / 3x / 10x, written on a cloud VM with `SIM2REAL_SLOW=1 SIM2REAL_WRITE_LADDERS=1` and
+   carrying the sha256 of both feedforward modules and of the test. Once it is committed the planner's recovery reads it; until then the
+   planner shows the routine ungraded.
 5. **Grade, twice.** Recovery of a sealed hidden truth in sim (the toy arm `tests/feedforward_toy.py`; the CAD prior fails the same
    ruler), then performance: the fitted feedforward must at least halve the feedback share and the tracking error of the CAD feedforward,
    with FB only and FF only reported beside them (part 2's closed loop).
@@ -582,8 +584,8 @@ installed by a pin move; none came from a routine, and none has a stop rule.
 
 - **Bench vs deployed.** Bench is this routine, submitted through rackq once the twin passes. Deployed is the same fit over the
   production runs the twin holds (`calibrate(data=)`), with PID tuna's learned feedforward as a drift canary.
-- **What has landed:** the routine, its fit, its catalog row and its sim proof on the toy arm (FF-1), then its rounds and their committed
-  ladder (FF-2). **Next:** the CAN 11 pendulum and the `bam_fb_v2` rig on the one-click seam, twin first (FF-3). **Still blocking a real-arm run:** the `bam_fb_v2` rig on the
+- **What has landed:** the routine, its fit, its catalog row and its sim proof on the toy arm (FF-1), then its rounds (FF-2), graded
+  by their ladder (step 4). **Next:** the CAN 11 pendulum and the `bam_fb_v2` rig on the one-click seam, twin first (FF-3). **Still blocking a real-arm run:** the `bam_fb_v2` rig on the
   seam, the friction twin's 20ad gate (it fails today), and Kt, which nothing measures and which reads exactly like a mass scale.
 - **The catalog row** identifies `link_inertials` (`arm_subassembly` M2, `arm_6dof` M3) and refines the drives' friction, so an
   integrated-servo pick never gets it in its cover; `arm.dynamics_excitation` and `servo.dynamics_regression` are its alternatives.

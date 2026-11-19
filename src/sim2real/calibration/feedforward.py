@@ -25,8 +25,9 @@ feedforward); each later round collects the grid's cells never collected, then t
 out of the last fit) is over ``tolerance_nm``, worst first, at most ``per_round`` of them, as fresh runs (``.../r{k}/...``) whose commands
 carry the last fit's feedforward. It stops converged when, after two rounds or more, the gravity of the last two fits differs by less than
 ``delta_nm`` on the pose graph (ΔG), the worst held-out cell residual is within ``tolerance_nm`` and no cell is empty; it stops NOT converged
-when ``patience`` rounds in a row cut that residual by less than ``min_improvement`` (relative: a model that cannot explain the data), when
-nothing is left to collect, or at ``max_rounds``. The runner says which in the step's ``stopped``. WHY the residual and ΔG and never the
+when, with every cell collected and that residual still over ``tolerance_nm``, ``patience`` rounds in a row cut it (over the cells both fits
+held) by less than ``min_improvement`` (relative: a model that cannot explain the data), when nothing is left to collect, or at
+``max_rounds``. The runner says which in the step's ``stopped``. WHY the residual and ΔG and never the
 95 % intervals alone (the runner's default stop): at noise 0 every interval is tight after round 1 while the fast band is still empty, and
 a stop rule must read only what the bench reads too (no hidden truth). Graded by tests/test_feedforward_rounds.py and its committed ladder
 sysid/results/routine_ladders/arm.feedforward_bench.json (0x / 1x / 3x / 10x on the closed-loop toy arm).
@@ -132,15 +133,22 @@ class FeedforwardBench:
         self.tolerance_nm, self.delta_nm = float(tolerance_nm), float(delta_nm)
         self.per_round = None if per_round is None else int(per_round)
         self.patience, self.min_improvement = int(patience), float(min_improvement)
-        # where ΔG is read: every edge the routine may play, 11 points along each (the poses its transfers pass through)
-        edges = sorted({edge for edge, _speed in (*self.grid, *self.first)})
-        along = np.linspace(0.0, 1.0, 11)[:, None]
-        self._probe = np.concatenate([self.poses[a] + along * (self.poses[b] - self.poses[a]) for a, b in edges])
+        self._fresh()
+
+    def _fresh(self) -> None:
         self._bare: dict[Cell, Any] = {}     # each cell's motion, made once (the library is deterministic)
         self._cells: dict[str, Cell] = {}    # run id -> its cell: the held-out residual leaves out a cell, never one run of a pair
         self._prior: dict[str, float] | None = None
         self.fits_: list[ff.FeedforwardFit] = []
         self._fit_of: dict[frozenset[str], ff.FeedforwardFit] = {}   # the runs a fit saw -> that fit (a round reads its own fit back)
+
+    def __copy__(self) -> FeedforwardBench:
+        """WHY its own caches (fix round 1, lane L8): calibration.plan.apply_options plays a copy.copy with other options (dwell_s, space,
+        poses, grid); a shallow copy would share the motions made at the original's options and the fits the original made."""
+        out = object.__new__(type(self))
+        out.__dict__.update(self.__dict__)
+        out._fresh()
+        return out
 
     def __repr__(self) -> str:
         return (f"FeedforwardBench({len(self.drives)} drives {self.drives}, {len(self.poses)} poses, {len(self.grid)} cells, "
@@ -172,7 +180,7 @@ class FeedforwardBench:
         self._prior = {k: float(values[k]) for k in self.gravity_keys}
         self.fits_ = []
         self._fit_of = {}
-        return tuple(self._run(cell, 1, values) for cell in self.first)
+        return tuple(self._run(cell, 1, values) for cell in self._cells_of(self.first))
 
     def next_runs(self, values: Mapping[str, float], history: Sequence[Any]) -> tuple[Run, ...]:
         """The next round's runs (gap A2's member; ``history``: the runner's rounds so far, each with the runs it asked for): the grid's
@@ -185,7 +193,7 @@ class FeedforwardBench:
             return ()
         latest = self._fits(history)[-1]
         collected = self._collected(history)
-        empty = [cell for cell in self.grid if cell not in collected]
+        empty = [cell for cell in self._cells_of(self.grid) if cell not in collected]
         residual = {cell: float(latest.residual_by_group.get(cell, math.nan)) for cell in collected}
         # WHY sorted on the residual alone (stable): ties keep the order they were collected in, so a round is the same for the same data
         over = sorted((cell for cell in collected if residual[cell] > self.tolerance_nm), key=lambda cell: -residual[cell])
@@ -196,28 +204,33 @@ class FeedforwardBench:
         """Gap A2's member, its own stop (it replaces the runner's default, every 95 % interval inside its tolerance, which an empty fast
         band would never trip). Converged, after two rounds or more: the gravity the last two fits give differs by less than ``delta_nm``
         anywhere on the pose graph's edges (ΔG), the worst cell's held-out residual is within ``tolerance_nm``, and no cell of the grid is
-        still empty: "converged: ...". Else, with more than ``patience`` rounds, a Stop (not converged) when none of the last ``patience``
-        rounds cut the worst cell's held-out residual by ``min_improvement`` (relative): "no improvement in {patience} rounds: ...". Else
-        None, the next round. The cap is the runner's (max_rounds)."""
+        still empty: "converged: ...". Else, with more than ``patience`` rounds, every cell collected and the worst residual still over
+        ``tolerance_nm``, a Stop (not converged) when none of the last ``patience`` rounds cut the worst held-out residual over the cells
+        both fits held by ``min_improvement`` (relative): "no improvement in {patience} rounds: ...". Else None, the next round. The cap
+        is the runner's (max_rounds)."""
         if len(history) < 2:
             return None
         fits = self._fits(history)
         change = self._gravity_change(fits[-2], fits[-1])
         worst = self._worst(fits[-1])
         collected = self._collected(history)
-        empty = [cell for cell in self.grid if cell not in collected]
+        empty = [cell for cell in self._cells_of(self.grid) if cell not in collected]
         if change < self.delta_nm and worst <= self.tolerance_nm and not empty:
             return (f"converged: ΔG {change:.3g} N·m < {self.delta_nm:g} N·m between rounds {len(history) - 1} and {len(history)}, and the "
                     f"worst held-out cell residual {worst:.3g} N·m <= {self.tolerance_nm:g} N·m over all {len(collected)} cells")
-        if len(history) > self.patience:
-            trail = [self._worst(fit) for fit in fits[-(self.patience + 1):]]
+        # WHY only over tolerance with every cell collected (fix round 1, lane L8): a model within tolerance, or one with cells still
+        # empty (per_round caps a round: 20-30 arm-minutes each), has not shown that it cannot explain the data; next_runs collects
+        # the empty cells first and the runner's cap still bounds it. A NaN residual is not within tolerance
+        if len(history) > self.patience and not worst <= self.tolerance_nm and not empty:
+            # WHY over the cells both fits held: round 1 holds the slow band only, so the worst over all cells would compare unlike sets
+            steps = [self._shared_worst(before, after) for before, after in zip(fits[-(self.patience + 1):-1], fits[-self.patience:])]
             # WHY a NaN or a rise counts as no improvement: only a residual that measurably falls earns another round of arm time
-            cut = [(before - after) / before if before > 0 else math.nan for before, after in zip(trail, trail[1:])]
+            cut = [(before - after) / before if before > 0 else math.nan for before, after, _n in steps]
             if not any(c >= self.min_improvement for c in cut):
-                return Stop(f"no improvement in {self.patience} rounds: the worst held-out cell residual went "
-                            f"{' -> '.join(f'{w:.3g}' for w in trail)} N·m (each round must cut it by {self.min_improvement:.0%}; "
-                            f"tolerance {self.tolerance_nm:g} N·m), ΔG {change:.3g} N·m"
-                            + (f", {len(empty)} cells never collected" if empty else ""))
+                return Stop(f"no improvement in {self.patience} rounds: the worst held-out cell residual over the cells both fits held went "
+                            + ", ".join(f"{before:.3g} -> {after:.3g} ({n} cells)" for before, after, n in steps)
+                            + f" N·m (each round must cut it by {self.min_improvement:.0%}; now {worst:.3g} N·m over all "
+                            f"{len(collected)} cells, tolerance {self.tolerance_nm:g} N·m), ΔG {change:.3g} N·m")
         return None
 
     # --- the rounds' bookkeeping (read from the fits this routine made, keyed by the runs each one saw)
@@ -244,12 +257,27 @@ class FeedforwardBench:
         return cells
 
     @staticmethod
-    def _worst(found: ff.FeedforwardFit) -> float:
-        finite = [float(v) for v in found.residual_by_group.values() if math.isfinite(v)]
+    def _worst(found: ff.FeedforwardFit, cells=None) -> float:
+        finite = [float(v) for cell, v in found.residual_by_group.items() if (cells is None or cell in cells) and math.isfinite(v)]
         return max(finite) if finite else math.nan
 
+    def _shared_worst(self, before: ff.FeedforwardFit, after: ff.FeedforwardFit) -> tuple[float, float, int]:
+        shared = set(before.residual_by_group) & set(after.residual_by_group)
+        return self._worst(before, shared), self._worst(after, shared), len(shared)
+
     def _gravity_change(self, before: ff.FeedforwardFit, after: ff.FeedforwardFit) -> float:
-        return float(np.abs(np.asarray(self.regressor(self._probe), float) @ (np.asarray(after.theta) - np.asarray(before.theta))).max())
+        return float(np.abs(np.asarray(self.regressor(self._probe()), float) @ (np.asarray(after.theta) - np.asarray(before.theta))).max())
+
+    def _probe(self) -> np.ndarray:
+        """Where ΔG is read: every edge the routine may play, 11 points along each (the poses its transfers pass through). WHY at use:
+        calibration.plan.apply_options hands the runner a copy with its own grid / first / poses."""
+        edges = sorted({edge for edge, _speed in (*self._cells_of(self.grid), *self._cells_of(self.first))})
+        poses = np.asarray(self.poses, float)
+        along = np.linspace(0.0, 1.0, 11)[:, None]
+        return np.concatenate([poses[a] + along * (poses[b] - poses[a]) for a, b in edges])
+
+    def _cells_of(self, cells: Sequence[Any]) -> tuple[Cell, ...]:
+        return tuple(_cell(c, len(self.poses)) for c in cells)
 
     def with_feedforward(self, command, values: Mapping[str, float]):
         """``command`` with channels["feedforward_effort"] = gravity at the values' theta + each drive's friction (Coulomb, smoothed at
