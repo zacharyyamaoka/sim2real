@@ -30,6 +30,8 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import os
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -45,12 +47,42 @@ def _base(key: str) -> str:
     return key.split(SESSION_MARK, 1)[0]
 
 
+def _json_stable(value: Any) -> Any:
+    """What json writes for a value it cannot write itself: a dataclass's fields, a mapping's items, a set's members sorted, an array's
+    list, a path's text, else the type's dotted name. WHY never repr (fix round 1, gap D): a plain object's repr holds its memory address,
+    and a session id that changes from run to run would never recognise the same session again."""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {f.name: getattr(value, f.name) for f in dataclasses.fields(value)}
+    if isinstance(value, Mapping):
+        return {str(k): v for k, v in value.items()}
+    if isinstance(value, (set, frozenset)):
+        return sorted(json.dumps(v, sort_keys=True, default=_json_stable) for v in value)
+    if callable(getattr(value, "tolist", None)):
+        return value.tolist()
+    if isinstance(value, os.PathLike):
+        return os.fspath(value)
+    return f"{type(value).__module__}.{type(value).__qualname__}"
+
+
 def session_id(twin: str, plan_ids: Any, noise: Any, **drawn: Any) -> str:
     """A deterministic id for one session of recordings: the twin, the routines the plan ran and the noise drawn (its seed in it), plus
-    whatever else moved the draws when it is set (`drawn`: known values, a moved truth). The same inputs give the same id, so the same
-    session collected twice is recognised and kept once when two datasets are joined."""
+    whatever else moved the draws when it is set (`drawn`: known values, a moved truth, the routines' options, the custom routines, the
+    values the world played). The same inputs give the same id, so the same session collected twice is recognised and kept once when two
+    datasets are joined."""
     doc = {"twin": twin, "plan": list(plan_ids), "noise": noise, **{k: v for k, v in drawn.items() if v}}
-    return hashlib.sha256(json.dumps(doc, sort_keys=True, default=repr).encode()).hexdigest()[:12]
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, default=_json_stable).encode()).hexdigest()[:12]
+
+
+def _drawn_by(planned: CalibrationPlan, config: CalibrationConfig | None) -> dict:
+    """What a config changes in a session's draws besides the plan's ids, the noise and the known values: the options it set on the
+    routines it planned (CalibrationConfig.routines: a routine's runs, rounds and amplitudes) and the custom routines it put in place of
+    the rig's (each by its type's dotted name)."""
+    if config is None:
+        return {}
+    ids = set(planned.ids)
+    options = {rid: dict(o.options) for rid, o in config.routines.items() if rid in ids and o.options}
+    custom = {r.id: f"{type(r).__module__}.{type(r).__qualname__}" for r in config.custom if getattr(r, "id", None) in ids}
+    return {"options": options, "custom": custom}
 
 
 @dataclass(frozen=True)
@@ -59,11 +91,11 @@ class CalibrationData:
 
     `runs` {recording key: what the backend measured}, the runs a fit may read; `plan` the plan they were collected for; `noise` the noise
     model's dict they were drawn at (sim), or what the transport said it played (real), or None. `meta`: `twin` (the twin's description
-    id), `backend` ("sim" | "real") and `session` (one id per session of recordings; on the rack, the submission folder's name), plus, on
-    real, `transport`, `submission`, `schedule_digest`, `files` {key: the file it was read from}, `refused` and `missing`; a grown dataset
-    also lists its `sessions` {session: [keys]}. `held_out` {key: recording}: runs kept only to judge the fit, never fitted. `serves`
-    {key: the run id it answers}: a key with no entry answers its own id (a rig's runs); the pendulum's keys answer "train", "held_out",
-    "repeat" or "floor".
+    id), `backend` ("sim" | "real") and `session` (one id per session of recordings; on the rack, the submission folder's absolute
+    path), plus, on real, `transport`, `submission`, `schedule_digest`, `files` {key: the file it was read from}, `refused` and `missing`;
+    a grown dataset also lists its `sessions` {session: [keys]}. `held_out` {key: recording}: runs kept only to judge the fit, never
+    fitted. `serves` {key: the run id it answers}: a key with no entry answers its own id (a rig's runs); the pendulum's keys answer
+    "train", "held_out", "repeat" or "floor".
 
     WHY no key in both `runs` and `held_out`, compared by run name (sklearn's leakage rule, as eval() refuses it): a held-out run never
     becomes a training run, on any day it was recorded."""
@@ -112,7 +144,8 @@ class CalibrationData:
         It grows by session: a session this dataset already holds is kept once, however it comes back (`(a + b) + b` is `a + b`). A run
         recorded again in another session is kept beside the first as "<key>@<session>", answering the same run id, never overwriting
         it. Refused: anything but a CalibrationData; another twin's runs; the sim's draws joined with the rack's recordings; a run held out
-        on one side and trained on on the other (compared by run name, the session suffix stripped). The plan and noise stay this one's.
+        on one side and trained on on the other (compared by run name, the session suffix stripped); two datasets that claim the same
+        session with different runs (compared by run name). The plan and noise stay this one's.
 
         WHY by session and never by key (Zach, 2026-11-17: "incoeprating life time learning... Then you need to like consider offline
         datasets"): the same schedule played on two days gives the same run ids and two recordings, and both are data."""
@@ -140,6 +173,13 @@ class CalibrationData:
         files = dict(self.meta.get("files") or {})
         for session, keys in theirs_by.items():
             if session in held:
+                # WHY compared before it is skipped (fix round 1): keeping a held session once is right only when it is the same session;
+                # two different ones that share an id would otherwise lose the second without a word. By run name, so (a + b) + b and
+                # a + (a + b), whose keys carry the session suffix, still come back as a + b
+                mine_names, their_names = Counter(map(_base, held[session])), Counter(map(_base, keys))
+                if mine_names != their_names:
+                    raise ValueError(f"two different datasets claim session {session!r}: one holds runs {sorted(mine_names.elements())}, "
+                                     f"the other {sorted(their_names.elements())}; a session id names one set of recordings")
                 continue   # a session already held is kept once, however it comes back
             added = []
             for key in keys:
@@ -189,11 +229,19 @@ def check_data(data: Any, twin_id: str, *, on: str, move_truth: Mapping[str, flo
 
 
 def recorded(twin: Any, planned: CalibrationPlan, runs: Mapping[str, Any], noise: dict, *, known: Mapping[str, float] | None = None,
-             truth_moved: Mapping[str, float] | None = None) -> CalibrationData:
+             truth_moved: Mapping[str, float] | None = None, config: CalibrationConfig | None = None,
+             world: Mapping[str, float] | None = None) -> CalibrationData:
     """The sim's recordings of one session as a CalibrationData, its session id from what drew them (session_id): collect() and a fitted
-    rig twin's data_ build it the same way, so one session collected and one calibrated are recognised as the same."""
+    rig twin's data_ build it the same way, so one session collected and one calibrated are recognised as the same. `config` adds what it
+    set on the planned routines (their options, the custom routines); `world` is the values the world played (the runner's
+    state["world_values"]: its truth at the noise model's offset, moved where asked, an injected RigRunner(world=) included).
+
+    WHY the world's values are hashed in (fix round 1): the same plan, noise and options on another world (tools/stress_wrist.py's far
+    truth) draw other recordings under the same run ids. Only a 12-character digest reaches meta, and the fitted runner's state holds
+    those values in the clear already, so nothing new leaves the seal."""
     twin_id = twin.description.id
-    session = session_id(twin_id, planned.ids, noise, known=dict(known or {}), truth_moved=dict(truth_moved or {}))
+    session = session_id(twin_id, planned.ids, noise, known=dict(known or {}), truth_moved=dict(truth_moved or {}),
+                         **_drawn_by(planned, config), world=dict(world or {}))
     return CalibrationData(runs=dict(runs), plan=planned, noise=noise, meta={"twin": twin_id, "backend": "sim", "session": session})
 
 
@@ -281,10 +329,10 @@ def collect(twin: Any, config: CalibrationConfig | None = None) -> CalibrationDa
     noise = resolve_noise(runner, None, config)
     store: dict[str, Any] = {}
     online = _fitted_online(planned)
-    runner.calibrate(model=twin.model, noise=noise, routines=[_Recorder(r, store, fits=r.id in online) for r in planned.routines],
-                     known=config.known, schedule=planned)
+    recorders = [_Recorder(r, store, fits=r.id in online) for r in planned.routines]
+    _calibration, state = runner.calibrate(model=twin.model, noise=noise, routines=recorders, known=config.known, schedule=planned)
     used = runner._noise(noise)
-    return recorded(twin, planned, store, used.to_dict(), known=config.known)
+    return recorded(twin, planned, store, used.to_dict(), known=config.known, config=config, world=state.get("world_values"))
 
 
 def fit_rig(twin: Any, *, move_truth: Mapping[str, float] | None = None, noise: Any = None, config: CalibrationConfig | None = None,
@@ -307,7 +355,8 @@ def fit_rig(twin: Any, *, move_truth: Mapping[str, float] | None = None, noise: 
     calibration, state = runner.calibrate(model=twin.model, truth=move_truth, noise=resolved, routines=list(planned.routines),
                                           measured=None if data is None else dict(data.runs), known=config.known, schedule=planned, **served)
     if data is None and "played" in state:
-        data = recorded(twin, planned, state["played"], state["noise"].to_dict(), known=config.known, truth_moved=move_truth)
+        data = recorded(twin, planned, state["played"], state["noise"].to_dict(), known=config.known, truth_moved=move_truth, config=config,
+                        world=state.get("world_values"))
     state["data"] = data   # None only when a runner hands back no recordings
     return calibration, state, planned
 

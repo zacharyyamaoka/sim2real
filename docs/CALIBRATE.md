@@ -244,13 +244,16 @@ better = fitted.calibrate(data=grown)              # fits every recording of eve
   runs a fit may read; `held_out` the runs kept only to judge it; `serves` {key: the run id it answers} (a rig's keys answer their own
   run ids; the pendulum's answer `"train"`, `"held_out"`, `"repeat"` or `"floor"`); `data.answering(run_id)` names every key that answers
   a run id. `meta` holds `twin`, `backend` (`"sim"` or `"real"`) and `session`; on the rack also the transport, the submission folder
-  (whose name is the session), the schedule digest, `files` (the file each run was read from), `refused` and `missing`.
+  (its absolute path is the session), the schedule digest, `files` (the file each run was read from), `refused` and `missing`.
 - **Refits start from the priors.** Every generation refits from the description's priors, so the same runs give the same values; a
   fitted twin's runner keeps the loaded twin's description (and a rig's world).
 - **Growth is by session.** `data + more` (or `data.extend(more)`) returns a new dataset. A session already held is kept once, however
   it comes back (`(a + b) + b` is `a + b`). The same run recorded in another session is kept beside the first as `<key>@<session>`,
   answering the same run id, never overwriting it. A run no routine asks for is held and never fitted. `collect()` names its session
-  from the twin, the plan's routines and the noise (its seed in it), so the same session collected twice is recognised.
+  from the twin, the plan's routines, the noise (its seed in it), the known values, the options `CalibrationConfig.routines` set, the
+  custom routines and the values the world played (a moved truth or an injected `RigRunner(world=)` included), so the same session
+  collected twice is recognised and any of these changed is another session. Two datasets that claim one session with different runs
+  (compared by run name) are refused by name, never merged by dropping one.
 - **The split rule.** A held-out run never becomes a training run: a dataset with a run in both `runs` and `held_out` is refused, and so
   is joining two where a run is held out on one side and trained on on the other (compared by run name, the session suffix stripped).
 - **The sim/real rule.** Rack runs are never fitted on the sim (they would be graded against a hidden truth that did not make them):

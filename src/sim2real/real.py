@@ -971,12 +971,16 @@ def _sysid_cards():
 def held_runs(twin_id: str, planned, state: Mapping[str, Any]):
     """What a twin fitted on the rack holds (its data_): one key per run that came back usable, the train runs to fit and the held-out and
     floor runs apart (never fitted), `serves` naming each one's purpose, and `meta` the twin, the backend ("real"), the transport, the
-    submission folder (whose name is the session), the schedule digest, the file each run was read from, what was refused and missing."""
+    submission folder (its absolute path is the session), the schedule digest, the file each run was read from, what was refused and
+    missing.
+
+    WHY the absolute path and never the folder's name (fix round 1): two RackTransport(out) sessions under different parents can share a
+    basename, and a session already held is kept once when datasets grow, so a shared name would drop the second session."""
     from .calibration.collect import CalibrationData  # noqa: PLC0415
 
     measured, submission, recording = state["measured"], state["submission"], state["recording"]
     serves = {**{n: "train" for n in measured.train}, **{n: "held_out" for n in measured.held_out}, **{n: "floor" for n in measured.floor}}
-    meta = {"twin": twin_id, "backend": "real", "session": Path(submission.folder).name, "transport": state["transport"],
+    meta = {"twin": twin_id, "backend": "real", "session": str(Path(submission.folder).resolve()), "transport": state["transport"],
             "submission": str(submission.folder), "schedule_digest": submission.digest, "files": dict(measured.files),
             "refused": dict(measured.refused), "missing": dict(measured.missing)}
     if recording is not None and recording.meta.get("truth_moved"):
