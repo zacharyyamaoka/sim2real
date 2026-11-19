@@ -691,7 +691,7 @@ class RobotTwin:
             self.model = self.models.get(servo.id) or dm.current_models(servo.type)[0].id
 
     @classmethod
-    def from_robot_description(cls, rd, *, models: Mapping[str, str] | None = None, workers: int = 6) -> RobotTwin:
+    def from_robot_description(cls, rd, *, models: Mapping[str, str] | None = None, workers: int = 6, world: str | None = None) -> RobotTwin:
         """The twin of a robot's description (Zach, 2026-11-17: "twin = RobotTwin.from_robot_description(rd)"). Read by attribute, so
         sim2real imports no description package: `rd.name`, `rd.title`, `rd.model` (the MJCF), `rd.source`, `rd.record` (the unit:
         {"path": its deployment record, "component": its id}) and `rd.components`, each with `.id`, `.title`, `.type` (a sim2real type
@@ -699,7 +699,15 @@ class RobotTwin:
         `.binds` and `.part` (a robotparts id, or None). First description: bam_rack_twin.description.station_description(11).
 
         The runner world is bound by the unit: the sysid example whose manifest `record` names the same deployment file and component
-        (the calibration world built for that unit), so the twin calibrates exactly where the hand-built fixture does."""
+        (the calibration world built for that unit), so the twin calibrates exactly where the hand-built fixture does.
+
+        `world` (2026-11-19, step 7 for any exported robot): None binds the unit's sysid world when rd.record names one, builds a NOMINAL
+        world when rd names no unit (rd.record None: a CAD export), and refuses a unit no world was built for (a misspelt one, can99);
+        "nominal" builds the nominal world whatever rd.record says: the description's own MJCF at its own Values, calibrated on the
+        one-click seam (sim2real.nominal: a RigBackend built from the description, played by sim2real.rig.RigRunner)."""
+        if world not in (None, "nominal"):
+            raise ValueError(f"world is None (the unit's sysid world, else the nominal world for a description with no unit) or 'nominal', "
+                             f"not {world!r}")
         if not hasattr(rd, "components"):
             if hasattr(rd, "elements") or hasattr(rd, "interfaces"):
                 raise TypeError(f"{getattr(rd, 'name', rd)!r} is a design-only RobotDescription: it names no unit (which board, which CAN id) "
@@ -730,8 +738,19 @@ class RobotTwin:
             instances.append(Instance(c.id, c.title, None if structural else c.type, c.parent, parameters,
                                       {p: p in on_type for p in parameters}, structural, c.type, dict(c.binds or {}),
                                       getattr(c, "part", None)))
-        world = _world_for(rd.record)
-        return cls(instances, name=world, model_file=rd.model, models=models, title=rd.title, source=rd.source, workers=workers)
+        record = getattr(rd, "record", None)
+        if world == "nominal" or record is None:
+            # WHY the sysid world first whenever the unit names one (the pendulum path as it was): only a description no world was built
+            # for, or an explicit world="nominal", plays its own MJCF
+            from .nominal import nominal_twin  # noqa: PLC0415
+
+            return nominal_twin(cls, instances, rd, models=models, workers=workers)
+        try:
+            bound = _world_for(record)
+        except LookupError as missing:
+            raise LookupError(f"{missing}. To calibrate against the description's own MJCF at its own Values instead: "
+                              "RobotTwin.from_robot_description(rd, world='nominal')") from None
+        return cls(instances, name=bound, model_file=rd.model, models=models, title=rd.title, source=rd.source, workers=workers)
 
     @property
     def fitted(self) -> bool:

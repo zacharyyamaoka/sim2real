@@ -130,14 +130,17 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
   - `NotImplementedError` for a `CalibrationConfig` with `known`, `models`, `noise` or `seed` on the tracer;
   - for `data=`: `TypeError` for anything but a `CalibrationData`; `ValueError` for another twin's runs, for rack runs on `on="sim"` (it names `on='real'`) or sim draws on `on="real"`, for `move_truth` with `data=`, and for `transport=` with `data=`.
 
-### `RobotTwin.from_robot_description(rd, *, models=None, workers=6) -> RobotTwin`
+### `RobotTwin.from_robot_description(rd, *, models=None, workers=6, world=None) -> RobotTwin`
 
 - **What it does:** builds the twin from a robot's description: its typed components with their priors (robot_msgs Values), its model file and its unit. The calibration world is the one built for that unit (the sysid example whose manifest `record` names the same deployment file and component).
 - **First description:** `bam_rack_twin.description.station_description(11)`; its twin is `pendulum_can11()` value for value.
+- **Any other description (since 2026-11-19): the nominal world.** When `rd.record` is None (a CAD export names no unit yet), or with `world="nominal"`, the twin's sim plant is the description's own MJCF at its own Values (`sim2real.nominal`), played on the one-click seam (`sim2real.rig.RigRunner`; the description is the rig). Each `integrated_servo` bound to an MJCF hinge (`binds["joint"]`) is driven by its board's PD (the description's `kp_nm_rad`/`kd_nm_s_rad`, else a 5 Hz loop on the joint's nominal inertia) through typed `JointTrajectory` tapes. `armature_kg_m2`, `damping_nm_s_rad` and `frictionloss_nm` set the joint's own MuJoCo attributes; on a lone hinge that states `gravity_nm`, `gravity_nm` and `gravity_bottom_rad` place the link's centre of mass and `armature_kg_m2` is the total inertia about the hinge (bam_rack_twin's convention). Every other parameter is carried and says why it is not identified. `plan(twin)` shows one step, `servo.dynamics_regression` (output error through the twin's replays; tolerance max(5 % of the nominal, a per-unit floor), 0.005 rad for an angle, "proposed"). `calibrate(on="sim")` recovers the nominal values, and with `move_truth` the moved ones (`tests/test_from_robot_description_nominal.py`: CAN 11 with gravity and damping moved; the UR wrist test rig's Cad2Robot bundle with friction and damping moved). `calibrate(on="real")` is refused (the seam has no rack transport). The noise is CAN 11's measured block as a stand-in.
+- **Needs, for the nominal world:** `rd.model` an MJCF file, and at least one `integrated_servo` component whose `binds["joint"]` names a hinge in it. `rd.record` may be None; `part` is optional.
 - **Raises:**
   - `TypeError` for a design-only `RobotDescription` (it names no unit and no typed priors), and for a prior that is a bare number instead of a Value;
-  - `ValueError` for a type that is no sim2real type, repeated component ids, or a parent that is no component;
-  - `LookupError` when no calibration world was built for the unit.
+  - `ValueError` for a type that is no sim2real type, repeated component ids, or a parent that is no component; for a `world` other than None or `"nominal"`; and, on the nominal world, for no model file, no servo bound to an MJCF hinge, a bound joint the MJCF lacks, or a lumped inertia below the link's own;
+  - `LookupError` when `rd.record` names a unit no calibration world was built for (it names `world='nominal'` as the way through);
+  - `NotImplementedError` for `models=` on the nominal world.
 
 ### `fitted.evaluate() -> TwinReport | RigReport` (alias `fitted.eval()`)
 
@@ -253,8 +256,9 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 
 - **A real `calibrate(on="real")` run.** The backend is built (`f4d84c8`, `sim2real.real`, docs/CALIBRATE.md "on='real'"): CAN 11's schedule goes out as a rack submission and the runs come back as robot_msgs `JointTrajectory` for the same routines `plan(twin)` shows (since 2026-11-18), scored against the rack's own floor (gate T1). It is proved on the rack twin only (`TwinTransport`); no run has executed on the rack yet.
 - **The description's side, past CAN 11.** Built: `bam_rack_twin.description.station_description(11)`, the shape `from_robot_description` reads. Not built:
-  - a description for any other unit (each needs a calibration world: a sysid example whose manifest `record` names it);
-  - one from a Cad2Robot bundle (CAN 11's `cad_joint` is null in the rack record: the Oct 9 export predates the station);
+  - a description for any other unit with a hidden-truth world of its own (a sysid example whose manifest `record` names it); without one it calibrates against the nominal world;
+  - a Cad2Robot bundle reader on the description's side (the nominal-world test reads the UR wrist placeholder bundle into the shape itself; CAN 11's `cad_joint` is null in the rack record: the Oct 9 export predates the station);
+  - on the nominal world: `calibrate(on="real")`, `twin.with_values()` (it rebuilds a twin by its name, which binds no world), the preflight soak and gains checks (they read the pendulum tracer's runner: `None`), backlash, Stribeck and joint zeros;
   - the write-back: a new description from `fitted.parameters`, and its own explicit save.
 - **The fixtures** (`sim2real.examples`) still build from the sysid manifests through `sim2real.twin.describe`, which is internal and not public API; they are the oracle a description's twin is held to.
 - **`simulate()` on a rig.**
