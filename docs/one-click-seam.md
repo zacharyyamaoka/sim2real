@@ -41,12 +41,17 @@ class Routine(Protocol):
     identifies: tuple[str, ...]                            # the parameter keys its fit returns as found (held to the truth)
     adjusts: tuple[str, ...] = ()                          # optional: keys it SETS for the twin without claiming them (a chain's
                                                            # masses on their visible subspace); their rows stay "not identified"
-    def runs(self, values) -> Sequence[Run]: ...           # its excitation, given what the earlier routines found (a frame, a pose)
+    commands_read: tuple[str, ...]                         # optional: the keys its runs' commands are made from (default: the
+                                                           # keys it requires); the schedule shows it made after their finders
+    def runs(self, values) -> Sequence[Run]: ...           # its excitation, given what the earlier routines found (a frame, a pose);
+                                                           # the same runs for the same values (the schedule is static)
     def fit(self, measured, values, twin: TwinHandle) -> Mapping[key, Estimate]: ...   # runs SEALED; may only twin.predict(...)
 ```
 
 Records: `Parameter(key, unit, tolerance=("rel"|"abs", SI value), tolerance_source, routine, why_not, display, title)`,
-`Estimate(value, ci95, method)`, `Run(id, split, spec)` (the runner reads `id` and `split` only), `Score(joints, runs, tool_stop_m)`.
+`Estimate(value, ci95, method)`, `Run(id, split, spec=None, seconds=None, command=None)` (the runner reads `id`, `split` and `command`:
+a robot_msgs `JointTrajectory` or `JointCommandSequence`, or none; `robot_seconds()` is its robot time; `to_dict()` / `from_dict()`),
+`Score(joints, runs, tool_stop_m)`.
 
 ## The rules the runner enforces (and the rig therefore must not)
 
@@ -60,10 +65,14 @@ Records: `Parameter(key, unit, tolerance=("rel"|"abs", SI value), tolerance_sour
 3. **The ruler is world.json's.** Rows hold each recovered value to `ruler(truth, nominal, noise)`: the committed truth, moved toward nominal
    by `noise.truth_offset` (1: as committed). `move_truth={key: value}` moves the world only, so the row turns red: the mutation test.
    A derived value is held to what the ruled values give, and cannot be moved on its own.
-4. **One play per run.** A run two routines both read is measured once and shared (the dynamics fit's chirps are the delay scan's).
-5. **Held out is held out.** `eval` refuses a run any routine measured or not split `held_out`. Its floor is the sim's own repeat
+4. **One play per run.** A run two routines both read is measured once and shared (the dynamics fit's chirps are the delay scan's); one
+   run id is one command, so a second routine that plays the id with another command is refused.
+5. **The schedule is what plays** (2026-11-18). `plan(twin)` binds each routine's runs at the priors and shows which are known now and
+   which are made after an earlier step (docs/CALIBRATE.md, "The schedule"); `calibrate()` refuses, before it plays, a known-now routine
+   whose runs differ from the ones shown.
+6. **Held out is held out.** `eval` refuses a run any routine measured or not split `held_out`. Its floor is the sim's own repeat
    spread: every held-out run measured twice under the same noise (streams `held_out` and `repeat`), scored against each other.
-6. **Gates:** `twinned` (the fitted twin's held-out error / floor at most `TWINNED_LIMIT`, 1.5x, worst joint), `recovery` (every identified
+7. **Gates:** `twinned` (the fitted twin's held-out error / floor at most `TWINNED_LIMIT`, 1.5x, worst joint), `recovery` (every identified
    value within tolerance), and `tool_at_stops` (p95 at most 1 mm, Zach 2026-11-11) when the rig scores a tool.
 
 ## The noise model (the stress lane's knobs)

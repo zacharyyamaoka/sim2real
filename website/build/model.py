@@ -355,7 +355,7 @@ class ApiEntry:
     anchor: str
     name: str
     qualname: str
-    kind: str                     # class | function | module | value
+    kind: str                     # class | function | module | value | alias
     signature: str
     summary: str
     rest: str
@@ -431,6 +431,14 @@ def api() -> list[ApiEntry]:
         if anchor in taken:
             continue
         qual = f"sim2real.calibration.{name}"
+        own = getattr(obj, "__name__", name)
+        if (inspect.isclass(obj) or inspect.isroutine(obj)) and own != name and getattr(cal, own, None) is obj:
+            # WHY one line: an alias (CalibrationPlan of CalibrationSchedule, generate_schedule of plan) is the same object under a second
+            # name; its full entry would repeat every member under a second set of anchors
+            entries.append(ApiEntry(anchor, name, qual, "alias", f"{name} = {own}",
+                                    f"Alias of `{own}`: the same object, documented under its own name.", ""))
+            taken.add(anchor)
+            continue
         if inspect.isclass(obj):
             entry = _class_entry(obj, name, qual)
         elif inspect.isroutine(obj):

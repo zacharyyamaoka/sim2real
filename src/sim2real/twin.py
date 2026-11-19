@@ -626,6 +626,15 @@ class RobotTwin:
     def simulate(self, **options) -> Simulation:
         return self.runner.simulate(**options)
 
+    def generate_schedule(self, config=None):
+        """The CalibrationSchedule calibrate() plays, without running anything (sim2real.calibration.plan(self, config)): each step in run
+        order with its runs bound at the priors, each run's typed command, which commands are known now and which are made after an
+        earlier step runs. WHY on the twin (Zach, Daily Note 2026-11-17: "robottwin.calibrate() internall mabye that does
+        .generate_schedule() -> CalibrationSchedule and then you can pass that to something thats gonna like dispatch/execute it")."""
+        from .calibration.plan import plan  # noqa: PLC0415
+
+        return plan(self, config)
+
     def calibrate(self, on: str = "sim", *, truth: str = "sealed", move_truth: Mapping[str, float] | None = None, noise=None, config=None,
                   data=None, transport=None) -> RobotTwin:
         """A NEW twin, fitted: the type's routine schedule played `on` the simulator at the hidden truth (`truth="sealed"`: the fit never
@@ -669,7 +678,6 @@ class RobotTwin:
         if noise is not None:
             raise NotImplementedError("the pendulum tracer sets its noise through sysid's ladder (sysid.world.noise_scale), not calibrate(noise=)")
         from .calibration.config import CalibrationConfig  # noqa: PLC0415
-        from .calibration.plan import plan as schedule_of  # noqa: PLC0415
         from .calibration.record import CalibrationRecord  # noqa: PLC0415
 
         config = config if config is not None else CalibrationConfig()
@@ -684,7 +692,7 @@ class RobotTwin:
         # WHY plan first and play exactly its routines (Zach, 2026-11-17: "robottwin.calibrate() internall mabye that does
         # .generate_schedule() -> CalibrationSchedule and then you can pass that to something thats gonna like dispatch/execute it"): the
         # schedule plan(twin) shows is the one that runs, and the fitted twin carries it as plan_
-        planned = schedule_of(self, config)
+        planned = self.generate_schedule(config)
         calibration, state = self.runner.calibrate(model=self.model, truth=move_truth, routines=list(planned.routines))
         servo = self.runner.typed().id
         fitted = RobotTwin.__new__(RobotTwin)

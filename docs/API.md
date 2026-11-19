@@ -89,11 +89,24 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 - **Never:** writes anything or touches hardware.
 - **Not built yet:** a rig's twin (`RigRunner` has no `simulate`).
 
+### `twin.generate_schedule(config=None) -> CalibrationSchedule`
+
+- **What it does:** the schedule `calibrate()` will play, without running anything (`sim2real.calibration.plan(twin, config)`; its
+  aliases `generate_schedule(twin)` and the old class name `CalibrationPlan` stay). Zach, Daily Note 2026-11-17: "internall mabye that
+  does .generate_schedule() -> CalibrationSchedule".
+- **What it holds:** the steps in run order, and on a twin that ships its routines each step's runs at the priors (each a
+  `sim2real.rig.Run` with a typed robot_msgs command, `JointTrajectory` or `JointCommandSequence`, or none) and whether its commands are
+  known now, made after an earlier step runs, or it is fit only. `.runs` (known now), `.previews` (made after), `.summary()`,
+  `.to_dict()["schedule"]`. See docs/CALIBRATE.md, "The schedule".
+- **Never:** plays anything. It calls each routine's `runs()` twice at the priors (to bind, and to check it is static).
+- **Raises:** `CalibrationPlanError` for `runs()` that change between two calls, one run id bound to two different runs, or a run id a
+  known-now and a made-after step share.
+
 ### `twin.calibrate(on="sim", *, truth="sealed", move_truth=None, noise=None, config=None, data=None, transport=None) -> RobotTwin`
 
 - **What it does:** returns a NEW, fitted twin. It plays the routines on the simulator against a hidden truth that the fit never sees, in the order their declarations give (`sim2real.calibration.plan`; docs/CALIBRATE.md).
 - **The learned values end in `_`** (scikit-learn's convention): `values_`, `intervals_`, `rungs_` and `calibration_`. `fitted.parameters` carries them as Values.
-- **`plan_` and `record_`**: `plan_` is the `CalibrationPlan` that ran (the one `plan(twin)` shows), and `record_` is the run as one `sim2real.calibration/1` record (`record_.to_dict()`; add eval's gates with `record_.with_evaluation(fitted.eval().to_dict())`). The pendulum tracer plays the routines its example ships (`sysid/examples/pendulum_can11/routines.py`: `servo.backlash_reversals_camera`, then `servo.dynamics_regression`, each a step of its pipeline) since 2026-11-17.
+- **`plan_` and `record_`**: `plan_` is the `CalibrationSchedule` that ran (the one `twin.generate_schedule()` and `plan(twin)` show; a known-now step that plays other runs than it showed is refused by name), and `record_` is the run as one `sim2real.calibration/1` record (`record_.to_dict()`; add eval's gates with `record_.with_evaluation(fitted.eval().to_dict())`). The pendulum tracer plays the routines its example ships (`sysid/examples/pendulum_can11/routines.py`: `servo.backlash_reversals_camera`, then `servo.dynamics_regression`, each a step of its pipeline) since 2026-11-17.
 - **`config=CalibrationConfig(...)`:** steers the run: models per part, known values, excluded or included routines, an explicit order, the noise level the metric reads, the budget, per-routine options and injected routines. On the pendulum tracer it picks, orders and excludes routines; `known`, `models`, `noise` and `seed` are refused there for now. See docs/CALIBRATE.md.
 - **`data=collect(twin)`:** fits recorded runs and never calls the backend's measure. This is the deployment path: collect in the field, fit anywhere.
 - **`move_truth={key: value}`:** moves hidden values for one run while the ruler stays put. It's the mutation test: a moved truth must turn red.

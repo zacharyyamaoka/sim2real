@@ -10,8 +10,9 @@ from sim2real.calibration import CalibrationConfig, collect, plan
 
 twin = sim2real.examples.ur_wrist_test_rig()
 plan(twin).summary()                                   # what would run, in what order, and why; nothing runs
+twin.generate_schedule()                               # the same CalibrationSchedule: each step's runs, known now or made after
 fitted = twin.calibrate(on="sim")                      # runs the plan; a NEW, fitted twin
-fitted.plan_                                           # the CalibrationPlan that ran
+fitted.plan_                                           # the CalibrationSchedule that ran (CalibrationPlan is its old name, kept)
 fitted.record_.to_dict()                               # the sim2real.calibration/1 record (below)
 fitted.record_.with_evaluation(fitted.eval().to_dict())   # the same record with eval()'s gates
 ```
@@ -115,6 +116,36 @@ A frozen dataclass with a JSON round trip (`to_dict()` / `from_dict()`). Pass it
 | `routines` | per-routine options, set with `config.with_routine(id, **options)`. They reach a **copy** of the routine. An option the routine does not have raises `KeyError` |
 | `custom` | injected routine objects. Each replaces the rig's implementation of a registered id. An id that is not in `cards/calibration.py` is refused |
 
+## The schedule: `CalibrationSchedule`
+
+`plan(twin)`, `generate_schedule(twin)` and `twin.generate_schedule()` all return one `CalibrationSchedule`: what calibrate() will play,
+as a static object you can look at before anything runs (Zach, Daily Note 2026-11-17: "the first output I think should be like A
+CalibrationSchedule ... a static description of the routines that will be run"). `CalibrationPlan` and `plan` stay as aliases. On a twin
+that ships its routines (a rig on the one-click seam, or the pendulum's `routines.py`), each step also holds its runs:
+
+| on the step | what it holds |
+|---|---|
+| `runs` | its runs bound at the priors (the description's values, `known` on top), each a `sim2real.rig.Run`; `()` = it plays nothing; `None` = no preview (its `runs()` needs a value no prior states) |
+| `status` | `"known now"` (its commands are what it shows, whatever earlier steps find), `"made after"` (its commands are made from what an earlier step finds), `"fit only"` (no runs of its own) |
+| `commands_after` | the earlier steps whose found values its commands are made from |
+
+- **Typed commands.** A `Run(id, split, spec=None, seconds=None, command=None)` carries a robot_msgs `JointTrajectory` (an open-loop
+  tape) or `JointCommandSequence` (closed-loop steps), or no command; anything else is a `TypeError`. `run.robot_seconds()` is its robot
+  time as (shortest, longest): the trajectory's duration, the sequence's bounds (each step ends by its `Elapsed` or its timeout, or at once
+  when another condition holds), else `(seconds, seconds)`, else `None`. A trajectory's `seconds` must equal its duration (one run, one
+  length). `to_dict()` / `from_dict()` carry id, split, spec, seconds and command; a spec that is not JSON is refused by the run's id.
+- **Made after comes from the declaration, never from the order and never from a probe.** A routine may declare `commands_read` (the keys
+  its commands are made from); without it, the keys it `requires` that an earlier step writes. A known value makes nothing wait.
+- **calibrate() is held to it.** A known-now step must play exactly the runs shown, or calibrate() refuses it by name before it plays
+  (a routine whose commands read more than it declares is caught there). `runs()` must give the same runs for the same values, a run id
+  means one command, and an id shared by a known-now and a made-after step is refused at plan time.
+- **Seeing it.** `schedule.runs` holds the runs known now (each once), `schedule.previews` a made-after step's runs at the priors.
+  `summary()` adds one line per step (`known now: ...`, `commands made after <step> runs; preview at the priors: ...`, `fit only`), and
+  `to_dict()["schedule"]` one row per step (`routine`, `status`, `commands_after`, `runs`: each `{id, split, command, seconds, preview}`),
+  present only when a step is bound: a catalog plan's dict is unchanged, and the record's step rows stay frozen.
+- **The pendulum.** Both steps are known now on the one `train` run, whose length is the committed schedule's train seconds
+  (`sysid/results/pendulum_can11.json`, 771.8 s), read, never re-derived; it has no command, because the rack plays sysid's schedule.
+
 ## collect vs fit
 
 Each routine is two halves: `runs(values)` says what to record, and `fit(measured, values, twin)` says what to compute. You can run
@@ -126,6 +157,8 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 ```
 
 - `collect()` plans each routine's runs from the priors (plus `known`), because nothing has been fitted yet when the data is logged.
+- The exception is a made-after step: `collect()` fits the steps it waits for as it goes, so it is recorded the way a replay builds it,
+  and `calibrate(data=)` replays it without measuring and without a mismatch.
 - A run that two routines share is played once.
 - If a fit then asks for a run the data does not hold, it raises `CalibrationPlanError` naming the run.
 
@@ -142,7 +175,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `written` | the day the record was written (ISO date) |
 | `seconds` | how long the run took |
 | `noise` | the noise model it was played at (each term, its level, seed and sources) |
-| `plan` | the plan that ran: `twin`, `source` (`"planner"`, `"config.order"`, or `"sysid"` for the pendulum's on='real' run, whose plan lists the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals` |
+| `plan` | the plan that ran: `twin`, `source` (`"planner"`, `"config.order"`, or `"sysid"` for the pendulum's on='real' run, whose plan lists the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals`, and `schedule` (the schedule's rows, above) when a step was bound |
 | `parameters` | one row per parameter (below) |
 | `routines` | one row per routine as it ran (below) |
 | `passed` | every graded value within its tolerance, and at least one graded |

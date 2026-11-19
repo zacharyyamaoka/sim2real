@@ -12,10 +12,10 @@ from . import recovery
 from .collect import CalibrationData, collect
 from .config import Budget, CalibrationConfig, RoutineOptions
 from .options import TypeOptions, options
-from .plan import (CalibrationCycleError, CalibrationPlan, CalibrationPlanError, Declaration, PlanStep, Selection, declaration, order, plan,
-                   select)
+from .plan import (CalibrationCycleError, CalibrationPlan, CalibrationPlanError, CalibrationSchedule, Declaration, PlanStep, Selection,
+                   declaration, generate_schedule, order, plan, select)
 from .record import RECORD_SCHEMA, CalibrationRecord
 
 __all__ = ["RECORD_SCHEMA", "Budget", "CalibrationConfig", "CalibrationCycleError", "CalibrationData", "CalibrationPlan", "CalibrationPlanError",
-           "CalibrationRecord", "Declaration", "PlanStep", "RoutineOptions", "Selection", "TypeOptions", "collect", "declaration", "options",
-           "order", "plan", "recovery", "select"]
+           "CalibrationRecord", "CalibrationSchedule", "Declaration", "PlanStep", "RoutineOptions", "Selection", "TypeOptions", "collect",
+           "declaration", "generate_schedule", "options", "order", "plan", "recovery", "select"]

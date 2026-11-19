@@ -4,7 +4,11 @@ are selected by a metric, and the selected routines are ordered from what each d
     from sim2real.calibration import plan, select, order
     plan({"cam": ("camera", "M1.measurement.distortion")}).ids   # ('camera.exposure_lock', 'camera.intrinsics_charuco', ...)
     plan(twin).steps                                               # a rig twin: its own routines, in the declared order
+    twin.generate_schedule().summary()                             # the same CalibrationSchedule: each step's runs, known now or made after
     order(routines, names=names)                                   # the same objects, ordered
+
+The schedule (``_bind``, on a twin that ships its routines): each step's runs bound at the priors, each run's command typed (sim2real.rig.Run),
+and whether its commands are known now, made after an earlier step runs, or it is fit only, from what each routine declares.
 
 The order (``order``): a hard graph from ``requires`` (after every routine that identifies or configures the name) and ``refines`` (after
 every OTHER routine that sets the name, provisionally or not), sorted by stdlib graphlib; among the ready routines the first by: no unplaced
@@ -457,6 +461,13 @@ class PlanStep:
     recovery: dict | None
     source: str                                  # "rig" | "custom" | "catalog"
     routine_object: Any = field(default=None, compare=False, repr=False)
+    # the schedule's facts (bound on a rig's plan; kept out of to_dict: the record's step rows are sim2real.calibration/1's):
+    # runs: its runs at the priors (sim2real.rig.Run), () = it plays nothing, None = not bound or no preview (its runs() needs a value
+    # only an earlier step finds). status: "known now" | "made after" | "fit only" ("" = not bound). commands_after: the steps whose
+    # found values its commands are made from.
+    runs: tuple[Any, ...] | None = field(default=None, compare=False, repr=False)
+    status: str = field(default="", compare=False)
+    commands_after: tuple[str, ...] = field(default=(), compare=False)
 
     def to_dict(self) -> dict:
         return {"routine": self.routine, "title": self.title, "kind": self.kind, "setting": self.setting, "identifies": list(self.identifies),
@@ -466,10 +477,20 @@ class PlanStep:
 
 
 @dataclass(frozen=True)
-class CalibrationPlan:
-    """What calibrate() runs, in order, and what it leaves out. `ids`: the routine ids in run order. `dropped`: [(routine, why)].
-    `uncovered`: [(instance, name, why)]. `assumed`: [(routine, name, why)], a requirement no planned routine provides, held at its prior.
-    `source`: "planner" (the declared order) or "config.order". `totals`: wall_time_s, operator_time_s, equipment_usd."""
+class CalibrationSchedule:
+    """What calibrate() runs, in order, and what it leaves out: a static object to look at before anything runs. `ids`: the routine ids in
+    run order. `dropped`: [(routine, why)]. `uncovered`: [(instance, name, why)]. `assumed`: [(routine, name, why)], a requirement no planned
+    routine provides, held at its prior. `source`: "planner" (the declared order) or "config.order". `totals`: wall_time_s,
+    operator_time_s, equipment_usd.
+
+    On a twin that ships its routines, each step also holds its runs bound at the priors (PlanStep.runs, each a sim2real.rig.Run with its
+    typed command) and says whether its commands are known now, made after an earlier step runs (from what the routine declares its
+    commands read: commands_read, else the keys it requires that an earlier step writes; never from the order, never probed), or whether
+    it is fit only. `runs`: the runs known now; `previews`: a made-after step's runs at the priors. calibrate() is held to it.
+
+    WHY this name, with CalibrationPlan kept as an alias (Zach, Daily Note 2026-11-17): "the first output I think should be like A
+    CalibrationSchedule ... a static description of the routines that will be run... so its nice to be able to kinda like see it as a
+    static object ... internall mabye that does .generate_schedule() -> CalibrationSchedule"."""
     ids: tuple[str, ...]
     steps: tuple[PlanStep, ...]
     dropped: tuple[tuple[str, str], ...]
@@ -485,21 +506,148 @@ class CalibrationPlan:
         """The routine objects in run order (what a runner plays)."""
         return tuple(s.routine_object for s in self.steps)
 
+    @property
+    def runs(self) -> tuple[Any, ...]:
+        """The runs known now, each once, in the order they are first played: what the robot plays whatever the earlier fits find."""
+        return _distinct(r for s in self.steps if s.status == "known now" and s.runs for r in s.runs)
+
+    @property
+    def previews(self) -> tuple[Any, ...]:
+        """A made-after step's runs as they would be at the priors, each once: never shown as known, since the earlier fit moves them."""
+        return _distinct(r for s in self.steps if s.status == "made after" and s.runs for r in s.runs)
+
     def to_dict(self) -> dict:
-        return {"twin": self.twin, "source": self.source, "level": self.level, "steps": [s.to_dict() for s in self.steps],
-                "dropped": [{"routine": r, "why": w} for r, w in self.dropped],
-                "uncovered": [{"instance": i, "name": n, "key": f"{i}.{n}", "why": w} for i, n, w in self.uncovered],
-                "assumed": [{"routine": r, "requires": n, "why": w} for r, n, w in self.assumed], "totals": dict(self.totals)}
+        out = {"twin": self.twin, "source": self.source, "level": self.level, "steps": [s.to_dict() for s in self.steps],
+               "dropped": [{"routine": r, "why": w} for r, w in self.dropped],
+               "uncovered": [{"instance": i, "name": n, "key": f"{i}.{n}", "why": w} for i, n, w in self.uncovered],
+               "assumed": [{"routine": r, "requires": n, "why": w} for r, n, w in self.assumed], "totals": dict(self.totals)}
+        # WHY only when a step is bound, and beside the steps rather than in them: a catalog plan's dict stays as it was, and the record's
+        # step rows (sim2real.calibration/1, STEP_KEYS) stay frozen
+        if any(s.status for s in self.steps):
+            out["schedule"] = [_schedule_row(s) for s in self.steps]
+        return out
 
     def summary(self) -> str:
         lines = [f"plan ({self.source}, recovery at {self.level}): {len(self.steps)} routines, "
                  f"{self.totals['wall_time_s']:.0f} s wall, {self.totals['operator_time_s']:.0f} s hands-on, ${self.totals['equipment_usd']:,.0f} equipment"]
         for k, s in enumerate(self.steps, 1):
             lines.append(f"  {k}. {s.routine:34s} {KIND_WORDS.get(s.kind, s.kind):9s} {s.setting:8s} {s.why_here}")
+            words = _schedule_words(s)
+            if words:
+                lines.append(f"       {words}")
         lines += [f"  dropped {r}: {w}" for r, w in self.dropped]
         lines += [f"  uncovered {i}.{n}: {w}" for i, n, w in self.uncovered]
         lines += [f"  assumed {n} for {r}: {w}" for r, n, w in self.assumed]
         return "\n".join(lines)
+
+
+CalibrationPlan = CalibrationSchedule  # the name it had until 2026-11-18: every import and isinstance keeps working
+
+
+# --- the schedule: each step's runs at the priors, and what its commands wait for -------------------------------------------------------
+
+
+def _distinct(runs) -> tuple[Any, ...]:
+    out: dict[str, Any] = {}
+    for run in runs:
+        out.setdefault(run.id, run)
+    return tuple(out.values())
+
+
+def _run_row(run: Any, preview: bool) -> dict:
+    command = getattr(run, "command", None)
+    seconds = run.robot_seconds() if callable(getattr(run, "robot_seconds", None)) else None
+    return {"id": run.id, "split": run.split, "command": None if command is None else type(command).__name__,
+            "seconds": None if seconds is None else [float(seconds[0]), float(seconds[1])], "preview": preview}
+
+
+def _schedule_row(step: PlanStep) -> dict:
+    preview = step.status == "made after"
+    return {"routine": step.routine, "status": step.status, "commands_after": list(step.commands_after),
+            "runs": None if step.runs is None else [_run_row(r, preview) for r in step.runs]}
+
+
+def _runs_words(runs: Sequence[Any], shown: int = 4) -> str:
+    def one(run) -> str:
+        from ..rig import _span  # noqa: PLC0415
+
+        command = getattr(run, "command", None)
+        seconds = run.robot_seconds() if callable(getattr(run, "robot_seconds", None)) else None
+        return f"{run.id} ({'no command' if command is None else type(command).__name__}, {_span(seconds)})"
+
+    head = ", ".join(one(r) for r in runs[:shown])
+    return head + (f" and {len(runs) - shown} more" if len(runs) > shown else "")
+
+
+def _schedule_words(step: PlanStep) -> str:
+    """The step's line of the schedule in summary()."""
+    whole = "no preview at the priors (its runs() needs a value no prior states): its time is counted whole"
+    if step.status == "fit only":
+        return "fit only: no runs of its own"
+    if step.status == "known now":
+        return f"known now: {_runs_words(step.runs)}" if step.runs is not None else f"known now; {whole}"
+    if step.status == "made after":
+        return (f"commands made after {', '.join(step.commands_after)} runs; "
+                + (f"preview at the priors: {_runs_words(step.runs)}" if step.runs is not None else whole))
+    return ""
+
+
+def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping[str, str], known: Mapping[str, float]) -> tuple[PlanStep, ...]:
+    """Each step's runs at the priors and its status (see CalibrationSchedule). Each routine's runs() is called twice at the priors: once to
+    bind, once to check it is static. Refused: runs() that change between the two calls; one run id bound to two different runs; a run id
+    shared by a known-now step and a made-after step (once the earlier step has run, the two differ under one id).
+
+    WHY from the declaration and never by probing runs() at moved values (Zach, 2026-11-17: "routines can almost like declare depencies on
+    what they require to run ahead of time so you can ... atuomaticaly generate the schedule"): a routine says what its commands read
+    (commands_read; by default the keys it requires that an earlier step writes), and a routine whose commands read more than it says is
+    caught at play time by name (rig.RigRunner.calibrate(schedule=)). A known value is never moved by its writer, so it makes nothing wait."""
+    from ..rig import _same_run, _same_runs  # noqa: PLC0415
+
+    decls = [declaration(s.routine_object) for s in steps]
+    written = {k for d in decls for k in d.identifies + d.configures + d.adjusts}
+    writes = [_tokens(d.identifies + d.configures + d.adjusts, names) for d in decls]
+    seen: dict[str, tuple[Any, str, str]] = {}   # run id -> (the run, the routine that binds it, its status)
+    out = []
+    for i, step in enumerate(steps):
+        routine = step.routine_object
+        if not callable(getattr(routine, "runs", None)):
+            out.append(step)  # a catalog stand-in, or an injected routine with nothing to play: not bound
+            continue
+        declared = getattr(routine, "commands_read", None)
+        reads = step.requires if declared is None else _expand(tuple(declared), names, written)
+        reads = [k for k in reads if k not in known]
+        after = tuple(dict.fromkeys(steps[j].routine for j in range(i) for k in reads if k in writes[j]))
+        try:
+            runs = tuple(routine.runs(dict(priors)))
+        except (LookupError, OSError):
+            runs = None   # no preview: its commands need a value no prior states (or a file this machine does not hold)
+        except Exception as caught:
+            caught.add_note(f"raised by {step.routine}'s runs() at the priors, while plan() bound its schedule")
+            raise
+        if runs is not None:
+            again = tuple(routine.runs(dict(priors)))
+            if not _same_runs(runs, again):
+                raise CalibrationPlanError(f"{step.routine}: runs() gave {[r.id for r in runs]} and then {[r.id for r in again]} for the same "
+                                           "values. A schedule is static: runs() must give the same runs for the same values (draw any "
+                                           "randomness from a seed in the values or the run's spec)")
+        status = "fit only" if runs == () else "made after" if after else "known now"
+        if status == "fit only":
+            after = ()
+        for run in runs or ():
+            if run.id not in seen:
+                seen[run.id] = (run, step.routine, status)
+                continue
+            other, by, by_status = seen[run.id]
+            if not _same_run(run, other):
+                raise CalibrationPlanError(f"run id {run.id!r} is bound to two different runs, by {by} and by {step.routine} (another command, "
+                                           "spec, split or length): one run id is one command; give one of them another id")
+            if (by_status == "made after") != (status == "made after"):
+                late, early = (step.routine, by) if status == "made after" else (by, step.routine)
+                raise CalibrationPlanError(f"run id {run.id!r} is shared by {early}, known now, and {late}, whose commands are made after "
+                                           f"an earlier step runs: they agree at the priors, but once that step has run the two commands "
+                                           f"differ under one id; give {late}'s run an id of its own")
+        out.append(dataclasses.replace(step, runs=runs, status=status, commands_after=after))
+    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -632,7 +780,7 @@ def _with_config_options(items: list, config: CalibrationConfig, present: set[st
     return [apply_options(r, config.routines[r.id].options) if r.id in config.routines else r for r in items]
 
 
-def _plan_catalog(picked: Mapping[str, Any], config: CalibrationConfig, twin: str | None = None) -> CalibrationPlan:
+def _plan_catalog(picked: Mapping[str, Any], config: CalibrationConfig, twin: str | None = None) -> CalibrationSchedule:
     catalog = _catalog()
     sel = select(picked, config)
     chosen = _picked(picked, config)
@@ -652,10 +800,10 @@ def _plan_catalog(picked: Mapping[str, Any], config: CalibrationConfig, twin: st
             sources.append("catalog")
     items = _with_config_options(items, config, {r.id for r in items})
     steps, assumed, source = _steps(items, sources, names, config)
-    return CalibrationPlan(tuple(s.routine for s in steps), steps, sel.dropped, sel.uncovered, assumed, source, _totals(steps), config.level, twin)
+    return CalibrationSchedule(tuple(s.routine for s in steps), steps, sel.dropped, sel.uncovered, assumed, source, _totals(steps), config.level, twin)
 
 
-def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> CalibrationPlan:
+def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> CalibrationSchedule:
     """A twin that ships its routines: a rig on the one-click seam (twin.runner.rig), or the pendulum tracer's example routines (`rig`:
     what SimRunner.schedule() gives, the planner's half of a RigBackend: name, parameters(), routines())."""
     catalog = _catalog()
@@ -710,6 +858,9 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         dropped.append((last.id, f"outside the budget: the plan's wall time {wall:.0f} s is over max_wall_time_s {budget.max_wall_time_s:g} s"
                         if too_long else f"outside the budget: the plan's equipment ${usd:,.0f} is over max_equipment_usd"))
     steps, assumed, source = _steps(keep, keep_sources, names, config)
+    # the priors each step's runs are bound at: the description's stated values, the caller's known values on top (what the runner starts from)
+    priors = {**{k: float(v) for k, v in description.values().items() if v is not None}, **config.known}
+    steps = _bind(steps, priors, names, config.known)
     gone = {rid: why for rid, why in dropped}
     uncovered = []
     for p in rig.parameters():
@@ -717,11 +868,11 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
             name = names.get(p.key, p.key)
             inst = p.key[: -len(name) - 1] if p.key.endswith("." + name) else p.key
             uncovered.append((inst, name, f"its routine {p.routine} was dropped: {gone[p.routine]}"))
-    return CalibrationPlan(tuple(s.routine for s in steps), steps, tuple(dropped), tuple(uncovered), assumed, source, _totals(steps),
+    return CalibrationSchedule(tuple(s.routine for s in steps), steps, tuple(dropped), tuple(uncovered), assumed, source, _totals(steps),
                            config.level, getattr(rig, "name", description.id))
 
 
-def plan(twin_or_picked: Any, config: CalibrationConfig | None = None) -> CalibrationPlan:
+def plan(twin_or_picked: Any, config: CalibrationConfig | None = None) -> CalibrationSchedule:
     """What calibrate() would run, in what order, without running anything. Pass a RobotTwin (a rig twin plans its own routines; the
     pendulum tracer plans the routines its example ships, sysid/examples/<id>/routines.py, and only without them its servo's model from the
     catalog) or picked models {instance: (type, model id)}."""
@@ -741,3 +892,6 @@ def plan(twin_or_picked: Any, config: CalibrationConfig | None = None) -> Calibr
         servo = runner.typed()
         return _plan_catalog({servo.id: (servo.type, twin.model)}, config, twin=twin.description.id)
     raise TypeError(f"plan() takes a RobotTwin or picked models {{instance: (type, model id)}}, not {type(twin_or_picked).__name__}")
+
+
+generate_schedule = plan  # Zach's name (Daily Note 2026-11-17: ".generate_schedule() -> CalibrationSchedule"); plan() stays

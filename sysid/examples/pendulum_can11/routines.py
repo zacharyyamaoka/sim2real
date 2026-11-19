@@ -28,15 +28,34 @@ sysid description), `workers` (the twin's cap on every pool) and `rung` (the run
 
 from __future__ import annotations
 
+import json
+import warnings
+
 from sim2real import rig as seam
+from sysid import RESULTS_DIR
 
 EXAMPLE = "pendulum_can11"
 SERVO = "can11"
 GAP = f"{SERVO}.backlash_rad"
 DYNAMICS = tuple(f"{SERVO}.{name}" for name in ("gravity_nm", "gravity_bottom_rad", "armature_kg_m2", "frictionloss_nm", "damping_nm_s_rad",
                                                 "friction_stribeck_drop_nm", "friction_stribeck_speed_rad_s"))
-# one recorded session: every FB run of the schedule's train split (pipeline.plan), measured once by the world and read by both steps
-TRAIN = seam.Run("train", "train", "every FB run of the train split of CAN 11's schedule (pipeline.plan)")
+
+
+def _train_seconds() -> float | None:
+    """The train split's robot time as the committed result states it (sysid/results/pendulum_can11.json, schedule.train.seconds: 771.8 s
+    on 2026-11-18), read and never re-derived; None (unknown) with a warning when the file or the field is missing."""
+    path = RESULTS_DIR / f"{EXAMPLE}.json"
+    try:
+        return float(json.loads(path.read_text(encoding="utf-8"))["schedule"]["train"]["seconds"])
+    except (OSError, KeyError, TypeError, ValueError) as caught:
+        warnings.warn(f"{EXAMPLE}: the train run's length is unknown ({path}: {caught!r}); the schedule shows it as unknown", stacklevel=2)
+        return None
+
+
+# one session: every FB run of the schedule's train split (pipeline.plan), which the rack plays (the world, in sim) and both steps read.
+# WHY no command and never labelled recorded data: the rack plays these runs (sysid's schedule, typed collection is a later lane), so the
+# run carries its real length and the spec says what it is
+TRAIN = seam.Run("train", "train", "every FB run of the train split of CAN 11's schedule (pipeline.plan)", seconds=_train_seconds())
 
 
 class Ladder(dict):

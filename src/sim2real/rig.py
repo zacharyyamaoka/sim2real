@@ -165,13 +165,129 @@ class Estimate:
     method: str = ""
 
 
+def _command_types() -> tuple[type, type]:
+    """The two command types a run may carry (robot_msgs, sim2real's one runtime dependency, imported when first needed)."""
+    from robot_msgs.control import JointCommandSequence  # noqa: PLC0415
+    from robot_msgs.trajectory import JointTrajectory  # noqa: PLC0415
+
+    return JointTrajectory, JointCommandSequence
+
+
+def _command_seconds(command: Any) -> tuple[float, float] | None:
+    """A command's robot time as (shortest, longest), or None for no command. A JointTrajectory runs its duration. A JointCommandSequence
+    runs each step until any of its conditions holds or its timeout aborts it: a step that ends only by time (every condition an Elapsed)
+    takes at least the shortest Elapsed, any other step may end at once; and none outlasts min(timeout, shortest Elapsed)."""
+    if command is None:
+        return None
+    from robot_msgs.control import Elapsed, JointCommandSequence  # noqa: PLC0415
+
+    if isinstance(command, JointCommandSequence):
+        low = high = 0.0
+        for step in command.steps:
+            elapsed = [c.duration for c in step.done_when if isinstance(c, Elapsed)]
+            low += min(elapsed) if elapsed and len(elapsed) == len(step.done_when) else 0.0
+            high += min([float(step.timeout), *elapsed])
+        return (float(low), float(high))
+    return (float(command.duration), float(command.duration))
+
+
 @dataclass(frozen=True)
 class Run:
-    """One run a routine (or the held-out set) plays. ``spec`` is the rig's own (a plan step, a tape, the host's frame); the runner reads
-    only ``id`` and ``split``."""
+    """One run a routine (or the held-out set) plays. ``spec`` is the rig's own (a plan step, a tape, the host's frame). ``command`` is what
+    the robot plays, typed: a robot_msgs JointTrajectory (an open-loop tape) or JointCommandSequence (closed-loop steps, each done by its
+    conditions or its timeout), or None (the rig's spec says what to play, or nothing is played: a log already recorded). ``seconds`` is its
+    robot time when no command states it (None: unknown; 0.0: already on disk); a command's own length wins, and a run has one length.
+    The runner reads ``id``, ``split`` and ``command``.
+
+    WHY typed commands (Zach, Daily Note 2026-11-17: "could a routine just be described as as long joint traecjtory? or how about like
+    ServoCommandSequence"): the schedule is a static object to look at, and a robot_msgs command is what makes a run something to look at;
+    anything else is refused, so a spec is never mistaken for a command."""
     id: str
     split: str          # "train" | "held_out"
     spec: Any = None
+    seconds: float | None = None
+    command: Any = None
+
+    def __post_init__(self) -> None:
+        if self.command is not None and not isinstance(self.command, _command_types()):
+            raise TypeError(f"run {self.id!r}: command is a robot_msgs JointTrajectory or JointCommandSequence (or None), not "
+                            f"{type(self.command).__name__}; what the rig itself reads goes in spec")
+        if self.seconds is None:
+            return
+        seconds = float(self.seconds)
+        if not (math.isfinite(seconds) and seconds >= 0.0):
+            raise ValueError(f"run {self.id!r}: seconds is None (unknown) or a finite number >= 0, not {self.seconds!r}")
+        object.__setattr__(self, "seconds", seconds)
+        bounds = _command_seconds(self.command)
+        if bounds is not None and not (bounds[0] - 1e-9 <= seconds <= bounds[1] + 1e-9):
+            raise ValueError(f"run {self.id!r}: seconds {seconds:g} disagrees with its {type(self.command).__name__}, which runs "
+                             f"{_span(bounds)}: one run has one length, and a command states its own")
+
+    def robot_seconds(self) -> tuple[float, float] | None:
+        """The robot time this run takes, (shortest, longest) in s: its command's, else (seconds, seconds), else None (unknown)."""
+        bounds = _command_seconds(self.command)
+        if bounds is not None:
+            return bounds
+        return None if self.seconds is None else (self.seconds, self.seconds)
+
+    def to_dict(self) -> dict:
+        """JSON: id, split, spec, seconds and the command as robot_msgs writes it (its "_type" names the class). A spec that is not JSON is
+        refused by the run's id, never dropped: a run that came back without its spec would be another run."""
+        import json  # noqa: PLC0415
+
+        try:
+            json.dumps(self.spec)
+        except (TypeError, ValueError) as caught:
+            raise TypeError(f"run {self.id!r}: its spec is not JSON ({caught}), so the run cannot be written as a dict") from None
+        return {"id": self.id, "split": self.split, "spec": self.spec, "seconds": self.seconds,
+                "command": None if self.command is None else self.command.to_dict()}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> Run:
+        command = data.get("command")
+        if command is not None:
+            from robot_msgs import from_dict  # noqa: PLC0415
+
+            _command_types()  # the message classes registered before robot_msgs reads "_type"
+            command = from_dict(command)
+        return cls(str(data["id"]), str(data["split"]), data.get("spec"), data.get("seconds"), command)
+
+
+def _span(bounds: tuple[float, float] | None) -> str:
+    if bounds is None:
+        return "an unknown time"
+    low, high = bounds
+    return f"{low:.4g} s" if math.isclose(low, high) else f"{low:.4g}-{high:.4g} s"
+
+
+def _same(a: Any, b: Any) -> bool:
+    """Exact equality that also holds for numpy arrays inside a spec (== on a dict holding an array raises)."""
+    import numpy as np  # noqa: PLC0415
+
+    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+        if not (isinstance(a, np.ndarray) and isinstance(b, np.ndarray) and a.shape == b.shape):
+            return False
+        return bool(np.array_equal(a, b, equal_nan=a.dtype.kind in "fc" and b.dtype.kind in "fc"))
+    if isinstance(a, Mapping) and isinstance(b, Mapping):
+        return a.keys() == b.keys() and all(_same(a[k], b[k]) for k in a)
+    if isinstance(a, (tuple, list)) and isinstance(b, (tuple, list)):
+        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
+    if isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b):
+        return True
+    try:
+        return bool(a == b)
+    except (TypeError, ValueError):
+        return a is b
+
+
+def _same_run(a: Any, b: Any) -> bool:
+    """One run: the same id, split, spec, seconds and command."""
+    return (a.id == b.id and a.split == b.split and _same(getattr(a, "spec", None), getattr(b, "spec", None))
+            and getattr(a, "seconds", None) == getattr(b, "seconds", None) and _same(getattr(a, "command", None), getattr(b, "command", None)))
+
+
+def _same_runs(a: Sequence[Any], b: Sequence[Any]) -> bool:
+    return len(a) == len(b) and all(_same_run(x, y) for x, y in zip(a, b))
 
 
 @dataclass(frozen=True)
@@ -198,6 +314,9 @@ class Routine(Protocol):
     identifies: tuple[str, ...]                    # the parameter keys its fit returns as found (held to the truth)
     # optional: adjusts: tuple[str, ...]           # keys it SETS for the twin without claiming them (a chain's masses on their visible
     #                                              # subspace): the twin uses them, their rows stay "not identified"
+    # optional: commands_read: tuple[str, ...]     # the keys its runs' commands are made from; the schedule (sim2real.calibration.plan)
+    #                                              # shows its commands made after the steps that find them. Not declared: the keys it
+    #                                              # requires. runs() must give the same runs for the same values (a schedule is static)
 
     def runs(self, values: Mapping[str, float]) -> Sequence[Run]: ...
 
@@ -354,6 +473,30 @@ def _say(text: str) -> None:
     print(f"[sim2real.rig {time.strftime('%H:%M:%S')}] {text}", file=sys.stderr, flush=True)
 
 
+def _held_to_schedule(routine_id: str, runs: Sequence[Run], step: Any, served: dict[str, tuple[str, Run]]) -> None:
+    """Refuse, before anything of it is played, a routine the schedule shows known now (`step`) that plays other runs than it shows, and a
+    run id another routine already played with another command. WHY held at play time and never probed at plan time (2026-11-18): the
+    schedule takes what a routine declares its commands read; a routine whose commands read more than it declares shows known now, and is
+    caught here by name, so what calibrate() plays is what the schedule showed."""
+    from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
+
+    if step is not None and not _same_runs(runs, step.runs):
+        bound = {r.id: r for r in step.runs}
+        differ = [r.id for r in runs if r.id not in bound or not _same_run(r, bound[r.id])]
+        differ += [rid for rid in bound if rid not in {r.id for r in runs}]
+        raise CalibrationPlanError(
+            f"{routine_id}: the schedule shows it known now, playing {[r.id for r in step.runs]} as made at the priors, but here it plays "
+            f"{[r.id for r in runs]}, and {differ} differ: its commands read a value an earlier step found. Declare that read "
+            f"(commands_read) so the schedule shows it made after that step; refused before it played")
+    for run in runs:
+        first = served.get(run.id)
+        if first is None:
+            served[run.id] = (routine_id, run)
+        elif not _same(first[1].command, run.command):
+            raise CalibrationPlanError(f"{routine_id} plays run {run.id!r} with another command than {first[0]} played under that id: one "
+                                       "run id is one command")
+
+
 # --- the runner ----------------------------------------------------------------------------------------------------------------------------
 
 
@@ -417,10 +560,13 @@ class RigRunner:
     # ---- calibrate
 
     def calibrate(self, *, model: str | None = None, truth: Mapping[str, float] | None = None, noise=None, routines: Sequence[Routine] | None = None,
-                  measured: Mapping[str, Any] | None = None, known: Mapping[str, float] | None = None) -> tuple[RigCalibration, dict]:
+                  measured: Mapping[str, Any] | None = None, known: Mapping[str, float] | None = None,
+                  schedule: Any = None) -> tuple[RigCalibration, dict]:
         """`routines`: the planned sequence (sim2real.calibration.plan: ordered, substituted, option copies), else the rig's own.
         `measured`: pre-collected runs {run id: measurement} (sim2real.calibration.collect); a planned run missing from it is refused and
-        the rig's measure is never called. `known`: {key: value} fixed for every routine (CalibrationConfig.known)."""
+        the rig's measure is never called. `known`: {key: value} fixed for every routine (CalibrationConfig.known). `schedule`: the
+        CalibrationSchedule the routines were planned in; a step it shows known now must play exactly the runs it shows, or it is refused
+        by name before anything of it is played."""
         from robot_msgs.space import Basis, Value  # noqa: PLC0415
 
         started = time.monotonic()
@@ -451,10 +597,13 @@ class RigRunner:
         adjusted: dict[str, Estimate] = {}
         steps, trained = [], set()
         played: dict[str, Any] = {}
+        served: dict[str, tuple[str, Run]] = {}   # run id -> (the routine that first played it, the run as it was played)
+        shown = {s.routine: s for s in getattr(schedule, "steps", ()) if s.status == "known now" and s.runs is not None}
         sequence = list(self.rig.routines() if routines is None else routines)
         for routine in sequence:
             began = time.monotonic()
             runs = list(routine.runs(dict(values)))
+            _held_to_schedule(routine.id, runs, shown.get(routine.id), served)
             # WHY played once: a run two routines both read (the dynamics fit's chirps are the delay scan's) is one physical run, its data shared
             fresh = [run for run in runs if run.id not in played]
             if fresh and recorded is not None:
