@@ -784,8 +784,9 @@ class RobotTwin:
         `callbacks` (gap E; Keras's fit(callbacks=)): objects told the schedule, each step as its fit finishes, the fitted twin and, through
         fitted.callbacks_, evaluate()'s gates (sim2real.calibration.Ledger: a local ledger; sim2real.tracking.calibrate_wandb.WandbLogger: its
         W&B copy). None reads SIM2REAL_TRACK (off | ledger | wandb): unset, a sim calibration (and a refit from held rack runs) writes
-        nothing and a fresh rack calibration keeps a ledger beside its submission; callbacks=[] wins over everything. A callback never changes or stops the fit (one that raises is
-        detached with a warning); a calibration that fails still raises, after its ledger says so."""
+        nothing and a fresh rack calibration keeps a ledger beside its submission; callbacks=[] wins over everything. A callback never
+        changes or stops the fit (one that raises is detached with a warning); a calibration that fails still raises, after its ledger
+        says so."""
         if on not in BACKENDS:
             raise ValueError(f"on must be one of {BACKENDS}, not {on!r}")
         if truth != "sealed":

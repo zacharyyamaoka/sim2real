@@ -112,9 +112,9 @@ class Ledger(Callback):
 
     `root` None: $SIM2REAL_CALIBRATIONS, else paths.CALIBRATIONS, read when a calibration begins. `beside_submission` (a fresh rack
     calibration's default): the folder opens under '<submission folder>/calibrate/' once emit has written the submission, before the rack
-    plays it; the lines before that wait in memory. A refit from held runs emits nothing, so it opens under `root`. `folder` is the latest calibration's folder. One Ledger reused for several calibrations opens one
-    folder each, and every event lands in its own calibration's folder (each event names its calibration), so a twin fitted earlier and
-    evaluated later still writes beside its own steps."""
+    plays it; the lines before that wait in memory. A refit from held runs emits nothing, so it opens under `root`. `folder` is the latest
+    calibration's folder. One Ledger reused for several calibrations opens one folder each, and every event lands in its own calibration's
+    folder (each event names its calibration), so a twin fitted earlier and evaluated later still writes beside its own steps."""
 
     def __init__(self, root: str | os.PathLike | None = None, *, beside_submission: bool = False):
         self.root = None if root is None else Path(root)
@@ -245,7 +245,8 @@ def resolve_callbacks(callbacks: Any, *, backend: str = "sim") -> list:
     """The callbacks a calibration reports to. A list or tuple is taken as given (callbacks=[] wins over everything). None reads
     SIM2REAL_TRACK: "off" gives none; "ledger" a Ledger; "wandb" a Ledger and a WandbLogger copying it (sim2real.tracking.calibrate_wandb,
     loaded here, lazily); unset or empty gives none on the sim and a Ledger beside the submission on the rack (backend "real": a fresh
-    rack calibration; RobotTwin.calibrate resolves a refit from held runs as "sim"). Any other value is refused by name. Resolving writes nothing (a ledger opens its folder when a calibration begins) and never imports wandb."""
+    rack calibration; RobotTwin.calibrate resolves a refit from held runs as "sim"). Any other value is refused by name. Resolving writes
+    nothing (a ledger opens its folder when a calibration begins) and never imports wandb."""
     if callbacks is not None:
         if not isinstance(callbacks, (list, tuple)):
             raise TypeError(f"callbacks is a list of callback objects (a Ledger, a WandbLogger, your own), not {type(callbacks).__name__}")
