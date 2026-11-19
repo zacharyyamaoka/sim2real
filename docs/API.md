@@ -148,7 +148,8 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 
 - **What it is:** the routine `arm.feedforward_bench` (since 2026-11-18): a rig hands it to its runner, and `calibrate()` plays its runs and
   its fit. It fits an arm's gravity (theta, linear in the twin's `regressor(q) -> (N, J, P)`) and each drive's Coulomb (`frictionloss_nm`)
-  and net viscous (`damping_nm_s_rad`) friction. `identifies` is `gravity_keys` plus those two keys per drive.
+  and net viscous (`damping_nm_s_rad`) friction. `identifies` is `gravity_keys` plus those two keys per drive, and so is `commands_read`:
+  its feedforward channel is made from them, so the schedule shows its commands made after any earlier step that finds one of them.
 - **`runs(values)`:** one run per cell of `first` (an edge of the `poses` graph at a speed fraction), each ONE
   `robot_trajectories.trapezoidal_velocity(..., back_to_start=True)` call in `Run.command`, its cell in `Run.spec["cell"]`, its
   `channels["feedforward_effort"]` made from `values`.

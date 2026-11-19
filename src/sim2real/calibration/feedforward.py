@@ -85,6 +85,10 @@ class FeedforwardBench:
         self.prior_sigma, self.dwell_s = prior_sigma, float(dwell_s)
         self.moving_rad_s, self.pair_tol_rad = float(moving_rad_s), float(pair_tol_rad)
         self.identifies = self.gravity_keys + tuple(f"{d}.{name}" for d in self.drives for name in self.FRICTION)
+        # WHY declared (fix round 1, lane L4): each run's feedforward channel is made from these very values, and the catalog's refines
+        # edge puts this routine after the step that finds the drives' friction (servo.dynamics_regression on the CAN 11 pendulum).
+        # Undeclared, the schedule would show it "known now" at the priors and RigRunner.calibrate(schedule=) would refuse it at play time
+        self.commands_read = self.identifies
         # WHY kept aside and not as max_rounds / converged members (lane L4): part 1 plays one round, so it exposes none of gap A's round
         # members and every runner treats it as a one-round routine; part 2 (FF-2) turns these into max_rounds, next_runs and converged
         self._rounds = {"tolerance_nm": float(tolerance_nm), "delta_nm": float(delta_nm), "max_rounds": int(max_rounds),
