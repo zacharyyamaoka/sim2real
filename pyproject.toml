@@ -26,11 +26,16 @@ tracking = ["wandb==0.31.0", "wandb-workspaces==0.4.13", "weave==0.54.1"]
 # WHY its own extra (2026-11-12, the homing bench): the kinematic homing rung runs on robot_models' stop core (coal + trimesh through
 # its contact extra) and draws its starts with scipy's Sobol; sim2real's stable folders never import it.
 homing = ["robot-models-lib[contact]", "scipy>=1.11"]
+# WHY its own extra and not the test extra (2026-11-18, gap FF): the bench feedforward routine builds its paired out-and-back runs
+# with robot_trajectories, imported only inside the function that makes them, so the package never needs it; the library has no
+# remote yet, so the extra resolves on this machine and in a cloud cut that carries it (a first push would make it public).
+trajectories = ["robot-trajectories"]
 test = ["pytest>=8", "robot-models-lib[contact]", "scipy>=1.11"]
 
 [tool.uv.sources]
 robot-msgs = { path = "/home/bam/robot_msgs", editable = true }
 robot-models-lib = { path = "/home/bam/robot_models", editable = true }
+robot-trajectories = { path = "/home/bam/robot_trajectories", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sim2real"]
