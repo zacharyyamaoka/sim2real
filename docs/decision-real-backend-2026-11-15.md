@@ -44,3 +44,26 @@ The rack itself is shared (the 1-DOF campaign owns it tonight; bam_ws main's rec
 - What a real run still needs is named, not papered over: the link-camera file for every train and held-out run (nothing turns the
   session's clips into it yet), a tree whose record and twin of record match CAN 11's live board, and the rack owner's time.
 - A rig on the one-click seam (`sim2real.rig`) has no transport yet; `on="real"` refuses it by name.
+
+## Amendment, 2026-11-18: the fit is the schedule's routines, through the sim's own loop (gap F-real)
+
+**Status:** accepted (the sim2real calibrate-gaps plan, lane L2; ruler `tests/test_real_plays_schedule.py`, and the One-click session's
+agreed change to `tests/test_real_backend.py`'s slow green test).
+
+- **What changed.** `calibrate(on="real")` no longer calls `identify()` in one shot and records a sysid plan of model rungs. It plans
+  `plan(twin)` (CAN 11: `servo.backlash_reversals_camera`, then `servo.dynamics_regression`) and plays exactly those routines over the train
+  runs the transport sent back, through `sim2real.twin._play_routines`, the loop `calibrate(on="sim")` plays. The gap step's finding is
+  handed to the regression (`identify(..., gap=)`), and the backlash row keeps that step's value, interval, method and routine. The fitted
+  twin's `plan_` is that plan and its record is written by `CalibrationRecord.from_schedule` (plan source `"planner"`);
+  `CalibrationRecord.from_sysid`, `sysid_plan` and `sysid_step_id` are deleted, and records written before today (source `"sysid"`) still
+  load through `from_dict`. `RealRunner.schedule()` lets a twin fitted on real plan the same schedule.
+- **WHY.** Zach, 2026-11-17: `robottwin.calibrate()` "does .generate_schedule() -> CalibrationSchedule and then you can pass that to
+  something thats gonna like dispatch/execute it". One schedule is shown, and it is the one both backends fit by. One executor means the
+  guards (a run nobody measured, a value a routine does not declare, the seal) cannot drift between sim and real.
+- **Robot time is earned.** Before emit, every planned run a routine names at the priors must be one the submission fills
+  (`twin.PLAYED_SPLITS`: today `train`), or `CalibrationPlanError` is raised and nothing is written or played.
+- **What did not change.** The submission (its 80 runs), emit, play, ingest, the transports, eval and the frozen `sim2real.calibration/1`
+  keys. What the rack plays is still the pipeline's run schedule; collecting each routine's own runs is the next leg.
+- **Side effects.** On a real record `plan.totals` are the planner's estimates (the rack's own time is the submission's `minutes`) and
+  `plan.level` is the planner's noise level (`"1x"`), not `"real"`.
+- **Undo.** `git revert` of the lane's code commit restores the one-shot `identify()` and the sysid plan (the ruler commits then go with it).

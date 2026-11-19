@@ -1,6 +1,7 @@
 """The real backend: ``RobotTwin.calibrate(on="real", transport=...)`` plays the type's test schedule on hardware through a transport, reads
-the runs back as robot_msgs JointTrajectory and fits them with the same identify() the sim backend runs (Zach, 2026-11-11: sim or real is
-an argument, ``on=``, not another verb). First station: CAN 11 on the One Dof Test Rack, swung as a pendulum (sysid's pendulum_can11).
+the runs back as robot_msgs JointTrajectory and fits them through the same routines, in the same loop, the sim backend plays (plan(twin):
+twin._play_routines; Zach, 2026-11-11: sim or real is an argument, ``on=``, not another verb). First station: CAN 11 on the One Dof Test
+Rack, swung as a pendulum (sysid's pendulum_can11).
 
     import sim2real
     from sim2real.real import RackTransport, TwinTransport
@@ -23,8 +24,8 @@ The four steps, each a function here, so there is always a level to drop to:
             + ``.json``, ``bam_rack_twin.hardware.board.save``, each stamped with its schedule run) and each run's link angle
             (``runs/link_camera/<name>.npz``, a robot_msgs JointTrajectory, the camera on tags 8-12); ``RunsPending`` when they are not back;
 4. ingest   every run read at the one door, ``tools/run_files.py`` (a JointTrajectory), judged and put in the joint output frame by the
-            producer's own rules (``bam_rack_twin.evidence``: judge, command_semantics, to_output_frame), then fitted by the pipeline's
-            identify() inside ``sysid.world.sealed()``.
+            producer's own rules (``bam_rack_twin.evidence``: judge, command_semantics, to_output_frame), then fitted by the schedule's
+            routines (plan(twin): CAN 11's gap from load reversals, then the regression at that gap), each inside ``sysid.world.sealed()``.
 
 WHY a transport and never hardware here (the dispatcher's brief, 2026-11-15; Zach's rule that robot time is earned): this module plans,
 writes and reads; a transport is the only thing that plays. ``TwinTransport`` plays a submission on the rack twin at the hidden truth
@@ -34,7 +35,9 @@ every board's config and frame checked, each step's own limits and guards) and r
 the adapter it is asked for, the record does not retire the station, and the tree has the rack's own bus lock (BAM_RACK_BUS_LOCK).
 
 WHY the fit is the sim's, unchanged (Zach, 2026-11-05: prove in sim that the fit recovers a hidden ground truth before any hardware): the
-pendulum pipeline's identify() is the one proven on the sealed world; the real backend changes only where its runs come from.
+schedule's routines are the ones proven on the sealed world, played by the sim's own loop (twin._play_routines, one executor, so the
+guards cannot drift); the real backend changes only where its runs come from. A planned run the submission cannot fill is refused before
+emit (robot time is earned).
 
 WHY eval replays each recorded run's OWN commands (not the schedule's tapes, as the sim's score() does): a real run's rows are the board's
 stamps, with its jitter and its preludes, so a twin is judged on what the board was actually sent. The floor is the rack's own (T1: the
@@ -75,11 +78,12 @@ import numpy as np
 from robot_msgs.space import Basis, Value
 
 from . import paths
+from . import twin as twin_module
 from .cards import registry as reg
 from .cards import servo_gates as targets
 from .metrics.gate import at_least, gate
 from .metrics.series import SAME_INPUT_TOLERANCE_NM, SAME_INPUT_TOLERANCE_RAD, SAME_INPUT_TOLERANCE_RAD_S, repeat_floor, rms
-from .twin import ORACLE_CARD, REPO, Calibration, Gate, Instance, SimRunner, TwinReport, _g, _identified, _sysid
+from .twin import ORACLE_CARD, REPO, Calibration, Gate, Instance, PipelineHandle, SimRunner, TwinReport, _g, _identified, _sysid
 
 SUBMISSION_SCHEMA = "sim2real.real.submission/1"
 LINK_CAMERA_DIR = "link_camera"  # runs/link_camera/<name>.npz: the link angle a camera saw during the run (robot_msgs JointTrajectory)
@@ -727,9 +731,9 @@ def ingest(recording: Recording, submission: Submission, *, station, module, str
 
 
 class RealRunner:
-    """The real backend's runner: plan, emit, play (the transport), ingest, identify sealed; eval over the rack's own floor. ``state`` is a
-    fitted twin's. Guards here, never in a transport: the fit runs inside sysid.world.sealed() and receives the train runs only; the
-    ruler is asked of the transport only after it; eval refuses any run the fit saw."""
+    """The real backend's runner: plan, emit, play (the transport), ingest, the schedule's routines fitted sealed; eval over the rack's own
+    floor. ``state`` is a fitted twin's. Guards here, never in a transport: each routine fits inside sysid.world.sealed() and receives the
+    train runs only; the ruler is asked of the transport only after the last fit; eval refuses any run the fit saw."""
 
     def __init__(self, description, *, workers: int = WORKERS, state: dict | None = None):
         self.description = description
@@ -749,28 +753,56 @@ class RealRunner:
     def simulate(self, **options):
         return SimRunner(self.description, workers=self.workers).simulate(**options)
 
-    def calibrate(self, *, model: str, transport: Transport, strict: bool = True) -> tuple[Calibration, dict]:
-        _, _, result, hidden = _sysid()
+    def schedule(self):
+        """The routines the example ships (SimRunner.schedule(): sysid/examples/<id>/routines.py), or None. WHY here too: a twin fitted on
+        real plans the same schedule (plan(fitted)), never the catalog's stand-ins."""
+        return SimRunner(self.description, workers=self.workers).schedule()
+
+    def calibrate(self, *, model: str, transport: Transport, strict: bool = True,
+                  routines: Sequence[Any] | None = None) -> tuple[Calibration, dict]:
+        """`routines`: the planned sequence (sim2real.calibration.plan(twin).routines), else the example's own routines in their declared
+        order, as SimRunner.calibrate. The rack plays one submission (the pipeline's run schedule plus its floor repeats); the routines then
+        fit the train runs that came back, in order, through the sim's own loop (twin._play_routines), each sealed from the hidden truth."""
+        from .calibration.plan import CalibrationPlanError, order  # noqa: PLC0415
+
+        _, _, result, _ = _sysid()
         started = time.monotonic()
         module, d = self.pipeline(), self.sysid_description()
         servo = self.typed()
         rung = SimRunner._rung(servo.type, model)
         plan = module.plan(d)
+        shipped = self.schedule()
+        names = {f"{i.id}.{n}": n for i in self.description.instances for n in i.parameters}
+        if routines is None:
+            if shipped is None:
+                raise NotImplementedError(f"{self.description.id} ships no routines (sysid/examples/{self.description.id}/routines.py): "
+                                          "nothing here runs the catalog's routines plan() would show")
+            routines = order(shipped.routines(), names)
+        # the values each routine sees: the description's priors, then what each routine before it found
+        values = {k: float(v) for k, v in self.description.values().items() if v is not None}
+        # WHY before emit (Zach's rule that robot time is earned): a planned step asking for a run the submission does not carry would fail
+        # only after the rack spent its minutes; refuse it here, before anything is written or played
+        fills = {run_id for run_id, split in twin_module.PLAYED_SPLITS.items() if getattr(plan, split, None)}
+        unfillable = _unfillable(routines, values, fills, names)
+        if unfillable:
+            raise CalibrationPlanError(f"on='real' refused before the rack moves: {'; '.join(unfillable)}; the submission fills "
+                                       f"{sorted(fills) or 'no run id'} (twin.PLAYED_SPLITS over the pipeline's splits)")
         joint = servo.binds.get("joint") or module.JOINT
         submission = emit(self.description.id, plan, transport.folder(self.description.id, plan.digest), can_id=int(servo.binds.get("station")),
                           joint=joint)
         recording = transport.play(submission)
         _, _, station = module._rack()
         measured = ingest(recording, submission, station=station, module=module, strict=strict)
-        with hidden.sealed():
-            fit = module.identify(d, dict(measured.train), workers=self.workers)
+        handle = PipelineHandle(module, d, self.workers, rung)
+        fit, steps, handed = twin_module._play_routines(routines, twin_module._played_from(measured), values, handle, servo=servo.id)
         ruler = dict(transport.ruler() or {})  # WHY after the seal: the fit never sees it; real hardware has none (rows ungraded)
-        recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}", "method": fit.methods[rung]}
-                     for name, value in fit.values[rung].items()}
+        recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
+                                              "method": handed.get(name, fit.methods[rung])} for name, value in fit.values[rung].items()}
         rows = result.parameter_rows(self.description.id, d, ruler, recovered)
         if not ruler:
             for r in rows:
                 r["why_not"] = "real hardware has no hidden truth to grade against: eval() judges the twin on held-out runs"
+        twin_module._mark_unplanned_rows(rows, routines, shipped)
         values = {}
         for name, value in fit.values[rung].items():
             key = f"{servo.id}.{name}"
@@ -778,7 +810,8 @@ class RealRunner:
             ci = fit.ci95[rung].get(name)
             values[name] = None if value is None else Value(float(value), unit, basis=Basis.MEASURED,
                                                            measured_by=f"sim2real.RobotTwin.calibrate(on='real', transport={transport.name}), {model}",
-                                                           source=fit.methods[rung], notes=f"95 % interval [{ci[0]:.6g}, {ci[1]:.6g}]" if ci else "")
+                                                           source=handed.get(name, fit.methods[rung]),
+                                                           notes=f"95 % interval [{ci[0]:.6g}, {ci[1]:.6g}]" if ci else "")
         card = ORACLE_CARD[servo.type]
         from .cards import domain as dm  # noqa: PLC0415
 
@@ -787,13 +820,13 @@ class RealRunner:
         noise = {"transport": transport.name, **dict(recording.noise)}
         state = {"d": d, "plan": plan, "submission": submission, "recording": recording, "measured": measured, "fit": fit, "ruler": ruler,
                  "model": model, "rung": rung, "module": module, "servo": servo, "noise": noise, "fits": fits, "noise_level": "real",
-                 "transport": transport.name}
+                 "transport": transport.name, "routines": steps}
         calibration = Calibration("real", model, rung, values, {k: dict(v) for k, v in fit.values.items()}, rows,
                                   dict(recording.meta.get("truth_moved") or {}), round(time.monotonic() - started, 1),
                                   {"train_runs": len(measured.train), "held_out_runs": len(measured.held_out), "floor_runs": len(measured.floor),
                                    "digest": plan.digest, "transport": transport.name, "submission": str(submission.folder),
                                    "missing": dict(measured.missing), "refused": dict(measured.refused),
-                                   "coverage_train_pct": plan.coverage["train"]["pct"]})
+                                   "coverage_train_pct": plan.coverage["train"]["pct"], "routines": [s["routine"] for s in steps]})
         return calibration, state
 
     def eval(self) -> RealReport:
@@ -910,14 +943,47 @@ def _sysid_cards():
 # --- the front door's hook ------------------------------------------------------------------------------------------------------------
 
 
+def _unfillable(routines: Sequence[Any], values: Mapping[str, float], fills: set[str], names: Mapping[str, str]) -> list[str]:
+    """Each known-now routine whose runs at the priors name a run id no split of the submission fills: ["<routine> plays runs [...]"].
+    Known now: nothing it requires is written by a routine before it (the planner's own requires edge). A routine whose runs are made after
+    an earlier fit, or that has no preview at the priors (LookupError / OSError), is left to the executor, which refuses it before its fit."""
+    from .calibration.plan import declaration  # noqa: PLC0415
+
+    written: set[str] = set()
+    out = []
+    for routine in routines:
+        decl = declaration(routine)
+        made_after = any(need in written for need in decl.requires)
+        keys = decl.identifies + decl.configures
+        written |= set(keys) | {names[k] for k in keys if k in names}
+        if made_after:
+            continue
+        try:
+            runs = list(routine.runs(dict(values)))
+        except (LookupError, OSError):
+            continue
+        missing = [run.id for run in runs if run.id not in fills]
+        if missing:
+            out.append(f"{routine.id} plays runs {missing}")
+    return out
+
+
 def calibrate(twin, transport: Transport, *, strict: bool = True):
-    """RobotTwin.calibrate(on="real")'s body: a NEW, fitted twin carrying the calibrated values, plan_, record_ (sim2real.calibration/1,
-    backend "real"), submission_ and runs_ (what the transport sent back and what could not be used)."""
-    from .calibration.record import CalibrationRecord, sysid_plan  # noqa: PLC0415
+    """RobotTwin.calibrate(on="real")'s body: a NEW, fitted twin carrying the calibrated values, plan_ (the schedule plan(twin) shows, the
+    one that ran), record_ (sim2real.calibration/1, backend "real"), submission_ and runs_ (what the transport sent back and what could not
+    be used). On a real record, plan.totals are the planner's estimates (the rack's own time is submission_.minutes) and plan.level is the
+    planner's noise level, not the hardware's."""
+    from .calibration.config import CalibrationConfig  # noqa: PLC0415
+    from .calibration.plan import plan as schedule_of  # noqa: PLC0415
+    from .calibration.record import CalibrationRecord  # noqa: PLC0415
     from .twin import RobotTwin  # noqa: PLC0415
 
+    # WHY plan first and play exactly its routines, as on='sim' (Zach, 2026-11-17: "robottwin.calibrate() internall mabye that does
+    # .generate_schedule() -> CalibrationSchedule and then you can pass that to something thats gonna like dispatch/execute it"): one
+    # schedule is shown, and it is the one the rack's runs are fitted by
+    planned = schedule_of(twin, CalibrationConfig())
     runner = RealRunner(twin.description, workers=twin.runner.workers)
-    calibration, state = runner.calibrate(model=twin.model, transport=transport, strict=strict)
+    calibration, state = runner.calibrate(model=twin.model, transport=transport, strict=strict, routines=list(planned.routines))
     servo = runner.typed().id
     fitted = RobotTwin.__new__(RobotTwin)
     fitted.description = twin.description.with_values(_identified(calibration, calibration.rung, lambda name: f"{servo}.{name}"))
@@ -929,9 +995,9 @@ def calibrate(twin, transport: Transport, *, strict: bool = True):
     fitted.calibration_ = calibration
     fitted.submission_ = state["submission"]
     fitted.runs_ = state["measured"]
-    fitted.plan_ = sysid_plan(twin.description.id, state["fits"], level="real", wall_time_s=calibration.seconds, description=twin.description)
-    fitted.record_ = CalibrationRecord.from_sysid(calibration.to_dict(), fits=state["fits"], plan=fitted.plan_, runs=len(state["measured"].train),
-                                                  noise=state["noise"], twin=twin.description.id, description=twin.description)
+    fitted.plan_ = planned
+    fitted.record_ = CalibrationRecord.from_schedule(calibration.to_dict(), routines=state["routines"], plan=planned, noise=state["noise"],
+                                                     twin=twin.description.id, description=twin.description)
     return fitted
 
 

@@ -175,7 +175,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `written` | the day the record was written (ISO date) |
 | `seconds` | how long the run took |
 | `noise` | the noise model it was played at (each term, its level, seed and sources) |
-| `plan` | the plan that ran: `twin`, `source` (`"planner"`, `"config.order"`, or `"sysid"` for the pendulum's on='real' run, whose plan lists the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals`, and `schedule` (the schedule's rows, above) when a step was bound |
+| `plan` | the plan that ran: `twin`, `source` (`"planner"` or `"config.order"`; `"sysid"` marks a pendulum on='real' record written before 2026-11-18, whose plan listed the model rungs sysid's `identify()` fitted), `level`, `steps`, `dropped`, `uncovered`, `assumed`, `totals`, and `schedule` (the schedule's rows, above) when a step was bound. On a real record `totals` are the planner's estimates (the rack's own time is the submission's `minutes`) and `level` is the planner's noise level, not the hardware's |
 | `parameters` | one row per parameter (below) |
 | `routines` | one row per routine as it ran (below) |
 | `passed` | every graded value within its tolerance, and at least one graded |
@@ -229,7 +229,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `operator_time_s` | a person's hands-on share of it |
 | `equipment_usd` | the cost of the equipment it needs |
 | `recovery` | `{level, pass, worst_error_over_tolerance}` at the plan's level, or null when nobody graded it |
-| `source` | `"rig"` (the rig's implementation), `"custom"` (injected through the config), `"catalog"` (planned for picked models; no implementation here) or `"sysid"` (a model rung a sysid pipeline fitted, id `sysid.<example>.<rung>`; its `wall_time_s` is null because `identify()` times no rung apart) |
+| `source` | `"rig"` (the rig's implementation), `"custom"` (injected through the config), `"catalog"` (planned for picked models; no implementation here) or `"sysid"` (records written before 2026-11-18 only: a model rung a sysid pipeline fitted, id `sysid.<example>.<rung>`; its `wall_time_s` is null because `identify()` times no rung apart) |
 
 `CalibrationRecord.from_rig(calibration, report=, description=)` turns a rig's `RigCalibration.to_dict()` into this record without losing
 a row, and `CalibrationRecord.from_dict(record.to_dict())` gives back the same record. The pendulum tracer's sim backend plays planned
@@ -237,15 +237,22 @@ routines since 2026-11-17: its example ships them (`sysid/examples/pendulum_can1
 gap from the train runs' load reversals, then `servo.dynamics_regression`, the regression over every rung at that gap, each a step of the
 pipeline), `plan(twin)` shows them, `calibrate()` plays exactly those, and `CalibrationRecord.from_schedule(...)` records the steps as they
 ran. Its `CalibrationConfig` picks, orders and excludes routines; `known`, `models`, `noise` and `seed` do not reach it yet (its rung is
-`RobotTwin(models=...)`, its noise sysid's ladder). The on='real' path still fits with `identify()` in one call, and
-`CalibrationRecord.from_sysid(...)` records it, its plan (`sysid_plan`) one fit step per model rung `identify()` actually fitted.
+`RobotTwin(models=...)`, its noise sysid's ladder). Since 2026-11-18 the on='real' path plays the same `plan(twin)` routines through
+the same loop (`sim2real.twin._play_routines`) over the train runs the rack sent back, and `CalibrationRecord.from_schedule(...)` records
+it with plan source `"planner"`; records written before that (`from_sysid`, plan source `"sysid"`, one step per model rung) still load
+through `from_dict`.
 
 ## on='real': the rack path
 
 `calibrate(on="real", transport=...)` plays the same schedule on hardware through a transport, reads the runs back as robot_msgs
-`JointTrajectory` through `tools/run_files.py` (the one door to the rack's run files) and fits them with the same `identify()` the sim
-backend runs, sealed. First station: CAN 11 on the One Dof Test Rack, the pendulum tracer (`sim2real.examples.pendulum_can11()`). Code:
-`src/sim2real/real.py`; acceptance: `tests/test_real_backend.py`.
+`JointTrajectory` through `tools/run_files.py` (the one door to the rack's run files) and fits them through the schedule `plan(twin)`
+shows, the same routines in the same loop the sim backend plays (`sim2real.twin._play_routines`), each sealed. On CAN 11 that is
+`servo.backlash_reversals_camera` (the gear gap from the train runs' load reversals), then `servo.dynamics_regression` handed that gap; both
+read the one submission's train runs, so the rack plays once. A planned run the submission cannot fill is refused before emit
+(`CalibrationPlanError`), so the rack never spends its minutes on a schedule that cannot be fitted. What the rack plays is still the
+pipeline's run schedule (its train and held-out splits plus the floor repeats); typed collection from each routine's own runs is next.
+First station: CAN 11 on the One Dof Test Rack, the pendulum tracer (`sim2real.examples.pendulum_can11()`). Code: `src/sim2real/real.py`;
+acceptance: `tests/test_real_backend.py` and `tests/test_real_plays_schedule.py`.
 
 ```python
 import sim2real
@@ -264,14 +271,14 @@ The four steps, each a function in `sim2real.real`:
 | plan | the sim backend's own plan (every FB run of the train and held-out splits) plus the schedule's five floor repeats (T1) | `sysid/examples/pendulum_can11/pipeline.py` `plan()` |
 | emit | `submission.json` (`sim2real.real.submission/1`), `schedule.json`, `plans/<station>_<mode>.json`: the rack runner's session plans over exactly the planned runs, each step stamped with its schedule run | `bam_rack_twin.schedule.session_plans` |
 | play | `transport.play(submission)` returns a `Recording` (session folders), or raises `RunsPending` | the transport |
-| ingest + fit | each `runs/<name>.npz` + `.json` read as a JointTrajectory, keyed by its schedule stamp, judged and put in the output frame, paired with its link angle; then `identify()` inside `sysid.world.sealed()` | `tools/run_files.py`, `bam_rack_twin.evidence` |
+| ingest + fit | each `runs/<name>.npz` + `.json` read as a JointTrajectory, keyed by its schedule stamp, judged and put in the output frame, paired with its link angle; then the schedule's routines, each inside `sysid.world.sealed()` | `tools/run_files.py`, `bam_rack_twin.evidence`, `sim2real.twin._play_routines` |
 
 **What a transport returns.** A session folder in the rack runner's own files: `runs/<name>.npz` + `runs/<name>.json`
 (`bam_rack_twin.hardware.board.save`: its FIELDS, the run meta with its `schedule` stamp {digest, run, split, mode}) and, per run,
-`runs/link_camera/<name>.npz`: the link angle a camera saw (a robot_msgs JointTrajectory, output frame, on the wall clock), which `identify()`
-reads for the gear gap (M4) and the rows where the gear is in contact. A run the producer's rules refuse (`bam_rack_twin.evidence.judge`:
-an abort, a latched watchdog, a hard fault, a setpoint not followed) came back, so it is kept out of the fit and eval and named on
-`fitted.runs_.refused`, never fatal: bam_rack_twin's own convention, and a re-run meets the same physics (on the twin's world CAN 11's
+`runs/link_camera/<name>.npz`: the link angle a camera saw (a robot_msgs JointTrajectory, output frame, on the wall clock), which the gap step
+(`servo.backlash_reversals_camera`, `gear_gap()`) reads for the gear gap and the regression for the rows where the gear is in contact
+(M4). A run the producer's rules refuse (`bam_rack_twin.evidence.judge`: an abort, a latched watchdog, a hard fault, a setpoint not
+followed) came back, so it is kept out of the fit and eval and named on `fitted.runs_.refused`, never fatal: bam_rack_twin's own convention, and a re-run meets the same physics (on the twin's world CAN 11's
 multisine at kp × 0.25 sticks in its stiction band, 5 mrad of a 100 mrad command, so 45 of the 46 train runs fit). A real fault still shows,
 as the runs the session then skipped. A planned run that did not come back and a train or held-out run without a usable link camera are
 named in an `IngestError`; `calibrate(..., strict=False)` (`sim2real.real.calibrate`, the CLI's `--partial`) fits what came back, keeping

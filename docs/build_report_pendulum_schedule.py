@@ -105,7 +105,8 @@ include and order work.</li>
 <h2>Left</h2>
 <ul>
 <li><b>The real path:</b> <code>on="real"</code> still runs the pipeline in one call and records a sysid plan. Moving it onto the same routines
-changes the one-click session's <code>test_real_backend</code>, so that change is its call.</li>
+changes the one-click session's <code>test_real_backend</code>, so that change is its call. (Closed 2026-11-18 by gap F-real: <code>on="real"</code>
+plays the same routines through the same loop; docs/decision-real-backend-2026-11-15.md, amendment.)</li>
 <li><b>Double-counted time:</b> the plan's 2744 s counts the shared train runs twice; the real wall time is about 1372 s.</li>
 <li><b>The clamp-over-camera pick:</b> the planner's minimal cover still prefers an ungraded routine that covers more over a graded one that
 covers less, for catalog-only planning.</li>
