@@ -151,10 +151,39 @@ that ships its routines (a rig on the one-click seam, or the pendulum's `routine
   + 600 of set-up), where the per-step sum said 2744 s.
 - **Seeing it.** `schedule.runs` holds the runs known now (each once), `schedule.previews` a made-after step's runs at the priors.
   `summary()` adds one line per step (`known now: ...`, `commands made after <step> runs; preview at the priors: ...`, `fit only`), and
-  `to_dict()["schedule"]` one row per step (`routine`, `status`, `commands_after`, `runs`: each `{id, split, command, seconds, preview}`),
-  present only when a step is bound: a catalog plan's dict is unchanged, and the record's step rows stay frozen.
+  `to_dict()["schedule"]` one row per step (`routine`, `status`, `commands_after`, `max_rounds`, `runs`: each
+  `{id, split, command, seconds, preview}`), present only when a step is bound: a catalog plan's dict is unchanged, and the record's step
+  rows stay frozen.
 - **The pendulum.** Both steps are known now on the one `train` run, whose length is the committed schedule's train seconds
   (`sysid/results/pendulum_can11.json`, 771.8 s), read, never re-derived; it has no command, because the rack plays sysid's schedule.
+
+## Rounds: collect, fit, come back for more
+
+A routine may iterate (gap A2; Zach, Daily Note 2026-11-18: "a routine should include datacollection and fitting steps, and then
+iterating things that all goes into it"). Besides `runs(values)` and `fit(measured, values, twin)` it declares three optional members:
+
+| member | what it does |
+|---|---|
+| `max_rounds` | its cap on rounds, an int >= 1; required once `next_runs` exists, else `plan()` refuses it ("max_rounds") |
+| `next_runs(values, history)` | the next round's runs, made after the last fit (`history`: a tuple of `sim2real.rig.Round(k, runs, found)`); `()` = nothing more |
+| `converged(history, values)` | its own stop rule, replacing the default: `None` = another round, a `str` = converged (the reason), `sim2real.rig.Stop(why)` = stop without claiming convergence |
+
+- **Each round's fit sees every run so far**, sealed from the truth; each run is measured once (a later round reads the earlier ones from
+  what was played). `runs()`, `next_runs()` and `converged()` run outside the seal, and what each round finds reaches the values before the
+  next round's runs are made, so a tune's rounds carry the last fit in their commands (the bench feedforward's shape).
+- **The stop, in order:** the routine's own `converged()` (it wins over the default); else the default, every 95 % interval inside its
+  tolerance (the rig's `Parameter.tolerance`, half-width vs `tol`, or `tol x |value|` for a relative one; the interval, never the hidden
+  truth, so moving the truth leaves the rounds unchanged); else `max_rounds`; else `next_runs()` returning nothing. A round with no new run
+  is refused by name (`CalibrationPlanError`): it adds no data, so it would never converge.
+- **Refused at plan time:** an iterating routine without an int `max_rounds` >= 1, and one the default rule cannot judge without a
+  `converged()` of its own: a tune (judged on performance, it recovers no value an interval could settle), a routine that identifies
+  nothing, or one none of whose identified keys has a tolerance.
+- **Seeing it.** The schedule shows round 0's runs and the bound: the step's `max_rounds`, and `summary()` says "up to N rounds".
+  `fitted.calibration_.routines` rows gain `rounds` (`[{k, runs: [ids], found: {key: value}}]`), `converged` (True, False, or None for a
+  routine that plays one round) and `stopped` (why it stopped); `runs` counts the distinct runs over every round and `found` is the last
+  fit. The record's routine rows carry the same three keys (additive; a record without them still loads).
+- **Where it runs:** a rig on the one-click seam (`sim2real.rig.RigRunner`). The pendulum tracer and `on="real"` play their schedule once,
+  so they refuse an iterating routine with a `NotImplementedError` naming it, before sysid is touched or anything is played.
 
 ## collect vs fit
 
@@ -169,6 +198,8 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 - `collect()` plans each routine's runs from the priors (plus `known`), because nothing has been fitted yet when the data is logged.
 - The exception is a made-after step: `collect()` fits the steps it waits for as it goes, so it is recorded the way a replay builds it,
   and `calibrate(data=)` replays it without measuring and without a mismatch.
+- A routine with rounds is fitted as it goes too (each round is made after the last fit): the data holds every round's runs, and
+  `calibrate(data=)` replays the same rounds by run id.
 - A run that two routines share is played once, and counted once in the plan's totals (`run_time_s`; see "The schedule").
 - If a fit then asks for a run the data does not hold, it raises `CalibrationPlanError` naming the run.
 
@@ -220,6 +251,7 @@ fitted = twin.calibrate(data=data)   # fits the recorded runs; the backend's mea
 | `runs` | how many runs it played |
 | `seconds` | its wall time in this run |
 | `found` | `{key: value}`, everything it set, including values it set for the twin without claiming them (its adjusts) |
+| `rounds`, `converged`, `stopped` | optional (a rig's run carries them, gap A2): each round `{k, runs, found}`, whether it converged (None: one round), why it stopped; see "Rounds" |
 
 ### Per plan step
 
@@ -407,11 +439,12 @@ installed by a pin move; none came from a routine, and none has a stop rule.
 
 - `CalibrationCycleError` (a `ValueError`): the declarations' hard edges form a cycle.
 - `CalibrationPlanError` (a `ValueError`): an unregistered custom routine, an explicit order that breaks a requirement, a strict budget
-  exceeded, or recorded data missing a planned run.
+  exceeded, recorded data missing a planned run, an iterating routine without `max_rounds` (or without `converged()` where the default
+  stop cannot judge it), or a round that plays no new run.
 - `KeyError`: an option a routine does not have.
 - `ValueError`: noise given both to `calibrate(noise=)` and in `CalibrationConfig.noise`.
 - `NotImplementedError`: `data=`, or a `CalibrationConfig` with `known`, `models`, `noise` or `seed`, on the pendulum tracer (its
-  config picks, orders and excludes its routines only).
+  config picks, orders and excludes its routines only); a routine with rounds on the pendulum tracer or `on="real"`.
 - `TypeError`: `calibrate(on="real")` without a transport (it names `RackTransport` and `TwinTransport`).
 - `RunsPending` (`sim2real.real`): the submission is written and dry-run, nothing has come back to fit; it carries the session commands.
 - `RackRefused` (`sim2real.real`): `RackTransport(execute=True)` refused before starting anything; `.refusals` says why.

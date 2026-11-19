@@ -331,6 +331,7 @@ def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, An
     through this one loop, so their guards (a run nobody measured, an undeclared value, the seal) cannot drift apart."""
     from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
 
+    _refuse_rounds(routines, "this loop plays each routine once over what was measured")   # the routines a runner resolved itself, too
     *_, hidden = _sysid()
     rung = handle.rung
     estimates, steps, fit, ladder = {}, [], None, None
@@ -373,6 +374,17 @@ def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, An
         if fit.values[rung].get(name) == estimate.value:
             handed[name] = estimate.method
     return fit, steps, handed
+
+
+def _refuse_rounds(routines: Sequence[Any] | None, why: str) -> None:
+    """Refuse, by id and before anything is played or sysid is touched, a routine that comes back for more (next_runs: rounds) on a
+    runner that plays its schedule once (`why`: how this one plays). WHY refused and never run once (gap A2): an iterating routine played
+    for one round would hand back a fit it never judged converged, silently; it runs on a rig on the one-click seam (sim2real.rig)."""
+    rounds = [r.id for r in routines or () if callable(getattr(r, "next_runs", None))]
+    if rounds:
+        raise NotImplementedError(f"{rounds} come back for more (next_runs: collect, fit, then another round made after the fit), and {why}, "
+                                  "so a round's new runs cannot be collected; a routine with rounds runs on a rig on the one-click seam "
+                                  "(sim2real.rig.RigRunner)")
 
 
 def _mark_unplanned_rows(rows: list[dict], routines: Sequence[Any], shipped) -> None:
@@ -431,6 +443,7 @@ class SimRunner:
         before it found. One of them must return the rung ladder (routines.Ladder: servo.dynamics_regression), the twin's model."""
         from .calibration.plan import order  # noqa: PLC0415
 
+        _refuse_rounds(routines, "the pendulum tracer's world plays its schedule once")
         _, _, result, hidden = _sysid()
         started = time.monotonic()
         module, d = self.pipeline(), self.sysid_description()

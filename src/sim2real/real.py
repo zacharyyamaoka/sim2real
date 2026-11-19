@@ -765,6 +765,7 @@ class RealRunner:
         fit the train runs that came back, in order, through the sim's own loop (twin._play_routines), each sealed from the hidden truth."""
         from .calibration.plan import CalibrationPlanError, order  # noqa: PLC0415
 
+        twin_module._refuse_rounds(routines, "the rack plays one submission")
         _, _, result, _ = _sysid()
         started = time.monotonic()
         module, d = self.pipeline(), self.sysid_description()

@@ -309,6 +309,27 @@ class TwinHandle:
         return self._rig.predict(measured, values, workers=self.workers)
 
 
+@dataclass(frozen=True)
+class Round:
+    """One round of a routine that comes back for more: ``k`` (0: the runs ``runs()`` gave, then each ``next_runs()``), the runs that
+    round asked for, and what the fit over every run so far found (the ``history`` a routine's ``next_runs`` and ``converged`` read).
+
+    WHY "rounds", not "iterations" (2026-11-18): in sim2real an iteration is a twin's generation (result.py stages, the W&B trend "across
+    twin iterations"); a round is one collect -> fit inside one routine."""
+    k: int
+    runs: tuple[Run, ...]
+    found: Mapping[str, Estimate]
+
+
+@dataclass(frozen=True)
+class Stop:
+    """What a routine's ``converged()`` returns to stop WITHOUT claiming convergence (``Stop("no improvement in 2 rounds")``); a plain str
+    stops it converged, None asks for the next round. Any object with ``why`` and ``converged`` reads the same (and one whose ``stop`` is
+    false asks for the next round), so a routine may return its own verdict."""
+    why: str
+    converged: bool = False
+
+
 class Routine(Protocol):
     id: str                                        # a cards.calibration ROUTINES id
     identifies: tuple[str, ...]                    # the parameter keys its fit returns as found (held to the truth)
@@ -317,10 +338,69 @@ class Routine(Protocol):
     # optional: commands_read: tuple[str, ...]     # the keys its runs' commands are made from; the schedule (sim2real.calibration.plan)
     #                                              # shows its commands made after the steps that find them. Not declared: the keys it
     #                                              # requires. runs() must give the same runs for the same values (a schedule is static)
+    # optional, a routine that comes back for more (rounds: collect, fit, come back; Zach, Daily Note 2026-11-18):
+    #   max_rounds: int                            # its cap on rounds (>= 1; required once next_runs exists)
+    #   next_runs(values, history: tuple[Round, ...]) -> Sequence[Run]   # the next round's runs, made after the last fit; () = no more
+    #   converged(history, values) -> str | Stop | None                  # its own stop rule, replacing the default (every 95 % interval
+    #                                              # inside its tolerance); a tune, or a routine that identifies no key with a tolerance,
+    #                                              # must have one
 
     def runs(self, values: Mapping[str, float]) -> Sequence[Run]: ...
 
     def fit(self, measured: Mapping[str, Any], values: Mapping[str, float], twin: TwinHandle) -> Mapping[str, Estimate]: ...
+
+
+def _round_cap(routine: Any) -> int | None:
+    """An iterating routine's max_rounds, checked (an int >= 1), or None for a routine that plays one round (no next_runs)."""
+    import numbers  # noqa: PLC0415
+
+    if not callable(getattr(routine, "next_runs", None)):
+        return None
+    cap = getattr(routine, "max_rounds", None)
+    if isinstance(cap, bool) or not isinstance(cap, numbers.Integral) or cap < 1:
+        from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
+
+        raise CalibrationPlanError(f"{routine.id} comes back for more (next_runs) but states no max_rounds, an int >= 1 (it has {cap!r}): "
+                                   "a routine that iterates says how many rounds it may take, so the schedule can show its bound")
+    return int(cap)
+
+
+def _inside_tolerance(found: Mapping[str, Estimate], identifies: Sequence[str], params: Mapping[str, Parameter],
+                      known: Mapping[str, float]) -> str | None:
+    """The default stop: a reason when every key the routine identifies that has a tolerance (and is not known) has a 95 % interval
+    whose half-width is inside it, else None. WHY the interval and never the truth (gap A2): a stop rule that read the hidden values would
+    leak them into how much is collected, and it must work the same on the bench, where there is no truth (moving the truth leaves the
+    rounds unchanged: tests/test_calibration_rounds.py)."""
+    judged = [k for k in identifies if k not in known and params.get(k) is not None and params[k].tolerance is not None]
+    if not judged:
+        return None
+    words = []
+    for key in judged:
+        estimate = found.get(key)
+        if estimate is None or estimate.value is None or not estimate.ci95 or not math.isfinite(estimate.value):
+            return None
+        kind, tol = params[key].tolerance
+        limit = float(tol) if kind == "abs" else float(tol) * abs(float(estimate.value))
+        half = (float(estimate.ci95[1]) - float(estimate.ci95[0])) / 2.0
+        # WHY the same part in 1e9 of slack as the rows' verdict (_rows): binary floating point never decides a stop
+        if not half <= limit * (1.0 + 1e-9):
+            return None
+        words.append(f"{key} ±{half:.3g} within {limit:.3g}")
+    return f"every 95 % interval inside its tolerance ({'; '.join(words)})"
+
+
+def _floats(found: Mapping[str, Estimate]) -> dict[str, float | None]:
+    return {key: (None if e.value is None else float(e.value)) for key, e in found.items()}
+
+
+def _stop_of(reason: Any) -> tuple[bool | None, str]:
+    """A converged() answer as (converged, why): None asks for the next round (converged None); a str stops it converged; a Stop (or any
+    object with `why` and `converged`) stops it as it says, unless its `stop` is false."""
+    if reason is None or (not isinstance(reason, str) and getattr(reason, "stop", True) is False):
+        return None, ""
+    if isinstance(reason, str):
+        return True, reason
+    return bool(reason.converged), str(reason.why)
 
 
 class RigBackend(Protocol):
@@ -600,12 +680,9 @@ class RigRunner:
         served: dict[str, tuple[str, Run]] = {}   # run id -> (the routine that first played it, the run as it was played)
         shown = {s.routine: s for s in getattr(schedule, "steps", ()) if s.status == "known now" and s.runs is not None}
         sequence = list(self.rig.routines() if routines is None else routines)
-        for routine in sequence:
-            began = time.monotonic()
-            runs = list(routine.runs(dict(values)))
-            _held_to_schedule(routine.id, runs, shown.get(routine.id), served)
-            # WHY played once: a run two routines both read (the dynamics fit's chirps are the delay scan's) is one physical run, its data shared
-            fresh = [run for run in runs if run.id not in played]
+
+        def play(routine: Routine, fresh: Sequence[Run]) -> None:
+            """The fresh runs into `played`: read from the recorded data (a run it lacks is refused by name), else measured on the world."""
             if fresh and recorded is not None:
                 missing = [run.id for run in fresh if run.id not in recorded]
                 if missing:
@@ -615,27 +692,12 @@ class RigRunner:
                 played.update({run.id: recorded[run.id] for run in fresh})
             elif fresh:
                 played.update(self.rig.measure(fresh, world_values, noise, f"routine:{routine.id}", workers=self.workers))
-            measured = {run.id: played[run.id] for run in runs}
-            _say(f"{routine.id}: {len(runs)} runs ({len(fresh)} played) in {time.monotonic() - began:.0f} s; fitting")
-            with hidden.sealed():
-                found = dict(routine.fit(measured, dict(values), TwinHandle(self.rig, self.workers)))
-            _say(f"{routine.id}: done in {time.monotonic() - began:.0f} s")
-            adjusts = tuple(getattr(routine, "adjusts", ()))
-            extra = sorted(set(found) - set(routine.identifies) - set(adjusts))
-            if extra:
-                raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies}, adjusts: {adjusts})")
-            for key, estimate in found.items():
-                if key in known:
-                    continue  # fixed by the caller: never overwritten, never graded
-                if key in routine.identifies:
-                    estimates[key] = estimate
-                else:
-                    adjusted[key] = estimate
-                if estimate.value is not None and math.isfinite(estimate.value):
-                    values[key] = float(estimate.value)
-            trained.update(run.id for run in runs)
-            steps.append({"routine": routine.id, "identifies": list(routine.identifies), "runs": len(runs), "seconds": round(time.monotonic() - began, 1),
-                          "found": {k: (None if e.value is None else float(e.value)) for k, e in found.items()}})
+
+        for routine in sequence:
+            step = self._play_routine(routine, values, play=play, played=played, served=served, shown=shown.get(routine.id), params=params,
+                                      known=known, estimates=estimates, adjusted=adjusted, hidden=hidden)
+            trained.update(run_id for done in step["rounds"] for run_id in done["runs"])
+            steps.append(step)
         rows = self._rows(params, nominal, ruled, estimates)
         ran = {r.id for r in sequence}
         for row in rows:
@@ -659,6 +721,82 @@ class RigRunner:
         state = {"values": values, "nominal": {k: v for k, v in nominal.items() if v is not None}, "world_values": world_values, "noise": noise,
                  "trained": trained, "calibration": calibration}
         return calibration, state
+
+    def _play_routine(self, routine: Routine, values: dict[str, float], *, play: Callable[[Routine, Sequence[Run]], None],
+                      played: Mapping[str, Any], served: dict[str, tuple[str, Run]], shown: Any, params: Mapping[str, Parameter],
+                      known: Mapping[str, float], estimates: dict[str, Estimate], adjusted: dict[str, Estimate], hidden: Any) -> dict:
+        """One routine, round by round: collect (`play` puts the runs no routine has played yet into `played`), fit SEALED on every run it
+        has asked for so far, and, for a routine that comes back for more (next_runs), stop on its own converged(), else when every 95 %
+        interval is inside its tolerance, else at max_rounds, else when next_runs() asks for nothing; runs(), next_runs() and converged()
+        run outside the seal. What it finds reaches `values` (and `estimates` / `adjusted`) after each round, so the next round's runs are
+        made after the last fit. Returns its step row: routine, identifies, runs (distinct, every round), seconds, found (the last fit),
+        rounds [{k, runs, found}], converged (None: it plays one round) and stopped.
+
+        WHY rounds inside one routine, refitted on every run so far (Zach, Daily Note 2026-11-18: "a routine should include datacollection
+        and fitting steps, and then iterating things that all goes into it"): each round adds data and the fit always sees all of it, so
+        what stops it is the data's own spread, and a round that adds no new run is refused by name rather than spinning to its cap."""
+        began = time.monotonic()
+        cap = _round_cap(routine)
+        runs = list(routine.runs(dict(values)))
+        _held_to_schedule(routine.id, runs, shown, served)
+        so_far: dict[str, Run] = {}
+        history: list[Round] = []
+        found: dict[str, Estimate] = {}
+        while True:
+            k = len(history)
+            # WHY played once: a run two routines both read (the dynamics fit's chirps are the delay scan's) is one physical run, its data
+            # shared; a later round reads every earlier round's runs from `played`, never measuring them again
+            fresh = [run for run in runs if run.id not in played]
+            play(routine, fresh)
+            so_far.update((run.id, run) for run in runs)
+            measured = {run_id: played[run_id] for run_id in so_far}
+            label = routine.id if cap is None else f"{routine.id} round {k}"
+            _say(f"{label}: {len(runs)} runs ({len(fresh)} played) in {time.monotonic() - began:.0f} s; fitting on {len(measured)}")
+            with hidden.sealed():
+                found = dict(routine.fit(measured, dict(values), TwinHandle(self.rig, self.workers)))
+            adjusts = tuple(getattr(routine, "adjusts", ()))
+            extra = sorted(set(found) - set(routine.identifies) - set(adjusts))
+            if extra:
+                raise KeyError(f"{routine.id} returned {extra}, which it does not declare (identifies: {routine.identifies}, adjusts: {adjusts})")
+            for key, estimate in found.items():
+                if key in known:
+                    continue  # fixed by the caller: never overwritten, never graded
+                if key in routine.identifies:
+                    estimates[key] = estimate
+                else:
+                    adjusted[key] = estimate
+                if estimate.value is not None and math.isfinite(estimate.value):
+                    values[key] = float(estimate.value)
+            history.append(Round(k, tuple(runs), dict(found)))
+            if cap is None:
+                converged, stopped = None, "ran once"
+                break
+            # the stop, in order: its own converged() (which replaces the default), the default rule, max_rounds, next_runs() empty
+            if callable(getattr(routine, "converged", None)):
+                converged, stopped = _stop_of(routine.converged(tuple(history), dict(values)))
+            else:
+                stopped = _inside_tolerance(found, routine.identifies, params, known) or ""
+                converged = True if stopped else None
+            if converged is not None:
+                break
+            if k + 1 >= cap:
+                converged, stopped = False, f"max_rounds {cap} reached: it did not converge"
+                break
+            runs = list(routine.next_runs(dict(values), tuple(history)))
+            if not runs:
+                converged, stopped = False, f"next_runs() asked for nothing more after round {k}: it did not converge"
+                break
+            if all(run.id in so_far for run in runs):
+                from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
+
+                raise CalibrationPlanError(f"{routine.id}: round {k + 1} asks for {[run.id for run in runs]}, which its earlier rounds already "
+                                           "played: a round with no new run adds no data, so it would never converge; next_runs() gives "
+                                           "runs with new ids, or () to stop")
+            _held_to_schedule(routine.id, runs, None, served)   # one run id is one command, across rounds too
+        _say(f"{routine.id}: done in {time.monotonic() - began:.0f} s" + ("" if cap is None else f", {len(history)} rounds ({stopped})"))
+        return {"routine": routine.id, "identifies": list(routine.identifies), "runs": len(so_far), "seconds": round(time.monotonic() - began, 1),
+                "found": _floats(found), "rounds": [{"k": r.k, "runs": [run.id for run in r.runs], "found": _floats(r.found)} for r in history],
+                "converged": converged, "stopped": stopped}
 
     @staticmethod
     def _rows(params: Mapping[str, Parameter], nominal, ruled, estimates) -> list[dict]:

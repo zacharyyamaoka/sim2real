@@ -26,6 +26,7 @@ RECORD_KEYS = ("schema", "twin", "backend", "model", "written", "seconds", "nois
 PARAMETER_KEYS = ("key", "instance", "name", "unit", "nominal", "value", "ci95", "true", "error", "tolerance", "pass", "routine", "method",
                   "why_not")
 ROUTINE_KEYS = ("routine", "identifies", "runs", "seconds", "found")
+ROUND_KEYS = ("rounds", "converged", "stopped")  # a routine row's when its run carries them (a rig's, since gap A2): additive, optional
 GATE_KEYS = ("id", "title", "value", "rule", "passed")
 
 
@@ -99,8 +100,7 @@ class CalibrationRecord:
                                "value": row.get("recovered"), "ci95": list(row["ci95"]) if row.get("ci95") else None, "true": row.get("true"),
                                "error": row.get("error"), "tolerance": row.get("tolerance"), "pass": row.get("pass"),
                                "routine": row.get("routine"), "method": row.get("method", ""), "why_not": row.get("why_not", "")})
-        routines = [{"routine": s["routine"], "identifies": list(s.get("identifies", [])), "runs": s.get("runs"), "seconds": s.get("seconds"),
-                     "found": dict(s.get("found", {}))} for s in calibration["routines"]]
+        routines = [_routine_row(s) for s in calibration["routines"]]
         if plan is None:
             plan = _plan_from_steps(calibration["routines"], description, calibration.get("rig"))
         plan_doc = plan.to_dict() if hasattr(plan, "to_dict") else dict(plan)
@@ -124,8 +124,7 @@ class CalibrationRecord:
         source "sysid", still load through from_dict). WHY onto from_rig's shape: one code path writes every sim2real.calibration/1 record."""
         owner = {key: step["routine"] for step in routines for key in step.get("found", {})}
         rows = [{**r, "routine": owner.get(r["key"])} for r in calibration["rows"]]
-        steps = [{"routine": s["routine"], "identifies": list(s.get("identifies", [])), "runs": s.get("runs"), "seconds": s.get("seconds"),
-                  "found": dict(s.get("found", {}))} for s in routines]
+        steps = [_routine_row(s) for s in routines]
         seam = {"rig": twin, "backend": calibration.get("backend", "sim"), "model": calibration.get("model", ""),
                 "seconds": calibration.get("seconds"), "noise": dict(noise), "rows": rows, "routines": steps,
                 "passed": calibration.get("passed"), "failing": list(calibration.get("failing", []))}
@@ -139,6 +138,16 @@ class CalibrationRecord:
         if self.evaluation:
             lines.append(f"  eval: {self.evaluation['summary']}")
         return "\n".join(lines)
+
+
+def _routine_row(step: Mapping[str, Any]) -> dict:
+    """A routine's row as it ran: ROUTINE_KEYS, plus its rounds (ROUND_KEYS: [{k, runs, found}], converged, stopped) when the run carries
+    them. WHY the rounds reach the ledger (gap A2): a routine that came back for more is read from its record as well as from the fitted
+    twin, how many rounds it took and why it stopped."""
+    row = {"routine": step["routine"], "identifies": list(step.get("identifies", [])), "runs": step.get("runs"), "seconds": step.get("seconds"),
+           "found": dict(step.get("found", {}))}
+    row.update({key: copy.deepcopy(step[key]) for key in ROUND_KEYS if key in step})
+    return row
 
 
 def _plan_from_steps(steps: Sequence[Mapping[str, Any]], description: Any, twin: str | None) -> dict:

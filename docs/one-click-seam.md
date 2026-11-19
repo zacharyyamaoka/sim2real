@@ -43,6 +43,9 @@ class Routine(Protocol):
                                                            # masses on their visible subspace); their rows stay "not identified"
     commands_read: tuple[str, ...]                         # optional: the keys its runs' commands are made from (default: the
                                                            # keys it requires); the schedule shows it made after their finders
+    max_rounds: int                                        # optional, rounds (collect, fit, come back): its cap, >= 1
+    def next_runs(self, values, history) -> Sequence[Run]: ...   # optional: the next round's runs, made after the last fit; () = no more
+    def converged(self, history, values) -> str | Stop | None: ...   # optional: its own stop (a str = converged), replacing the default
     def runs(self, values) -> Sequence[Run]: ...           # its excitation, given what the earlier routines found (a frame, a pose);
                                                            # the same runs for the same values (the schedule is static)
     def fit(self, measured, values, twin: TwinHandle) -> Mapping[key, Estimate]: ...   # runs SEALED; may only twin.predict(...)
@@ -51,7 +54,8 @@ class Routine(Protocol):
 Records: `Parameter(key, unit, tolerance=("rel"|"abs", SI value), tolerance_source, routine, why_not, display, title)`,
 `Estimate(value, ci95, method)`, `Run(id, split, spec=None, seconds=None, command=None)` (the runner reads `id`, `split` and `command`:
 a robot_msgs `JointTrajectory` or `JointCommandSequence`, or none; `robot_seconds()` is its robot time; `to_dict()` / `from_dict()`),
-`Score(joints, runs, tool_stop_m)`.
+`Score(joints, runs, tool_stop_m)`, `Round(k, runs, found)` (one round of a routine's `history`) and `Stop(why, converged=False)`
+(a `converged()` that stops without claiming convergence).
 
 ## The rules the runner enforces (and the rig therefore must not)
 
@@ -70,9 +74,13 @@ a robot_msgs `JointTrajectory` or `JointCommandSequence`, or none; `robot_second
 5. **The schedule is what plays** (2026-11-18). `plan(twin)` binds each routine's runs at the priors and shows which are known now and
    which are made after an earlier step (docs/CALIBRATE.md, "The schedule"); `calibrate()` refuses, before it plays, a known-now routine
    whose runs differ from the ones shown.
-6. **Held out is held out.** `eval` refuses a run any routine measured or not split `held_out`. Its floor is the sim's own repeat
+6. **Rounds** (2026-11-18). A routine with `next_runs` plays round by round: each round's fresh runs are measured once, the fit runs
+   sealed on every run so far, and it stops on its own `converged()`, else when every 95 % interval is inside its tolerance (never the
+   truth), else at `max_rounds`, else when `next_runs()` asks for nothing; a round with no new run is refused by name. The step row carries
+   `rounds`, `converged` and `stopped` (docs/CALIBRATE.md, "Rounds").
+7. **Held out is held out.** `eval` refuses a run any routine measured or not split `held_out`. Its floor is the sim's own repeat
    spread: every held-out run measured twice under the same noise (streams `held_out` and `repeat`), scored against each other.
-7. **Gates:** `twinned` (the fitted twin's held-out error / floor at most `TWINNED_LIMIT`, 1.5x, worst joint), `recovery` (every identified
+8. **Gates:** `twinned` (the fitted twin's held-out error / floor at most `TWINNED_LIMIT`, 1.5x, worst joint), `recovery` (every identified
    value within tolerance), and `tool_at_stops` (p95 at most 1 mm, Zach 2026-11-11) when the rig scores a tool.
 
 ## The noise model (the stress lane's knobs)

@@ -8,8 +8,10 @@ The seam already splits each routine into runs(values) (what to record) and fit(
 the runs; calibrate(data=) fits them. WHY collect plans each routine's runs from the priors (plus CalibrationConfig.known): in the field
 nothing has been fitted yet when the data is logged. The one exception is a step the schedule shows made after an earlier one (its commands
 are made from what that step finds: the dynamics tapes in the homed frame): collect fits the steps it waits for as it goes, so the
-made-after step is recorded the way a replay will build it, and calibrate(data=) replays without measuring and without a mismatch. A run a
-fit asks for that the data does not hold is refused by name, never re-measured.
+made-after step is recorded the way a replay will build it, and calibrate(data=) replays without measuring and without a mismatch. A
+routine that comes back for more (next_runs: rounds) is fitted as it goes too, since each round's runs are made after the last fit; the
+data then holds every round's runs, and calibrate(data=) replays the same rounds by run id. A run a fit asks for that the data does not
+hold is refused by name, never re-measured.
 
 This module also holds the planner's side of RobotTwin.calibrate (fit_rig), so twin.py's hook stays a few lines.
 """
@@ -37,12 +39,18 @@ class CalibrationData:
 
 class _Recorder:
     """A planned routine that records the measurements its runs return (collect's stand-in for the routine). It fits nothing, unless
-    `fits`: a step whose found values a later step's commands are made from (see _fitted_online)."""
+    `fits`: a step whose found values a later step's commands are made from (see _fitted_online), or a routine that comes back for more,
+    whose round members (max_rounds, next_runs, converged) it carries so the runner plays its rounds."""
 
     def __init__(self, routine: Any, store: dict, *, fits: bool = False) -> None:
         self.id = routine.id
         self.identifies = tuple(getattr(routine, "identifies", ()))
         self.adjusts = tuple(getattr(routine, "adjusts", ()))
+        if callable(getattr(routine, "next_runs", None)):
+            # WHY fitted online (gap A2): a round's runs are made after the last fit, so collection cannot run ahead of fitting
+            self.max_rounds, self.next_runs, fits = getattr(routine, "max_rounds", None), routine.next_runs, True
+            if callable(getattr(routine, "converged", None)):
+                self.converged = routine.converged
         self._routine, self._store, self._fits = routine, store, fits
 
     def runs(self, values):
@@ -99,7 +107,8 @@ def resolve_noise(runner: Any, noise: Any, config: CalibrationConfig):
 
 def collect(twin: Any, config: CalibrationConfig | None = None) -> CalibrationData:
     """Plan, then play every planned routine's runs once through the backend's measure (a run two routines share is played once); the
-    steps a made-after step waits for are fitted as they go (see the module docstring). Returns CalibrationData(runs, plan);
+    steps a made-after step waits for, and every routine that comes back for more, are fitted as they go (see the module docstring).
+    Returns CalibrationData(runs, plan);
     calibrate(data=...) fits it."""
     config = config or CalibrationConfig()
     runner = _rig_runner(twin)

@@ -513,10 +513,12 @@ class PlanStep:
     # the schedule's facts (bound on a rig's plan; kept out of to_dict: the record's step rows are sim2real.calibration/1's):
     # runs: its runs at the priors (sim2real.rig.Run), () = it plays nothing, None = not bound or no preview (its runs() needs a value
     # only an earlier step finds). status: "known now" | "made after" | "fit only" ("" = not bound). commands_after: the steps whose
-    # found values its commands are made from.
+    # found values its commands are made from. max_rounds: a routine that comes back for more (next_runs) plays up to this many rounds,
+    # each made after the last fit, and `runs` shows round 0 (None: it plays one round).
     runs: tuple[Any, ...] | None = field(default=None, compare=False, repr=False)
     status: str = field(default="", compare=False)
     commands_after: tuple[str, ...] = field(default=(), compare=False)
+    max_rounds: int | None = field(default=None, compare=False)
 
     def to_dict(self) -> dict:
         return {"routine": self.routine, "title": self.title, "kind": self.kind, "setting": self.setting, "identifies": list(self.identifies),
@@ -617,7 +619,7 @@ def _run_row(run: Any, preview: bool) -> dict:
 
 def _schedule_row(step: PlanStep) -> dict:
     preview = step.status == "made after"
-    return {"routine": step.routine, "status": step.status, "commands_after": list(step.commands_after),
+    return {"routine": step.routine, "status": step.status, "commands_after": list(step.commands_after), "max_rounds": step.max_rounds,
             "runs": None if step.runs is None else [_run_row(r, preview) for r in step.runs]}
 
 
@@ -635,6 +637,14 @@ def _runs_words(runs: Sequence[Any], shown: int = 4) -> str:
 
 def _schedule_words(step: PlanStep) -> str:
     """The step's line of the schedule in summary()."""
+    words = _status_words(step)
+    if words and step.max_rounds is not None:
+        words += (f"; up to {step.max_rounds} rounds: the runs shown are round 0's, each later round's are made after the last fit, and it "
+                  "stops on its own rule, else when every 95 % interval is inside its tolerance")
+    return words
+
+
+def _status_words(step: PlanStep) -> str:
     whole = f"no preview at the priors (its runs() needs a value no prior states): {step.routine}'s time is counted whole in the totals"
     if step.status == "fit only":
         return "fit only: no runs of its own"
@@ -644,6 +654,28 @@ def _schedule_words(step: PlanStep) -> str:
         return (f"commands made after {', '.join(step.commands_after)} runs; "
                 + (f"preview at the priors: {_runs_words(step.runs)}" if step.runs is not None else whole))
     return ""
+
+
+def _rounds_of(routine: Any, rid: str, tolerated: set[str], known: Mapping[str, float]) -> int | None:
+    """A routine's bound on rounds (None: it plays one round), refused at plan time when it iterates (next_runs) without an int max_rounds
+    >= 1, or without a converged() of its own where the default stop cannot judge it: a tune, a routine that identifies nothing, or one
+    none of whose identified keys has a tolerance. WHY refused and not run to its cap (gap A2 review): the default rule reads each
+    identified value's 95 % interval against its tolerance; a tune recovers no hidden value (it is judged on performance), so for it the
+    default would be vacuous and every run would silently spend all its rounds."""
+    from ..rig import _round_cap  # noqa: PLC0415
+
+    cap = _round_cap(routine)
+    if cap is None or callable(getattr(routine, "converged", None)):
+        return cap
+    d = declaration(routine)
+    judged = [k for k in d.identifies if k in tolerated and k not in known]
+    if d.kind == "tune" or not judged:
+        what = ("a tune, judged on performance, recovers no value an interval could settle" if d.kind == "tune"
+                else "it identifies no key with a tolerance" if d.identifies else "it identifies nothing")
+        raise CalibrationPlanError(f"{rid} comes back for more (next_runs) with no converged() of its own, and the default stop (every 95 % "
+                                   f"interval inside its tolerance) cannot judge it: {what}. Give it converged(history, values), its own "
+                                   "stop rule")
+    return cap
 
 
 def _runs_at(routine: Any, rid: str, priors: Mapping[str, float]) -> tuple[Any, ...] | None:
@@ -659,12 +691,13 @@ def _runs_at(routine: Any, rid: str, priors: Mapping[str, float]) -> tuple[Any, 
 
 
 def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping[str, str], known: Mapping[str, float],
-          first: Mapping[int, tuple[Any, ...] | None] | None = None) -> tuple[PlanStep, ...]:
+          first: Mapping[int, tuple[Any, ...] | None] | None = None, rounds: Mapping[int, int | None] | None = None) -> tuple[PlanStep, ...]:
     """Each step's runs at the priors and its status (see CalibrationSchedule). Each routine's runs() is called twice at the priors: once to
     bind (`first`: {id(routine object): its runs at the priors} already read by _plan_rig for the budget, so that call is not repeated),
     once to check it is static. Refused: runs() that change between the two calls; one run id bound to two different runs; a run id
     with a command or a spec shared by a known-now step and a made-after step (once the earlier step has run, the two differ under one
-    id). Only a run with neither (an id the rig reads as is) is one run both steps read.
+    id). Only a run with neither (an id the rig reads as is) is one run both steps read. `rounds`: {id(routine object): its max_rounds}
+    (_rounds_of), shown on the step; a routine that comes back for more binds round 0's runs.
 
     WHY from the declaration and never by probing runs() at moved values (Zach, 2026-11-17: "routines can almost like declare depencies on
     what they require to run ahead of time so you can ... atuomaticaly generate the schedule"): a routine says what its commands read
@@ -714,7 +747,7 @@ def _bind(steps: Sequence[PlanStep], priors: Mapping[str, float], names: Mapping
                 raise CalibrationPlanError(f"run id {run.id!r} is shared by {early}, known now, and {late}, whose commands are made after "
                                            f"an earlier step runs: they agree at the priors, but once that step has run the two runs "
                                            f"(command or spec) differ under one id; give {late}'s run an id of its own")
-        out.append(dataclasses.replace(step, runs=runs, status=status, commands_after=after))
+        out.append(dataclasses.replace(step, runs=runs, status=status, commands_after=after, max_rounds=(rounds or {}).get(id(routine))))
     return tuple(out)
 
 
@@ -913,6 +946,10 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         else:
             keep.append(r)
             keep_sources.append(src)
+    # a routine that comes back for more states its bound and, where the default stop cannot judge it, its own rule (refused here, by name)
+    iterating = any(callable(getattr(r, "next_runs", None)) for r in keep)
+    tolerated = {p.key for p in rig.parameters() if p.tolerance is not None} if iterating else set()
+    rounds = {id(r): _rounds_of(r, r.id, tolerated, config.known) for r in keep}
     # the priors each step's runs are bound at: the description's stated values, the caller's known values on top (what the runner starts from)
     priors = {**{k: float(v) for k, v in description.values().items() if v is not None}, **config.known}
     # WHY read here, once per kept routine, and handed to _bind (gap T): the budget and the strict refusal count a run two steps share once,
@@ -941,7 +978,7 @@ def _plan_rig(twin: Any, config: CalibrationConfig, rig: Any = None) -> Calibrat
         dropped.append((last.id, f"outside the budget: the plan's wall time {wall:.0f} s is over max_wall_time_s {budget.max_wall_time_s:g} s"
                         if too_long else f"outside the budget: the plan's equipment ${usd:,.0f} is over max_equipment_usd"))
     steps, assumed, source = _steps(keep, keep_sources, names, config)
-    steps = _bind(steps, priors, names, config.known, first)
+    steps = _bind(steps, priors, names, config.known, first, rounds)
     gone = {rid: why for rid, why in dropped}
     uncovered = []
     for p in rig.parameters():
