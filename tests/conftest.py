@@ -9,3 +9,7 @@ import os
 
 for _name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_name, "1")
+
+# WHY forced off (gap E, 2026-11-18): a developer shell or a cloud VM with SIM2REAL_TRACK=ledger|wandb must never make the suite write
+# ledgers or push W&B runs; the tests that exercise tracking set it themselves (monkeypatch), and an explicit callbacks= always wins.
+os.environ["SIM2REAL_TRACK"] = "off"
