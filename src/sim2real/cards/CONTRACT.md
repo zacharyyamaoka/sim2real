@@ -35,7 +35,8 @@ identifies) the drives' `frictionloss_nm` and `damping_nm_s_rad`, so no integrat
 
 Since 2026-11-18 (a value change by decision, gap C): `pid.pidtuna` is re-kinded `use` -> `tune`. It identifies nothing, configures the
 `servo` card's `kp_nm_rad` and `kd_nm_s_rad`, requires `armature_kg_m2` and `frictionloss_nm`, uses the gravity, its bottom, the damping,
-the command delay and the Stribeck drop, and its wall and operator time are 0 s (the SIM tier tunes on the fitted twin: no robot time);
+the command delay and the Stribeck drop, its operator time is 0 s and its wall time is compute (the SIM tier tunes on the fitted twin: no
+robot time; since 2026-11-19 the catalog holds every wall time positive, so it is the tune's measured 3 s on a cloud VM, not 0 s);
 its code gains `src/sim2real/calibration/pid_tune.py` (sim2real's `PidTune`) and its grade is `routine_ladders/pid.pidtuna.json`.
 `domain_v3.json` and `sysid/results/calibration_routines.json` are regenerated. Only PID tuning is re-kinded: the IK fine-tune stays
 `use`. Decision: `docs/decision-pidtuna-tune-2026-11-18.md`.

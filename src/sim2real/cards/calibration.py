@@ -813,11 +813,14 @@ ROUTINES = (
     # --- PID ----------------------------------------------------------------------------------------------------------------------
     # WHY kind "tune", re-kinded from "use" (2026-11-18, docs/decision-pidtuna-tune-2026-11-18.md; Zach, 2026-11-11: PID tuning is
     # "calibration or like tune beacuse there is not a real to reference it off of"): the planner schedules a tune after the fits it
-    # requires; a "use" routine it never reaches. WHY 0 s: what runs today is the SIM tier, PID tuna on the fitted twin, no robot time
-    # (the BENCH tier, its tapes played on the joint, is the follow-up the decision names)
+    # requires; a "use" routine it never reaches. WHY its wall time is compute (ruler owner, 2026-11-19: every routine's wall time is
+    # positive): what runs today is the SIM tier, PID tuna on the fitted twin, so the time is the tune's compute, measured on a cloud VM,
+    # and "no robot time" is runs() being empty (the BENCH tier, its tapes played on the joint, is the follow-up the decision names)
     routine("pid.pidtuna", "PID gains from the identified model, then measured tuning (pidtuna)", "pid", (), "bench",
-         Q(0, "s", "the SIM tier tunes on the fitted twin; no robot time"),
-         Q(0, "s", "the SIM tier tunes on the fitted twin; no robot time"), (),
+         Q(3, "s", "measured: one PidTune.fit of CAN 11 on its fitted twin (the SIM tier, 2 workers) in 3.24 s, its whole pytest session, "
+                   "on a cloud VM (d15425264, 2026-11-19; the slow grade's three fits with its bench, 21.27 s, on the same VM); compute "
+                   "only, no robot time"),
+         Q(0, "s", "the SIM tier tunes on the fitted twin; no robot time, no hands"), (),
          "the identified model, then steps and sweeps on the fitted twin (pidtuna's ServoSim)", "the closed loop's band", 1,
          "pidtuna: an analytic start from the fitted plant, a bandwidth search and its gates on the fitted twin, under the fitted model's "
          "feed-forward held fixed; it proposes the board's kp and kd, never writes a board",

@@ -616,7 +616,8 @@ sim2real runs it as `sim2real.calibration.PidTune`.
 
 - **Where it runs:** after the fits it requires (`armature_kg_m2`, `frictionloss_nm`; it reads the gravity, damping, command delay and
   Stribeck drop where found). The SIM tier tunes the board's kp and kd on a pidtuna ServoSim of the **fitted** twin, under the fitted
-  model's feed-forward held fixed: no robot time, no hands (wall time 0 s). Its pools are the twin's workers, closed when it is done.
+  model's feed-forward held fixed: no robot time, no hands (its wall time is compute: 3 s for CAN 11 on a cloud VM, 2 workers). Its
+  pools are the twin's workers, closed when it is done.
 - **What it writes:** settings. A step's configures keys land in its record row's `found` and in `fitted.settings_` (`{key: value}`, in
   run order), and each later routine sees them as its handle's `settings`. A tune's never enter the values a later routine fits with, the
   values the twin replays at (`runner.state["values"]`) or `fitted.values_`, and they own no parameter row: the runs were made at the gains

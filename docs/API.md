@@ -240,7 +240,8 @@ The examples are fixtures, not a registry. sim2real can't load a robot from a na
 
 - PID tuna as the tune routine `pid.pidtuna` (gap C, docs/decision-pidtuna-tune-2026-11-18.md): a schedule step that tunes the board's
   kp and kd on the twin the steps before it fitted, under the fitted model's feed-forward held fixed. No run on the robot
-  (`runs()` is empty, wall and operator time 0 s); it requires `<instance>.armature_kg_m2` and `<instance>.frictionloss_nm`.
+  (`runs()` is empty; operator time 0 s; its wall time is the catalog's, the tune's compute on the fitted twin, 3 s measured on a
+  cloud VM); it requires `<instance>.armature_kg_m2` and `<instance>.frictionloss_nm`.
 - `servo`: the board as it runs today, a pidtuna `Servo` (its gains are the as-found controller), or a zero-argument callable that builds
   one when the routine runs. `goal`: a pidtuna `Objective` (None: one repeat). `can_id`: checked against the servo's.
 - `fit(measured, values, twin)` returns the settings `{<instance>.kp_nm_rad, <instance>.kd_nm_s_rad}` (`sim2real.rig.Estimate`) with
