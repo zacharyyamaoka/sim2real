@@ -42,9 +42,11 @@ J1_RETURN_SPEED = 0.03 * TAU
 # WHY READY's J1 is -12.7 deg, not 0 (2026-11-14 07:11Z): at READY J1 = 0 is blocked - contact at homed -7 deg in the side-table clutter
 # (full_arm/obstacles/j1_contact_20261114T0711Z.json, envelope J1 <= -9 deg); READY is the board record with J1 at -12.7
 # (full_arm/ready_20261114T073916Z). J1 goes back there before the wrist homes. The angle is the description's named pose "ready"
-# (sim2real.named_poses, bam_ws PEP 0056), never a copy: READY moves here when it moves there. The envelope below is the side table's,
-# not READY's - a READY with J1 above -9 deg (the compact one's J1 0) is refused until it is retired (the clutter was cleared 11-15).
-J1_READY_RAD = named_pose("ready").position_of(J1)
+# (sim2real.named_poses, bam_ws PEP 0056), never a copy. Since 2026-11-19 it is the named pose "homing" (READY's numbers until then):
+# READY moved to the compact pose (J1 -2), where J1's gravity at the stop would crowd the 9 N.m stall rule, so J1 seeks and returns in
+# the homing posture and the arm is walked to READY after (bam_robot_activity.runner --return-home). The envelope below is the side
+# table's (cleared 11-15), and the homing posture's J1 -12.7 sits inside it.
+J1_READY_RAD = named_pose("homing").position_of(J1)  # the HOMING posture's J1 (READY's until 2026-11-19; the description's HOMING why)
 J1_ENVELOPE_MAX_RAD = math.radians(-9.0)
 # WHY one seek from wherever J1 hangs, relative: before its stall J1 reads only its board's frame. 110 deg covers the grid's highest start
 # (+6 deg, a few sagged) to the stop with room for the stall to build

@@ -89,7 +89,7 @@ CRAIG_OFFSET_DEG = {J2: _DESCRIPTION_CRAIG_OFFSET_DEG[J2], C1: _DESCRIPTION_CRAI
 READY_CRAIG_DEG = FIVEBAR_LEVELS["READY"]
 # TD4 at READY (bam_rack_twin full_arm.wrist_td4: W1 = L2's angle j2 + j3, W2 +90, W3 0; READY's j3 is -64.079 deg): the claw plumb. The
 # description's named pose "ready" (bam_ws PEP 0056), never a copy: (1.167, 90.0, 0.0) today
-READY_TD4_WRIST_DEG = wrist_deg(named_pose("ready"))
+READY_TD4_WRIST_DEG = wrist_deg(named_pose("homing"))  # the homing posture's TD4 wrist (READY's until 2026-11-19, when READY moved)
 RECIPE_SEEK_DEG_S = math.degrees(0.1 * TAU)  # 36 deg/s: the recipe's max_vel 0.1 rev/s
 MULTI_LOCATE_DEG_S = 60.0  # 0.7 x the wrist's 86 deg/s speed ceiling (the ruler's 0.8 margin, with room for the stall's overshoot)
 MULTI_RETOUCH_DEG_S = 9.0  # a quarter of the recipe

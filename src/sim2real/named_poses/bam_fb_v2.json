@@ -7,10 +7,47 @@
    "name": "ready",
    "group": "arm",
    "kind": "joint",
-   "digest": "51a91ae8c099e0de",
+   "digest": "50fc022a42863673",
    "pose": {
     "_type": "manipulation/NamedPose",
     "name": "ready",
+    "group": "arm",
+    "joint_names": [
+     "revolute_3",
+     "revolute_6",
+     "revolute_7",
+     "revolute_11",
+     "revolute_14",
+     "revolute_17"
+    ],
+    "positions": {
+     "dtype": "<f8",
+     "shape": [
+      6
+     ],
+     "data": [
+      -0.03490658503988659,
+      -0.08726646259971647,
+      0.5480987520699373,
+      -0.9599310885968813,
+      1.5707963267948966,
+      0.0
+     ]
+    },
+    "tolerance": null,
+    "tool_pose": null,
+    "tip_link": "",
+    "why": "Where the full arm waits: it starts and ends every session here and arm-hold holds it here between them (never released). Zach 2026-11-19: 'a better Home/ready position that is lower energy and more centered in the belt'. The upper arm 5 deg forward of vertical, the forearm 55 deg forward, J1 -2, the claw lying flat along the plane: the claw's tip over the belt's usable middle (bench plane x 0.177 m; the arm reaches hover height from x -0.10 to 0.45) at 2.5 W copper to hold (PID tuna's 15c masses; the 2026-11-15 READY took 3.9 W with the hand 478 mm out past the far rail), 120 mm over the belt and 55 mm over the tallest item, the bundle's self-collision rules proven, 0.6 % of the overhead camera's pick zone hidden. WHY the claw flat: on this five-bar a plumb claw needs the wrist ~100 mm higher to clear the items, and every claw-plumb pose that holds with less than the old READY sits at the far rail (x >= 0.44); a session leaves READY with a wrist swing in place and ends with one back (repick). WHY J1 -2, not 0: the bench admits J1 only in [-90, 0] (full_arm_pan.J1_PAN_RANGE_RAD), so a hold that sags a tenth of a degree past 0 would refuse a session. The study: bam_ws reports/media/ready-pose-2026-11-19.html (variant F). The rack realises it per power-up as a board record (ready_record.json, which carries this pose's digest): python -m bam_rack_twin.hardware.zero_writer ready writes it after an edit here."
+   }
+  },
+  {
+   "name": "homing",
+   "group": "arm",
+   "kind": "joint",
+   "digest": "fe212c4504a429fb",
+   "pose": {
+    "_type": "manipulation/NamedPose",
+    "name": "homing",
     "group": "arm",
     "joint_names": [
      "revolute_3",
@@ -37,7 +74,7 @@
     "tolerance": null,
     "tool_pose": null,
     "tip_link": "",
-    "why": "Where the full arm starts and ends every session and waits between picks (READY to READY, never released; the five-bar's own home would hang the claw 101 mm into the belt). These are the numbers every copy had on 2026-11-15: the claw's TCP 40 mm over the bin's drop (bam_rack_twin full_arm.ready_motors, TCP (0.565, 0.400) m in the bench plane) with the claw plumb (TD4: W1 = L2's angle, W2 +90, W3 0); the five-bar as sim2real's homing ruler had it (Craig 65.246 / 122.791, ready_motors' IK to 0.0005 deg); J1 -12.7 because J1 0 touched the side-table clutter at homed -7 deg (2026-11-14 07:11Z, envelope J1 <= -9 deg; the clutter was cleared 2026-11-15 09:38Z). The rack realises it per power-up as a board record (ready_record.json, which carries this pose's digest). Zach 2026-11-15: a more compact READY that costs less to hold is being chosen in sim."
+    "why": "The homing routine's posture: READY's numbers from 2026-11-15 to 2026-11-19 (the claw's TCP 40 mm over the bin's drop, TCP (0.565, 0.400) m in the bench plane, the claw plumb (TD4: W1 = L2's angle, W2 +90, W3 0); the five-bar as sim2real's homing ruler had it, Craig 65.246 / 122.791; J1 -12.7). WHY homing keeps its own pose when READY moves: J1 seeks its top stop with the arm in this posture, where J1's gravity at the stop measured 5.2 N.m against the seek's 9 N.m stall rule (sim2real j1_home); in READY's compact posture the model's gravity there is 1.6x (study: -6.7 vs -4.1 N.m), which would leave too little between gravity plus friction and the rule to tell the stop from a stall. The wrist feed-forward and the homing corridor were fitted and proven here, byte for byte. After homing the arm is walked to READY (bam_robot_activity.runner --return-home)."
    }
   },
   {

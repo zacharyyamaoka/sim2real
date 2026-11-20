@@ -125,10 +125,11 @@ NOMINAL = "nominal"
 # -- the start grid ------------------------------------------------------------------------------------------------------------------
 # WHY these five-bar poses (bam_rack_twin full_arm, bam_ws main d6c263129: bench_real(), full_arm_cell("cap", 0), full_arm_tool(0) and
 # bam_fivebar tool_ik / inverse_pose; tests/test_homing_routine.py re-derives them when bam_rack_twin imports): Craig (J2, C1) deg.
-# READY is the description's named pose "ready" (sim2real.named_poses; bam_ws PEP 0056), never a copy: the cells sit where the arm waits
-# between picks, wherever READY is - (65.246, 122.791) today, full_arm.ready_motors' TCP 40 mm over the bin's drop.
+# "READY" here is the description's named pose "homing" (sim2real.named_poses; bam_ws PEP 0056), never a copy: READY's numbers until
+# 2026-11-19 (65.246, 122.791; full_arm.ready_motors' TCP 40 mm over the bin's drop), where the homing routine runs and these cells were
+# scored. WHY not "ready" since READY moved (2026-11-19): the ruler is the homing routine's, and the homing keeps its posture.
 FIVEBAR_LEVELS = {
-    "READY": fivebar_craig_deg(named_pose("ready")),
+    "READY": fivebar_craig_deg(named_pose("homing")),  # the homing posture (READY until 2026-11-19): the cells were scored here
     "PICK": (86.31, 166.93),  # TCP (0.434, 0.575): 30 mm over the tray floor (0.605), mid-tray
     "LIFT": (96.65, 150.06),  # TCP (0.434, 0.455): 150 mm over the tray floor, the pick's lift
     "UP": (131.62, 170.70),  # TCP (0.300, 0.300): the arm raised toward the shoulder

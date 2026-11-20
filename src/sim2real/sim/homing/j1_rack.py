@@ -25,16 +25,17 @@ The real run, in order (every rack piece is bam_rack_twin.hardware's, never re-m
    arm-hold left, so C1 does not sag), the five-bar on the full arm's comp, the wrist and claw held. ``J1HomeBus`` is fullarm_stops'
    ``StopsBus`` (HeldBus's guards: faults, mode 11, the voltage, J1 off its hold, the drives' tracking; the measured-pose belt guard) with J1's
    ceiling raised from J1_HOLD_NM to each step's own cap (11 N.m seek, 17.98 return) - the one change j1_seek_min's SeekBus also made.
-3. **READY:** every joint but J1 walked to READY's record by ``fullarm_stops.route_to_start`` when it is off by more than the tolerance (Zach:
+3. **The homing posture:** every joint but J1 walked to the named pose "homing" (``homing_start_q``; READY's record until READY moved
+   on 2026-11-19) by ``fullarm_stops.route_to_start`` when it is off by more than the tolerance (Zach:
    runners route, they do not refuse a pose); J1 is not routed - its frame is what this run establishes.
 4. **J1's home:** the seek (-110 deg relative at 7.2 deg/s, cap 11 N.m) until EffortStall (still < 0.01 rad/s for 0.2 s while pushing the way
-   it seeks past 9 N.m), which defines J1 = -89.972 deg; then back to READY's -12.7 deg in that frame. J1 runs PID tuna's gains (j1_gains:
+   it seeks past 9 N.m), which defines J1 = -89.972 deg; then back to the homing posture's -12.7 deg in that frame. J1 runs PID tuna's gains (j1_gains:
    kp x14 / kd x16.8, ilimit 0 - PD only) and J1's gravity fed forward EVERY tick at its joint angle in the best frame known: the map's when
    J1's board has not powered up since J1 was homed, else none until the stall defines the frame (a power-up shifts J1's board by whole rotor
    turns, and j1_gains' curve is in the frame of the 2026-11-14 home). A step that times out (no stall: a cap or feed-forward fault, the
    trap the rule exists for) or the sequence's own guard ends the home: J1 walks back to where it started and the run is refused. A bus
    guard (a fault, J1 off its hold, the belt) holds every board where it is (HeldBus.hold_here) and nothing more moves.
-5. **The end:** every board held at READY, the transport closed without a stop and arm-hold's targets written (HeldBus.close: arm-hold's
+5. **The end:** every board held at the homing posture (the bring-up then walks the arm to READY: ``bam_robot_activity.runner --return-home``), the transport closed without a stop and arm-hold's targets written (HeldBus.close: arm-hold's
    restore ramps back to them), the bus lock released, arm-hold restarted.
 6. **J1's zero, after the bus is closed** (file writes never inside a powered tick): the stall's board reading must sit on the stop's rotor
    phase (within WITNESS_TOL_DEG, mod one 36 deg turn, of the 05:41Z / 05:56Z stalls). Then the shift that puts the stall at -89.972: under
@@ -67,6 +68,7 @@ from robot_msgs.sensor import JointState
 from robot_msgs.std import Header
 
 from ... import paths as _paths
+from ...named_poses import named_pose
 from .j1_home import (
     J1,
     J1_JOINT_CAP_NM,
@@ -568,6 +570,24 @@ def run_twin(arguments, *, rack) -> dict[str, Any]:
     return result
 
 
+
+def homing_start_q(here: Mapping[str, float], ready_rad: Mapping[str, float]) -> dict[str, float]:
+    """Where step 3 walks every joint but J1 before the seek (URDF rad, the run's frames): the description's named pose "homing" on the turn
+    nearest where each joint is now (``here``; else READY's record, ``ready_rad``), the claw (not in the pose's arm group) at READY's record.
+
+    WHY "homing" and not READY's record (2026-11-19, READY moved to the compact pose): J1 seeks its top stop in this posture, where its
+    gravity at the stop measured 5.2 N.m under the 9 N.m stall rule (j1_home); READY's compact posture hangs the arm lower (the model's
+    gravity there 1.6x), too close to the rule to tell the stop from a stall. WHY the nearest turn: today's homed map reads C1 a whole turn
+    off READY's URDF angle (-374.65 deg), so a target taken as written would ask C1 for a 360 deg walk."""
+
+    pose = named_pose("homing")
+    out = dict(ready_rad)
+    for joint in pose.joint_names:
+        target = float(pose.position_of(joint))
+        reference = here.get(joint, ready_rad.get(joint))
+        out[joint] = target if reference is None else float(reference) + math.remainder(target - float(reference), 2.0 * math.pi)
+    return out
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m sim2real.sim.homing.j1_rack", description=__doc__.split("\n\n")[0])
     parser.add_argument("--dry-run", action="store_true", help="files only: the checks, the sequence, the witness; nothing opened")
@@ -673,8 +693,8 @@ def real_run(arguments, check: Mapping[str, Any], *, rack, say) -> int:
             bus.take_over(drive_cap_nm=dict(home.HELD_MOVE_CAP_NM), feedforward=home.full_arm_comp(_servo_map(check["fivebar_homed"])),
                           hold_riders=True)
             result["take_over"] = {"fast": bus.fast_takeover, "boards": {str(k): v for k, v in bus.taken_over.items()}}
-            start_q = dict(check["ready_rad"])
             here = frames.q(fs.board_angles(bus.last), geometry) or {}
+            start_q = homing_start_q(here, check["ready_rad"])
             start_q[J1] = here.get(J1, start_q.get(J1, 0.0))  # J1 is not routed: its frame is what this run establishes
             result["route"] = fs.route_to_start(bus, frames, geometry, start_q, tolerance_deg=arguments.start_tolerance_deg, say=say)
             bus.stage = "J1 home"
