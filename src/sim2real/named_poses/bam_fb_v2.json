@@ -7,7 +7,7 @@
    "name": "ready",
    "group": "arm",
    "kind": "joint",
-   "digest": "50fc022a42863673",
+   "digest": "28a094f8abac0730",
    "pose": {
     "_type": "manipulation/NamedPose",
     "name": "ready",
@@ -27,9 +27,9 @@
      ],
      "data": [
       -0.03490658503988659,
-      -0.08726646259971647,
-      0.5480987520699373,
-      -0.9599310885968813,
+      -0.17453292519943295,
+      0.403178689872502,
+      -1.0471975511965976,
       1.5707963267948966,
       0.0
      ]
@@ -37,7 +37,7 @@
     "tolerance": null,
     "tool_pose": null,
     "tip_link": "",
-    "why": "Where the full arm waits: it starts and ends every session here and arm-hold holds it here between them (never released). Zach 2026-11-19: 'a better Home/ready position that is lower energy and more centered in the belt'. The upper arm 5 deg forward of vertical, the forearm 55 deg forward, J1 -2, the claw lying flat along the plane: the claw's tip over the belt's usable middle (bench plane x 0.177 m; the arm reaches hover height from x -0.10 to 0.45) at 2.5 W copper to hold (PID tuna's 15c masses; the 2026-11-15 READY took 3.9 W with the hand 478 mm out past the far rail), 120 mm over the belt and 55 mm over the tallest item, the bundle's self-collision rules proven, 0.6 % of the overhead camera's pick zone hidden. WHY the claw flat: on this five-bar a plumb claw needs the wrist ~100 mm higher to clear the items, and every claw-plumb pose that holds with less than the old READY sits at the far rail (x >= 0.44); a session leaves READY with a wrist swing in place and ends with one back (repick). WHY J1 -2, not 0: the bench admits J1 only in [-90, 0] (full_arm_pan.J1_PAN_RANGE_RAD), so a hold that sags a tenth of a degree past 0 would refuse a session. The study: bam_ws reports/media/ready-pose-2026-11-19.html (variant F). The rack realises it per power-up as a board record (ready_record.json, which carries this pose's digest): python -m bam_rack_twin.hardware.zero_writer ready writes it after an edit here."
+    "why": "Where the full arm waits: it starts and ends every session here and arm-hold holds it here between them (never released). Zach 2026-11-19: 'a better Home/ready position that is lower energy and more centered in the belt'. The upper arm 10 deg forward of vertical, the forearm 60 deg forward, J1 -2, the claw lying flat along the plane: the claw's tip over the belt's usable middle (bench plane x 0.212 m; the arm reaches hover height from x -0.10 to 0.45; the 2026-11-15 READY's hand sat 478 mm out, past the far rail), 150 mm over the belt, the bundle's self-collision rules proven. Holding power: 3.9 W on the arm's fitted comp vs the old READY's 4.0 - on this arm every usable READY holds at 3-4 W (C1 carries 3-4 N.m in all of them), so the posture buys centring, not energy (measured 2026-11-20: the study's 15c model under-read J2 / C1 here). WHY this height and not the first pick F (forearm 55, 20 mm lower): a session leaves READY with a wrist swing in place (flat to plumb) and ends with one back (repick.ready_wrist_swing); at F those swings cleared the 30 mm belt rule by 3 mm and the far rail by 14, here by 27 mm and 32 mm on the 7 newest measured belts. WHY the claw flat: a plumb claw needs the wrist ~100 mm higher to clear the items, and every claw-plumb pose that holds with less than the old READY sits at the far rail (x >= 0.44). WHY J1 -2, not 0: the bench admits J1 only in [-90, 0] (full_arm_pan.J1_PAN_RANGE_RAD), so a hold that sags a tenth of a degree past 0 would refuse a session. The study: bam_ws reports/media/ready-pose-2026-11-19.html. The rack realises it per power-up as a board record (ready_record.json, which carries this pose's digest): python -m bam_rack_twin.hardware.zero_writer ready writes it after an edit here; tests/test_ready_swing_margin (bam_rack_twin) checks any READY written here against the session's swings."
    }
   },
   {
