@@ -3,39 +3,42 @@
  "levels": {
   "0x": {
    "admissible": true,
-   "cost_oracle": 0.2456519286256316,
+   "cost_oracle": 0.47752946310023736,
    "cost_tuned": 0.47752946310023736,
    "gain": 4.188223250175002,
-   "pass": false,
-   "regret": 0.9439271890593715,
+   "oracle_pool": "the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band (0.65, 1.0))",
+   "pass": true,
+   "regret": 0.0,
    "stop_p90_mrad": 6.588023687028278,
-   "worst_error_over_tolerance": 6.292847927062477
+   "worst_error_over_tolerance": 0.0
   },
   "1x": {
    "admissible": true,
-   "cost_oracle": 0.2456519286256316,
+   "cost_oracle": 0.47752946310023736,
    "cost_tuned": 0.495998163847036,
    "gain": 4.0322729916733975,
-   "pass": false,
-   "regret": 1.019109585754268,
+   "oracle_pool": "the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band (0.65, 1.0))",
+   "pass": true,
+   "regret": 0.03867552093413318,
    "stop_p90_mrad": 6.988563254242625,
-   "worst_error_over_tolerance": 6.7940639050284535
+   "worst_error_over_tolerance": 0.25783680622755456
   },
   "3x": {
    "admissible": true,
-   "cost_oracle": 0.2456519286256316,
+   "cost_oracle": 0.47752946310023736,
    "cost_tuned": 0.6341810897779309,
    "gain": 3.1536733469935747,
+   "oracle_pool": "the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band (0.65, 1.0))",
    "pass": false,
-   "regret": 1.5816247131705188,
+   "regret": 0.3280459925146253,
    "stop_p90_mrad": 9.33171890773799,
-   "worst_error_over_tolerance": 10.544164754470126
+   "worst_error_over_tolerance": 2.1869732834308353
   }
  },
  "provenance": {
   "pid_tune_sha256": "ee56ec3401bf93a4105be986baa565f0cc500659bb9c7d1823cd76efdf40c52b",
-  "pidtuna_head": "ae35ed8cc64c6bf1c3f1af7fcc43da63a7d1ed0d",
-  "test_sha256": "56d2692142a852a0cb47e7b0fa0c163531238010379fa87f7147ab0a0df39d6c"
+  "pidtuna_head": "8b00457fecd2e364482bbdcf3dd5bf53be23c6ff",
+  "test_sha256": "8ee3bbf95ff42fa5c57d20acb75dbe78663291b07231cac92b516c3e53bc8065"
  },
  "routine": "pid.pidtuna",
  "schema": "sim2real.routine_ladder/1",
