@@ -55,6 +55,7 @@ import json
 import math
 import sys
 import time
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -358,7 +359,8 @@ def _tracer_data(twin_id: str, planned, measured, noise: dict, *, truth_moved: M
 def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, Any]], values: dict[str, float], handle: PipelineHandle, *,
                    servo: str, on_step: Callable[[dict], None] | None = None, collected: str = "measured",
                    settings: dict[str, float] | None = None,
-                   proposals: dict[str, Any] | None = None) -> tuple[Any, list[dict], dict[str, str]]:
+                   proposals: dict[str, Any] | None = None,
+                   keep_fits_on_failed_tune: bool = False) -> tuple[Any, list[dict], dict[str, str]]:
     """Play the planned routines in order over what was measured: each reads the runs it names from `played` (by run id), fits them sealed
     from the hidden truth, and hands what it found to the ones after it through `values` (updated in place). Returns (fit, steps, handed):
     the rung ladder one routine returned (routines.Ladder.fit), the steps as they ran (the record's routines) and, by parameter name, the
@@ -372,8 +374,11 @@ def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, An
     found {key: {value, ci95, method, unit}}, round}; the unit is the sysid description's nominal unit.
 
     A configure / tune step's configures keys fill `settings` (in place; a tune's never reach `values`, sim2real.rig._settle), each later
-    fit sees them as handle.settings, and a fit result's `proposal` fills `proposals` {routine id: proposal} (gap C)."""
-    from .calibration.plan import CalibrationPlanError  # noqa: PLC0415
+    fit sees them as handle.settings, and a fit result's `proposal` fills `proposals` {routine id: proposal} (gap C).
+
+    `keep_fits_on_failed_tune` (the real backend's): a tune step (kind "tune") whose fit raises is recorded as a stopped step
+    ({"stopped": "failed: <its error>"}, nothing found, no settings, no proposal) and the loop goes on with the fits before it kept."""
+    from .calibration.plan import CalibrationPlanError, declaration  # noqa: PLC0415
     from .rig import _settle  # noqa: PLC0415
 
     _refuse_rounds(routines, "this loop plays each routine once over what was measured")   # the routines a runner resolved itself, too
@@ -395,8 +400,28 @@ def _play_routines(routines: Sequence[Any], played: Mapping[str, Mapping[str, An
         data = {name: run_data for run in runs for name, run_data in played[run.id].items()}
         configures = tuple(getattr(routine, "configures", ()))
         fitting = time.monotonic()
-        with hidden.sealed():
-            found = routine.fit(data, dict(values), dataclasses.replace(handle, settings=dict(settings)))
+        try:
+            with hidden.sealed():
+                found = routine.fit(data, dict(values), dataclasses.replace(handle, settings=dict(settings)))
+        except Exception as failed:
+            # WHY (L10 review, the real path): a tune runs after the rack has played and the runs are ingested, so a tune that fails here
+            # (pidtuna API drift, a missing deployment record, an unusable fitted armature) must not throw away the fits the rack's
+            # minutes paid for. It only proposes settings, so the twin is whole without it: the step is recorded as stopped, with why
+            if not (keep_fits_on_failed_tune and declaration(routine).kind == "tune"):
+                raise
+            reason = f"failed: {type(failed).__name__}: {failed}"
+            warnings.warn(f"{routine.id} {reason}; the fits before it are kept and it proposes nothing", stacklevel=2)
+            step = {"routine": routine.id, "identifies": list(routine.identifies), "runs": len(data),
+                    "seconds": round(time.monotonic() - began, 1), "found": {}, "stopped": reason}
+            if configures:
+                step["configures"] = list(configures)
+            steps.append(step)
+            if on_step is not None:
+                on_step({"routine": routine.id, "identifies": list(routine.identifies),
+                         "runs": list(dict.fromkeys(run.id for run in runs)), "collected": collected, "collect_s": fitting - began,
+                         "fit_s": time.monotonic() - fitting, "seconds": time.monotonic() - began, "found": {}, "round": 0,
+                         "stopped": reason})
+            continue
         fit_s = time.monotonic() - fitting
         extra = sorted(set(found) - set(routine.identifies) - set(configures))
         if extra:
@@ -971,13 +996,22 @@ class RobotTwin:
                             "the rack's session runner), or sim2real.real.TwinTransport() for the rack twin at a sealed hidden truth")
         if move_truth:
             raise ValueError("on='real' has no truth to move: the world is the transport's (sim2real.real.TwinTransport(move_truth=...))")
-        if config is not None or noise is not None:
+        from .calibration.config import CalibrationConfig  # noqa: PLC0415
+        from .calibration.pid_tune import ROUTINE as TUNE  # noqa: PLC0415  (a name only: importing it imports no pidtuna)
+
+        # WHY this one config and no other (L10 review): the docs promise CalibrationConfig(exclude=("pid.pidtuna",)) leaves the tune out,
+        # and on the rack that is how an operator plays the fits without a tune; it drops a step that plays no run, so the submission the
+        # rack plays is unchanged. Every other config steers what a rig plays and stays refused, by name, until the rack honours it
+        skip_tune = isinstance(config, CalibrationConfig) and config == CalibrationConfig(exclude=(TUNE,))
+        if (config is not None and not skip_tune) or noise is not None:
             raise NotImplementedError("config= and noise= steer a rig on the one-click seam; on='real' plays the schedule plan(twin) shows "
-                                      "with its default config, over the runs the rack sends back (its noise is the hardware's: eval()'s "
+                                      f"with its default config (or CalibrationConfig(exclude=({TUNE!r},)), the one config it takes: the "
+                                      "fits without the tune), over the runs the rack sends back (its noise is the hardware's: eval()'s "
                                       "floor measures it); data= refits rack runs a twin already holds")
         from . import real  # noqa: PLC0415
 
-        return real.calibrate(self, transport, **(watch.real_hooks() if watch is not None else {}))
+        return real.calibrate(self, transport, **({"config": config} if skip_tune else {}),
+                              **(watch.real_hooks() if watch is not None else {}))
 
     def noise(self):
         """The rig's measured 1x noise model (sim2real.rig.NoiseModel): .at(level) and .with_terms(...) make a stress lane's sweep."""

@@ -391,7 +391,7 @@ python -m sim2real.tracking.calibrate_wandb --sync FOLDER     # or --all; --dry-
 | `runs` | how many runs it played |
 | `seconds` | its wall time in this run |
 | `found` | `{key: value}`, everything it set, including values it set for the twin without claiming them (its adjusts) and the settings a configure / tune step chose (they own no parameter row) |
-| `rounds`, `converged`, `stopped` | optional (a rig's run carries them, gap A2): each round `{k, runs, found}`, whether it converged (None: one round), why it stopped; see "Rounds" |
+| `rounds`, `converged`, `stopped` | optional (a rig's run carries them, gap A2): each round `{k, runs, found}`, whether it converged (None: one round), why it stopped; see "Rounds". On `on="real"`, a tune step whose fit raised carries `stopped` alone (`"failed: <its error>"`) |
 
 ### Per plan step
 
@@ -435,6 +435,15 @@ read the one submission's train runs, so the rack plays once. A planned run the 
 pipeline's run schedule (its train and held-out splits plus the floor repeats); typed collection from each routine's own runs is next.
 First station: CAN 11 on the One Dof Test Rack, the pendulum tracer (`sim2real.examples.pendulum_can11()`). Code: `src/sim2real/real.py`;
 acceptance: `tests/test_real_backend.py` and `tests/test_real_plays_schedule.py`.
+
+The tune step on the rack (`pid.pidtuna`, third on CAN 11) plays no run: it tunes on the twin the two fits found, after the rack has
+played. Two guards keep it from costing the rack's runs:
+
+- **Leaving it out:** `config=` is refused on `on="real"` except `CalibrationConfig(exclude=("pid.pidtuna",))`, which plans the fits
+  without the tune (the submission is the same; every other config still raises `NotImplementedError`).
+- **A failed tune keeps the fits:** if the tune's fit raises on the rack path (pidtuna's API changed, a missing deployment record, an
+  unusable fitted armature), the step is recorded as stopped (`stopped: "failed: <its error>"`, nothing found, no `settings_`, no
+  `proposals_`, and a warning), and the fitted twin keeps the values the two fits found. On `on="sim"` the error still raises.
 
 ```python
 import sim2real
@@ -650,7 +659,8 @@ sim2real runs it as `sim2real.calibration.PidTune`.
 - `KeyError`: an option a routine does not have.
 - `ValueError`: noise given both to `calibrate(noise=)` and in `CalibrationConfig.noise`.
 - `NotImplementedError`: a `CalibrationConfig` with `known`, `models`, `noise` or `seed` on the pendulum tracer (its config picks,
-  orders and excludes its routines only); a routine with rounds on the pendulum tracer or `on="real"`.
+  orders and excludes its routines only); any `config=` on `on="real"` but `CalibrationConfig(exclude=("pid.pidtuna",))`; a routine with
+  rounds on the pendulum tracer or `on="real"`.
 - `TypeError` / `ValueError` for `data=` (see "The twin holds its data"): not a `CalibrationData`; another twin's runs; rack runs on the
   sim or sim draws on the rack; `move_truth` or `transport=` with `data=`; a held-out run turned training run.
 - `TypeError`: `calibrate(on="real")` without a transport (it names `RackTransport` and `TwinTransport`).

@@ -836,8 +836,10 @@ class RealRunner:
         handle = PipelineHandle(module, d, self.workers, rung)
         hooks = {} if on_step is None else {"on_step": on_step, "collected": "recorded" if data is not None else "measured"}
         settings, proposals = {}, {}   # what a configure / tune step chose (gap C): settings, never values
+        # WHY keep_fits_on_failed_tune (L10 review): by now the rack has played and its runs are ingested; a tune that fails after that
+        # is recorded as a stopped step and the fits it would have tuned on are kept, never lost to its error (twin._play_routines)
         fit, steps, handed = twin_module._play_routines(routines, played, values, handle, servo=servo.id, settings=settings,
-                                                        proposals=proposals, **hooks)
+                                                        proposals=proposals, keep_fits_on_failed_tune=True, **hooks)
         # WHY after the seal: the fit never sees it; real hardware has none (rows ungraded); a refit asks no transport, so none either
         ruler = dict(transport.ruler() or {}) if transport is not None else {}
         recovered = {f"{servo.id}.{name}": {"value": value, "ci95": fit.ci95[rung].get(name), "rung": f"fitted with {rung}",
@@ -1055,7 +1057,8 @@ def _unfillable(routines: Sequence[Any], values: Mapping[str, float], fills: set
     return out
 
 
-def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: Any = None, on_plan: Callable[[Any], None] | None = None,
+def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: Any = None, config: Any = None,
+              on_plan: Callable[[Any], None] | None = None,
               on_step: Callable[[dict], None] | None = None, on_collect: Callable[[dict], None] | None = None,
               on_submission: Callable[..., None] | None = None, on_pending: Callable[[Any, BaseException], None] | None = None):
     """RobotTwin.calibrate(on="real")'s body: a NEW, fitted twin carrying the calibrated values, plan_ (the schedule plan(twin) shows, the
@@ -1067,7 +1070,10 @@ def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: A
     None and its data_ is all of `data`.
 
     The on_* hooks (gap E; RobotTwin.calibrate and main pass them only when there are callbacks, sim2real.calibration.callbacks.Watch):
-    `on_plan(schedule)` before anything is emitted, so a ledger holds the schedule before the rack moves; the rest are RealRunner.calibrate's."""
+    `on_plan(schedule)` before anything is emitted, so a ledger holds the schedule before the rack moves; the rest are RealRunner.calibrate's.
+
+    `config` (a CalibrationConfig, checked by RobotTwin.calibrate: today only one that excludes pid.pidtuna) plans the schedule; None plans
+    with the default config."""
     from .calibration.config import CalibrationConfig  # noqa: PLC0415
     from .calibration.plan import plan as schedule_of  # noqa: PLC0415
     from .calibration.record import CalibrationRecord  # noqa: PLC0415
@@ -1076,7 +1082,7 @@ def calibrate(twin, transport: Transport | None, *, strict: bool = True, data: A
     # WHY plan first and play exactly its routines, as on='sim' (Zach, 2026-11-17: "robottwin.calibrate() internall mabye that does
     # .generate_schedule() -> CalibrationSchedule and then you can pass that to something thats gonna like dispatch/execute it"): one
     # schedule is shown, and it is the one the rack's runs are fitted by
-    planned = data.plan if data is not None else schedule_of(twin, CalibrationConfig())
+    planned = data.plan if data is not None else schedule_of(twin, config if config is not None else CalibrationConfig())
     # WHY the twin's runner's description (gap D): it is the loaded twin's priors on a fitted twin too (whose own description is edited, and
     # the pipeline refuses edited priors), so a twin fitted on the rack refits from the same priors
     priors = twin.runner.description
