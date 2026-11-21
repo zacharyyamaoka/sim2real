@@ -59,7 +59,7 @@ import sys
 import time
 import types
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -465,10 +465,14 @@ def _relative_range(gain_range: Mapping[str, Any] | None) -> tuple[tuple | None,
         kd = tuple(gain_range["kd"]) if gain_range.get("kd") is not None else kp
         return kp, kd, f"the caller's range ({source})"
     try:
-        envelope = _pidtuna("pidtuna.types").Envelope()
+        envelope = _pidtuna("pidtuna.types").Envelope
     except Exception:  # noqa: BLE001  (no pidtuna: no Envelope to state one)
         return None
-    kp, kd = getattr(envelope, "gain_scale_range", None), getattr(envelope, "kd_range", None)
+    # WHY the fields' defaults, not Envelope(): since pidtuna amendment 4 (v2.4) an Envelope states its travel and speed and a bare one is
+    # refused; what is asked here is only the range an Envelope states when its caller gives none (kd's own, else kp's, as Envelope.kd_range)
+    defaults = {f.name: None if f.default is MISSING else f.default for f in fields(envelope)} if is_dataclass(envelope) else {}
+    kp = defaults.get("gain_scale_range")
+    kd = defaults.get("kd_scale_range") or kp
     if kp is None and kd is None:
         return None
     return (None if kp is None else tuple(kp)), (None if kd is None else tuple(kd)), "pidtuna types.Envelope's default range"

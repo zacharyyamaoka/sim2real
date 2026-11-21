@@ -201,7 +201,9 @@ class PidTune:
         # WHY one repeat: the fitted twin carries no sensor noise, so a second repeat replays the same tapes
         objective = self.goal if self.goal is not None else types.Objective(repeats=1)
         feedforward = model.feedforward()   # the fitted model's: held fixed, so before and after differ only in kp and kd
-        cap = min(servo.envelope.max_torque_nm, servo.torque_limit_nm)
+        # WHY the servo's own rule (pidtuna amendment 4, v2.4): an Envelope that states no torque cap (None) leaves the board's datasheet
+        # torque_limit_nm; a lower envelope cap still wins where one is stated
+        cap = servo.torque_cap_nm
         # WHY the stated loop for the analytic seed too: the seed and the climb's ceiling read one loop; without a stated one the seed keeps
         # the board's current loop and the fitted delay over pidtuna's LoopModel defaults, as before
         loop = (dataclasses.replace(stated, torque_cap_nm=cap) if stated is not None else
