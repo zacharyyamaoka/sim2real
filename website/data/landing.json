@@ -1,8 +1,8 @@
 {
  "schema": "sim2real.landing/1",
- "exported_utc": "2026-11-21T04:41:37Z",
+ "exported_utc": "2026-11-21T04:43:07Z",
  "exporter": "website/build/export_landing.py",
- "sim2real_commit": "40e1cd89e75654214286bed5ae4b666b3e3773ca",
+ "sim2real_commit": "96115ba59340d7a578c93dc2eca5ca0332a6b3bf",
  "gate": "gate.tool_mm",
  "metrics": {
   "sim": {
