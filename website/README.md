@@ -56,7 +56,7 @@ folder. The build prints `STALE landing source` when an in-repo source changed s
   and footer parameters. `site/sim2real.css` holds the accent (BAM green) and the calibration tables.
 - **New registries go in the registries, never here:** a new type, model, routine or recovery ladder appears on the next build with no
   edit to this folder.
-- **Not deployed yet.** `wrangler.jsonc` is a static-assets Worker like robotmsgs.com's, with a preview only:
+- **Preview live since 2026-11-20** (version a540f109): https://sim2real-docs-preview.zach-yamaoka.workers.dev, noindexed. `wrangler.jsonc` is a static-assets Worker like robotmsgs.com's, with a preview only:
   `pnpm --dir /home/bam/sim2real/website run deploy:preview` builds with `--noindex` (robots `Disallow: /`, a noindex meta on every
   page) and uploads to `sim2real-docs-preview.<account>.workers.dev`; `wrangler delete --env preview` undoes it. The production domain is
   Zach's pick; a prod deploy passes `--origin https://<domain>`. `sitemap.xml` uses the placeholder origin `https://sim2real.example`
