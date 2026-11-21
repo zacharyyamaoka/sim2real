@@ -130,6 +130,34 @@ def board_servo():
                                        command_rate_hz=COMMAND_RATE_HZ)
 
 
+DEPLOYMENT = "one-dof-test-rack"
+
+
+def board_loop(values, twin):
+    """CAN 11's board loop as the twin states it, a pidtuna analytic.LoopModel for PID tuna's analytic ceiling (or None when a piece is
+    unstated): the board's recorded current loop, PLL band and one encoder count (sim2real/data/board_configs.json, a copy of its moteus
+    dump), its driver's datasheet control rate (robotparts, the low end), and the command delay the fit found, else the twin of record's
+    (the description's known.board_knobs). WHY (pidtuna CONTRACT amendment 3): with no relative gain range the climb is held by the
+    analytic bounds on the stated loop, which pidtuna applies only where Servo.loop is stated; sim2real.preflight reads the same pieces."""
+    from pidtuna import analytic  # noqa: PLC0415  (PidTune.fit has put pidtuna on the path)
+
+    from sim2real.calibration import board_loop as bl  # noqa: PLC0415
+
+    entry = bl.board(DEPLOYMENT, CAN_ID)
+    found = values.get(f"{SERVO}.command_delay_s")
+    if found is not None:
+        delay = (float(found), f"the fitted {SERVO}.command_delay_s")
+    else:
+        record = twin.module.twin({k.split(".", 1)[1]: float(v) for k, v in values.items() if k.startswith(f"{SERVO}.") and v is not None},
+                                  "pid-tune loop")
+        delay = ((float(record.command_delay_s), "the twin of record's command_delay_s") if record.command_delay_s is not None else
+                 (None, "no command delay"))
+    pieces = {"loop_hz": bl.control_rate(None if entry is None else entry.get("driver_part")), "delay_s": delay,
+              "torque_bandwidth_hz": bl.current_loop(entry), "velocity_filter_hz": bl.velocity_filter(entry),
+              "encoder_quantum_rad": bl.encoder_count(entry)}
+    return bl.loop_model(analytic, pieces)
+
+
 class Routines:
     """What the planner reads from a RigBackend (sim2real.rig): `name`, `parameters()` (each key with the routine that identifies it and its
     tolerance from sysid/acceptance.json) and `routines()`."""
@@ -144,7 +172,7 @@ class Routines:
                                     title=key.split(".", 1)[1]) for key, routine in owner.items())
 
     def routines(self) -> tuple:
-        return (GapFromReversals(), DynamicsRegression(), PidTune(SERVO, servo=board_servo, can_id=CAN_ID))
+        return (GapFromReversals(), DynamicsRegression(), PidTune(SERVO, servo=board_servo, can_id=CAN_ID, loop=board_loop))
 
 
 def schedule() -> Routines:

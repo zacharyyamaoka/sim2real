@@ -106,13 +106,18 @@ class PidTune:
     """``pid.pidtuna`` on one servo instance (its keys are "<instance>.<name>"). ``servo``: the board as it runs today, a pidtuna Servo
     whose gains are the as-found controller (or a zero-argument callable that builds one when the routine runs, so planning never
     imports pidtuna). ``goal``: a pidtuna Objective (None: pidtuna's defaults, one repeat). ``can_id``: the board's id, checked against
-    the servo's. It plays no run on the robot and needs no hands (the SIM tier); its pools are the twin's workers, closed when it is
-    done."""
+    the servo's. ``loop``: the board's loop as the twin states it, a pidtuna analytic.LoopModel (or a callable ``loop(values, twin)``
+    that builds one, or None when a piece is unstated), handed to PID tuna as Servo.loop. It plays no run on the robot and needs no hands
+    (the SIM tier); its pools are the twin's workers, closed when it is done."""
     instance: str = "can11"
     _: dataclasses.KW_ONLY
     servo: Any = None
     goal: Any = None
     can_id: int | None = None
+    # WHY the stated loop (pidtuna CONTRACT amendment 3; pidtuna 6c6c4a9): with no relative gain range the climb is held by the analytic
+    # bounds on the identified model and the stated loop, and pidtuna holds its climb at that ceiling only where Servo.loop is stated;
+    # without one the CAN 11 sim tune climbed to its first ringing rung with no cited ceiling
+    loop: Any = None
 
     id: ClassVar[str] = ROUTINE
     kind: ClassVar[str] = "tune"
@@ -164,9 +169,14 @@ class PidTune:
         return dataclasses.replace(servo, gains=gains, priors=model,
                                    can_id=servo.can_id if servo.can_id is not None else self.can_id)
 
+    def _stated_loop(self, values: Mapping[str, float], twin: Any):
+        """The board's stated loop (a pidtuna LoopModel), or None: ``loop`` as given, built now when it is a callable."""
+        return self.loop(values, twin) if callable(self.loop) else self.loop
+
     def fit(self, measured: Mapping[str, Any], values: Mapping[str, float], twin: Any) -> Tuned:
-        """Tune kp and kd on a ServoSim of the twin the earlier steps fitted (``values``), under its feed-forward held fixed. Reads only
-        ``twin.workers`` (the cap on every pool) from the handle; ``measured`` is empty (it plays no run)."""
+        """Tune kp and kd on a ServoSim of the twin the earlier steps fitted (``values``), under its feed-forward held fixed. Reads
+        ``twin.workers`` (the cap on every pool) from the handle, and hands it to ``loop`` when that is a callable; ``measured`` is empty
+        (it plays no run)."""
         types = _pidtuna_module("pidtuna.types")
         servo_sim = _pidtuna_module("pidtuna.plants.servo_sim")
         analytic = _pidtuna_module("pidtuna.analytic")
@@ -174,6 +184,9 @@ class PidTune:
         model = _plant_model(types, values, self.instance)
         as_run = self._as_run()
         servo = self._board(types, model, as_run)
+        stated = self._stated_loop(values, twin)
+        if stated is not None:
+            servo = dataclasses.replace(servo, loop=stated)
         static = float(values[f"{self.instance}.frictionloss_nm"])
         speed = values.get(f"{self.instance}.friction_stribeck_speed_rad_s")
         delay = values.get(f"{self.instance}.command_delay_s")
@@ -189,8 +202,10 @@ class PidTune:
         objective = self.goal if self.goal is not None else types.Objective(repeats=1)
         feedforward = model.feedforward()   # the fitted model's: held fixed, so before and after differ only in kp and kd
         cap = min(servo.envelope.max_torque_nm, servo.torque_limit_nm)
-        loop = analytic.LoopModel(torque_bandwidth_hz=TORQUE_BANDWIDTH_HZ, torque_cap_nm=cap,
-                                  **({} if delay is None else {"delay_s": float(delay)}))
+        # WHY the stated loop for the analytic seed too: the seed and the climb's ceiling read one loop; without a stated one the seed keeps
+        # the board's current loop and the fitted delay over pidtuna's LoopModel defaults, as before
+        loop = (dataclasses.replace(stated, torque_cap_nm=cap) if stated is not None else
+                analytic.LoopModel(torque_bandwidth_hz=TORQUE_BANDWIDTH_HZ, torque_cap_nm=cap, **({} if delay is None else {"delay_s": float(delay)})))
         seed, _info = analytic.analytic_controller(model, loop, objective)
         try:
             # WHY looked up at call time on the module: the tuner PID tuna exports now, and the one a test watches
@@ -202,9 +217,12 @@ class PidTune:
         gains = tuning.gains[servo.name]
         verdict = tuning.verdicts.get(servo.name, {})
         wn, zeta = verdict.get("wn_tuned"), verdict.get("zeta_tuned")
+        climb = next((e.data.get("wn_climb_cap") for e in reversed(tuning.log.find(stage="sweep", kind="limit"))), None)
         method = ("pidtuna.tune on the fitted twin (SIM tier) under its feed-forward held fixed"
                   + (f": wn {wn:.3g} rad/s, zeta {zeta:.2f}" if wn is not None and zeta is not None else "")
-                  + (", the as-found kp and kd" if verdict.get("kept_as_found") else ""))
+                  + (", the as-found kp and kd" if verdict.get("kept_as_found") else "")
+                  + (f"; the climb held at the analytic ceiling wn {climb:.3g} rad/s on the board's stated loop" if climb is not None else
+                     "; no stated loop: the climb was held by its live gates only"))
         found = {f"{self.instance}.kp_nm_rad": Estimate(float(gains.kp), None, method),
                  f"{self.instance}.kd_nm_s_rad": Estimate(float(gains.kd), None, method)}
         # WHY the document against the board as it RUNS, not the ilimit-0 copy PID tuna played (Zach, 2026-11-13: PD + feed-forward only):
