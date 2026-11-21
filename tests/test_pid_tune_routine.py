@@ -30,9 +30,11 @@ The ruler (written before the code; whoever turns it green may not edit it):
 5. Grade: performance gained on a moved hidden CAN 11 (truth in no file the routine may read: world.json is refused during the fit),
    handed values at the edge of a passing dynamics fit (x 0 / 1 / 3 of sysid/acceptance.json's tolerance, signed to mislead), scored by
    sim2real.metrics.actuator against the best admissible PD + feed-forward on a grid with the TRUE model's feed-forward:
-   regret = cost / oracle - 1 <= 0.15 passes (bam_pid_tunning K6). Admissible is pidtuna's oracle rule (its CONTRACT amendment 1): inside
-   the board's gain guard AND inside the caller's damping band on the truth; where no grid gains are, the pool is the as-found kp / kd
-   under each feed-forward (what PID tuna keeps), and the tuned gains are held to the same band. The ruler fails the board's own
+   regret = cost / oracle - 1 <= 0.15 passes (bam_pid_tunning K6). Admissible is pidtuna's oracle rule (its CONTRACT amendments 1 and 3):
+   inside the caller's damping band on the truth AND inside every analytic bound on the TRUE loop; the grid is pidtuna's oracle grid
+   since amendment 3 (6c6c4a9): its coarse band around the closed form's bandwidth on the true model and loop, no relative gain range, so
+   the pool tops out at the analytic ceiling on the true loop. Where no grid gains are, the pool is the as-found kp / kd under each
+   feed-forward (what PID tuna keeps), and the tuned gains are held to the same rules. The ruler fails the board's own
    as-found controller (else it cannot grade a gain) and a deliberately bad corner. The ladder is written BEFORE the pass asserts (a
    FAIL is recorded, not lost) and carries the hashes of the wrapper and this file, so a hand-written ladder cannot stand in for the run.
 6. The pendulum's one-click schedule holds it after the regression (or drops it by name where pidtuna cannot be imported); slow:
@@ -575,10 +577,10 @@ def _pidtuna():
         from sim2real import paths  # noqa: PLC0415
 
         sys.path.insert(0, str(paths.PIDTUNA / "src"))
-    from pidtuna import gains, oracle, tapes, types  # noqa: PLC0415
+    from pidtuna import analytic, gains, oracle, tapes, types  # noqa: PLC0415
     from pidtuna.plants import servo_sim  # noqa: PLC0415
 
-    return SimpleNamespace(tapes=tapes, types=types, servo_sim=servo_sim, gains=gains, oracle=oracle)
+    return SimpleNamespace(tapes=tapes, types=types, servo_sim=servo_sim, gains=gains, oracle=oracle, analytic=analytic)
 
 
 def _truth_values() -> dict[str, float]:
@@ -688,20 +690,34 @@ def bench():
     truth, model = _truth(pt, values), _model(pt, values)
     workload = _workload(pt, servo, model)
     t = pt.types
-    factors = np.geomspace(0.25, 2.0, 7)
     feedforwards = (t.Feedforward(), model.feedforward(0.5), model.feedforward(1.0))
-    grid = [t.Controller(t.Gains(kp=servo.gains.kp * a, kd=servo.gains.kd * b), ff, label=f"oracle kp x{a:.3g} kd x{b:.3g} ff {k}")
-            for a in factors for b in factors for k, ff in enumerate(feedforwards)]
-    # WHY the band (PID Tuna's owner, 2026-11-20, on pidtuna 85495d4 "Never deliver outside the damping band"; pidtuna docs/CONTRACT.md
-    # amendment 1: "ideal" means ideal under the objective and rules the caller set, evaluated on the truth): the oracle is the best
-    # controller inside the board's gain guard AND inside the caller's damping band, the damping read on the TRUE plant the way pidtuna's
-    # own oracle reads it (oracle.true_model: true J and b, gravity linearised at the origin as a spring; gains.bandwidth_of). Grading
-    # against grid gains the caller's band forbids graded PID tuna against controllers it is told never to deliver.
     plant = pt.servo_sim.ServoSim(servo, truth, seed=SEED, workers=WORKERS)
     band = _band(pt)
+    # WHY pidtuna's oracle grid (its CONTRACT amendment 3, v2.3; pidtuna 6c6c4a9): no relative gain range holds the oracle. The levels span
+    # oracle.COARSE_BAND (1/6 to 3x) around the closed form's bandwidth on the TRUE model and loop (oracle.closed_form_ideal), COARSE_STEP
+    # apart, at oracle.COARSE_ZETAS, each a gains.guarded point; a candidate that breaks an analytic bound on the TRUE loop (_obeys_bounds)
+    # is never played, so the pool tops out at the analytic ceiling there. WHY the levels are not clipped to that ceiling: pidtuna tried it,
+    # and the levels thinned until the lever's narrow admissible window fell between three of them (6c6c4a9)
+    true_model = pt.oracle.true_model(plant)
+    closed, _info = pt.oracle.closed_form_ideal(plant, servo, _objective(pt))
+    floor, ceiling = pt.gains.wn_floor(true_model, servo), pt.gains.wn_ceiling(true_model, servo)
+    center = min(max(pt.gains.bandwidth_of(closed, true_model)[0], floor), ceiling)
+    low, high = max(floor, center * pt.oracle.COARSE_BAND[0]), min(ceiling, center * pt.oracle.COARSE_BAND[1])
+    count = max(1, int(math.floor(math.log(high / low) / math.log(pt.oracle.COARSE_STEP))) + 1) if high > low else 1
+    levels = list(np.geomspace(low, high, count)) if count > 1 else [center]
+    points = list(dict.fromkeys(pt.gains.guarded(true_model, servo, wn=wn, zeta=zeta)[0] for wn in levels for zeta in pt.oracle.COARSE_ZETAS))
+    kept_points = [g for g in points if _obeys_bounds(pt, plant, servo, g)]
+    grid = [t.Controller(g, ff, label=f"oracle kp {g.kp:.4g} kd {g.kd:.4g} ff {k}") for g in kept_points for k, ff in enumerate(feedforwards)]
+    print(f"{ROUTINE} oracle grid: {len(points)} points (wn {low:.3g}-{high:.3g} rad/s about the closed form's {center:.3g}, zetas "
+          f"{pt.oracle.COARSE_ZETAS}); {len(kept_points)} inside every analytic bound on the true loop", flush=True)
+    # WHY the band (PID Tuna's owner, 2026-11-20, on pidtuna 85495d4 "Never deliver outside the damping band"; pidtuna docs/CONTRACT.md
+    # amendment 1: "ideal" means ideal under the objective and rules the caller set, evaluated on the truth): the oracle is the best
+    # controller inside every analytic bound on the true loop AND inside the caller's damping band, the damping read on the TRUE plant the
+    # way pidtuna's own oracle reads it (oracle.true_model: true J and b, gravity linearised at the origin as a spring; gains.bandwidth_of).
+    # Grading against grid gains the caller's band forbids graded PID tuna against controllers it is told never to deliver.
     zetas = [pt.gains.bandwidth_of(c.gains, pt.oracle.true_model(plant))[1] for c in grid]
     in_band = [k for k, zeta in enumerate(zetas) if band[0] - 1e-6 <= zeta <= band[1] + 1e-6]  # pidtuna oracle.search_ideal's tolerance
-    # WHY the as-found fallback (the same ruling): where no gains inside the guard reach the band, pidtuna keeps the as-found kp and kd
+    # WHY the as-found fallback (the same ruling): where no gains inside the bounds reach the band, pidtuna keeps the as-found kp and kd
     # (its integrator off, as PidTune hands it the board) and says so; the pool is then those gains under each feed-forward, so the
     # honest grade is how much the tune gains with nothing admissible to improve in kp / kd, not red
     kept = replace(servo.gains, ilimit=0.0)
@@ -714,27 +730,43 @@ def bench():
     print(f"{ROUTINE} oracle pool: {len(in_band)} of {len(grid)} grid controllers inside the band {band} on the truth (grid zeta "
           f"{min(zetas):.3g}-{max(zetas):.3g}); pool = {'those' if in_band else 'the as-found kp / kd under each feed-forward'}",
           flush=True)
-    assert any(s["admissible"] for s in pool_scores), "the ruler admits no PD + feed-forward controller on the guard: the ruler is broken"
+    assert any(s["admissible"] for s in pool_scores), "the ruler admits no PD + feed-forward controller in its pool: the ruler is broken"
     return SimpleNamespace(pt=pt, servo=servo, truth=truth, model=model, workload=workload, found=found, grid=grid, scores=scores,
                            plant=plant, band=band, in_band=in_band, pool=pool, pool_scores=pool_scores)
 
 
-def _band(pt) -> tuple[float, float]:
-    """The caller's damping band: the objective the routine hands PID tuna (PidTune's goal; None = pidtuna's default Objective)."""
+def _objective(pt):
+    """The objective the routine hands PID tuna (PidTune's goal; None = pidtuna's default Objective)."""
     from sim2real.calibration.pid_tune import PidTune  # noqa: PLC0415
 
     goal = PidTune(instance="can11").goal
-    return tuple((goal if goal is not None else pt.types.Objective()).damping_band)
+    return goal if goal is not None else pt.types.Objective()
+
+
+def _band(pt) -> tuple[float, float]:
+    """The caller's damping band: the objective the routine hands PID tuna."""
+    return tuple(_objective(pt).damping_band)
+
+
+def _obeys_bounds(pt, plant, servo, gains) -> bool:
+    """Every analytic bound on the TRUE loop but the damping (the band holds that): pidtuna oracle.search_ideal's broken_rules, at the
+    objective's gain margin and band floor (analytic.limits on oracle.true_model / true_loop)."""
+    objective = _objective(pt)
+    model, loop = pt.oracle.true_model(plant), pt.oracle.true_loop(plant, servo)
+    if loop is None:
+        return True
+    rules = pt.analytic.limits(model, loop, gains, margin=objective.gain_margin, min_damping=objective.damping_band[0])
+    return all(ok for name, ok in rules.items() if name != "damping")
 
 
 def _obeys_band(bench, controller) -> bool:
-    """The tuned gains under the oracle's rule: inside the caller's band on the truth, or the as-found kp and kd (pidtuna's tune exempts
-    only those: keeping them changes nothing)."""
+    """The tuned gains under the oracle's rule: inside the caller's band on the truth and every analytic bound on the true loop, or the
+    as-found kp and kd (pidtuna's tune exempts only those: keeping them changes nothing)."""
     g, board = controller.gains, bench.servo.gains
     if math.isclose(g.kp, board.kp, rel_tol=1e-9) and math.isclose(g.kd, board.kd, rel_tol=1e-9):
         return True
     zeta = bench.pt.gains.bandwidth_of(g, bench.pt.oracle.true_model(bench.plant))[1]
-    return bench.band[0] - 1e-6 <= zeta <= bench.band[1] + 1e-6
+    return bench.band[0] - 1e-6 <= zeta <= bench.band[1] + 1e-6 and _obeys_bounds(bench.pt, bench.plant, bench.servo, g)
 
 
 def _grade(bench, controller) -> dict:
@@ -749,7 +781,7 @@ def _grade(bench, controller) -> dict:
             "regret": float(regret), "gain": float(2.0 / cost), "admissible": admissible, "cost_tuned": float(cost),
             "cost_oracle": float(oracle), "stop_p90_mrad": float(tuned["stop_p90_mrad"]),
             "oracle_pool": f"{len(bench.in_band)} grid controllers inside the band {bench.band}" if bench.in_band else
-                           f"the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band {bench.band})"}
+                           f"the as-found kp / kd under each feed-forward (no grid gains inside the bounds reach the band {bench.band})"}
 
 
 def _pidtuna_head() -> str:
@@ -883,7 +915,7 @@ def test_pendulum_calibrate_plays_pid_tuna_and_keeps_the_fit(pendulum, monkeypat
     settings = fitted.settings_
     assert {f"can11.{s}" for s in GAINS} <= set(settings), settings
     kp, kd = settings["can11.kp_nm_rad"], settings["can11.kd_nm_s_rad"]
-    assert 0.0 < kp < math.inf and 0.0 < kd < math.inf, (kp, kd)  # the guard around the as-found gains is graded in the bench test
+    assert 0.0 < kp < math.inf and 0.0 < kd < math.inf, (kp, kd)  # the analytic bounds on the true loop are graded in the bench test
     assert isinstance(fitted.proposals_.get(ROUTINE), dict), "the board proposal PID tuna made is kept for review"
     row = next(r for r in fitted.record_.to_dict()["routines"] if r["routine"] == ROUTINE)
     assert row["identifies"] == [] and {k: row["found"][k] for k in settings} == pytest.approx(settings)
