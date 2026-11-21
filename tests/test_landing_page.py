@@ -683,7 +683,11 @@ def test_the_export_is_well_formed_and_public_safe(data):
     assert gate["key"] == ["TOOL_GATE_MM"] and data["sources"][gate["source"]]["path"] == "src/sim2real/result.py"
     text = LANDING_JSON.read_text(encoding="utf-8")
     assert "NaN" not in text and "Infinity" not in text
-    assert not SERIAL.search(text), SERIAL.search(text).group(0)
+    # WHY digests are blanked first (ruler fix 2026-11-20, owner): a sha256 or a commit is hex and often holds ten decimal digits in a
+    # row, so the device-serial guard flagged the digests this ruler itself requires (6 hits, cloud d04003079). A serial could only
+    # reach the export through prose, labels or keys, which stay checked; export_landing.py blanks the same four fields.
+    bare = re.sub(r'"(sha256|from_sha256|commit|sim2real_commit)": "[0-9a-f]{40,64}"', r'"\1": ""', text)
+    assert not SERIAL.search(bare), SERIAL.search(bare).group(0)
     assert not ABSOLUTE.search(text), "landing.json is public: logical names only (lab:, amb:, snap:), never an absolute path"
     for template in templates(data):  # WHY (review C R1, R2): a template's prose carries no number; numbers are {value-id}s
         assert not loose_numbers(prose_of_template(template)), template
