@@ -261,7 +261,7 @@ GAPS = [
                ("d12541672", "slow", "W&amp;B offline: the live-copy test wrote a real wandb run."),
                ("d11484463", "slow", "At <code>d607380</code>. After it, <code>9b38cc2</code> is whitespace only and <code>5d7ec2a</code> touches "
                 "only callbacks.py, calibrate_wandb.py and the docs.")]),
-    dict(key="C", lane="L10", title="PID tuna as a tune routine", landed=False,
+    dict(key="C", lane="L10", title="PID tuna as a tune routine", landed=True,
          changed=[
              "<code>pid.pidtuna</code> becomes a <b>tune</b> step. It configures the servo's kp/kd, needs the fitted inertia and friction, and "
              "uses no robot time. Its outputs are settings (<code>fitted.settings_</code>, <code>proposals_</code>), never fitted values.",
@@ -269,10 +269,28 @@ GAPS = [
              "runs it as the third step.",
              "Review fixes on the branch: the proposal is written against the board as it runs, so applying it sets <code>ilimit: 0</code> (PD, not "
              "PID). A rig twin's <code>values_</code> now shows a known key at its known number.",
-             "<b>Not landed.</b> No test has run at the branch head <code>8a97966</code>."],
-         ruler="tests/test_pid_tune_routine.py, plus the ruler fix 274d0cf (on the branch)",
-         commits=["7dd327d", "7b50a2c", "6c7b087", "a2335a3", "274d0cf", "dd67909", "e33ce71", "3dfb869", "8a97966"],
-         runs=[("d14061318", "fast", "At <code>fd7f849</code>, before the review fixes. The 2 ruler failures are the missing ladder and the plan "
+             "<b>Landed Nov 21</b> at sim2real <code>02d1034</code>, pushed. <code>on=\"real\"</code> takes "
+             "<code>CalibrationConfig(exclude=(\"pid.pidtuna\",))</code> and refuses any other config; a tune that fails after the rack played "
+             "is a stopped step and the paid-for fits are kept (<code>5355ff6</code>, pinned by <code>tests/test_pid_tune_real_path.py</code>).",
+             "<b>The grade, after pidtuna's damping-band rule</b> (pidtuna <code>85495d4</code>, never deliver outside the caller's band): PID "
+             "Tuna's owner ruled the band stays, so the ruler's owner graded against pidtuna's own pool, inside the 0.25–2× gain guard and the "
+             "band (<code>8f9fad2</code>). On CAN 11 no gains in the guard reach ζ 0.65 (best 0.58; 0.65 needs kd ×4.27 as found, and no measured "
+             "run went past ×2), so pidtuna keeps the as-found kp/kd and the gain is the feed-forward's: 0x regret 0.000, gain 4.19×; 1x regret "
+             "0.039, 4.03×; 3x regret 0.33, recorded, not gated (<code>c9deaf0</code>, from d06353334)."],
+         ruler="tests/test_pid_tune_routine.py, with the owner's fixes 274d0cf (pidtuna v2) and 8f9fad2 (pidtuna's band and guard)",
+         commits=["e605418", "6da4969", "367af92", "f879b7d", "8538233", "a012452", "a83f1ad", "6d41810", "4cebd28", "5355ff6", "d909124",
+                  "c7e912e", "8f9fad2", "c9deaf0", "df14143", "08077b0", "02d1034"],
+         runs=[("d06502487", "fast", "At the landed head <code>02d1034</code>, rack venv, 4 VMs. Every red is identical to main <code>090c638</code> "
+                "run the same way (d06505253): <code>test_preflight</code> 5 and <code>test_preflight_nominal</code> 5 (the cut lacks robotparts' "
+                "datasheets and robot_trajectories), <code>type_cards/tests</code> 13. L10's files: <code>test_pid_tune_routine</code> 13 · 0 · 3, "
+                "<code>test_pid_tune_real_path</code> 8 · 0 · 0, <code>test_real_backend</code> 18 · 0 · 2."),
+               ("d06515241", "fast", "At <code>02d1034</code>, sim2real's own venv. Reds identical to main's (d06521840)."),
+               ("d07255742", "fast", "<code>sysid/tests/test_noise_ladder.py</code> at <code>02d1034</code> in both venvs (with d07262288): 19 · 5 · 3 "
+                "and 17 · 7 · 3, the same five and seven failures as main."),
+               ("d06501647", "slow", "At <code>02d1034</code>: the three-lines end-to-end and the pendulum schedule's calibrate pass; "
+                "<code>test_pid_tune_routine</code> 16 · 0 · 0, reproducing the committed ladder; the real-fit preflight fails as it does on main "
+                "(torque_margin: the cut has no robotparts datasheet)."),
+               ("d14061318", "fast", "At <code>fd7f849</code>, before the review fixes. The 2 ruler failures are the missing ladder and the plan "
                 "recovery that reads it. <code>test_calibration_backend</code> (4) and <code>test_plan_totals_shared_runs</code> (1) need MuJoCo, "
                 "which this venv lacks; both pass in the rack venv below. <code>type_cards/tests</code>: 10 of the 11 fail on the base too (files "
                 "the cut doesn't carry). The extra one was the 0 s wall time against \"every routine's wall time &gt; 0\", which "
@@ -284,8 +302,8 @@ GAPS = [
                 "files pass with the tune step in."),
                ("d14162546", "slow, grade probe", "Throwaway branch <code>d2daa45</code>: the ruler's two pidtuna-v1 lines respelled for v2. "
                 "Never lands. Its ladder is in the table below.")],
-         slow_note="At <code>8a97966</code> nothing has run. d19420510 (on jidoka) never started a worker, and the retry was refused before it "
-                   "got an id: every other account is at its weekly limit."),
+         slow_note="Before the band ruling, the grade failed on pidtuna main 6882390 (d04582098: regret 0.94 at 0x) while it passed on "
+                   "33bfce3. The 2026-11-19 stall (no account could start a worker) ended when bam's quota reset."),
 ]
 
 
@@ -541,28 +559,27 @@ def main() -> None:
     gaps_html = "".join(gap_section(g) for g in GAPS)
     lv = LADDER["levels"]
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Calibrate gaps: 9 of 10 landed</title><style>{CSS}</style></head><body><main>
-<h1>Calibrate gaps: nine of ten landed, PID tuna waits on one cloud worker</h1>
+<title>Calibrate gaps: all 10 landed</title><style>{CSS}</style></head><body><main>
+<h1>Calibrate gaps: all ten landed</h1>
 <p class="lede">sim2real · lanes L1–L10 · 2026-11-18 → 19 · every test ran on Claude Code cloud VMs, none on the workstation (the arm is powered)</p>
 
-<div class="verdict"><b>9 of 10 lanes are landed and pushed: sim2real <code>origin/main</code> @ <code>713da7a</code>.</b>
-L10 (PID tuna as a tune routine) is built and review-fixed on <code>claude/l10-c</code> @ <code>8a97966</code>, but not landed: no cloud worker
-could start to test it. Four accounts are at their weekly limit, and jidoka's cloud workers stop at the CLI's first-run theme picker.
+<div class="verdict"><b>Update, Nov 21: all 10 lanes are landed and pushed.</b> L10 (PID tuna as the tune step) landed at sim2real
+<code>02d1034</code>, after pidtuna's damping-band rule was settled with PID Tuna's owner: on CAN 11 the tune keeps the board's kp/kd and its
+gain is the feed-forward's (4.19× at 0x). Every cloud red at that head is identical to main's. The first 9 landed Nov 19 at
+<code>713da7a</code>.
 The cloud harness the lanes ran on is on bam_ws <code>origin/main</code> (<code>0bea21956</code>, <code>be55ede05</code>, plus the tracker
 records <code>ff21b7032</code>).</div>
 
-<div class="needs"><b>Needs you, about 10 s:</b> run this once in a terminal and pick a theme. jidoka's cloud workers then start, and L10's
-grade can run. If you'd rather not, it waits for bam's quota reset, Nov 20 9pm PT.
-<pre class="cmd">CLAUDE_CONFIG_DIR=~/.claude-jidoka claude</pre>
-<span class="muted small">Recommended: do it. It's the only thing L10 is waiting on. Dispatch row of the grade that never started: {stalled}.</span></div>
+<p class="small muted">Nov 19 stall, for the record: the grade's first dispatch never started a worker ({stalled}). It ran on bam
+after its reset; jidoka was never needed.</p>
 
 <h2>The ten gaps</h2>
 {board()}
 
 <h2>The one-click seam, as it is now</h2>
 {SEAM_WIDE}{SEAM_NARROW}
-<p class="small muted">Blue outline: changed by this run and on <code>origin/main</code>. Dashed amber: the tune step, on <code>claude/l10-c</code>
-only. On main today the CAN 11 schedule has two steps; with L10 it gets PID tuna as the third.</p>
+<p class="small muted">Blue outline: changed by this run and on <code>origin/main</code>. Dashed amber: the tune step, drawn as it stood Nov 19
+(on <code>claude/l10-c</code>); since Nov 21 it is on main, and the CAN 11 schedule runs PID tuna as its third step.</p>
 
 <h2>Each gap: what changed, its ruler, its commits, its cloud runs</h2>
 <p class="small muted">Every lane worked the same way. Its ruler was committed alone and red first. A builder in its own worktree never
@@ -719,17 +736,9 @@ projection on one pinned core (<code>8a97966</code>).</li>
 
 <h2>Left</h2>
 <ul class="left">
-<li><b>L10 (blocked, next):</b> once jidoka is onboarded or bam resets, dispatch from bam_ws <code>.claude/worktrees/sim2real-cloud-tests</code>
-at sim2real <code>8a97966</code>: (a) the grade with <code>SIM2REAL_SLOW=1 SIM2REAL_WRITE_LADDERS=1 -k grade</code>, which writes
-<code>sysid/results/routine_ladders/pid.pidtuna.json</code>. Commit it byte for byte, set the catalog time to the grade's call time / 3, and
-regenerate the projection. (b) At that commit: the grade without WRITE, the whole fast tier in both venvs, and the slow pid_tune, pendulum,
-from_robot_description and preflight tests. Then land. Also: pidtuna's <code>ServoSim.close()</code> is on the local branch
-<code>claude/l10-servosim-close</code> (<code>30d01e9</code>); <code>a2335a3</code> closes the pool without it.</li>
-<li><b>L10, the reviewer's real-path issues, before it runs on the rack:</b> (1) on <code>on="real"</code> the tune can't be excluded,
-because <code>config=</code> is refused there, and the docs promise <code>exclude=</code>. (2) <code>PidTune.fit</code> runs after the rack has
-played and been ingested, with no guard. A failure there (pidtuna API drift, a missing deployment.json, a bad fitted armature) loses the two
-fits the rack paid for. The reviewer's fix: prove before emit that each tune step can run, and refuse by name, or record a failed tune as a
-stopped step and keep the fits.</li>
+<li><b>L10, landed; what's left around it:</b> a citable kd cap on CAN 11 (PID Tuna's ask: a twin sweep at kd ×2–6 and a prepared,
+unrun bench step at ×4.5, in progress), without which the band stays out of reach there. The catalog's 3 s wall time is still a probe
+session's. The real-fit preflight test can't pass on a VM until bam_ws's rack cut carries robotparts' datasheets and robot_trajectories.</li>
 <li><b>FF-3:</b> hook <code>arm.feedforward_bench</code> to CAN 11, then build the bam_fb_v2 rig on the seam, twin first (see above).</li>
 <li><b>Routine grades from the Nov 17 proposal, not built:</b> model mismatch, honest error bars, identifiability, repeatability, completion,
 safety margin, validity window, and performance gain as a ranked grade. Today a routine is graded on hidden-truth recovery, and FF and PID tuna
@@ -740,14 +749,14 @@ wrist tests can't run on a VM.</li>
 </ul>
 
 <h2>Needs you</h2>
-<p>Only the onboarding command above (about 10 s). Recommendation: run it. The alternative is waiting for bam's reset, Nov 20 9pm PT. I
-didn't do it myself because it changes an account's Claude Code config.</p>
+<p>Nothing. (The Nov 19 onboarding ask is moot: L10 ran on bam after its reset.)</p>
 
 <h2>Deliberately not done</h2>
 <ul class="left">
 <li>No pytest, sim or build ran on the workstation: the arm is powered. Every count above is from a cloud VM.</li>
 <li>pidtuna and robot_trajectories were not pushed. Their first push would make each one public. The cloud carries both inside the cut.</li>
-<li>L10 was not landed on its review fixes alone. Its head is untested, and its ruler is red without the ladder.</li>
+<li>The preflight fixture fix in <code>tests/test_preflight.py</code> (<code>df14143</code>) was made by the routines dispatcher for its
+owner, the One-click session, which was not running. No assertion changed. <span class="undo">Undo: <code>git revert df14143</code>.</span></li>
 </ul>
 
 <h2>Sources</h2>
