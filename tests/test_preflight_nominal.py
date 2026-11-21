@@ -19,8 +19,8 @@ RigRunner has neither, so they came back None. Here they must be ANSWERED:
 
 Amended 2026-11-21 for pidtuna contract amendment 3 (v2.3: no relative gain range by default; the shipped gains are held by pidtuna's
 analytic bounds on the twin's model and stated loop, tests/test_preflight_analytic_bounds.py): gains_within_board_limits is answered, or
-None naming the pieces of a bound the twin does not state (CAN 11 states no encoder count and no structural mode; the wrist no structural
-mode), never None for want of the tracer's runner and never a pass on nothing. A 5x kp is red for a bound it breaks (the damping floor, the
+None naming the pieces of a bound the twin does not state (the nominal CAN 11 states no encoder count), never None for want of the
+tracer's runner and never a pass on nothing; an unstated structural mode is not applied (pidtuna §2 bounds a known mode), so the wrist passes. A 5x kp is red for a bound it breaks (the damping floor, the
 linear range); a tune inside every bound is not red.
 
 The oracles are this file's own: the nominal loop's kp from the description's inertia and LOOP_HZ, the caps from the robotparts files.
@@ -153,7 +153,8 @@ def unstated_bounds_only(gains) -> bool:
     """Amendment 3: a None gains check is None only for bounds whose pieces the twin does not state (each naming them), none broken."""
     per_servo = [gains.limit["bounds"]] if "bounds" in (gains.limit or {}) else [v["bounds"] for v in (gains.limit or {}).values()]
     return (gains.passed is None and bool(per_servo) and "could not be checked" in gains.why
-            and all(b["passed"] is not False and (b["passed"] is True or b["missing"]) for bounds in per_servo for b in bounds.values()))
+            and all(b["passed"] is not False and (b["passed"] in (True, "not applied") or b["missing"]) for bounds in per_servo
+                    for b in bounds.values()))
 
 
 def test_can11_nominal_answers_every_blocking_check(can11_report):

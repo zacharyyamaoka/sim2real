@@ -10,7 +10,10 @@ for every twin (the UR wrist bundle's nominal twin, which passed 4 of 4 blocking
    does not raise.
 2. gains_within_board_limits is never a pass with no limit behind it: True only when every analytic bound is computed (gain margin,
    damping floor, velocity noise, encoder count, structural mode, linear range), each with its value, its limit and its source.
-3. A piece the twin does not state makes its bound None and the check None, naming the piece; never True.
+3. A piece the twin does not state makes its bound None and the check None, naming the piece; never True. Except the structural mode,
+   which pidtuna's contract §2 bounds only when it is known (analytic.limits: an unstated mode is no bound): unstated, that bound reads
+   "not applied: no structural mode stated (pidtuna §2 applies it to a known mode)", visible in the limit, neither None nor a pass on its
+   own (coordinator, 2026-11-21: preflight must not be stricter than the deploy it gates).
 4. A bound broken turns the check False with its numbers: a kp past the gain margin (damping held at 1).
 5. A twin that states every piece passes, every bound computed and inside.
 6. A relative range is kept only where it is stated, and a stated range must cite its source; pidtuna's Envelope states none now.
@@ -71,14 +74,20 @@ def bounds_of(gains, servo=None):
     return limit["bounds"]
 
 
+NOT_APPLIED = "not applied: no structural mode stated (pidtuna §2 applies it to a known mode)"
+
+
 def never_a_bare_pass(gains):
-    """Rule 2: True only with every bound computed, inside its limit, with a source."""
+    """Rule 2: True only with every bound computed, inside its limit, with a source (an unstated structural mode: not applied, rule 3)."""
     assert gains.limit is not None or gains.passed is not True, gains
     if gains.passed is True:
         per_servo = [gains.limit["bounds"]] if "bounds" in gains.limit else [v["bounds"] for v in gains.limit.values()]
         for bounds in per_servo:
             assert set(bounds) == set(BOUNDS), bounds
             for name, b in bounds.items():
+                if name == "structural mode" and b["passed"] == "not applied":
+                    assert b["why"].startswith(NOT_APPLIED), b
+                    continue
                 assert b["passed"] is True and b["value"] is not None and b["limit"] is not None and b["from"], (name, b)
 
 
@@ -136,14 +145,16 @@ def test_a_nominal_twin_preflights_without_raising_and_names_what_it_lacks(can11
     never_a_bare_pass(gains)
     bounds = bounds_of(gains, "can11")
     assert set(bounds) == set(BOUNDS), bounds
-    # the nominal CAN 11 states no structural mode and no encoder count (its encoder names no part, the motor's datasheet gives lines, not
-    # the count the board reads): those bounds and the check are None, the check naming both
-    for name in ("structural mode", "encoder count"):
-        assert bounds[name]["passed"] is None and bounds[name]["missing"], (name, bounds[name])
+    # the nominal CAN 11 names no unit, so no board config, and its encoder names no part (the motor's datasheet gives lines, not the count
+    # the board reads): the encoder count and the check are None, naming it. It states no structural mode: not applied (rule 3)
+    assert bounds["encoder count"]["passed"] is None and bounds["encoder count"]["missing"], bounds["encoder count"]
+    structural = bounds["structural mode"]
+    assert structural["passed"] == "not applied" and structural["why"].startswith(NOT_APPLIED), structural
     assert gains.passed is None, gains
-    assert "could not be checked" in gains.why and "structural mode" in gains.why and "encoder count" in gains.why, gains.why
+    assert "could not be checked" in gains.why and "encoder count" in gains.why, gains.why
+    assert "structural mode could not be checked" not in gains.why, gains.why
     for name, b in bounds.items():
-        if b["passed"] is not None:
+        if b["passed"] in (True, False):
             assert b["value"] is not None and b["limit"] is not None and b["from"], (name, b)
 
 
@@ -165,6 +176,11 @@ def test_the_ur_wrist_bundle_preflights(nominal):
     never_a_bare_pass(gains)
     for servo in ("revolute_11", "revolute_14", "revolute_17"):
         assert set(bounds_of(gains, servo)) == set(BOUNDS)
+        assert bounds_of(gains, servo)["structural mode"]["passed"] == "not applied", bounds_of(gains, servo)["structural mode"]
+    # every piece but the structural mode is stated (the GIM4305-10's datasheet encoder bits and dead band, the world's loop and noise):
+    # 4 of 4 blocking checks, as on Nov 21 before pidtuna amendment 3
+    assert gains.passed is True, gains.why
+    assert report.passed is True, report.summary()
 
 
 def test_the_tracer_preflights_without_raising(tracer, tracer_fitted):
