@@ -3,42 +3,42 @@
  "levels": {
   "0x": {
    "admissible": true,
-   "cost_oracle": 0.47752946310023736,
-   "cost_tuned": 0.47752946310023736,
-   "gain": 4.188223250175002,
-   "oracle_pool": "the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band (0.65, 1.0))",
+   "cost_oracle": 0.1262713080388852,
+   "cost_tuned": 0.1262713080388852,
+   "gain": 15.838910921744002,
+   "oracle_pool": "30 grid controllers inside the band (0.65, 1.0)",
    "pass": true,
    "regret": 0.0,
-   "stop_p90_mrad": 6.588023687028278,
+   "stop_p90_mrad": 1.4864687766281695,
    "worst_error_over_tolerance": 0.0
   },
   "1x": {
    "admissible": true,
-   "cost_oracle": 0.47752946310023736,
-   "cost_tuned": 0.495998163847036,
-   "gain": 4.0322729916733975,
-   "oracle_pool": "the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band (0.65, 1.0))",
+   "cost_oracle": 0.12893187392795785,
+   "cost_tuned": 0.13478122882016283,
+   "gain": 14.838861594507192,
+   "oracle_pool": "30 grid controllers inside the band (0.65, 1.0)",
    "pass": true,
-   "regret": 0.03867552093413318,
-   "stop_p90_mrad": 6.988563254242625,
-   "worst_error_over_tolerance": 0.25783680622755456
+   "regret": 0.04536779551868908,
+   "stop_p90_mrad": 1.687597322333015,
+   "worst_error_over_tolerance": 0.3024519701245939
   },
   "3x": {
    "admissible": true,
-   "cost_oracle": 0.47752946310023736,
-   "cost_tuned": 0.6341810897779309,
-   "gain": 3.1536733469935747,
-   "oracle_pool": "the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band (0.65, 1.0))",
+   "cost_oracle": 0.12893187392795785,
+   "cost_tuned": 0.16883621602469184,
+   "gain": 11.845799716972484,
+   "oracle_pool": "30 grid controllers inside the band (0.65, 1.0)",
    "pass": false,
-   "regret": 0.3280459925146253,
-   "stop_p90_mrad": 9.33171890773799,
-   "worst_error_over_tolerance": 2.1869732834308353
+   "regret": 0.3094994347094575,
+   "stop_p90_mrad": 2.267341080471369,
+   "worst_error_over_tolerance": 2.0633295647297167
   }
  },
  "provenance": {
-  "pid_tune_sha256": "ee56ec3401bf93a4105be986baa565f0cc500659bb9c7d1823cd76efdf40c52b",
-  "pidtuna_head": "8b00457fecd2e364482bbdcf3dd5bf53be23c6ff",
-  "test_sha256": "8ee3bbf95ff42fa5c57d20acb75dbe78663291b07231cac92b516c3e53bc8065"
+  "pid_tune_sha256": "50d775fd9e702d379f050b0f745a34c46fd849c55ca35686eba26d30743797a6",
+  "pidtuna_head": "5db5ceb7886f82e734fe1595483abaf67c4d3ec8",
+  "test_sha256": "8432e151d6233ecb7cc4f5d68193877effef52d0745f3ea33dc2fdec0156b7c3"
  },
  "routine": "pid.pidtuna",
  "schema": "sim2real.routine_ladder/1",
