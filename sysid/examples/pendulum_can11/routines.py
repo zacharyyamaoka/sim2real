@@ -131,27 +131,27 @@ def board_servo():
 
 
 DEPLOYMENT = "one-dof-test-rack"
+# WHY 2 ms: the twin of record's command delay (bam_rack_twin.schedule.record_twin(11), "twin of record (followup C)", a replay fit in
+# bam_ws docs/followup_1029.py; the one pipeline.twin plays and preflight reads), held equal to it by tests/test_pid_tune_stated_loop.py so
+# the loop builds where no pipeline is at hand. NOT description.json known.board_knobs' "command_delay_s 0.001": that text is stale
+COMMAND_DELAY_S = 0.002
 
 
-def board_loop(values, twin):
+def board_loop(values, twin=None):
     """CAN 11's board loop as the twin states it, a pidtuna analytic.LoopModel for PID tuna's analytic ceiling (or None when a piece is
     unstated): the board's recorded current loop, PLL band and one encoder count (sim2real/data/board_configs.json, a copy of its moteus
     dump), its driver's datasheet control rate (robotparts, the low end), and the command delay the fit found, else the twin of record's
-    (the description's known.board_knobs). WHY (pidtuna CONTRACT amendment 3): with no relative gain range the climb is held by the
-    analytic bounds on the stated loop, which pidtuna applies only where Servo.loop is stated; sim2real.preflight reads the same pieces."""
+    (COMMAND_DELAY_S). `twin`, the step's handle, is not read: the loop builds with no pipeline in hand. WHY (pidtuna CONTRACT amendment
+    3): with no relative gain range the climb is held by the analytic bounds on the stated loop, which pidtuna applies only where
+    Servo.loop is stated; sim2real.preflight reads the same pieces."""
     from pidtuna import analytic  # noqa: PLC0415  (PidTune.fit has put pidtuna on the path)
 
     from sim2real.calibration import board_loop as bl  # noqa: PLC0415
 
     entry = bl.board(DEPLOYMENT, CAN_ID)
     found = values.get(f"{SERVO}.command_delay_s")
-    if found is not None:
-        delay = (float(found), f"the fitted {SERVO}.command_delay_s")
-    else:
-        record = twin.module.twin({k.split(".", 1)[1]: float(v) for k, v in values.items() if k.startswith(f"{SERVO}.") and v is not None},
-                                  "pid-tune loop")
-        delay = ((float(record.command_delay_s), "the twin of record's command_delay_s") if record.command_delay_s is not None else
-                 (None, "no command delay"))
+    delay = ((float(found), f"the fitted {SERVO}.command_delay_s") if found is not None else
+             (COMMAND_DELAY_S, "the twin of record's command_delay_s (bam_rack_twin.schedule.record_twin(11), a replay fit)"))
     pieces = {"loop_hz": bl.control_rate(None if entry is None else entry.get("driver_part")), "delay_s": delay,
               "torque_bandwidth_hz": bl.current_loop(entry), "velocity_filter_hz": bl.velocity_filter(entry),
               "encoder_quantum_rad": bl.encoder_count(entry)}
