@@ -10,7 +10,7 @@ can ship. Before the values reach a board, the twin is held to four blocking che
 `passed` is True, False or None ("could not be checked", with its reason; never a pass):
 
 1. record_matches_description: every value the fitted twin carries has a unit and a source; every key the schedule says it identifies has
-   a fitted value; the record (record_, sim2real.calibration/1) names this twin, and its units are the description's.
+   a fitted value (a tune step's keys are settings, fitted.settings_, and are left to check 2); the record (record_, sim2real.calibration/1) names this twin, and its units are the description's.
 2. gains_within_board_limits: the kp / kd / ki the twin would ship (a tune step's fitted.settings_ and proposals_ when one ran, else the
    description's priors, else the board as it runs today: the description's joint and its unit's deployment record) inside the board's
    admissible range, and no integrator. WHY PD only (Zach, 2026-11-13): the real arm runs PD + feed-forward, never an integrator; a board
@@ -168,6 +168,15 @@ class _Unit:
 # --- 1. the record against the description ---------------------------------------------------------------------------------------------------
 
 
+def _is_tune(routine_id: str | None) -> bool:
+    """True when the catalog (sim2real.calibration.plan.declaration) declares `routine_id` a tune routine."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from .calibration.plan import declaration  # noqa: PLC0415
+
+    return routine_id is not None and declaration(SimpleNamespace(id=routine_id)).kind == "tune"
+
+
 def _record(fitted, unit: _Unit) -> Check:
     title = "every value has a unit and a source; every identified key is fitted; the record matches the description"
     values = fitted.description.values()
@@ -184,8 +193,11 @@ def _record(fitted, unit: _Unit) -> Check:
         if value is not None and not (getattr(value, "unit", None) and getattr(value, "source", None)):
             problems.append(f"the fit's {key} lacks its unit or source")
     plan, record = getattr(fitted, "plan_", None), getattr(fitted, "record_", None)
-    identified = [k for s in plan.steps for k in s.identifies] if plan is not None else \
-                 [k for r in (record.routines if record is not None else []) for k in r.get("identifies", [])]
+    # WHY a tune step's keys are left out (gap C, lane L10): what a tune (pid.pidtuna) chooses are settings (fitted.settings_), never
+    # fitted values or a record row, so "every identified key is fitted" does not hold for them; gains_within_board_limits checks them
+    identified = [k for s in plan.steps if s.kind != "tune" for k in s.identifies] if plan is not None else \
+                 [k for r in (record.routines if record is not None else []) for k in r.get("identifies", [])
+                  if not (k in r.get("configures", ()) and _is_tune(r.get("routine")))]
     rows = {} if record is None else {row["key"]: row for row in record.parameters}
     for key in dict.fromkeys(identified):
         if values.get(key) is None:
