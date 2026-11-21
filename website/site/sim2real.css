@@ -191,7 +191,7 @@ table.recovery-proof td.cell .v { font-size: 15px; }
 .seam a:hover .seam-box { stroke: var(--accent); }
 .seam-branch, .seam-designed { stroke: var(--amber); stroke-dasharray: 6 4; fill: var(--amber-bg); }
 .seam-title { font: 600 16px var(--sans); fill: var(--fg); }
-.seam-code { font: 400 12px var(--mono); fill: var(--fg2); }
+.seam-code { font: 400 11.5px var(--mono); fill: var(--fg2); }
 .seam-badge-bg { fill: var(--bg); stroke: var(--amber); stroke-width: 1; }
 .seam-badge { font: 600 10px var(--sans); fill: var(--amber); }
 .seam-arrow { fill: none; stroke: var(--faint); stroke-width: 1.5; }
