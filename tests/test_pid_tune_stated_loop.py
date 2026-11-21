@@ -9,7 +9,8 @@ ruler:
 
 1. The pendulum's PidTune states CAN 11's loop: the driver's datasheet control rate (robotparts mjbots-moteus-r4-11, its low end), the
    board's recorded current loop, velocity filter and one encoder count (sim2real/data/board_configs.json, a copy of its moteus dump),
-   and the twin of record's command delay; this file reads each from those files itself.
+   and the twin of record's command delay; this file reads each from those files itself. The loop is built with no pipeline in hand
+   (a handle with workers only, as the slow grade and a VM without bam_rack_twin hold it).
 2. On CAN 11's sim (the committed fit's values), PID tuna gets that loop, its climb has a finite analytic ceiling, and every rung the
    climb plays is at or under it.
 3. The control: with no stated loop the climb has no analytic ceiling (the loop is what holds it).
@@ -95,7 +96,7 @@ def test_the_pendulums_tune_states_can11s_loop(tune_step, values, pendulum):
 
     analytic = _pidtuna_module("pidtuna.analytic")
     assert tune_step.loop is not None, "the pendulum's PidTune states no loop"
-    loop = tune_step.loop(values, SimpleNamespace(workers=1, module=pendulum.runner.pipeline())) if callable(tune_step.loop) else tune_step.loop
+    loop = tune_step.loop(values, SimpleNamespace(workers=1)) if callable(tune_step.loop) else tune_step.loop
     assert isinstance(loop, analytic.LoopModel), loop
     for name, expected in _expected_loop().items():
         assert getattr(loop, name) == pytest.approx(expected, rel=1e-12), (name, getattr(loop, name), expected)

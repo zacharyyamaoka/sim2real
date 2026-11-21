@@ -812,6 +812,7 @@ def test_grade_pid_tuna_on_a_hidden_can11_against_the_oracle(bench, monkeypatch)
     from sysid import world as hidden  # noqa: PLC0415
 
     from sim2real.calibration.pid_tune import PidTune  # noqa: PLC0415
+    from sysid.examples.pendulum_can11.routines import board_loop  # noqa: PLC0415
 
     # WHY by module name (ruler owner, 2026-11-19): pidtuna v2's package exports the tune FUNCTION as pidtuna.tune, so the attribute
     # path gets the function, not the module whose tune() the watch below replaces (the bench fixture put pidtuna on the path)
@@ -854,7 +855,10 @@ def test_grade_pid_tuna_on_a_hidden_can11_against_the_oracle(bench, monkeypatch)
         with hidden.sealed(), monkeypatch.context() as guard:  # sealed, and world.json refused, while the routine runs
             guard.setattr(builtins, "open", guarded_open)
             guard.setattr(Path, "read_text", guarded_read)
-            found = PidTune(instance="can11", servo=bench.servo).fit({}, dict(handed), SimpleNamespace(workers=WORKERS))
+            # WHY the pendulum's stated loop (2026-11-21, pidtuna amendment 3): the routine runs with it (routines.board_loop), and without
+            # it the climb has no analytic ceiling: at 0x it delivered kp 107.6 (wn 27.3), past the true loop's linear range (281.8 against
+            # 277.4 N.m/rad), which the oracle's pool may not use either
+            found = PidTune(instance="can11", servo=bench.servo, loop=board_loop).fit({}, dict(handed), SimpleNamespace(workers=WORKERS))
         assert len(delivered) == ran + 1, "the backend is PID tuna: pidtuna.tune.tune ran once per fit"
         # WHY rebuilt here (ruler owner, 2026-11-19): pidtuna v2 returns Tuning (gains per joint), not v1's TuneResult.tuned; the graded
         # controller is the gains PID tuna delivered plus the feed-forward it was handed, both read off the backend call itself
