@@ -12,9 +12,16 @@ can ship. Before the values reach a board, the twin is held to four blocking che
 1. record_matches_description: every value the fitted twin carries has a unit and a source; every key the schedule says it identifies has
    a fitted value (a tune step's keys are settings, fitted.settings_, and are left to check 2); the record (record_, sim2real.calibration/1) names this twin, and its units are the description's.
 2. gains_within_board_limits: the kp / kd / ki the twin would ship (a tune step's fitted.settings_ and proposals_ when one ran, else the
-   description's priors, else the board as it runs today: the description's joint and its unit's deployment record) inside the board's
-   admissible range, and no integrator. WHY PD only (Zach, 2026-11-13): the real arm runs PD + feed-forward, never an integrator; a board
-   that keeps its ki with ilimit 0 integrates nothing (moteus holds the integral to +-ilimit; bam_ws 9de804493), so ki 0 or ilimit 0 passes.
+   description's priors, else the board as it runs today: the description's joint and its unit's deployment record) pass pidtuna's analytic
+   bounds (pidtuna.analytic.limits, CONTRACT amendment 3) on the twin's model and stated loop, at pidtuna's own Objective() (its gain margin
+   and its damping band's floor): the gain margin with the loop's delay, current loop, velocity filter and rate; the damping floor; the
+   velocity-noise budget (kd x noise inside the tuner's chatter share of the cap); one encoder count against the cap; a third of the
+   structural mode; the linear range. Each bound's value, limit and the source of every piece it read are in the check's limit. A bound
+   whose piece the twin does not state is None, naming the piece, and the check is None ("could not be checked"), never True; any bound
+   broken is False with its numbers. A relative range only where one is stated (preflight(gain_range=...), with its source; pidtuna's
+   Envelope states none since amendment 3). And no integrator. WHY PD only (Zach, 2026-11-13): the real arm runs PD + feed-forward, never
+   an integrator; a board that keeps its ki with ilimit 0 integrates nothing (moteus holds the integral to +-ilimit; bam_ws 9de804493), so
+   ki 0 or ilimit 0 passes.
 3. torque_margin: the peak torque over the planned envelope (the soak, and the fit's recorded runs when it holds them) under the torque
    cap. WHY this cap (the house rule): the motor's datasheet peak x the gear ratio x 0.97, read from the twin's robotparts parts; a
    gearbox whose own peak is lower binds instead.
@@ -27,8 +34,9 @@ can ship. Before the values reach a board, the twin is held to four blocking che
 
 A nominal-world twin (sim2real.nominal: RobotTwin.from_robot_description of a description no sysid world binds) is checked per servo the
 world drives, through the world itself (NominalRig): the gains it would ship are a tune's settings_ / proposals_, else the world's own board
-loop (the description's stated kp / kd, or its default 5 Hz loop), ki 0 (the world's loop is PD); their limits are the description's
-declared kp / kd interval, else pidtuna's admissible range about that loop (the gains the fit was played under). The soak is a
+loop (the description's stated kp / kd, or its default 5 Hz loop), ki 0 (the world's loop is PD); their bounds read the world's own board
+loop (a PD per 1 kHz tick, the torque held over it, on the raw joint velocity: no delay, current loop or filter unless the description
+states one), its mass matrix and gravity at the fitted values, its noise model, and the servo's datasheet cap, encoder bits and dead band. The soak is a
 burn_in_wiggle per servo (the others held) inside the envelope the fit's tapes spanned, then a hold, on the description's MJCF at the
 FITTED values under those gains and the fitted model's feed-forward, the command clipped at the cap; its stop gate is the strictest
 servo.stop_error.dx any deployment card declares (a nominal twin names no unit). Each servo's cap is its motor's datasheet peak x its
@@ -111,18 +119,23 @@ class Preflight:
         return {"twin": self.twin, "passed": self.passed, "seconds": self.seconds, "checks": [c.to_dict() for c in self.checks]}
 
 
-def preflight(fitted, *, soak_s: float = 6.0, workers: int = 1) -> Preflight:
+def preflight(fitted, *, soak_s: float = 6.0, workers: int = 1, gain_range: Mapping[str, Any] | None = None) -> Preflight:
     """The preflight of a fitted RobotTwin (the module docstring). `soak_s`: at least this many seconds of wiggle (whole sweeps), then a
-    hold. `workers`: the soak's replay pool (1: in this process)."""
+    hold. `workers`: the soak's replay pool (1: in this process). `gain_range`: a relative range the shipped gains must also sit in,
+    {"kp": (low, high), "kd": (low, high), "source": "..."} times the as-found gains; it is a cap on the joint, so its source is required
+    (a datasheet value, a measured limit, or the owner's dated words; pidtuna CONTRACT amendment 3). None: only a range pidtuna's
+    Envelope states by default, which it no longer does."""
     if not getattr(fitted, "fitted", False):
         raise RuntimeError("preflight needs a fitted twin: fitted = twin.calibrate(...), then sim2real.preflight(fitted)")
+    if gain_range is not None:
+        _relative_range(gain_range)   # a stated range without its source is refused before anything plays
     started = time.monotonic()
     rig = _nominal_rig(fitted)
     if rig is not None:
-        return _preflight_nominal(fitted, rig, soak_s=soak_s, started=started)
+        return _preflight_nominal(fitted, rig, soak_s=soak_s, started=started, gain_range=gain_range)
     unit = _Unit.of(fitted)
-    gains, shipped = _gains(fitted, unit)
     cap = _torque_cap(fitted, unit)
+    gains, shipped = _gains(fitted, unit, cap, gain_range)
     soak, soak_peak = _soak(fitted, unit, shipped, cap, soak_s=soak_s, workers=workers)
     checks = (_record(fitted, unit), gains, _torque_margin(fitted, cap, soak_peak), soak, _schedule(fitted))
     return Preflight(fitted.description.id, checks, round(time.monotonic() - started, 2))
@@ -268,55 +281,323 @@ def _shipped(fitted, unit: _Unit) -> dict | None:
     return None
 
 
-def _gain_range() -> tuple[tuple[float, float], tuple[float, float]] | None:
-    """pidtuna's admissible gain range, relative to the board's as-found gains ((kp low, high), (kd low, high)), or None without pidtuna.
-    WHY this range (pidtuna types.Envelope): "a session never strays further than that from gains known to be safe"; it is the guard
-    the tune itself is held to, so a shipped gain outside it is one nothing has shown the board tolerates."""
-    try:
-        if importlib.util.find_spec("pidtuna") is None and str(paths.PIDTUNA / "src") not in sys.path:
-            sys.path.append(str(paths.PIDTUNA / "src"))
-        envelope = importlib.import_module("pidtuna.types").Envelope()
-    except Exception:  # noqa: BLE001
+# WHY the analytic bounds and no relative range (pidtuna docs/CONTRACT.md amendment 3, v2.3, pidtuna 7a46660; Zach, 2026-11-20,
+# zach_brain Settings/Memory/feedback_no_artificial_guards.md: every cap on a robot cites a datasheet, a measured limit or his dated words):
+# pidtuna's old default guard, 0.25-2x the as-found gains, cited nothing, and on a friction-dominated pendulum it held kd under half of
+# what the damping floor needs. The gains are held by pidtuna's analytic bounds on the twin's model and stated loop instead. Each bound
+# needs pieces of the twin, each a (value, source), or (None, why it is missing): a bound with a piece missing is None, never a pass.
+GAIN_TITLE = "the kp / kd it would ship pass pidtuna's analytic bounds on the twin's model and stated loop; PD only (ki 0, or ilimit 0)"
+GAIN_UNIT = "N·m/rad, N·m·s/rad, N·m/(rad·s), N·m"
+BOUND_NEEDS = {
+    "gain margin": ("inertia_kg_m2", "loop_hz", "delay_s", "torque_bandwidth_hz", "velocity_filter_hz"),
+    "damping floor": ("inertia_kg_m2",),
+    "velocity noise": ("velocity_noise_rad_s", "torque_cap_nm"),
+    "encoder count": ("encoder_quantum_rad", "torque_cap_nm"),
+    "structural mode": ("inertia_kg_m2", "structural_hz"),
+    "linear range": ("inertia_kg_m2", "torque_cap_nm", "travel_rad", "gravity_load_nm", "coulomb_nm", "backlash_rad"),
+}
+# a piece the description may state on the servo (<instance>.<name>, a Value with its source): it wins over the rig's own
+STATED = {"delay_s": "command_delay_s", "torque_bandwidth_hz": "current_loop_hz", "loop_hz": "loop_hz", "velocity_filter_hz": "velocity_filter_hz",
+          "velocity_noise_rad_s": "velocity_noise_rad_s", "encoder_quantum_rad": "encoder_quantum_rad", "structural_hz": "structural_hz"}
+ARCMIN_RAD = math.pi / (180.0 * 60.0)
+
+
+def _pidtuna(name: str):
+    """A pidtuna module, imported now: the installed package, else the checkout at sim2real.paths.PIDTUNA (the tune routine's import)."""
+    from .calibration.pid_tune import _pidtuna_module  # noqa: PLC0415
+
+    return _pidtuna_module(name)
+
+
+def _described(fitted, instance: str, name: str) -> tuple[float, str] | None:
+    """(value, source) of a parameter the description states on `instance`, or None."""
+    value = fitted.description.values().get(f"{instance}.{name}")
+    if value is None or not math.isfinite(float(value)):
         return None
-    return tuple(envelope.gain_scale_range), tuple(envelope.kd_range)
+    return float(value), f"the description's {instance}.{name} ({getattr(value, 'source', None) or 'no source'})"
 
 
-def _gains(fitted, unit: _Unit) -> tuple[Check, dict | None]:
-    title = "the kp / kd / ki it would ship are inside the board's range, PD only (ki 0, or ilimit 0)"
-    gain_unit = "N·m/rad, N·m·s/rad, N·m/(rad·s), N·m"
+def _with_stated(fitted, instance: str, pieces: dict) -> dict:
+    """`pieces`, each one the description states on `instance` (STATED) in place of the rig's own."""
+    for piece, name in STATED.items():
+        found = _described(fitted, instance, name)
+        if found is not None:
+            pieces[piece] = found
+    return pieces
+
+
+def _parts_of(fitted, instance: str) -> list[tuple[str, str]]:
+    """(type, robotparts part) of the servo and of each child naming a part, the servo first."""
+    own = [(i.type, i.part) for i in fitted.description.instances if i.id == instance and i.part]
+    return own + [(i.type, i.part) for i in fitted.description.instances if i.parent == instance and i.part]
+
+
+def _backlash(fitted, instance: str) -> tuple[float | None, str]:
+    """The gear's dead band (rad): the larger of what the twin states (its backlash_rad) and its gear's robotparts datasheet backlash
+    (arcmin). WHY the larger: an unidentified prior of 0 must not hide a datasheet's dead band (pidtuna's linear range also takes the
+    larger of its loop's and its model's)."""
+    found = [] if (stated := _described(fitted, instance, "backlash_rad")) is None else [stated]
+    for kind, part in _parts_of(fitted, instance):
+        sheet = _datasheet(part, "backlash") if kind in ("gearbox", "integrated_servo") else None
+        if sheet is not None and sheet[1] == "arcmin":
+            found.append((sheet[0] * ARCMIN_RAD, f"robotparts {part} backlash {sheet[0]:g} arcmin ({sheet[2]})"))
+    if not found:
+        return None, f"no backlash: neither the twin ({instance}.backlash_rad) nor a gear's robotparts datasheet states one"
+    value, source = max(found, key=lambda f: f[0])
+    others = [s for _, s in found if s != source]
+    return value, source + (f"; the larger of it and {'; '.join(others)}" if others else "")
+
+
+def _encoder_count(fitted, instance: str) -> tuple[float | None, str]:
+    """One encoder count at the output (rad) from a robotparts datasheet: an integrated servo's encoder_bits (at its rotor) over its own
+    gear_ratio, or its motor's encoder_bits over its gearbox's gear_ratio; None when no datasheet states the bits."""
+    parts = _parts_of(fitted, instance)
+    gears = [g for kind, part in parts if kind == "gearbox" and (g := _datasheet(part, "gear_ratio")) is not None]
+    for kind, part in parts:
+        bits = _datasheet(part, "encoder_bits") if kind in ("integrated_servo", "bldc_motor") else None
+        if bits is None:
+            continue
+        gear = _datasheet(part, "gear_ratio") if kind == "integrated_servo" else (gears[0] if gears else None)
+        has_gearbox = kind == "integrated_servo" or any(k == "gearbox" for k, _ in parts)
+        if gear is None and has_gearbox and kind == "bldc_motor":
+            continue
+        ratio = 1.0 if gear is None else gear[0]
+        return TAU / (2.0 ** bits[0] * ratio), (f"robotparts {part} encoder_bits {bits[0]:g} at the rotor ({bits[2]})"
+                                                + (f" over gear_ratio {ratio:g} ({gear[2]})" if gear is not None else ", direct"))
+    return None, (f"no encoder count: no robotparts datasheet of {instance}'s servo or motor states its encoder_bits (and the description "
+                  f"states no {instance}.encoder_quantum_rad)")
+
+
+def _no_structural_mode(instance: str) -> tuple[None, str]:
+    return None, (f"no structural mode: neither the description ({instance}.structural_hz) nor robotparts states one (a gearbox's or a "
+                  "belt's stiffness against the inertia)")
+
+
+def _finite(number: float) -> float | str:
+    """A JSON-ready number: inf as the word (a margin with no crossing), never a silent None."""
+    return float(number) if math.isfinite(number) else ("inf" if number > 0 else "-inf")
+
+
+def _bounds(pieces: Mapping[str, tuple], kp: float, kd: float) -> dict[str, dict]:
+    """pidtuna's analytic bounds for (kp, kd) on what the twin states (`pieces`: name -> (value, source), value None where it states none).
+    Per bound {passed, value, limit, rule, unit, why, from}: decided by pidtuna.analytic.limits on pidtuna's own Objective() (its gain margin
+    and its damping band's floor, the rule the tuner, its closed form and its oracle hold), the velocity-noise budget by the tuner's chatter
+    rule (kd x velocity noise <= LoopModel.chatter_fraction x the cap: analytic.candidate's kd budget). A bound with a piece missing is
+    {passed: None, missing: [why]}."""
+    analytic, ptypes, gainlib = _pidtuna("pidtuna.analytic"), _pidtuna("pidtuna.types"), _pidtuna("pidtuna.gains")
+    rules = ptypes.Objective()
+    margin, floor = rules.gain_margin, rules.damping_band[0]
+    have = {k: float(v) for k, (v, _) in pieces.items() if v is not None}
+    inertia = have.get("inertia_kg_m2", 1.0)   # a placeholder only where every bound reading it is reported missing
+    model = ptypes.PlantModel(inertia, have.get("viscous_nm_s_rad", 0.0), have.get("coulomb_nm", 0.0), backlash_rad=have.get("backlash_rad", 0.0))
+    base = analytic.LoopModel()   # its loop numbers stand in only where the gain margin is reported missing
+    loop = analytic.LoopModel(
+        delay_s=have.get("delay_s", base.delay_s), torque_bandwidth_hz=have.get("torque_bandwidth_hz", base.torque_bandwidth_hz),
+        velocity_filter_hz=have.get("velocity_filter_hz", base.velocity_filter_hz), loop_hz=have.get("loop_hz", base.loop_hz),
+        velocity_noise_rad_s=have.get("velocity_noise_rad_s", 0.0), position_quantum_rad=have.get("encoder_quantum_rad", 0.0),
+        torque_cap_nm=have.get("torque_cap_nm", math.inf), structural_hz=have.get("structural_hz", 0.0), travel=have.get("travel_rad", 0.0),
+        gravity_load_nm=have.get("gravity_load_nm", 0.0), backlash_rad=have.get("backlash_rad", 0.0), min_damping=floor)
+    gains = ptypes.Gains(kp, kd)
+    verdict = analytic.limits(model, loop, gains, margin=margin, min_damping=floor)
+    wn, zeta = gainlib.bandwidth_of(gains, model)
+    cap, chatter = loop.torque_cap_nm, kd * loop.velocity_noise_rad_s
+    rows = {
+        "gain margin": (analytic.gain_margin(inertia, model.viscous_nm_s_rad, gains, loop, 0.0), margin, ">=", "", verdict["gain margin"],
+                        f"pidtuna Objective().gain_margin {margin:g}, the loop's delay, current loop, velocity filter and rate in the loop "
+                        "(analytic.gain_margin)"),
+        "damping floor": (zeta, floor, ">=", "", verdict["damping"],
+                          f"pidtuna Objective().damping_band's floor ({rules.damping_ratio:g} less its band; analytic.limits 'damping')"),
+        "velocity noise": (chatter, loop.chatter_fraction * cap, "<=", " N·m", chatter <= loop.chatter_fraction * cap,
+                           f"kd x the velocity noise within pidtuna LoopModel.chatter_fraction {loop.chatter_fraction:g} of the cap (the "
+                           "tuner's chatter rule, analytic.candidate's kd budget)"),
+        "encoder count": (kp * loop.position_quantum_rad, loop.quantum_fraction * cap, "<=", " N·m", verdict["quantization"],
+                          f"kp x one count within pidtuna LoopModel.quantum_fraction {loop.quantum_fraction:g} of the cap"),
+        "structural mode": (wn, TAU * loop.structural_hz / 3.0, "<=", " rad/s", verdict["structural mode"],
+                            "wn within a third of the first structural mode (analytic.limits)"),
+        "linear range": (kp + kd * wn, analytic.linear_range_budget(model, loop), "<=", " N·m/rad", verdict["linear range"],
+                         f"kp + kd wn within the cap left after the gravity load and the Coulomb, over pidtuna LoopModel.linear_range "
+                         f"{loop.linear_range:g} of the travel plus the backlash (analytic.linear_range_budget)"),
+    }
+    out = {}
+    for name, (value, limit, rule, unit, ok, why) in rows.items():
+        missing = [pieces.get(p, (None, f"no {p}"))[1] for p in BOUND_NEEDS[name] if pieces.get(p, (None,))[0] is None]
+        if missing:
+            out[name] = {"passed": None, "value": None, "limit": None, "rule": rule, "unit": unit.strip(), "missing": missing}
+        else:
+            out[name] = {"passed": bool(ok), "value": _finite(value), "limit": _finite(limit), "rule": rule, "unit": unit.strip(), "why": why,
+                         "from": {p: pieces[p][1] for p in BOUND_NEEDS[name]}}
+    return out
+
+
+def _bound_words(name: str, b: Mapping[str, Any]) -> str:
+    if b["passed"] is None:
+        return f"{name} could not be checked ({'; '.join(b['missing'])})"
+    unit = f" {b['unit']}" if b["unit"] else ""
+    shown = [v if isinstance(v, str) else f"{v:.4g}" for v in (b["value"], b["limit"])]
+    return f"{name} {shown[0]}{unit} {'≥' if b['rule'] == '>=' else '≤'} {shown[1]}{unit}" + ("" if b["passed"] else " BROKEN")
+
+
+def _relative_range(gain_range: Mapping[str, Any] | None) -> tuple[tuple | None, tuple | None, str] | None:
+    """(kp range, kd range, source) relative to the as-found gains: the caller's (preflight(gain_range=...)), else pidtuna's Envelope
+    default where it states one; None when neither states one. A caller's range names its source (pidtuna amendment 3)."""
+    if gain_range is not None:
+        source = gain_range.get("source")
+        if not (isinstance(source, str) and source.strip()):
+            raise ValueError("preflight(gain_range=...) is a cap on the joint's gains and needs its source beside it (\"source\": a "
+                             "datasheet value, a measured limit, or the owner's dated words; pidtuna docs/CONTRACT.md amendment 3)")
+        kp = tuple(gain_range["kp"]) if gain_range.get("kp") is not None else None
+        kd = tuple(gain_range["kd"]) if gain_range.get("kd") is not None else kp
+        return kp, kd, f"the caller's range ({source})"
+    try:
+        envelope = _pidtuna("pidtuna.types").Envelope()
+    except Exception:  # noqa: BLE001  (no pidtuna: no Envelope to state one)
+        return None
+    kp, kd = getattr(envelope, "gain_scale_range", None), getattr(envelope, "kd_range", None)
+    if kp is None and kd is None:
+        return None
+    return (None if kp is None else tuple(kp)), (None if kd is None else tuple(kd)), "pidtuna types.Envelope's default range"
+
+
+def _servo_gains(label: str, shipped: dict, pieces: Mapping[str, tuple], relative, as_found: tuple[float, float] | None,
+                 as_found_source: str) -> dict:
+    """One servo's verdict on the gains it would ship: {limit, problems (False), unknown (None), words (what was computed)}."""
+    kp, kd, ki, ilimit = shipped["kp_nm_rad"], shipped["kd_nm_s_rad"], shipped["ki_nm_rad_s"], shipped["ilimit_nm"]
+    prefix = f"{label}: " if label else ""
+    problems, unknown = [], []
+    words = [f"{prefix}kp {kp:.4g} N·m/rad, kd {kd:.4g} N·m·s/rad"]
+    if ki is None or (ki != 0.0 and ilimit != 0.0):
+        problems.append(prefix + ("ki is unknown" if ki is None else
+                                  f"ki {ki:g} N·m/(rad·s) with ilimit {ilimit} integrates: the real arm runs PD + feed-forward only (ki 0, or ilimit 0)"))
+    limit: dict[str, Any] = {"ki_nm_rad_s": 0.0}
+    try:
+        bounds = _bounds(pieces, kp, kd)
+    except ImportError as error:
+        bounds = None
+        unknown.append(f"{prefix}pidtuna, which holds the analytic bounds, cannot be imported here ({error}; no installed package, no "
+                       f"checkout at {paths.PIDTUNA}: set SIM2REAL_PIDTUNA)")
+    if bounds is not None:
+        limit["bounds"] = bounds
+        for name, b in bounds.items():
+            (problems if b["passed"] is False else unknown if b["passed"] is None else words).append(prefix + _bound_words(name, b))
+    if relative is not None:
+        kp_range, kd_range, source = relative
+        if as_found is None:
+            unknown.append(f"{prefix}{source} is relative to the as-found gains, and the twin states none")
+        else:
+            ranges = {}
+            for name, scale, base in (("kp_nm_rad", kp_range, as_found[0]), ("kd_nm_s_rad", kd_range, as_found[1])):
+                if scale is None:
+                    continue
+                low, high = base * scale[0], base * scale[1]
+                ranges[name] = [low, high]
+                inside = low <= shipped[name] <= high
+                (words if inside else problems).append(f"{prefix}{name.split('_')[0]} {shipped[name]:.4g} {'inside' if inside else 'outside'} "
+                                                       f"[{low:.4g}, {high:.4g}] ({source} x {as_found_source})")
+            limit["relative"] = {**ranges, "source": source}
+    return {"limit": limit, "problems": problems, "unknown": unknown, "words": words}
+
+
+def _gains_check(entries: Mapping[str, dict], value: Any, limit: Any, sources: str) -> Check:
+    """The gains check over every servo's verdict: False when any rule is broken (its numbers named), else None when any bound could
+    not be computed (naming the missing pieces), else True."""
+    problems = [p for e in entries.values() for p in e["problems"]]
+    unknown = [u for e in entries.values() for u in e["unknown"]]
+    computed = "; ".join(w for e in entries.values() for w in e["words"])
+    if problems:
+        return Check("gains_within_board_limits", GAIN_TITLE, False, value, limit, GAIN_UNIT,
+                     f"{'; '.join(problems)}. Inside: {computed}. Shipped: {sources}")
+    if unknown:
+        return Check("gains_within_board_limits", GAIN_TITLE, None, value, limit, GAIN_UNIT,
+                     f"could not be checked: {'; '.join(unknown)}. Inside: {computed}. PD only holds. Shipped: {sources}")
+    return Check("gains_within_board_limits", GAIN_TITLE, True, value, limit, GAIN_UNIT,
+                 f"every analytic bound inside: {computed}; no integrator. Shipped: {sources}")
+
+
+def _tracer_pieces(fitted, unit: _Unit, cap: dict) -> dict:
+    """What the pendulum tracer's twin states for the bounds: the fitted servo values (the whole axis's inertia, viscous, the kinetic
+    Coulomb, the gravity over the joint's range), the twin of record's board knobs (current loop, command delay), the driver's datasheet
+    control rate, the world's measured velocity noise, the house torque cap, the gear's dead band."""
+    s = unit.servo
+    values = {k: float(v) for k, v in fitted.description.values().items() if v is not None and math.isfinite(float(v))}
+    pieces: dict[str, tuple] = {}
+
+    def fitted_piece(name: str, why: str) -> tuple:
+        found = _described(fitted, s, name)
+        return found if found is not None else (None, why)
+
+    pieces["inertia_kg_m2"] = fitted_piece("armature_kg_m2", f"no inertia: the twin holds no {s}.armature_kg_m2")
+    damping = values.get(f"{s}.damping_nm_s_rad")
+    pieces["viscous_nm_s_rad"] = ((max(0.0, damping), f"the fitted {s}.damping_nm_s_rad") if damping is not None else
+                                  (0.0, f"no {s}.damping_nm_s_rad: 0, the side that only lowers the margin and the damping"))
+    static = values.get(f"{s}.frictionloss_nm")
+    pieces["coulomb_nm"] = ((max(0.0, static - values.get(f"{s}.friction_stribeck_drop_nm", 0.0)),
+                             f"the fitted {s}.frictionloss_nm less its Stribeck drop (the kinetic level)") if static is not None else
+                            (None, f"no Coulomb friction: the twin holds no {s}.frictionloss_nm"))
+    joint = unit.joint
+    if joint is not None and getattr(joint, "range_rad", None) is not None:
+        low, high = (float(x) for x in joint.range_rad)
+        pieces["travel_rad"] = (max(abs(low), abs(high)), f"{joint.name}'s joint description range [{low:.3g}, {high:.3g}] rad about its origin")
+        gravity, bottom = values.get(f"{s}.gravity_nm", 0.0), values.get(f"{s}.gravity_bottom_rad", 0.0)
+        reach = [float(joint.origin_rad) + low + (high - low) * k / 400.0 for k in range(401)]
+        pieces["gravity_load_nm"] = (max(abs(gravity * math.sin(q - bottom)) for q in reach),
+                                     f"the fitted gravity {gravity:.4g} N·m sin(q - {bottom:.4g}) over the joint's range")
+    else:
+        pieces["travel_rad"] = (None, "no travel: the runner exposes no joint description")
+        pieces["gravity_load_nm"] = (None, "no gravity load: the runner exposes no joint description")
+    pieces["backlash_rad"] = _backlash(fitted, s)
+    pieces["torque_cap_nm"] = (cap["cap_nm"], cap["why"]) if "cap_nm" in cap else (None, f"no torque cap: {cap['why']}")
+    record = None
+    if unit.module is not None and hasattr(unit.module, "twin"):
+        try:
+            record = unit.module.twin({k: float(v) for k, v in fitted.parameters.get(s, {}).items() if v is not None}, "preflight")
+        except Exception as error:  # noqa: BLE001  (a pipeline builds its twin its own way)
+            unit.notes.append(f"the twin of record could not be built ({type(error).__name__}: {error})")
+    knobs = "the twin of record's board knobs (the sysid description's known.board_knobs)"
+    lag, delay = getattr(record, "current_loop_hz", None), getattr(record, "command_delay_s", None)
+    pieces["torque_bandwidth_hz"] = ((float(lag), f"{knobs}: current_loop_hz") if lag else (None, f"no current loop: {knobs} state none"))
+    pieces["delay_s"] = ((float(delay), f"{knobs}: command_delay_s") if delay is not None else (None, f"no command delay: {knobs} state none"))
+    pieces["loop_hz"] = _driver_rate(fitted, s)
+    pieces["velocity_filter_hz"] = (None, f"no velocity filter: neither the description ({s}.velocity_filter_hz), the twin of record nor "
+                                          f"the deployment record ({unit.record.name if unit.record else 'none'}) states the board's")
+    noise = (getattr(fitted.runner, "state", None) or {}).get("noise") or {}
+    speed = noise.get("speed_rad_s", noise.get("velocity_noise_rad_s"))
+    pieces["velocity_noise_rad_s"] = ((float(speed), (noise.get("sources") or {}).get("speed_rad_s", "the world's noise block"))
+                                      if speed else (None, "no velocity noise: the fit's noise record states none"))
+    pieces["encoder_quantum_rad"] = _encoder_count(fitted, s)
+    pieces["structural_hz"] = _no_structural_mode(s)
+    return _with_stated(fitted, s, pieces)
+
+
+def _driver_rate(fitted, instance: str) -> tuple[float | None, str]:
+    """The board loop's rate (Hz): its driver's robotparts datasheet control_rate (a foc_controller child), the low end of a stated range
+    (the slower loop leaves the smaller margin); None when no driver part states one."""
+    for kind, part in _parts_of(fitted, instance):
+        if kind != "foc_controller":
+            continue
+        path = Path(paths.ROBOTPARTS, *PARTS, f"{part}.json")
+        spec = json.loads(path.read_text(encoding="utf-8")).get("specs", {}).get("control_rate") if path.is_file() else None
+        raw = None if not spec else spec.get("value")
+        scale = {"kHz": 1000.0, "Hz": 1.0}.get((spec or {}).get("unit"))
+        if raw is None or scale is None:
+            continue
+        low = min(raw) if isinstance(raw, (list, tuple)) else raw
+        return float(low) * scale, (f"robotparts {part} control_rate {spec.get('raw') or raw} ({spec.get('source_url', 'its datasheet')}): "
+                                    "the low end, the slower loop")
+    return None, f"no board loop rate: no driver part of {instance} states its control_rate (and the description states no {instance}.loop_hz)"
+
+
+def _gains(fitted, unit: _Unit, cap: dict, gain_range: Mapping[str, Any] | None = None) -> tuple[Check, dict | None]:
     shipped = _shipped(fitted, unit)
     if shipped is None:
-        return Check("gains_within_board_limits", title, None, None, None, gain_unit,
+        return Check("gains_within_board_limits", GAIN_TITLE, None, None, None, GAIN_UNIT,
                      "could not be checked: the twin states no gains to ship (no tune step's settings_, no kp/kd priors, no board record)"
                      + (f"; {'; '.join(unit.notes)}" if unit.notes else "")), None
     value = {k: shipped[k] for k in ("kp_nm_rad", "kd_nm_s_rad", "ki_nm_rad_s", "ilimit_nm")}
-    ki, ilimit = shipped["ki_nm_rad_s"], shipped["ilimit_nm"]
-    integrates = ki is None or (ki != 0.0 and ilimit != 0.0)
-    problems = []
-    if integrates:
-        problems.append("ki is unknown" if ki is None else
-                        f"ki {ki:g} N·m/(rad·s) with ilimit {ilimit} integrates: the real arm runs PD + feed-forward only (ki 0, or ilimit 0)")
-    scale = _gain_range()
-    limit = None
-    if unit.board is not None and scale is not None:
-        (kp_lo, kp_hi), (kd_lo, kd_hi) = scale
-        kp0, kd0 = float(unit.board["kp"]) / TAU, float(unit.board["kd"]) / TAU
-        limit = {"kp_nm_rad": [kp0 * kp_lo, kp0 * kp_hi], "kd_nm_s_rad": [kd0 * kd_lo, kd0 * kd_hi], "ki_nm_rad_s": 0.0}
-        for name, (low, high) in (("kp_nm_rad", limit["kp_nm_rad"]), ("kd_nm_s_rad", limit["kd_nm_s_rad"])):
-            if not low <= shipped[name] <= high:
-                problems.append(f"{name.split('_')[0]} {shipped[name]:.4g} is outside [{low:.4g}, {high:.4g}]")
-    where = (f"limits: the board's as-found kp {unit.board['kp']:g} / kd {unit.board['kd']:g} N·m/rev ({unit.record.name}) x pidtuna's "
-             f"admissible range {scale[0]} / {scale[1]}") if limit else ""
-    if problems:
-        return Check("gains_within_board_limits", title, False, value, limit, gain_unit,
-                     f"{'; '.join(problems)}. Shipped: {shipped['source']}" + (f"; {where}" if where else "")), shipped
-    if limit is None:
-        return Check("gains_within_board_limits", title, None, value, None, gain_unit,
-                     f"could not be checked: no gain limit is declared (" + ("no board record" if unit.board is None else
-                     "pidtuna, which holds the admissible range, cannot be imported here") + f"); PD only holds. Shipped: {shipped['source']}"), shipped
-    return Check("gains_within_board_limits", title, True, value, limit, gain_unit,
-                 f"kp {shipped['kp_nm_rad']:.4g} N·m/rad, kd {shipped['kd_nm_s_rad']:.4g} N·m·s/rad inside the range; "
-                 f"{'ki 0' if ki == 0.0 else f'ki {ki:g} with ilimit 0'}: no integrator. Shipped: {shipped['source']}; {where}"), shipped
+    as_found = None if unit.board is None else (float(unit.board["kp"]) / TAU, float(unit.board["kd"]) / TAU)
+    where = (f"the board's as-found kp {unit.board['kp']:g} / kd {unit.board['kd']:g} N·m/rev ({unit.record.name})"
+             if unit.board is not None else "no board record")
+    entry = _servo_gains("", shipped, _tracer_pieces(fitted, unit, cap), _relative_range(gain_range), as_found, where)
+    return _gains_check({unit.servo or "": entry}, value, entry["limit"], shipped["source"]), shipped
 
 
 # --- 3. the torque cap and the margin ------------------------------------------------------------------------------------------------------
@@ -541,11 +822,11 @@ def _nominal_rig(fitted):
     return rig if isinstance(rig, NominalRig) else None
 
 
-def _preflight_nominal(fitted, rig, *, soak_s: float, started: float) -> Preflight:
+def _preflight_nominal(fitted, rig, *, soak_s: float, started: float, gain_range: Mapping[str, Any] | None = None) -> Preflight:
     servos = rig.servos
     shipped = {s.instance: _nominal_shipped(fitted, rig, s) for s in servos}
-    gains = _nominal_gains(fitted, rig, shipped)
     caps = {s.instance: _servo_cap(fitted, s.instance) for s in servos}
+    gains = _nominal_gains(fitted, rig, shipped, caps, gain_range)
     soak, peaks = _nominal_soak(fitted, rig, shipped, caps, soak_s=soak_s)
     checks = (_record(fitted, _Unit()), gains, _nominal_torque(caps, peaks), soak, _schedule(fitted))
     return Preflight(fitted.description.id, checks, round(time.monotonic() - started, 2))
@@ -569,41 +850,79 @@ def _nominal_shipped(fitted, rig, servo) -> dict:
             "source": f"no tune step having run, {rig.gains_source(i)}; ki " + ("0: the world's loop is PD" if ki is None else "as stated")}
 
 
-def _nominal_gains(fitted, rig, shipped: Mapping[str, dict]) -> Check:
-    title = "the kp / kd / ki it would ship are inside the board's range, PD only (ki 0, or ilimit 0)"
-    gain_unit = "N·m/rad, N·m·s/rad, N·m/(rad·s), N·m"
+def _nominal_pieces(fitted, rig, servo, cap: dict, model, envelope: Mapping[str, float], noise) -> dict:
+    """What a nominal-world twin states for the bounds on one servo: the world's mass matrix and gravity at the fitted values (the others
+    held at their start poses, as the soak holds them), its joint damping and frictionloss as it plays them, the envelope the soak plays,
+    the world's own board loop (sim2real.nominal: a PD per BOARD_HZ tick, the torque held over it, on the raw joint velocity), its noise
+    model, and the servo's datasheet torque cap, encoder count and dead band."""
+    import mujoco  # noqa: PLC0415
+    import numpy as np  # noqa: PLC0415
+
+    from .nominal import BOARD_HZ  # noqa: PLC0415
+
+    i = servo.instance
+    data = mujoco.MjData(model)
+
+    def pose(q: float) -> None:
+        data.qpos[:] = model.qpos0
+        for other in rig.servos:
+            data.qpos[other.qpos] = other.q0
+        data.qpos[servo.qpos] = q
+        data.qvel[:] = 0.0
+        mujoco.mj_forward(model, data)
+
+    pose(servo.q0)
+    dense = np.zeros((model.nv, model.nv))
+    mujoco.mj_fullM(model, data, dense)
+    inertia = float(dense[servo.dof, servo.dof])
+    low, high = float(envelope["low_rad"]), float(envelope["high_rad"])
+    gravity = 0.0
+    for q in np.linspace(low, high, 41):
+        pose(float(q))
+        gravity = max(gravity, abs(float(data.qfrc_bias[servo.dof])))
+    world = "the nominal world (sim2real.nominal NominalRig._play)"
+    pieces = {
+        "inertia_kg_m2": (inertia, f"the nominal world's mass matrix at {i}'s start pose ({servo.q0:.3g} rad, the others at theirs) at the "
+                                   "fitted values (NominalRig.model_at)"),
+        "viscous_nm_s_rad": (float(model.dof_damping[servo.dof]), f"{i}'s joint damping as the fitted twin plays it"),
+        "coulomb_nm": (float(model.dof_frictionloss[servo.dof]), f"{i}'s joint frictionloss as the fitted twin plays it"),
+        "travel_rad": (max(high - servo.q0, servo.q0 - low), f"the soak's envelope [{low:.3g}, {high:.3g}] rad about the start pose "
+                                                             "(NominalRig.tape_envelope)"),
+        "gravity_load_nm": (gravity, f"the largest gravity on {i} over that envelope (MuJoCo's qfrc_bias at rest, the others held)"),
+        "backlash_rad": _backlash(fitted, i),
+        "torque_cap_nm": (cap["cap_nm"], cap["why"]) if "cap_nm" in cap else (None, f"no torque cap: {cap['why']}"),
+        "loop_hz": (BOARD_HZ, f"{world}: its board loop computes the PD once per {BOARD_HZ:g} Hz tick and holds the torque over it"),
+        "delay_s": (0.0, f"{world}: each tick's PD torque acts within that tick, no command delay"),
+        "torque_bandwidth_hz": (math.inf, f"{world}: the PD torque is applied as commanded, no current-loop lag"),
+        "velocity_filter_hz": (math.inf, f"{world}: the PD reads MuJoCo's joint velocity, unfiltered"),
+        "velocity_noise_rad_s": ((float(noise.velocity_noise_rad_s), noise.sources.get("velocity_noise_rad_s", "the world's noise model"))
+                                 if noise is not None and noise.velocity_noise_rad_s > 0 else
+                                 (None, "no velocity noise: the world's noise model states none")),
+        "encoder_quantum_rad": ((float(noise.encoder_quantum_rad), noise.sources.get("encoder_quantum_rad", "the world's noise model"))
+                                if noise is not None and noise.encoder_quantum_rad > 0 else _encoder_count(fitted, i)),
+        "structural_hz": _no_structural_mode(i),
+    }
+    return _with_stated(fitted, i, pieces)
+
+
+def _nominal_gains(fitted, rig, shipped: Mapping[str, dict], caps: Mapping[str, dict], gain_range: Mapping[str, Any] | None = None) -> Check:
     value = {i: {k: g[k] for k in ("kp_nm_rad", "kd_nm_s_rad", "ki_nm_rad_s", "ilimit_nm")} for i, g in shipped.items()}
-    scale = _gain_range()
-    problems, limit = [], {}
-    for s in rig.servos:
-        g = shipped[s.instance]
-        ki, ilimit = g["ki_nm_rad_s"], g["ilimit_nm"]
-        if ki != 0.0 and ilimit != 0.0:
-            problems.append(f"{s.instance}: ki {ki:g} N·m/(rad·s) with ilimit {ilimit} integrates: the real arm runs PD + feed-forward only "
-                            "(ki 0, or ilimit 0)")
-        if scale is None:
-            continue
-        # WHY about the world's own loop: it is the board config the fit was played under, the nominal twin's "gains known to be safe"
-        # (pidtuna Envelope's guard is relative to the as-found gains; a nominal twin has no board record, its loop stands in for it)
-        (kp_lo, kp_hi), (kd_lo, kd_hi) = scale
-        limit[s.instance] = {"kp_nm_rad": [s.kp * kp_lo, s.kp * kp_hi], "kd_nm_s_rad": [s.kd * kd_lo, s.kd * kd_hi], "ki_nm_rad_s": 0.0}
-        for name in ("kp_nm_rad", "kd_nm_s_rad"):
-            low, high = limit[s.instance][name]
-            if not low <= g[name] <= high:
-                problems.append(f"{s.instance}: {name.split('_')[0]} {g[name]:.4g} is outside [{low:.4g}, {high:.4g}]")
+    values = {k: float(v) for k, v in fitted.description.values().items() if v is not None and math.isfinite(float(v))}
+    try:
+        model, envelope, noise, failure = rig.model_at(values), rig.tape_envelope(), rig.noise(), None
+    except Exception as error:  # noqa: BLE001  (a refused build is the soak's to fail; here it only leaves the pieces unstated)
+        model, envelope, noise, failure = None, None, None, f"{type(error).__name__}: {error}"
+    relative = _relative_range(gain_range)
+    entries = {}
+    for k, s in enumerate(rig.servos):
+        pieces = ({"inertia_kg_m2": (None, f"no inertia: the fitted twin's world could not be built ({failure})")} if model is None else
+                  _nominal_pieces(fitted, rig, s, caps[s.instance], model, envelope[k], noise))
+        # WHY a relative range about the world's own loop (only when one is stated): the board config the fit was played under is the
+        # nominal twin's as-found gains; a nominal twin has no board record
+        entries[s.instance] = _servo_gains(s.instance, shipped[s.instance], pieces, relative, (s.kp, s.kd),
+                                           f"{s.instance}'s nominal-world loop (kp {s.kp:.4g}, kd {s.kd:.4g})")
     sources = "; ".join(dict.fromkeys(f"{i}: {g['source']}" for i, g in shipped.items()))
-    where = (f"limits: pidtuna's admissible range {scale[0]} (kp) / {scale[1]} (kd) about each servo's nominal-world loop "
-             f"(no board record; neither robotparts nor the description declares a gain limit)") if scale else ""
-    if problems:
-        return Check("gains_within_board_limits", title, False, value, limit or None, gain_unit,
-                     f"{'; '.join(problems)}. Shipped: {sources}" + (f"; {where}" if where else ""))
-    if scale is None:
-        return Check("gains_within_board_limits", title, None, value, None, gain_unit,
-                     "could not be checked: no gain limit is declared (no board record on a nominal twin, none in robotparts or the "
-                     f"description, and pidtuna, which holds the admissible range, cannot be imported here); PD only holds. Shipped: {sources}")
-    worded = ", ".join(f"{i} kp {g['kp_nm_rad']:.4g} N·m/rad, kd {g['kd_nm_s_rad']:.4g} N·m·s/rad" for i, g in shipped.items())
-    return Check("gains_within_board_limits", title, True, value, limit, gain_unit,
-                 f"{worded}: inside the range; no integrator. Shipped: {sources}; {where}")
+    return _gains_check(entries, value, {i: e["limit"] for i, e in entries.items()}, sources)
 
 
 def _datasheet(part: str, name: str) -> tuple[float, str, str] | None:

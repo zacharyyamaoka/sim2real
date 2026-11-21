@@ -17,6 +17,12 @@ RigRunner has neither, so they came back None. Here they must be ANSWERED:
 3. Mutations turn their check red: an inertia 20x the fit turns the soak red; a tuned kp outside pidtuna's admissible range about the
    nominal loop (0.25-2x) turns the gains red, and an integrating ki does too; a tune inside the range passes.
 
+Amended 2026-11-21 for pidtuna contract amendment 3 (v2.3: no relative gain range by default; the shipped gains are held by pidtuna's
+analytic bounds on the twin's model and stated loop, tests/test_preflight_analytic_bounds.py): gains_within_board_limits is answered, or
+None naming the pieces of a bound the twin does not state (CAN 11 states no encoder count and no structural mode; the wrist no structural
+mode), never None for want of the tracer's runner and never a pass on nothing. A 5x kp is red for a bound it breaks (the damping floor, the
+linear range); a tune inside every bound is not red.
+
 The oracles are this file's own: the nominal loop's kp from the description's inertia and LOOP_HZ, the caps from the robotparts files.
 """
 
@@ -143,8 +149,16 @@ def tuned(fitted, *, kp, kd, ki=0.0, ilimit=0.0):
 # --- CAN 11, record None --------------------------------------------------------------------------------------------------------------
 
 
+def unstated_bounds_only(gains) -> bool:
+    """Amendment 3: a None gains check is None only for bounds whose pieces the twin does not state (each naming them), none broken."""
+    per_servo = [gains.limit["bounds"]] if "bounds" in (gains.limit or {}) else [v["bounds"] for v in (gains.limit or {}).values()]
+    return (gains.passed is None and bool(per_servo) and "could not be checked" in gains.why
+            and all(b["passed"] is not False and (b["passed"] is True or b["missing"]) for bounds in per_servo for b in bounds.values()))
+
+
 def test_can11_nominal_answers_every_blocking_check(can11_report):
-    unanswered = {c.id: c.why for c in can11_report.checks if c.id in BLOCKING and c.passed is None}
+    unanswered = {c.id: c.why for c in can11_report.checks if c.id in BLOCKING and c.passed is None
+                  and not (c.id == "gains_within_board_limits" and unstated_bounds_only(c))}
     assert not unanswered, unanswered
     for c in can11_report.checks:
         if c.id in BLOCKING and c.passed is False:
@@ -157,7 +171,7 @@ def test_can11_ships_the_nominal_loop_pd_only(can11_fitted, can11_report):
     assert value["kp_nm_rad"] == pytest.approx(nominal_loop_kp(can11_fitted), rel=1e-3), gains
     assert value["kd_nm_s_rad"] == pytest.approx(nominal_loop_kd(can11_fitted), rel=1e-3), gains
     assert value["ki_nm_rad_s"] == 0.0, gains
-    assert gains.passed is True, gains
+    assert gains.passed is True or unstated_bounds_only(gains), gains
 
 
 def test_can11_torque_cap_is_the_datasheet_house_cap(can11_report):
@@ -182,8 +196,9 @@ def test_the_wrist_is_answered_where_its_part_has_a_datasheet(wrist_fitted, wris
     else:
         # an integrated servo's datasheet peak is at its output (the gear inside): the cap is that peak x 0.97
         assert torque.passed in (True, False) and torque.limit == pytest.approx(peak * 0.97, rel=1e-6), torque
-    for check_id in ("gains_within_board_limits", "sim_soak"):
-        assert check(wrist_report, check_id).passed in (True, False), check(wrist_report, check_id)
+    assert check(wrist_report, "sim_soak").passed in (True, False), check(wrist_report, "sim_soak")
+    gains = check(wrist_report, "gains_within_board_limits")
+    assert gains.passed in (True, False) or unstated_bounds_only(gains), gains
 
 
 def test_a_wrist_part_with_no_datasheet_is_none_naming_the_part(wrist_fitted):
@@ -209,6 +224,7 @@ def test_a_tuned_kp_outside_its_range_turns_the_gains_red(can11_fitted):
     report = sim2real.preflight(tuned(can11_fitted, kp=5.0 * nominal_loop_kp(can11_fitted), kd=nominal_loop_kd(can11_fitted)), soak_s=0.5)
     gains = check(report, "gains_within_board_limits")
     assert gains.passed is False and "kp" in gains.why, gains
+    assert "damping floor" in gains.why or "linear range" in gains.why, gains.why   # amendment 3: the bound it breaks, named
     assert report.passed is False
 
 
@@ -221,7 +237,7 @@ def test_an_integrating_ki_turns_the_gains_red(can11_fitted):
 def test_a_tune_inside_the_range_passes_the_gains(can11_fitted):
     gains = check(sim2real.preflight(tuned(can11_fitted, kp=1.3 * nominal_loop_kp(can11_fitted), kd=1.2 * nominal_loop_kd(can11_fitted)),
                                      soak_s=0.5), "gains_within_board_limits")
-    assert gains.passed is True, gains
+    assert gains.passed is True or unstated_bounds_only(gains), gains
 
 
 # --- added after the first green (tests only; nothing above edited): the soak's mutation must fail for its OWN reason --------------------
@@ -242,5 +258,6 @@ def test_a_2x_stiffer_tune_passes_every_blocking_check_on_can11(can11_fitted):
     # WHY 1.9 and not 2.0: 2x sits on pidtuna's upper bound, and this file's loop kp (from the FITTED inertia) is a hair above the world's
     # (the nominal inertia), so 2.0x lands just outside it
     report = sim2real.preflight(tuned(can11_fitted, kp=1.9 * nominal_loop_kp(can11_fitted), kd=1.4 * nominal_loop_kd(can11_fitted)))
-    failing = {c.id: c.why for c in report.checks if c.id in BLOCKING and c.passed is not True}
+    failing = {c.id: c.why for c in report.checks if c.id in BLOCKING and c.passed is not True
+               and not (c.id == "gains_within_board_limits" and unstated_bounds_only(c))}
     assert not failing, failing

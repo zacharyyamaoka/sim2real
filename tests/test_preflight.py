@@ -11,11 +11,16 @@ The ruler, written before the code (red first); whoever turns it green may not e
    checked", with its reason, never a pass), .passed (every blocking check True), .summary() and a JSON-ready .to_dict().
 3. The checks: record_matches_description, gains_within_board_limits, torque_margin, sim_soak (blocking) and schedule_complete
    (informational: it reports, it never blocks).
-4. The golden case passes every blocking check: CAN 11's twin from its description (bam_rack_twin.description.station_description(11)),
-   fitted cheaply from the committed fit (sysid/results/pendulum_can11.json, the oracle's recovered values) and carrying the gains a tune
-   step proposes, in the shape claude/l10-c's PidTune writes (fitted.settings_, fitted.proposals_: kp and kd at the output, the board's
-   ki with ilimit 0).
-5. Each mutation turns its check red: a gain outside its limit; an integrating ki; no tune (the board's as-found ki 16000, ilimit 0.5);
+4. The golden case passes every blocking check it can be checked for: CAN 11's twin from its description
+   (bam_rack_twin.description.station_description(11)), fitted cheaply from the committed fit (sysid/results/pendulum_can11.json, the
+   oracle's recovered values) and carrying the gains a tune step proposes, in the shape claude/l10-c's PidTune writes (fitted.settings_,
+   fitted.proposals_: kp and kd at the output, the board's ki with ilimit 0).
+   Amended 2026-11-21 for pidtuna contract amendment 3 (v2.3: no relative gain range by default; the gains are held by pidtuna's analytic
+   bounds): the tune's kd is the one that puts the committed fit at damping 0.8 (pidtuna's Objective), since a tune never delivers outside
+   its damping band and the old 1.2x the board's kd sits at 0.22, under the band's 0.65 floor (now its own mutation, below); and the gains
+   check is None, naming what CAN 11's twin does not state (its velocity filter, its encoder count, its structural mode), never a pass.
+5. Each mutation turns its check red: a gain past a bound (5x kp: under the damping floor); the old golden gains, underdamped; an
+   integrating ki; no tune (the board's as-found ki 16000, ilimit 0.5);
    a torque cap cut below the envelope (a robotparts datasheet whose peak is cut); a value with its source stripped; a soak on an unstable
    parameter. A twin with no parts cannot be checked for torque (None, naming the parts). A schedule that dropped a routine for missing
    equipment is None naming the items; one that excluded a routine the record needed is False.
@@ -90,10 +95,21 @@ def _cheap_fit(twin):
     return twin.calibrate(on="sim", callbacks=[])
 
 
-def _tuned(fitted, *, kp_scale=1.3, kd_scale=1.2, ki=None, ilimit=0.0):
+def in_band_kd_scale(kp_scale: float, zeta: float = 0.8) -> float:
+    """The kd scale (on the board's kd) that puts the committed fit at damping `zeta` under kp_scale x the board's kp: kd = 2 zeta wn J - b,
+    wn = sqrt(kp / J), from the committed fit's inertia and viscous (read here). WHY 0.8: pidtuna's Objective().damping_ratio, the middle
+    of the band a tune delivers inside."""
+    fit = {r["key"]: float(r["recovered"]) for r in committed_fit()["parameters"]}
+    inertia, viscous = fit["can11.armature_kg_m2"], fit["can11.damping_nm_s_rad"]
+    kp = board()["kp"] / TAU * kp_scale
+    return (2.0 * zeta * math.sqrt(kp / inertia) * inertia - viscous) / (board()["kd"] / TAU)
+
+
+def _tuned(fitted, *, kp_scale=1.3, kd_scale=None, ki=None, ilimit=0.0):
     """The fitted twin carrying the gains a tune step proposed, in claude/l10-c's shape (settings_ in SI at the output; proposals_ the
-    pidtuna gains document, its `tuned` the board's ki with ilimit 0 by default)."""
+    pidtuna gains document, its `tuned` the board's ki with ilimit 0 by default). kd_scale None: the in-band kd (in_band_kd_scale)."""
     b = board()
+    kd_scale = in_band_kd_scale(kp_scale) if kd_scale is None else kd_scale
     kp, kd = b["kp"] / TAU * kp_scale, b["kd"] / TAU * kd_scale
     ki = b["ki"] / TAU if ki is None else ki
     out = copy.copy(fitted)
@@ -175,11 +191,19 @@ def test_the_callable_survives_importing_the_module(golden):
 
 
 def test_the_can11_golden_case_passes_every_check(golden_report):
-    failing = {c.id: (c.passed, c.why) for c in golden_report.checks if c.id in BLOCKING and c.passed is not True}
+    failing = {c.id: (c.passed, c.why) for c in golden_report.checks
+               if c.id in BLOCKING and c.id != "gains_within_board_limits" and c.passed is not True}
     assert not failing, failing
-    assert golden_report.passed is True
+    # amendment 3: the analytic bounds it can compute are inside, and the ones whose pieces CAN 11's twin does not state are named; None
+    # never passes, so the golden report does not either until the twin states them
+    gains = check(golden_report, "gains_within_board_limits")
+    assert gains.passed is None and "could not be checked" in gains.why, gains
+    for piece in ("velocity filter", "encoder count", "structural mode"):
+        assert piece in gains.why, (piece, gains.why)
+    assert all(b["passed"] is not False for b in gains.limit["bounds"].values()), gains.limit
+    assert gains.limit["bounds"]["damping floor"]["passed"] is True, gains.limit
+    assert golden_report.passed is False and "FAIL" in golden_report.summary()
     assert check(golden_report, "schedule_complete").passed is True, "CAN 11's default schedule drops and assumes nothing"
-    assert "PASS" in golden_report.summary()
 
 
 def test_the_torque_margin_reads_the_datasheet_cap(golden_report):
@@ -201,10 +225,20 @@ def test_none_never_counts_as_a_pass(golden):
 
 
 def test_a_gain_outside_its_limit_turns_gains_red(fitted):
-    report = sim2real.preflight(_tuned(fitted, kp_scale=5.0), soak_s=0.5)
+    # amendment 3: 5x kp at the golden kd (not re-damped) leaves the damping floor; red for the bound it breaks, with its numbers
+    report = sim2real.preflight(_tuned(fitted, kp_scale=5.0, kd_scale=in_band_kd_scale(1.3)), soak_s=0.5)
     gains = check(report, "gains_within_board_limits")
     assert gains.passed is False and "kp" in gains.why, gains
+    assert "damping floor" in gains.why, gains.why
     assert report.passed is False
+
+
+def test_the_old_golden_gains_are_underdamped_and_red(fitted):
+    # 1.3x kp and 1.2x kd of the board (the golden gains before amendment 3): damping 0.22 on the committed fit, under pidtuna's 0.65 floor
+    gains = check(sim2real.preflight(_tuned(fitted, kd_scale=1.2), soak_s=0.5), "gains_within_board_limits")
+    floor = gains.limit["bounds"]["damping floor"]
+    assert gains.passed is False and floor["passed"] is False and floor["value"] < floor["limit"], gains
+    assert "damping floor" in gains.why, gains.why
 
 
 def test_an_integrating_ki_turns_gains_red(fitted):
@@ -286,7 +320,11 @@ def test_a_schedule_that_excluded_a_needed_routine_is_red_but_does_not_block(gol
     report = sim2real.preflight(cut, soak_s=0.5)
     schedule = check(report, "schedule_complete")
     assert schedule.passed is False and "servo.backlash_reversals_camera" in schedule.why, schedule
-    assert all(c.passed is True for c in report.checks if c.id in BLOCKING) and report.passed is True, "informational: it never blocks"
+    # informational: it never blocks. The blocking verdicts are the golden case's (amended 2026-11-21: the golden gains are None under
+    # pidtuna amendment 3, so the report's pass is the golden one's, not True)
+    golden_verdicts = {c.id: c.passed for c in sim2real.preflight(golden, soak_s=0.5).checks if c.id in BLOCKING}
+    assert {c.id: c.passed for c in report.checks if c.id in BLOCKING} == golden_verdicts
+    assert all(v is True for k, v in golden_verdicts.items() if k != "gains_within_board_limits"), golden_verdicts
 
 
 # --- the slow half: the real fit ---------------------------------------------------------------------------------------------------------
@@ -306,6 +344,11 @@ def test_the_real_can11_fit_preflights():
             # WHY (ruler fix, found on the cheap fit before this ran): the soak plays what would ship, the integrating board, and CAN 11
             # limit-cycles under ki 16000 (pipeline.py's docstring): its stop error and torque ceiling fail; the tune's PD passes
             assert c.passed is False, c
+        elif c.id == "gains_within_board_limits":
+            # amendment 3: None where CAN 11's twin does not state a bound's pieces, never a pass on nothing; no computed bound broken
+            assert c.passed is not False, c
         elif c.id in BLOCKING:
             assert c.passed is True, c
-    assert sim2real.preflight(_tuned(real) if not tuned else real).passed is True
+    shipped = sim2real.preflight(_tuned(real) if not tuned else real)
+    assert all(c.passed is True for c in shipped.checks if c.id in BLOCKING and c.id != "gains_within_board_limits"), shipped.summary()
+    assert check(shipped, "gains_within_board_limits").passed is not False, shipped.summary()

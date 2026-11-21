@@ -110,4 +110,8 @@ def test_preflight_leaves_a_tune_steps_keys_to_the_gains_check():
     record = next(c for c in report.checks if c.id == "record_matches_description")
     assert record.passed is True, record
     gains = next(c for c in report.checks if c.id == "gains_within_board_limits")
-    assert gains.passed is True, gains
+    # the gains check judges the tune's settings (amended 2026-11-21, pidtuna amendment 3: held by pidtuna's analytic bounds, so None where
+    # CAN 11's twin does not state a bound's pieces, never a pass on nothing; none of the bounds it computes is broken)
+    assert gains.value["kp_nm_rad"] == pytest.approx(fitted.settings_["can11.kp_nm_rad"]), gains
+    assert gains.value["kd_nm_s_rad"] == pytest.approx(fitted.settings_["can11.kd_nm_s_rad"]), gains
+    assert gains.passed is not False and all(b["passed"] is not False for b in gains.limit["bounds"].values()), gains
