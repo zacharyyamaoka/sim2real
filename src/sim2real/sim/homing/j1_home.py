@@ -41,7 +41,7 @@ J1_SEEK_SPEED = 0.02 * TAU  # 7.2 deg/s (the rack's seeks: 77.7 deg in 12.4 s)
 J1_RETURN_SPEED = 0.03 * TAU
 # WHY READY's J1 is -12.7 deg, not 0 (2026-11-14 07:11Z): at READY J1 = 0 is blocked - contact at homed -7 deg in the side-table clutter
 # (full_arm/obstacles/j1_contact_20261114T0711Z.json, envelope J1 <= -9 deg); READY is the board record with J1 at -12.7
-# (full_arm/ready_20261114T073916Z). J1 goes back there before the wrist homes. The angle is the description's named pose "ready"
+# (full_arm/ready_20261114T073916Z). J1 goes back there before the wrist homes. The angle was the description's named pose "ready"
 # (sim2real.named_poses, bam_ws PEP 0056), never a copy. Since 2026-11-19 it is the named pose "homing" (READY's numbers until then):
 # READY moved to the compact pose (J1 -2), where J1's gravity at the stop would crowd the 9 N.m stall rule, so J1 seeks and returns in
 # the homing posture and the arm is walked to READY after (bam_robot_activity.runner --return-home). The envelope below is the side

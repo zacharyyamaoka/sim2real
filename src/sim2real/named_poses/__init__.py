@@ -1,4 +1,4 @@
-"""A robot's saved positions, by name: ``named_pose("ready")`` - sim2real's copy of what the robot description publishes.
+"""A robot's saved positions, by name: ``named_pose("ready_to_pick")`` - sim2real's copy of what the robot description publishes.
 
 The description owns the poses: bam_ws ``bam_cad_descriptions/descriptions/bam_fb_v2.py`` declares them (robot_msgs ``NamedPose``,
 MoveIt's SRDF group_state with its reason) and generates ``bam_fb_v2.named_poses.json``. sim2real imports nothing of bam_ws, so the same
@@ -11,8 +11,8 @@ file is kept here as ``<robot>.json`` (generated, never edited: robot_msgs refus
 WHY by name (Zach, 2026-11-15): "all the code should not be like referencing an exact position, but should rather be like accessing that
 saved position by name, so that in the future you can always just change it easily and it continues to work." PEP 0056 in bam_ws.
 
-Light on purpose (robot_msgs + the standard library, no layer): J1's home on the rack (``sim.homing.j1_home``) reads READY's J1 from here
-inside the powered deployment venv.
+Light on purpose (robot_msgs + the standard library, no layer): J1's home on the rack (``sim.homing.j1_home``) reads the homing posture's
+J1 from here inside the powered deployment venv.
 """
 
 from __future__ import annotations
@@ -40,7 +40,8 @@ def named_poses(robot: str = ROBOT) -> tuple[NamedPose, ...]:
 
 
 def named_pose(name: str, group: str | None = None, robot: str = ROBOT) -> NamedPose:
-    """The saved position called ``name`` (``"ready"``); an unknown name raises KeyError listing those there are."""
+    """The saved position called ``name`` (``"ready_to_pick"``: READY, ``"ready"`` until 2026-11-21); an unknown name raises KeyError
+    listing those there are."""
 
     return find_named_pose(named_poses(robot), name, group)
 

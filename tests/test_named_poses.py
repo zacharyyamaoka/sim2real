@@ -53,7 +53,8 @@ def test_the_ruler_cells_and_j1s_home_are_byte_for_byte_the_old_ones():
 
 
 def test_the_copy_is_digest_checked_and_names_the_poses():
-    assert [(p.name, p.group) for p in named_poses.named_poses()] == [("ready", "arm"), ("homing", "arm"), ("home", "fivebar")]
+    assert [(p.name, p.group) for p in named_poses.named_poses()] == [("ready_to_pick", "arm"), ("stow_low_power", "arm"),
+                                                                      ("sleep_limp", "arm"), ("homing", "arm"), ("home", "fivebar")]
     with pytest.raises(KeyError, match="there are"):
         named_poses.named_pose("fold")
     j2, c1 = named_poses.fivebar_craig_deg(named_poses.named_pose("home"))
@@ -71,7 +72,7 @@ def test_the_copy_is_bam_ws_descriptions_when_bam_ws_is_here():
 def test_reading_a_pose_loads_no_layer_and_nothing_heavy():
     """J1's home reads READY's J1 inside the rack's powered venv (robot_msgs + sim2real, no robot_models, no MuJoCo)."""
 
-    probe = ("import sys, sim2real.named_poses as n; n.named_pose('ready'); "
+    probe = ("import sys, sim2real.named_poses as n; n.named_pose('ready_to_pick'); "
              "print(sorted(m for m in sys.modules if m.split('.')[0] in {'robot_models', 'mujoco', 'scipy', 'wandb'} "
              "or m.startswith(('sim2real.metrics', 'sim2real.schedule', 'sim2real.fit', 'sim2real.sim', 'sim2real.models', 'sim2real.cards'))))")
     done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, cwd=str(Path(__file__).resolve().parents[1] / "src"))
@@ -83,7 +84,7 @@ def test_ready_moved_and_homing_did_not():
     """2026-11-19: READY (where the arm waits) is the compact pose; the homing routine keeps the old READY's posture (the description's
     HOMING why: J1's top-stop seek and its 9 N.m stall rule were proven there)."""
 
-    ready, homing = named_poses.named_pose("ready"), named_poses.named_pose("homing")
+    ready, homing = named_poses.named_pose("ready_to_pick"), named_poses.named_pose("homing")
     assert ready.digest() != homing.digest()
     assert -89.0 <= math.degrees(ready.position_of("revolute_3")) <= -1.0  # READY's numbers are the description's to change: not pinned
     assert j1_home.J1_READY_RAD == homing.position_of("revolute_3") != ready.position_of("revolute_3")

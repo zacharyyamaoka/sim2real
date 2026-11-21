@@ -88,7 +88,7 @@ TAU = 2.0 * math.pi
 CRAIG_OFFSET_DEG = {J2: _DESCRIPTION_CRAIG_OFFSET_DEG[J2], C1: _DESCRIPTION_CRAIG_OFFSET_DEG[C1]}
 READY_CRAIG_DEG = FIVEBAR_LEVELS["READY"]
 # TD4 at READY (bam_rack_twin full_arm.wrist_td4: W1 = L2's angle j2 + j3, W2 +90, W3 0; READY's j3 is -64.079 deg): the claw plumb. The
-# description's named pose "ready" (bam_ws PEP 0056), never a copy: (1.167, 90.0, 0.0) today
+# description's named pose "homing" (bam_ws PEP 0056), never a copy: (1.167, 90.0, 0.0) today
 READY_TD4_WRIST_DEG = wrist_deg(named_pose("homing"))  # the homing posture's TD4 wrist (READY's until 2026-11-19, when READY moved)
 RECIPE_SEEK_DEG_S = math.degrees(0.1 * TAU)  # 36 deg/s: the recipe's max_vel 0.1 rev/s
 MULTI_LOCATE_DEG_S = 60.0  # 0.7 x the wrist's 86 deg/s speed ceiling (the ruler's 0.8 margin, with room for the stall's overshoot)
@@ -101,6 +101,8 @@ LOCATE_TOL_DEG = 1.5
 SPAN_TOL_DEG = 1.0
 GAP_MAX_DEG = 1.0  # the most backlash a GIM4305-10 could plausibly carry (datasheet class: 12-18 arcmin): a "gap" past it is not a gap
 TOUCHES = ("single", "multi", "press_reverse")
+# WHY "ready" is not renamed with the named pose (bam_ws 2026-11-21, "ready" -> "ready_to_pick"): it labels this routine's option, the wrist
+# homed at the homing routine's READY (READY_CRAIG_DEG = FIVEBAR_LEVELS["READY"], the named pose "homing"), never the description's READY
 WRIST_POSES = ("ready", "bowl")
 
 # -- J1's home: ONE definition for the twin and the rack (j1_home: every number and its WHY; the rack entry point j1_rack runs the same steps)

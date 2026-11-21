@@ -4,13 +4,13 @@
  "source": "bam_cad_descriptions/descriptions/bam_fb_v2.py",
  "poses": [
   {
-   "name": "ready",
+   "name": "ready_to_pick",
    "group": "arm",
    "kind": "joint",
-   "digest": "28a094f8abac0730",
+   "digest": "e5ebcd15a3c08f07",
    "pose": {
     "_type": "manipulation/NamedPose",
-    "name": "ready",
+    "name": "ready_to_pick",
     "group": "arm",
     "joint_names": [
      "revolute_3",
@@ -27,9 +27,9 @@
      ],
      "data": [
       -0.03490658503988659,
-      -0.17453292519943295,
-      0.403178689872502,
-      -1.0471975511965976,
+      1.1665706448272715,
+      1.8349702349866461,
+      1.028153002608697,
       1.5707963267948966,
       0.0
      ]
@@ -37,7 +37,84 @@
     "tolerance": null,
     "tool_pose": null,
     "tip_link": "",
-    "why": "Where the full arm waits: it starts and ends every session here and arm-hold holds it here between them (never released). Zach 2026-11-19: 'a better Home/ready position that is lower energy and more centered in the belt'. The upper arm 10 deg forward of vertical, the forearm 60 deg forward, J1 -2, the claw lying flat along the plane: the claw's tip over the belt's usable middle (bench plane x 0.212 m; the arm reaches hover height from x -0.10 to 0.45; the 2026-11-15 READY's hand sat 478 mm out, past the far rail), 150 mm over the belt, the bundle's self-collision rules proven. Holding power: 3.9 W on the arm's fitted comp vs the old READY's 4.0 - on this arm every usable READY holds at 3-4 W (C1 carries 3-4 N.m in all of them), so the posture buys centring, not energy (measured 2026-11-20: the study's 15c model under-read J2 / C1 here). WHY this height and not the first pick F (forearm 55, 20 mm lower): a session leaves READY with a wrist swing in place (flat to plumb) and ends with one back (repick.ready_wrist_swing); at F those swings cleared the 30 mm belt rule by 3 mm and the far rail by 14, here by 27 mm and 32 mm on the 7 newest measured belts. WHY the claw flat: a plumb claw needs the wrist ~100 mm higher to clear the items, and every claw-plumb pose that holds with less than the old READY sits at the far rail (x >= 0.44). WHY J1 -2, not 0: the bench admits J1 only in [-90, 0] (full_arm_pan.J1_PAN_RANGE_RAD), so a hold that sags a tenth of a degree past 0 would refuse a session. The study: bam_ws reports/media/ready-pose-2026-11-19.html. The rack realises it per power-up as a board record (ready_record.json, which carries this pose's digest): python -m bam_rack_twin.hardware.zero_writer ready writes it after an edit here; tests/test_ready_swing_margin (bam_rack_twin) checks any READY written here against the session's swings."
+    "why": "Zach 2026-11-21: V4's plumb claw at V4's height with the hand ON the red line. That exact spec (the TCP on the line at V4's height) is refused by bam_fivebar's valid region - 'collision l2_tube x j1_drive (-8.0 mm)', a conservative box the size of the J1 drive's whole turning circle - while the CAD meshes leave L2 38 mm from the shoulder there (ready_boundary.json); tightening that box to the CAD shape (bam_fivebar.limits, its owner's change; then re-run ready_candidates.py + swing_gate.py) is the path to the exact spec. Along the admitted boundary every 1 mm closer to the line costs ~0.5 mm of height, so this is the closest pose that passes every gate with >= 2 mm to spare: the TCP 12 mm off the line (V4: 78), 8 mm under V4's height. 9.16 W on the arm's fitted comp (V4 12.17, the READY it replaces 3.82); 117 mm over the belt by the swing gate on its 7 measured belts (its READY rule 115); the claw plumb at TD4, so no wrist swing at session start or end; the wrist's self-collision proven. Camera: the overhead D435 loses 8.2 % of the belt to the belt-plane refit and 1.4 % of the pick zone. Study: bam_ws docs/named_poses/rest_poses_1121 (ready_scan / ready_boundary / ready_candidates), reports/media/rest-poses-2026-11-21 (ready_boundary.json, swing_ready.json). The rack realises it per power-up as a board record (ready_record.json, which carries this pose's digest): python -m bam_rack_twin.hardware.zero_writer ready writes it after an edit here, python -m bam_robot_activity.runner --return-home walks the arm there; tests/test_ready_swing_margin (bam_rack_twin) checks any READY written here against the session's swings.",
+    "description": "Where the arm waits between picks: the claw hangs straight down with the planner's own wrist (TD4), so a session starts without a wrist swing, the hand 12 mm from the belt's centre line and 117 mm over the belt (the swing gate's own number)."
+   }
+  },
+  {
+   "name": "stow_low_power",
+   "group": "arm",
+   "kind": "joint",
+   "digest": "83cf4d8b80fc1dd0",
+   "pose": {
+    "_type": "manipulation/NamedPose",
+    "name": "stow_low_power",
+    "group": "arm",
+    "joint_names": [
+     "revolute_3",
+     "revolute_6",
+     "revolute_7",
+     "revolute_11",
+     "revolute_14",
+     "revolute_17"
+    ],
+    "positions": {
+     "dtype": "<f8",
+     "shape": [
+      6
+     ],
+     "data": [
+      -0.03490658503988659,
+      0.6283185307179586,
+      1.9118577811087798,
+      1.905561769164803,
+      -1.5707963267948966,
+      0.0
+     ]
+    },
+    "tolerance": null,
+    "tool_pose": null,
+    "tip_link": "",
+    "why": "Zach 2026-11-21: the most compact, low-energy pose that lets waste pass beneath and is out of the way. The criteria were frozen before the search (stow_criteria.json, commit d8570b361): gates S1-S4, then power 50 / compact 30 / camera 20. 133,920 five-bar x wrist candidates (310 five-bar poses on a 6 deg grid x 24 claw angles x 9 W2 x 2 W3), 21,465 passed every gate. This one: 2.17 W on the arm's fitted comp (J2 1.76, C1 0.06, the wrist + J1 0.35; 43 % under the READY ready_to_pick replaced, 3.82), 126 mm over the belt, the hand within 120 mm of the line, nothing past the shoulder along the belt, footprint 603 cm2 (that READY's 1026). The alternatives: >= 150 mm over the belt costs 3.33 W (the best-scoring such pose, 156 mm), >= 200 mm 5.35 W; the rank-2 pose ties on score (0.23 W lighter, its hand 22 mm further out) and the frozen rule gives a tie to the higher belt clearance. The joint-linear transit from ready_to_pick clears the belt by 112 mm. Study: bam_ws docs/named_poses/rest_poses_1121 (stow_search.py / stow_report.py), reports/media/rest-poses-2026-11-21 (stow_search.json, stow_report.json).",
+    "description": "Where the arm rests when it has nothing to pick: folded in behind the line, the lowest holding power of any pose that lets waste pass 126 mm beneath and keeps the hand inside the shoulder (2.2 W)."
+   }
+  },
+  {
+   "name": "sleep_limp",
+   "group": "arm",
+   "kind": "joint",
+   "digest": "09294ee52b53fb2a",
+   "pose": {
+    "_type": "manipulation/NamedPose",
+    "name": "sleep_limp",
+    "group": "arm",
+    "joint_names": [
+     "revolute_3",
+     "revolute_6",
+     "revolute_7",
+     "revolute_11",
+     "revolute_14",
+     "revolute_17"
+    ],
+    "positions": {
+     "dtype": "<f8",
+     "shape": [
+      6
+     ],
+     "data": [
+      -0.03490658503988659,
+      0.10471975511965978,
+      1.7111449171294317,
+      -2.9286624848464853,
+      1.5707963267948966,
+      0.0
+     ]
+    },
+    "tolerance": null,
+    "tool_pose": null,
+    "tip_link": "",
+    "why": "Zach 2026-11-21: a sleep phase that lets the arm go limp in an intelligent way. Until now limp was never for a joint that carries gravity (Zach 2026-11-13: hold, brake on a fault, never a bare stop), and today's arm_hold never lets go - so nothing walks the arm here and goes limp yet; the only limps are the claw on request and W1-W3 in return-home's fold escape. The gravity bowl: torque off at any working pose (the READY ready_to_pick replaced, V4, ready_to_pick, stow_low_power) drops the arm into the five-bar's gravity bowl with the claw 70-85 mm under the belt top (sleep_survey.json) - never limp there. The other rest the potential map has, the coupler's crank-end eye on the L1 tube (~270 mm over the belt, holds limp), is the crank-FLIPPED assembly: entering it drives the crank through its fold and return-home refuses a flipped five-bar, so it was rejected (sleep_rest.json, sleep_basin.json); a J1 tilt does not help (the arm swings back to its hang). So sleep is the bowl on the working assembly, made safe by the wrist: the five-bar at its lowest-torque pose (comp J2 +0.54 / C1 -0.04 N.m, under their 0.59 / 0.62 N.m Coulomb), the claw turned 105 deg from plumb so gravity (+0.16 N.m) presses W1 onto its own 169.85 deg stop instead of hanging the claw. Torque off (boards stopped or braked) it moves at most 2.0 deg, its lowest point 78 mm over the belt (gate >= 30; the items are 65 mm), +-3 deg kicks on every drive all stay >= 75 mm. W2 is held only by friction: gravity 0.007 N.m against 0.083 kinetic / 0.140 static measured; in the frictionless bound W2 creeps to its stop and the claw ends 0.4 mm over the belt top - so it holds stopped or braked on the measured friction (brake mode 15 preferred: phases shorted, damped), and W2 alone kept holding (~0.0002 W) makes it friction-proof; holding the whole pose powered would cost 0.28 W. The limp sim (limp_sim.py, three cases: free, brake, frictionless) modelled gravity on the 15c masses, the bundle's stop pairs as contacts, the closed loop, each drive's Coulomb / viscous loss and reflected rotor inertia, and brake mode's damping (the JMC drives' ASSUMED); it did not model backlash, cogging, static friction over kinetic (the frictionless bound stands in), contacts with the belt, the rail or the wrist on the arm (checked from the geometry along the settle), cable drag or belt vibration (the kicks stand in). Waking: the five-bar stays inside the envelope, and the bowl is the five-bar homing's own start. Study: bam_ws docs/named_poses/rest_poses_1121 (landscape.py, limp_sim.py, sleep_survey / sleep_basin / sleep_rest / sleep_bowl / sleep_pick.py), reports/media/rest-poses-2026-11-21 (sleep_pick.json).",
+    "description": "Torque off, for an idle line: the arm hangs straight down in its own gravity bowl with the claw folded up onto W1's hard stop and stays put (it moves 2 deg) 78 mm over the belt - so only with the belt stopped or empty. Limp only with the boards stopped or braked, or W2 kept powered; no runtime path goes here yet."
    }
   },
   {
@@ -74,7 +151,8 @@
     "tolerance": null,
     "tool_pose": null,
     "tip_link": "",
-    "why": "The homing routine's posture: READY's numbers from 2026-11-15 to 2026-11-19 (the claw's TCP 40 mm over the bin's drop, TCP (0.565, 0.400) m in the bench plane, the claw plumb (TD4: W1 = L2's angle, W2 +90, W3 0); the five-bar as sim2real's homing ruler had it, Craig 65.246 / 122.791; J1 -12.7). WHY homing keeps its own pose when READY moves: J1 seeks its top stop with the arm in this posture, where J1's gravity at the stop measured 5.2 N.m against the seek's 9 N.m stall rule (sim2real j1_home); in READY's compact posture the model's gravity there is 1.6x (study: -6.7 vs -4.1 N.m), which would leave too little between gravity plus friction and the rule to tell the stop from a stall. The wrist feed-forward and the homing corridor were fitted and proven here, byte for byte. After homing the arm is walked to READY (bam_robot_activity.runner --return-home)."
+    "why": "The homing routine's posture: READY's numbers from 2026-11-15 to 2026-11-19 (the claw's TCP 40 mm over the bin's drop, TCP (0.565, 0.400) m in the bench plane, the claw plumb (TD4: W1 = L2's angle, W2 +90, W3 0); the five-bar as sim2real's homing ruler had it, Craig 65.246 / 122.791; J1 -12.7). WHY homing keeps its own pose when READY moves: J1 seeks its top stop with the arm in this posture, where J1's gravity at the stop measured 5.2 N.m against the seek's 9 N.m stall rule (sim2real j1_home); in READY's compact posture the model's gravity there is 1.6x (study: -6.7 vs -4.1 N.m), which would leave too little between gravity plus friction and the rule to tell the stop from a stall. The wrist feed-forward and the homing corridor were fitted and proven here, byte for byte. After homing the arm is walked to READY (bam_robot_activity.runner --return-home).",
+    "description": "Where the homing routine works: J1 seeks its top stop and the homing walk ends with the arm here, the claw plumb over the bin's drop; after homing the arm is walked to ready_to_pick."
    }
   },
   {
@@ -103,7 +181,8 @@
     "tolerance": null,
     "tool_pose": null,
     "tip_link": "",
-    "why": "The five-bar's home in its homed map of record (homed_083647, 2026-11-10: home_joint_rad, Craig 91.01 / -126.438): where fivebar_home ends and the homing routines start their walks (sim2real gff_rung / fullarm_check / fullarm_home HOME_CRAIG_DEG, bam_rack_twin fullarm_comp's 'home'). The full arm never waits here in a session: the claw would hang 101 mm into the belt."
+    "why": "The five-bar's home in its homed map of record (homed_083647, 2026-11-10: home_joint_rad, Craig 91.01 / -126.438): where fivebar_home ends and the homing routines start their walks (sim2real gff_rung / fullarm_check / fullarm_home HOME_CRAIG_DEG, bam_rack_twin fullarm_comp's 'home'). The full arm never waits here in a session: the claw would hang 101 mm into the belt.",
+    "description": "The five-bar's own home (the five-bar group alone): where the five-bar's homing ends and the full arm's homing routines start their walks; the arm never waits here, the claw would hang into the belt."
    }
   }
  ]
