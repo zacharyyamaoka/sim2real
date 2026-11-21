@@ -30,9 +30,11 @@ The ruler (written before the code; whoever turns it green may not edit it):
 5. Grade: performance gained on a moved hidden CAN 11 (truth in no file the routine may read: world.json is refused during the fit),
    handed values at the edge of a passing dynamics fit (x 0 / 1 / 3 of sysid/acceptance.json's tolerance, signed to mislead), scored by
    sim2real.metrics.actuator against the best admissible PD + feed-forward on a grid with the TRUE model's feed-forward:
-   regret = cost / oracle - 1 <= 0.15 passes (bam_pid_tunning K6). The ruler fails the board's own as-found controller (else it cannot
-   grade a gain) and a deliberately bad corner. The ladder is written BEFORE the pass asserts (a FAIL is recorded, not lost) and carries
-   the hashes of the wrapper and this file, so a hand-written ladder cannot stand in for the run.
+   regret = cost / oracle - 1 <= 0.15 passes (bam_pid_tunning K6). Admissible is pidtuna's oracle rule (its CONTRACT amendment 1): inside
+   the board's gain guard AND inside the caller's damping band on the truth; where no grid gains are, the pool is the as-found kp / kd
+   under each feed-forward (what PID tuna keeps), and the tuned gains are held to the same band. The ruler fails the board's own
+   as-found controller (else it cannot grade a gain) and a deliberately bad corner. The ladder is written BEFORE the pass asserts (a
+   FAIL is recorded, not lost) and carries the hashes of the wrapper and this file, so a hand-written ladder cannot stand in for the run.
 6. The pendulum's one-click schedule holds it after the regression (or drops it by name where pidtuna cannot be imported); slow:
    calibrate() plays it, settings_ carries the gains, the fit still passes, pools never exceed the twin's workers.
 """
@@ -50,7 +52,7 @@ import re
 import subprocess
 import sys
 import zlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -573,10 +575,10 @@ def _pidtuna():
         from sim2real import paths  # noqa: PLC0415
 
         sys.path.insert(0, str(paths.PIDTUNA / "src"))
-    from pidtuna import tapes, types  # noqa: PLC0415
+    from pidtuna import gains, oracle, tapes, types  # noqa: PLC0415
     from pidtuna.plants import servo_sim  # noqa: PLC0415
 
-    return SimpleNamespace(tapes=tapes, types=types, servo_sim=servo_sim)
+    return SimpleNamespace(tapes=tapes, types=types, servo_sim=servo_sim, gains=gains, oracle=oracle)
 
 
 def _truth_values() -> dict[str, float]:
@@ -690,20 +692,64 @@ def bench():
     feedforwards = (t.Feedforward(), model.feedforward(0.5), model.feedforward(1.0))
     grid = [t.Controller(t.Gains(kp=servo.gains.kp * a, kd=servo.gains.kd * b), ff, label=f"oracle kp x{a:.3g} kd x{b:.3g} ff {k}")
             for a in factors for b in factors for k, ff in enumerate(feedforwards)]
-    found, *scores = _play(pt, servo, truth, [servo.as_found, *grid], workload)
+    # WHY the band (PID Tuna's owner, 2026-11-20, on pidtuna 85495d4 "Never deliver outside the damping band"; pidtuna docs/CONTRACT.md
+    # amendment 1: "ideal" means ideal under the objective and rules the caller set, evaluated on the truth): the oracle is the best
+    # controller inside the board's gain guard AND inside the caller's damping band, the damping read on the TRUE plant the way pidtuna's
+    # own oracle reads it (oracle.true_model: true J and b, gravity linearised at the origin as a spring; gains.bandwidth_of). Grading
+    # against grid gains the caller's band forbids graded PID tuna against controllers it is told never to deliver.
+    plant = pt.servo_sim.ServoSim(servo, truth, seed=SEED, workers=WORKERS)
+    band = _band(pt)
+    zetas = [pt.gains.bandwidth_of(c.gains, pt.oracle.true_model(plant))[1] for c in grid]
+    in_band = [k for k, zeta in enumerate(zetas) if band[0] - 1e-6 <= zeta <= band[1] + 1e-6]  # pidtuna oracle.search_ideal's tolerance
+    # WHY the as-found fallback (the same ruling): where no gains inside the guard reach the band, pidtuna keeps the as-found kp and kd
+    # (its integrator off, as PidTune hands it the board) and says so; the pool is then those gains under each feed-forward, so the
+    # honest grade is how much the tune gains with nothing admissible to improve in kp / kd, not red
+    kept = replace(servo.gains, ilimit=0.0)
+    fallback = [] if in_band else [t.Controller(kept, ff, label=f"as found kp / kd, integrator off, ff {k}")
+                                   for k, ff in enumerate(feedforwards)]
+    found, *scores = _play(pt, servo, truth, [servo.as_found, *grid, *fallback], workload)
     assert math.isfinite(found["stop_p90_mrad"]) and found["stop_p90_mrad"] > 0 and found["tracking_rms_mrad"] > 0, found
-    assert any(s["admissible"] for s in scores), "the ruler admits no PD + feed-forward controller on the guard: the ruler is broken"
-    return SimpleNamespace(pt=pt, servo=servo, truth=truth, model=model, workload=workload, found=found, grid=grid, scores=scores)
+    pool = [grid[k] for k in in_band] if in_band else fallback
+    pool_scores = [scores[k] for k in in_band] if in_band else scores[len(grid):]
+    print(f"{ROUTINE} oracle pool: {len(in_band)} of {len(grid)} grid controllers inside the band {band} on the truth (grid zeta "
+          f"{min(zetas):.3g}-{max(zetas):.3g}); pool = {'those' if in_band else 'the as-found kp / kd under each feed-forward'}",
+          flush=True)
+    assert any(s["admissible"] for s in pool_scores), "the ruler admits no PD + feed-forward controller on the guard: the ruler is broken"
+    return SimpleNamespace(pt=pt, servo=servo, truth=truth, model=model, workload=workload, found=found, grid=grid, scores=scores,
+                           plant=plant, band=band, in_band=in_band, pool=pool, pool_scores=pool_scores)
+
+
+def _band(pt) -> tuple[float, float]:
+    """The caller's damping band: the objective the routine hands PID tuna (PidTune's goal; None = pidtuna's default Objective)."""
+    from sim2real.calibration.pid_tune import PidTune  # noqa: PLC0415
+
+    goal = PidTune(instance="can11").goal
+    return tuple((goal if goal is not None else pt.types.Objective()).damping_band)
+
+
+def _obeys_band(bench, controller) -> bool:
+    """The tuned gains under the oracle's rule: inside the caller's band on the truth, or the as-found kp and kd (pidtuna's tune exempts
+    only those: keeping them changes nothing)."""
+    g, board = controller.gains, bench.servo.gains
+    if math.isclose(g.kp, board.kp, rel_tol=1e-9) and math.isclose(g.kd, board.kd, rel_tol=1e-9):
+        return True
+    zeta = bench.pt.gains.bandwidth_of(g, bench.pt.oracle.true_model(bench.plant))[1]
+    return bench.band[0] - 1e-6 <= zeta <= bench.band[1] + 1e-6
 
 
 def _grade(bench, controller) -> dict:
     tuned = _play(bench.pt, bench.servo, bench.truth, [controller], bench.workload)[0]
-    pool = [_cost(s, bench.found) for s in bench.scores if s["admissible"]] + ([_cost(tuned, bench.found)] if tuned["admissible"] else [])
+    # WHY the band on the tuned gains too: the pool and the graded controller obey one rule, so a tune outside the caller's band (which
+    # pidtuna's contract forbids it to deliver) cannot pass by beating a pool it was not allowed to join
+    admissible = bool(tuned["admissible"] and _obeys_band(bench, controller))
+    pool = [_cost(s, bench.found) for s in bench.pool_scores if s["admissible"]] + ([_cost(tuned, bench.found)] if admissible else [])
     oracle, cost = min(pool), _cost(tuned, bench.found)
     regret = cost / oracle - 1.0
-    return {"pass": bool(tuned["admissible"] and regret <= REGRET_MAX), "worst_error_over_tolerance": float(regret / REGRET_MAX),
-            "regret": float(regret), "gain": float(2.0 / cost), "admissible": bool(tuned["admissible"]), "cost_tuned": float(cost),
-            "cost_oracle": float(oracle), "stop_p90_mrad": float(tuned["stop_p90_mrad"])}
+    return {"pass": bool(admissible and regret <= REGRET_MAX), "worst_error_over_tolerance": float(regret / REGRET_MAX),
+            "regret": float(regret), "gain": float(2.0 / cost), "admissible": admissible, "cost_tuned": float(cost),
+            "cost_oracle": float(oracle), "stop_p90_mrad": float(tuned["stop_p90_mrad"]),
+            "oracle_pool": f"{len(bench.in_band)} grid controllers inside the band {bench.band}" if bench.in_band else
+                           f"the as-found kp / kd under each feed-forward (no grid gains inside the guard reach the band {bench.band})"}
 
 
 def _pidtuna_head() -> str:
@@ -800,13 +846,22 @@ def test_grade_pid_tuna_on_a_hidden_can11_against_the_oracle(bench, monkeypatch)
 @pytest.mark.skipif(not SLOW, reason="SIM2REAL_SLOW=1: the ruler's own mutation test on the hidden CAN 11")
 def test_the_grade_fails_the_boards_own_controller_and_a_bad_corner_and_passes_the_grids_best(bench):
     t = bench.pt.types
-    assert not _grade(bench, bench.servo.as_found)["pass"], \
+    as_found = _grade(bench, bench.servo.as_found)
+    print(f"{ROUTINE} mutation, the board's as-found controller: {as_found}", flush=True)
+    assert not as_found["pass"], \
         "the board's as-found controller passes: the ruler cannot tell a tune that does nothing from one that gains"
+    # WHY on the regret too (the band ruling, 2026-11-20): as found is exempt from the band, so only the cost can fail it - it must
+    assert as_found["regret"] > REGRET_MAX, as_found
     bad = t.Controller(t.Gains(kp=2.0 * bench.servo.gains.kp, kd=0.25 * bench.servo.gains.kd), t.Feedforward(),
                        label="kp x2, kd x0.25, no feed-forward")
-    assert not _grade(bench, bad)["pass"], "a ruler that passes the least damped, uncompensated corner cannot fail"
-    costs = [(_cost(s, bench.found), k) for k, s in enumerate(bench.scores) if s["admissible"]]
-    entry = _grade(bench, bench.grid[min(costs)[1]])
+    corner = _grade(bench, bad)
+    print(f"{ROUTINE} mutation, the bad corner: {corner}", flush=True)
+    assert not corner["pass"], "a ruler that passes the least damped, uncompensated corner cannot fail"
+    # WHY on the regret too: the band alone refuses this corner; the cost must refuse it as well, or the metric could not fail anything
+    assert corner["regret"] > REGRET_MAX, corner
+    # the pool's best (the grid's best inside the band; where none is, the as-found kp / kd under its best feed-forward) passes, regret 0
+    costs = [(_cost(s, bench.found), k) for k, s in enumerate(bench.pool_scores) if s["admissible"]]
+    entry = _grade(bench, bench.pool[min(costs)[1]])
     assert entry["pass"] and entry["regret"] == pytest.approx(0.0, abs=1e-9), entry
 
 
