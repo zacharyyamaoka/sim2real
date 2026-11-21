@@ -45,7 +45,9 @@ LEVEL_WORDS = {"0x": "with no sensor noise", "1x": "at the oracle's own sensor n
 DOCS = (  # (slug, markdown file, nav label): a file that does not exist yet is skipped, never an empty page
     ("guide", REPO / "docs" / "API.md", "Guide"),
     ("calibrate", REPO / "docs" / "CALIBRATE.md", "What calibrate() returns"),
+    ("deployed", REPO / "docs" / "DEPLOYED.md", "Deployed"),
 )
+LANDING = WEBSITE / "data" / "landing.json"   # export_landing.py writes it from landing_picks.py; the build only reads it
 
 
 # ---------------------------------------------------------------------------------- docstrings (robotmsgs.com's model.py)
@@ -471,6 +473,22 @@ def docs() -> list[tuple[str, str, str, str]]:
         title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), label)
         out.append((slug_, title, label, text))
     return out
+
+
+def landing() -> dict | None:
+    """The landing page's numbers (website/data/landing.json), plus `stale_sources`: the in-repo files whose bytes moved since the export
+    (the page then still shows the exported numbers, and build.py says STALE so nobody ships them unnoticed)."""
+    if not LANDING.is_file():
+        return None
+    data = json.loads(LANDING.read_text(encoding="utf-8"))
+    stale = []
+    for sid, src in data.get("sources", {}).items():
+        if src.get("in_repo"):
+            path = REPO / src["path"]
+            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != src["sha256"]:
+                stale.append(sid)
+    data["stale_sources"] = stale
+    return data
 
 
 def source_stamp() -> str:

@@ -1,0 +1,22 @@
+// Cloudflare deploy of the sim2real docs site: a static-assets Worker serving dist/ (built by build/build.py; no server code).
+// No production domain yet (it is Zach's pick): only the preview exists, built with --noindex so search engines skip it.
+//   pnpm --dir /home/bam/sim2real/website run deploy:preview   -> sim2real-docs-preview.<account>.workers.dev
+// Undo (run it yourself): wrangler delete --env preview
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sim2real-docs",
+  // Not a secret (Cloudflare docs): the account robotmsgs.com deploys to.
+  "account_id": "c2747ee6a8842e150e38acc3d044adde",
+  "compatibility_date": "2026-11-20",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "workers_dev": true,
+  "routes": [],
+  "env": {
+    // WHY a preview env only: a prod deploy needs a domain, and then passes --origin https://<domain> to build.py
+    "preview": { "workers_dev": true, "routes": [] }
+  }
+}

@@ -3,7 +3,8 @@
     env -u VIRTUAL_ENV PYTHONPATH=/home/bam/sim2real/src:/home/bam/sim2real /home/bam/sim2real/.venv/bin/python /home/bam/sim2real/website/build/build.py
 
 `--out <dir>` (default website/dist/, gitignored). It reads cards/domain.py, cards/calibration.py, sim2real.calibration.recovery, the
-docstrings, docs/*.md and website/examples/*.out.json; it never runs a calibration and never writes a tracked file. Runs in seconds.
+docstrings, docs/*.md, website/examples/*.out.json and website/data/landing.json (the landing page's numbers, written by
+export_landing.py); it never runs a calibration and never writes a tracked file. Runs in seconds. `--noindex` builds a preview.
 """
 
 from __future__ import annotations
@@ -29,6 +30,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, default=ROOT / "dist", help="output folder (default: website/dist/)")
     ap.add_argument("--origin", default=ORIGIN, help=f"the site's origin for sitemap.xml and robots.txt (default {ORIGIN})")
+    # WHY --noindex: a preview on workers.dev must not be indexed before the domain (Zach's pick) exists; it writes robots Disallow
+    # and a noindex meta on every page, so the preview's origin does not matter
+    ap.add_argument("--noindex", action="store_true", help="a preview build: robots.txt disallows everything, every page says noindex")
     args = ap.parse_args(argv)
     dist: Path = args.out.resolve()
 
@@ -49,6 +53,8 @@ def main(argv=None) -> int:
     for name in ("site.css", "site.js", "sim2real.css"):
         digest.update((SITE / name).read_bytes())
     ctx = {"asset_version": digest.hexdigest()[:8], "stamp": model.source_stamp()}
+    if args.noindex:
+        ctx["robots"] = "noindex"
 
     types = model.types()
     routines = model.routines()
@@ -56,7 +62,7 @@ def main(argv=None) -> int:
     catalog = set(routines_by_id)
     examples = model.examples()
     docs = model.docs()
-    doc_links = {"API.md": "/docs/guide/", "CALIBRATE.md": "/docs/calibrate/"}
+    doc_links = {"API.md": "/docs/guide/", "CALIBRATE.md": "/docs/calibrate/", "DEPLOYED.md": "/docs/deployed/"}
     doc_links = {name: url for name, url in doc_links.items() if any(url == f"/docs/{s}/" for s, *_ in docs)}
 
     urls: list[str] = []
@@ -65,7 +71,8 @@ def main(argv=None) -> int:
         write(f"{url}index.html", content)
         urls.append(url)
 
-    page("/", pages.home(types, routines, examples, docs, **ctx))
+    landing = model.landing()
+    page("/", pages.home(types, routines, examples, docs, landing, **ctx))
     page("/types/", pages.types_index(types, **ctx))
     for t in types:
         page(t.path, pages.type_page(t, types, routines_by_id, **ctx))
@@ -85,13 +92,20 @@ def main(argv=None) -> int:
         page(f"/docs/{slug}/", pages.doc_page(slug, title, label, markdown, types, doc_links, **ctx))
     write("404.html", pages.not_found(types, **ctx))
 
-    write("robots.txt", f"User-agent: *\nAllow: /\nSitemap: {args.origin}/sitemap.xml\n")
+    if args.noindex:
+        write("robots.txt", "User-agent: *\nDisallow: /\n")
+    else:
+        write("robots.txt", f"User-agent: *\nAllow: /\nSitemap: {args.origin}/sitemap.xml\n")
     entries = "".join(f"<url><loc>{args.origin}{u}</loc></url>" for u in urls)
     write("sitemap.xml", f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{entries}</urlset>\n')
     size = sum(f.stat().st_size for f in dist.rglob("*") if f.is_file())
     stale = [ex.name for ex in examples if ex.stale]
     print(f"built {len(urls) + 1} pages ({len(types)} types, {len(routines)} routines, {len(examples)} examples, {len(docs)} docs) "
           f"into {dist}, {size / 1024:.0f} KiB" + (f"; STALE example output: {', '.join(stale)}" if stale else ""))
+    if landing is None:
+        print("NO landing data: website/data/landing.json is missing (run website/build/export_landing.py); the home page says so")
+    elif landing["stale_sources"]:
+        print(f"STALE landing source: {', '.join(landing['stale_sources'])} changed since export_landing.py read it; re-export")
     return 0
 
 

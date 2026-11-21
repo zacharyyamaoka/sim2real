@@ -12,6 +12,7 @@ Equipment $, Recovery at 0x / 1x / 3x / 10x, Needs first) are the old catalog's,
 from __future__ import annotations
 
 import html
+import math
 import re
 
 from highlight import highlight
@@ -27,12 +28,6 @@ BRAND_SVG = ('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke
              'stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="9" height="14" rx="1.5"/>'
              '<path d="M14.5 5h1.5M19 5h1a1.5 1.5 0 0 1 1.5 1.5v1M21.5 10.5v3M21.5 16.5v1A1.5 1.5 0 0 1 20 19h-1M16 19h-1.5" '
              'stroke="var(--accent)"/><path d="M7 11h.01M17 12h.01" stroke-width="3"/></svg>')
-STAGE_WORDS = (
-    ("configure", "set a value: a joint zero, an exposure lock. Nothing is fitted; the model is evaluated at it."),
-    ("fit", "match a model to reality: friction, mass, backlash, a sticker's as-built pose. The catalog's word for it is identify."),
-    ("tune", "optimize a metric where there is no real reference: PID gains, a camera's exposure for ArUco accuracy."),
-    ("measure", "a gauge: how well the fitted twin matches held-out runs. It writes no parameter."),
-)
 
 
 def esc(text: object) -> str:
@@ -293,67 +288,467 @@ def rung_table(t: TypeInfo, family: str, routines_by_id: dict[str, RoutineInfo])
 # ------------------------------------------------------------------------------------------------------- pages
 
 
-def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[ExampleInfo], docs: list[tuple[str, str, str, str]], **ctx) -> str:
-    implemented = sum(r.status == "implemented" for r in routines)
-    graded = sum(any(level.ratio is not None for level in r.levels) for r in routines)
-    n_models = sum(len(t.models) for t in types)
-    n_params = sum(len(t.parameters) for t in types)
-    tour = examples[0] if examples else None
-    tour_html = ""
-    if tour is not None:
-        printed = (tour.recorded or {}).get("stdout", "").strip()
-        out = (f'<p class="out-label">Output</p>{code_block(printed, "text", wrap=True, label="tour output")}' if printed
-               else '<p class="muted">Not recorded yet: run <code>website/build/record_examples.py</code>.</p>')
-        tour_html = (f'<section class="tour" aria-labelledby="tour-h"><h2 id="tour-h">calibrate() in one screen</h2>'
-                     f'<p class="muted">This is <a href="{tour.path}"><code>website/examples/{esc(tour.name)}.py</code></a>, run for real; '
-                     f'the output below is what it printed.</p>{code_block(tour.source, label="tour example")}{out}</section>')
-    stages = "".join(f'<div class="pillar"><h2>{esc(word)}</h2><p>{esc(text)}</p></div>' for word, text in STAGE_WORDS)
-    calibrate_doc = next((s for s, *_ in docs if s == "calibrate"), None)
-    returns = (f'<a href="/docs/calibrate/">What calibrate() returns</a>' if calibrate_doc
-               else "what <code>calibrate()</code> returns (docs/CALIBRATE.md, once the back end lands)")
-    sections = "".join(
-        f'<a class="pkg" href="{href}"><span class="pkg-name">{esc(name)}</span><span class="pkg-n">{esc(n)}</span></a>'
-        for name, href, n in (
-            ("Types", "/types/", plural(len(types), "type")),
-            ("Routines", "/routines/", f"{len(routines)} · {implemented} implemented"),
-            ("Examples", "/examples/", plural(len(examples), "oracle example")),
-            ("API", "/api/", "RobotTwin, calibrate, eval"),
-            ("Docs", "/docs/", plural(len(docs), "page")),
-        )
+# ------------------------------------------------------------------------------------------------------- the landing page
+#
+# WHY this shape (Zach, Daily Note 2026-11-20, "# Sim2Real routines"): pidtuna.com's section grammar - hero, proof, how, quickstart,
+# promises, CTA - plus his three modes and bench vs deployed, in eight sections. Every number comes from website/data/landing.json
+# (export_landing.py reads it out of a named file) and links to its source; a missing number says "not measured yet" and why. Prose that
+# makes a claim lives in landing.json and is rendered by render_template; the words written here carry no number and no comparison.
+
+GITHUB = "https://github.com/zacharyyamaoka/sim2real"
+LANDING_PLACE = re.compile(r"\{(=[^{}]+|gate:[a-z0-9_.-]+|cmp:[a-z0-9_.-]+:[a-z0-9_.-]+|[a-z0-9][a-z0-9_.-]*)\}")
+FORMATS = {"mm": "{n} mm", "°": "{n}°", "°/s": "{n}°/s", "× floor": "{n} × floor", "h": "{n} h", "": "{n}", "%": "{n}%",
+           "×": "×{n}", "N·m": "{n} N·m"}
+GATE_WORDS = {"pass": "pass", "fail": "fail", "unjudged": "not judged"}
+COMPARE_WORDS = {-1: "smaller than", 0: "the same as", 1: "larger than"}
+STATUS_WORDS = {"not_measured": "not measured yet", "not_built": "not built yet", "runs": "runs today"}
+# the small label after each number in a cell (what the number is); a count that follows a stop number reads "worst of N stops"
+MEASURE_WORDS = {"stop_worst": "worst stop", "stop_median": "median stop", "stop_task_worst_median": "median task's worst stop",
+                 "gate_pass_rate": "of tasks within the gate", "tcp_rms": "TCP RMS", "joint_rms": "joint RMS", "stops": "stops",
+                 "held_out_ratio": "", "held_out_tool": "", "held_out_flange": "", "floor": ""}
+ROBOT_WORDS = {"pendulum": "Pendulum", "ur_arm": "UR arm", "bam_arm": "BAM arm"}
+RECOVERY_HEADS = {"recovered": "Recovered", "nominal": "Description's values", "fitted": "Fitted", "floor": "Floor"}
+API_EXAMPLE = '''import sim2real
+from bam_rack_twin.description import station_description
+from sim2real.calibration import Budget, CalibrationConfig, Ledger
+
+if __name__ == "__main__":  # calibrate() replays runs in a process pool that re-imports this module
+    rd = station_description(11)                          # a robot description: typed parts with their priors, an MJCF, its unit
+    twin = sim2real.RobotTwin.from_robot_description(rd)
+    config = CalibrationConfig(budget=Budget(settings=("bench",), equipment=("camera_tags",)))
+    schedule = twin.generate_schedule(config)             # what will run, in order, with its time and equipment; nothing moves
+    print(schedule.summary())
+    fitted = twin.calibrate(on="sim", config=config, callbacks=[Ledger()])
+    report = fitted.evaluate()                            # held-out error ÷ floor, and the gates
+    print(report.summary())
+    print(fitted.data_)                                   # the runs it was fitted on; fitted.calibrate(data=fitted.data_ + more) refits
+'''
+
+
+class Landing:
+    """landing.json plus what rendering it needs: the [n] of each source in the sources list."""
+
+    def __init__(self, data: dict):
+        self.data = data
+        self.cite = {sid: i for i, sid in enumerate(data["sources"], 1)}
+
+    def value(self, vid: str) -> dict:
+        return self.data["values"][vid]
+
+    def shown(self, vid: str) -> str:
+        v = self.value(vid)
+        return FORMATS[v["display_unit"]].format(n=f"{v['value'] * v['scale']:.{v['digits']}f}")
+
+    def span(self, vid: str) -> str:
+        v = self.value(vid)
+        sid = v["source"]
+        src = self.data["sources"][sid]
+        before, _, after = FORMATS[v["display_unit"]].partition("{n}")
+        number = f"{v['value'] * v['scale']:.{v['digits']}f}"
+        text = (f'<span class="u">{esc(before)}</span>' if before else "") + f'<span class="n">{esc(number)}</span>' + \
+            (f'<span class="u">{esc(after)}</span>' if after else "")
+        return (f'<span class="v" data-value-id="{esc(vid)}" data-value="{v["value"] * v["scale"]!r}" data-unit="{esc(v["display_unit"])}" '
+                f'data-source="{esc(sid)}">{text}<a class="src" href="#src-{esc(sid)}" title="{esc(src["shown"])}">'
+                f'[{self.cite[sid]}]</a></span>')
+
+    def verdict(self, vid: str) -> str:
+        """The 1 mm tool gate at a stop: a worst stop passes or fails; a median above it proves a fail, at or under it proves nothing."""
+        v, g = self.value(vid), self.value(self.data["gate"])
+        if v["measure"] == "gate_pass_rate":
+            return "pass" if v["value"] >= 1.0 - 1e-12 else "fail"
+        value, limit = v["value"] * v["scale"], g["value"] * g["scale"]
+        if v["measure"] == "stop_worst":
+            return "pass" if value <= limit else "fail"
+        return "fail" if value > limit else "unjudged"
+
+    def gate(self, vid: str) -> str:
+        verdict = self.verdict(vid)
+        return (f'<span class="gate gate-{verdict}" data-gate="{verdict}" data-gate-value="{esc(vid)}" '
+                f'title="against the tool gate at every stop">{GATE_WORDS[verdict]}</span>')
+
+    def compare(self, a: str, b: str) -> str:
+        va, vb = self.value(a), self.value(b)
+        x, y = va["value"] * va["scale"], vb["value"] * vb["scale"]
+        word = COMPARE_WORDS[0 if math.isclose(x, y, rel_tol=1e-9) else (1 if x > y else -1)]
+        return f'<span data-compare data-a="{esc(a)}" data-b="{esc(b)}">{word}</span>'
+
+    def render(self, template: str) -> str:
+        """A landing.json template as HTML: {value-id}, {=name}, {gate:value-id}, {cmp:a:b}, `code` (the ruler's render, as markup)."""
+        out = []
+        for i, part in enumerate(template.split("`")):
+            if i % 2:
+                out.append(f"<code>{esc(part)}</code>")
+                continue
+            pos = 0
+            for m in LANDING_PLACE.finditer(part):
+                out.append(esc(part[pos:m.start()]))
+                body = m.group(1)
+                if body.startswith("="):
+                    out.append(f'<span class="name">{esc(body[1:])}</span>')
+                elif body.startswith("gate:"):
+                    out.append(self.gate(body[5:]))
+                elif body.startswith("cmp:"):
+                    _, a, b = body.split(":")
+                    out.append(self.compare(a, b))
+                else:
+                    out.append(self.span(body))
+                pos = m.end()
+            out.append(esc(part[pos:]))
+        return "".join(out)
+
+    def plain(self, template: str) -> str:
+        """The same template as plain text (an alt text)."""
+        def one(m):
+            body = m.group(1)
+            if body.startswith("="):
+                return body[1:]
+            if body.startswith("gate:"):
+                return GATE_WORDS[self.verdict(body[5:])]
+            return self.shown(body) if not body.startswith("cmp:") else ""
+        return " ".join(LANDING_PLACE.sub(one, template).replace("`", "").split())
+
+    def figure(self, mid: str, cls: str = "") -> str:
+        m = self.data["media"][mid]
+        return (f'<figure class="shot {cls}" data-media="{esc(mid)}"><img src="/assets/{esc(m["file"])}" alt="{esc(self.plain(m["what"]))}" '
+                f'decoding="async"><figcaption>{self.render(m["what"])} '
+                f'<a class="media-src" href="#media-{esc(mid)}">where it is from</a></figcaption></figure>')
+
+    def numbers(self, ids: list[str]) -> str:
+        """A cell's numbers, one line each, with what each one is; a stop count reads with the number before it."""
+        lines, i = [], 0
+        while i < len(ids):
+            vid = ids[i]
+            measure = self.value(vid)["measure"]
+            nxt = ids[i + 1] if i + 1 < len(ids) else None
+            nmeasure = self.value(nxt)["measure"] if nxt else None
+            if measure == "stop_worst" and nmeasure == "stops":
+                lines.append(f'{self.span(vid)} <span class="mw">worst of</span> {self.span(nxt)} <span class="mw">stops</span>')
+                i += 2
+                continue
+            if measure == "within_gate" and nmeasure == "stops":
+                lines.append(f'{self.span(vid)} <span class="mw">of</span> {self.span(nxt)} <span class="mw">stops within the gate</span>')
+                i += 2
+                continue
+            if measure == "recovered" and nmeasure == "graded":
+                lines.append(f'{self.span(vid)} <span class="mw">of</span> {self.span(nxt)}')
+                i += 2
+                continue
+            word = MEASURE_WORDS.get(measure, "")
+            lines.append(self.span(vid) + (f' <span class="mw">{esc(word)}</span>' if word else ""))
+            i += 1
+        return "".join(f'<div class="num-line">{line}</div>' for line in lines)
+
+    def cell(self, key: str, spec: dict, *, head: str = "") -> str:
+        # WHY data-head: on a phone the table stacks into cards and each cell shows its column's title (CSS), so nobody scrolls sideways
+        h = f' data-head="{esc(head)}"' if head else ""
+        if "status" in spec:
+            return (f'<td data-cell="{key}"{h} class="cell status-cell"><span class="st st-{esc(spec["status"])}" '
+                    f'data-status="{esc(spec["status"])}">{STATUS_WORDS[spec["status"]]}</span>'
+                    f'<span class="why" data-why>{self.render(spec["why"])}</span></td>')
+        body = self.numbers(spec["values"])
+        if spec.get("gate"):
+            body += f'<div class="gate-line">{self.gate(spec["gate"])}</div>'
+        ctl = spec.get("controller")
+        if ctl:
+            text = self.data["labels"][ctl["label"]]["text"]
+            body += (f'<div class="ctl"><span data-ctl-words>{self.render(ctl["words"])}</span> '
+                     f'<code class="ctl-code" data-label-id="{esc(ctl["label"])}">{esc(text)}</code></div>')
+        return f'<td data-cell="{key}"{h} class="cell">{body}</td>'
+
+
+def _seam_svg(tune_on_main: bool, links: dict[str, str]) -> str:
+    """How it works: the one-click seam Zach approved, ten steps in two rows. No numbers; every step links to its page."""
+    w, h, gap, top, row2 = 204, 84, 36, 18, 164
+    steps = (
+        ("describe", "Describe", ("rd: typed parts,", "priors and an MJCF"), ""),
+        ("twin", "Twin", ("RobotTwin.", "from_robot_description(rd)"), ""),
+        ("schedule", "Plan", ("generate_schedule(config)", "→ CalibrationSchedule"), ""),
+        ("calibrate", "Calibrate", ("calibrate(config)", "sim | rack"), ""),
+        ("tune", "Tune", ("PID tuna tune step", "main" if tune_on_main else "on a branch"), "main" if tune_on_main else "branch"),
+        ("callbacks", "Record", ("Ledger, then", "a W&B copy"), ""),
+        ("fitted", "Fitted twin", ("data_ · plan_ · record_", ""), ""),
+        ("evaluate", "Evaluate", ("evaluate(): gates", "on held-out runs"), ""),
+        ("preflight", "Preflight", ("preflight(fitted)", "before it ships"), ""),
+        ("deployed", "Deployed", ("monitor → refit →", "keep if it wins"), "designed"),
     )
-    body = f"""<div class="home">
-<section class="hero" aria-labelledby="hero-h">
-  <p class="eyebrow">Every robot part comes with a twin</p>
-  <h1 id="hero-h">sim2real <span class="dash">—</span> types, models, parameters and the routines that calibrate them</h1>
-  <p class="lead">A <code>RobotTwin</code> holds typed parts. Each part's <a href="/types/">type</a> offers a ladder of models; picking a model picks its parameters, and the parameters pick the <a href="/routines/">calibration routines</a> that identify them. <code>twin.calibrate()</code> runs those routines in the order their declared dependencies give, and <code>fitted.eval()</code> scores the result on held-out runs.</p>
-  <div class="cta">
-    <a class="btn primary" href="/types/">Browse {len(types)} types</a>
-    <a class="btn" href="/routines/">{len(routines)} calibration routines</a>
-    <a class="btn" href="/examples/">Examples</a>
+    parts = []
+    for i, (key, title, (l1, l2), status) in enumerate(steps):
+        col, y = i % 5, (top if i < 5 else row2)
+        x = col * (w + gap) + 2
+        cls = "seam-box" + (" seam-branch" if status == "branch" else "") + (" seam-designed" if status == "designed" else "")
+        st = f' data-status="{status}"' if status else ""
+        badge = ""
+        if status in ("branch", "designed"):
+            word = "on a branch" if status == "branch" else "designed"
+            badge = (f'<rect class="seam-badge-bg" x="{x + w - 92}" y="{y - 10}" width="86" height="20" rx="10"/>'
+                     f'<text class="seam-badge" x="{x + w - 49}" y="{y + 4}" text-anchor="middle">{word}</text>')
+            if status == "branch":
+                l2 = ""
+        parts.append(
+            f'<g data-step="{key}"{st}><a href="{esc(links[key])}"><rect class="{cls}" x="{x}" y="{y}" width="{w}" height="{h}" rx="10"/>'
+            f'<text class="seam-title" x="{x + 14}" y="{y + 28}">{esc(title)}</text>'
+            f'<text class="seam-code" x="{x + 14}" y="{y + 50}">{esc(l1)}</text>'
+            f'<text class="seam-code" x="{x + 14}" y="{y + 68}">{esc(l2)}</text>{badge}</a></g>'
+        )
+    arrows = []
+    for i in range(4):  # row arrows
+        for y in (top + h / 2, row2 + h / 2):
+            x1 = (i + 1) * (w + gap) - gap + 6
+            arrows.append(f'<path class="seam-arrow" d="M{x1} {y} h{gap - 14}" marker-end="url(#seam-head)"/>')
+    # the wrap from the end of row one to the start of row two
+    ex = 4 * (w + gap) + 2 + w / 2
+    sx = 2 + w / 2
+    mid = top + h + (row2 - top - h) / 2
+    arrows.append(f'<path class="seam-arrow" d="M{ex} {top + h + 4} V{mid} H{sx} V{row2 - 8}" marker-end="url(#seam-head)"/>')
+    width = 5 * w + 4 * gap + 4
+    return (f'<svg class="seam" viewBox="0 0 {width} {row2 + h + 8}" role="img" aria-labelledby="seam-t">'
+            f'<title id="seam-t">How sim2real works: describe, twin, plan, calibrate, tune, record, fitted twin, evaluate, preflight, deployed'
+            f'</title><defs><marker id="seam-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" '
+            f'orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="seam-head"/></marker></defs>'
+            + "".join(arrows) + "".join(parts) + "</svg>")
+
+
+def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[ExampleInfo], docs: list[tuple[str, str, str, str]],
+         landing: dict | None = None, **ctx) -> str:
+    if landing is None:  # WHY a notice, never a page of made-up numbers: the ruler fails it until landing.json exists
+        body = ('<div class="lp"><section class="lp-sec" data-section="hero"><h1>sim2real</h1><p class="warn">The landing page has no data: '
+                'website/data/landing.json is missing. Run website/build/export_landing.py.</p></section></div>')
+        return shell(title="sim2real", description="sim2real: calibration for robot twins.", path="/", body=body, section="home",
+                     current="home", types=types, wide=True, **ctx)
+    L = Landing(landing)
+    data = landing
+    by_id = {r.id: r for r in routines}
+    settings = {s: sum(r.setting == s for r in routines) for s in ("bench", "deployed", "both")}
+    tune_on_main = by_id.get("pid.pidtuna") is not None and by_id["pid.pidtuna"].kind == "tune"
+
+    # 1 hero ------------------------------------------------------------------------------------------------------------------
+    hero = data["hero"]
+    lines = "".join(f'<p class="readout-line" data-line>{L.render(line)}</p>' for line in hero["lines"])
+    hero_html = f"""<section class="lp-hero" data-section="hero" id="hero" aria-labelledby="hero-h">
+  <div class="hero-copy">
+    <p class="eyebrow">{L.render(hero["eyebrow"])}</p>
+    <h1 id="hero-h">{L.render(hero["h1"])}</h1>
+    <p class="lead">{L.render(hero["lead"])}</p>
+    <p class="today" data-today>{L.render(hero["today"])}</p>
+    <div class="cta">
+      <a class="btn primary" href="#api">Quickstart</a>
+      <a class="btn" href="#how">How it works</a>
+      <a class="btn" href="#proof">The three robots</a>
+      <a class="btn" href="/routines/">All routines</a>
+      <a class="btn ghost" href="{GITHUB}" rel="noopener">Source on GitHub</a>
+    </div>
   </div>
-  <div class="install">
-    {code_block('fitted = sim2real.examples.pendulum_can11().calibrate(on="sim")', wrap=True, label="one-line calibrate")}
-    <p class="note">{n_models} models and {n_params} parameters over {len(types)} types; {graded} of {len(routines)} routines graded against a hidden truth at 0x / 1x / 3x / 10x noise. See {returns}.</p>
+  <div class="hero-stage">{L.figure(hero["media"], "hero-shot")}
+    <div class="readout" data-readout>
+      <p class="readout-head"><span class="where where-pseudo" data-chip="pseudo-real">pseudo-real</span> sim2real's own <code>calibrate()</code>, against a hidden world</p>
+      {lines}
+    </div>
+    <p class="counts"><span data-count="types">{len(types)}</span> part types · <span data-count="routines">{len(routines)}</span> calibration routines, read from the registries</p>
   </div>
-</section>
+</section>"""
 
-<section class="pillars" aria-label="Routine kinds">
-  {stages}
-</section>
-<p class="muted small">A routine's kind sets the order two routines run in when nothing else orders them: configure, then fit, then tune, then measure. A declared <code>requires</code> always wins.</p>
+    # 2 proof -----------------------------------------------------------------------------------------------------------------
+    metrics = data["metrics"]
+    defs = "".join(f'<div class="mdef"><dt>{esc(metrics[k]["title"])}</dt><dd data-metric-def="{k}">{L.render(metrics[k]["definition"])}</dd></div>'
+                   for k in ("sim", "on_real", "tuned"))
+    heads = "".join(f'<th scope="col" data-metric="{k}">{esc(metrics[k]["title"])}</th>' for k in ("sim", "on_real", "tuned"))
+    body_rows, note_groups = [], []
+    for robot in data["robots"]:
+        body_rows.append(f'<tr class="robot-group"><th scope="rowgroup" colspan="4">{L.render(robot["title"])}</th></tr>')
+        notes = []
+        for row in robot["rows"]:
+            fig = L.figure(row["media"], "row-shot") if row.get("media") else ""
+            where = row["where"]
+            th = (f'<th scope="row" data-cell="robot" class="robot-cell"><div class="row-title" data-title><a href="{esc(row["link"])}">'
+                  f'{L.render(row["title"])}</a></div><span class="where where-{"real" if where == "real" else "pseudo"}" data-where-chip>{where}</span>'
+                  f'<p class="target" data-target>{L.render(row["target"])}</p>{fig}</th>')
+            cells = "".join(L.cell(k, row["cells"][k], head=metrics[k]["title"]) for k in ("sim", "on_real", "tuned"))
+            body_rows.append(f'<tr data-row="{esc(row["id"])}" data-robot="{esc(robot["id"])}" data-where="{esc(where)}">{th}{cells}</tr>')
+            notes += [f'<li data-note-for="{esc(row["id"])}">{L.render(n)}</li>' for n in row.get("notes", [])]
+        if notes:
+            note_groups.append(f'<li class="note-group"><span class="note-head">{esc(ROBOT_WORDS[robot["id"]])}</span><ul>{"".join(notes)}</ul></li>')
+    caveat = ('Every number in this table was measured by that robot\'s own campaign tooling (the <span class="name">1-DOF</span> campaign, '
+              'the UR wrist lane, arm_motion_bench), not by sim2real: <code>calibrate(on="real")</code> is built and proven on the rack twin '
+              'and has not yet run on hardware. sim2real\'s own numbers are the hidden-truth table under <a href="#modes">What you can do '
+              'today</a>.')
+    proof_html = f"""<section class="lp-sec" data-section="proof" id="proof" aria-labelledby="proof-h">
+  <div class="sec-head"><p class="kicker">Proof</p><h2 id="proof-h">Three numbers per robot</h2>
+  <p>Fitting a model only pays if the robot then hits its target. So every robot gets the same three numbers on the same target motion: tool error in mm, joint error in degrees, and a verdict against the gate of {L.span(data["gate"])} at every stop.</p></div>
+  <dl class="metric-defs">{defs}</dl>
+  <div class="table-wrap proof-wrap"><table class="proof" data-table="metrics">
+    <caption><span data-caveat>{caveat}</span></caption>
+    <thead><tr><th scope="col">Robot and target</th>{heads}</tr></thead>
+    <tbody>{"".join(body_rows)}</tbody>
+  </table></div>
+  <ul class="notes" data-notes="proof">{"".join(note_groups)}</ul>
+</section>"""
 
-{tour_html}
+    # 3 modes, with the hidden-truth table -------------------------------------------------------------------------------------
+    cards = []
+    for mode in data["modes"]:
+        code = (code_block(mode["call"], wrap=True, label=f"mode {mode['n']} call", pre_attrs=f' data-code="mode-{mode["n"]}"')
+                if mode["call"] else '<p class="no-call">No call to show: this verb does not exist yet.</p>')
+        robots_li = "".join(
+            f'<li data-robot="{r}" data-status="{esc(spec["status"])}"><span class="st st-{esc(spec["status"])}">{STATUS_WORDS[spec["status"]]}</span> '
+            f'<span class="who">{ROBOT_WORDS[r]}</span> <span class="why" data-why>{L.render(spec["why"])}</span></li>'
+            for r, spec in mode["robots"].items())
+        cards.append(f'<article class="mode" data-mode="{mode["n"]}"><div class="mode-top"><span class="mode-n" data-mode-n="{mode["n"]}">{mode["n"]}</span>'
+                     f'<h3 data-mode-title>{L.render(mode["title"])}</h3></div><p class="mode-what" data-mode-what>{L.render(mode["what"])}</p>'
+                     f'{code}<ul class="mode-robots">{robots_li}</ul></article>')
+    rec_rows, rec_notes = [], []
+    for row in data["recovery"]:
+        meta = []
+        rec = row["recorded"]
+        if rec:
+            src = data["sources"][rec["source"]]
+            meta.append(f'recorded <time data-source-date="{esc(rec["source"])}" datetime="{esc(src["dated"])}">{esc(src["dated"][:10])}</time>')
+            if src["in_repo"]:
+                meta.append(f'commit <code data-commit="{esc(rec["source"])}">{esc(src["commit"][:7])}</code>')
+            if rec.get("routines"):
+                meta.append(f'routines <code data-label-id="{esc(rec["routines"])}">{esc(data["labels"][rec["routines"]]["text"])}</code>')
+        call = f'<code class="call" data-call>{esc(row["via"])}</code>' if row["via"] else ""
+        th = (f'<th scope="row" data-cell="robot" class="robot-cell"><div class="row-title" data-title>{L.render(row["title"])}</div>{call}'
+              f'<p class="measure" data-measure>{L.render(row["measure"])}</p>'
+              + (f'<p class="rec-meta">{" · ".join(meta)}</p>' if meta else "") + "</th>")
+        cells = "".join(L.cell(k, row["cells"][k], head=RECOVERY_HEADS[k]) for k in ("recovered", "nominal", "fitted", "floor"))
+        rec_rows.append(f'<tr data-row="{esc(row["id"])}" data-robot="{esc(row["robot"])}" id="recovery-{esc(row["id"])}">{th}{cells}</tr>')
+        rec_notes += [f'<li data-note-for="{esc(row["id"])}">{L.render(n)}</li>' for n in row.get("notes", [])]
+    modes_html = f"""<section class="lp-sec" data-section="modes" id="modes" aria-labelledby="modes-h">
+  <div class="sec-head"><p class="kicker">Today</p><h2 id="modes-h">What you can do today</h2>
+  <p>Three ways to use a twin, and where each one stands for each robot.</p></div>
+  <div class="modes">{"".join(cards)}</div>
+  <p class="muted small">In sim2real the second and third are one call: the world it calibrates against is already pseudo-real. Run either inside <code>if __name__ == "__main__":</code> (the API section shows the whole script).</p>
+  <h3 class="sub-h" id="recovery">Does calibration find the truth?</h3>
+  <p class="muted">In sim the answer is known. These are sim2real's own numbers: modelling error, twin against a hidden world, on runs it never trained on.</p>
+  <div class="table-wrap"><table class="recovery-proof" data-table="recovery-proof">
+    <thead><tr><th scope="col">Robot, call and measure</th>{"".join(f'<th scope="col">{esc(RECOVERY_HEADS[k])}</th>' for k in ("recovered", "nominal", "fitted", "floor"))}</tr></thead>
+    <tbody>{"".join(rec_rows)}</tbody>
+  </table></div>
+  <ul class="notes" data-notes="recovery">{"".join(rec_notes)}</ul>
+</section>"""
 
-<section class="packages" aria-labelledby="sections-h">
-  <h2 id="sections-h">Sections</h2>
-  <div class="pkgs">{sections}</div>
-  <p class="muted">Every page is generated from sim2real's registries: <code>cards/domain.py</code> (types, models, parameters), <code>cards/calibration.py</code> (routines, equipment) and <code>sim2real.calibration.recovery</code> (how well each routine recovers a hidden truth).</p>
-</section>
-</div>"""
+    # 4 how it works ------------------------------------------------------------------------------------------------------------
+    links = {
+        "describe": "/types/", "twin": "/api/#api-RobotTwin-from_robot_description", "schedule": "/api/#api-RobotTwin-generate_schedule",
+        "calibrate": "/api/#api-RobotTwin-calibrate", "tune": "/routines/pid.pidtuna/", "callbacks": "/api/#api-Ledger",
+        "fitted": doc_anchor(docs, "calibrate", "The twin holds its data"), "evaluate": "/api/#api-RobotTwin-evaluate",
+        "preflight": doc_anchor(docs, "guide", "`sim2real.preflight("), "deployed": "#deployed",
+    }
+    kinds = doc_anchor(docs, "calibrate", "The routine kinds")
+    how_html = f"""<section class="lp-sec" data-section="how" id="how" aria-labelledby="how-h">
+  <div class="sec-head"><p class="kicker">How it works</p><h2 id="how-h">From a description to a fitted twin</h2>
+  <p>One seam from the robot description to a twin that is fitted, checked and ready to ship. Each box opens its page.</p></div>
+  <div class="seam-wrap">{_seam_svg(tune_on_main, links)}</div>
+  <p class="muted small">Routines come in four kinds, <a href="{esc(kinds)}">configure → fit → tune → measure</a>, and that is their order when nothing else orders them.</p>
+</section>"""
+
+    # 5 the API on one screen ------------------------------------------------------------------------------------------------
+    wandb = doc_anchor(docs, "guide", "`sim2real.tracking.calibrate_wandb.WandbLogger(")
+    api_html = f"""<section class="lp-sec" data-section="api" id="api" aria-labelledby="api-h">
+  <div class="sec-head"><p class="kicker">Quickstart</p><h2 id="api-h">The API on one screen</h2>
+  <p>Not packaged yet: the examples run in bam_rack_twin's environment (see the README).</p></div>
+  <div class="api-code">{code_block(API_EXAMPLE, label="quickstart", pre_attrs=' data-code="api"')}</div>
+  <ul class="api-notes">
+      <li><a href="/api/#api-CalibrationConfig"><code>CalibrationConfig</code></a>: which models to fit, what is already known, what to include or leave out, the noise and the budget.</li>
+      <li><a href="/api/#api-Budget"><code>Budget</code></a>: <code>settings=</code> says where it runs (bench, deployed), <code>equipment=</code> what you have. A routine needing anything else is dropped, and the schedule names the item and its price.</li>
+      <li><code>callbacks=</code>: <a href="/api/#api-Ledger"><code>Ledger()</code></a> writes every event and the record; <a href="{esc(wandb)}">WandbLogger</a> keeps a W&amp;B copy of it.</li>
+      <li><code>fitted.data_</code>: the runs it was fitted on. <code>fitted.calibrate(data=fitted.data_ + more)</code> refits with new runs.</li>
+      <li><code>on="real", transport=</code>: the same call on hardware, through a transport you pass. Built and proven on the rack twin; not yet run on a robot.</li>
+  </ul>
+  <p class="api-more"><a href="/examples/pendulum_can11/"><code>calibrate()</code> in one screen, run for real: the pendulum example</a> · <a href="/api/">the whole API</a> · <a href="/docs/guide/">the guide</a></p>
+</section>"""
+
+    # 6 bench today, deployed next ----------------------------------------------------------------------------------------------
+    life = data["lifecycle"]
+    today = []
+    for item in life["today"]:
+        go = ""
+        if item.get("href"):
+            go = (f'<a class="go" href="{esc(item["href"])}" title="{esc(item["href"])}" aria-label="Open {esc(item["href"])}">'
+                  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+                  'stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a>')
+        today.append(f'<li data-today-item>{go}{L.render(item["text"])}</li>')
+    not_built = "".join(f'<li data-not-built="{esc(item["name"])}">{L.render(item["text"])}</li>' for item in life["not_built"])
+    loop = ' <span class="loop-arrow" aria-hidden="true">→</span> '.join(f'<span class="loop-step">{esc(step)}</span>' for step in life["loop"])
+    life_html = f"""<section class="lp-sec" data-section="lifecycle" id="bench-or-deployed" aria-labelledby="life-h">
+  <div class="sec-head"><p class="kicker">Bench and deployed</p><h2 id="life-h">Bench today, deployed next</h2>
+  <p>Every routine says where it runs. <code>Budget(settings=("bench",))</code> keeps the <span data-setting-count="bench">{settings["bench"]}</span> bench routines and the <span data-setting-count="both">{settings["both"]}</span> that run anywhere; <code>("deployed",)</code> keeps the <span data-setting-count="deployed">{settings["deployed"]}</span> that run on a robot at work.</p>
+  <p><code>Budget(equipment=(...))</code> says what you have: a routine needing anything else is dropped, and the schedule names the item and its price.</p></div>
+  <div class="deployed">
+    <h3 id="deployed">Deployed: lifetime calibration and monitoring <span class="badge designed" data-status="designed">designed, not built</span></h3>
+    <p class="lead-sm">{L.render(life["lead"])}</p>
+    <p class="loop" data-loop>{loop}</p>
+    <div class="life-grid">
+      <div><h4>There today</h4><ul class="life-list">{"".join(today)}</ul></div>
+      <div><h4>Not built yet</h4><ul class="life-list not-built">{not_built}</ul></div>
+    </div>
+    <p><a href="/docs/deployed/">The whole design, with its code sketch</a></p>
+  </div>
+</section>"""
+
+    # 7 promises ------------------------------------------------------------------------------------------------------------------
+    promises_html = f"""<section class="lp-sec" data-section="promises" aria-labelledby="promises-h">
+  <h2 class="visually-hidden" id="promises-h">What sim2real promises</h2>
+  <div class="promises">
+    <div class="promise" data-promise><strong>The fit never sees the answer.</strong><p>A hidden world stays sealed while the twin fits; the grade opens it only afterwards, and the score comes from runs the fit never used.</p></div>
+    <div class="promise" data-promise><strong>It never moves a motor by itself.</strong><p>A calibration plans its runs and asks for them; on hardware a transport you pass moves the robot, and nothing is written to a board or a description unless you say so.</p></div>
+    <div class="promise" data-promise><strong>PD and feed-forward, nothing else.</strong><p>On a real robot the controller is PD with feed-forward from the fitted values. An integrator never runs on the arm.</p></div>
+  </div>
+  <div class="cta lp-cta">
+    <a class="btn primary" href="/routines/">Browse the routines</a>
+    <a class="btn" href="/api/">API reference</a>
+    <a class="btn" href="/docs/guide/">The guide</a>
+    <a class="btn" href="/docs/deployed/">The deployed design</a>
+    <a class="btn ghost" href="{GITHUB}" rel="noopener">GitHub</a>
+  </div>
+</section>"""
+
+    # 8 sources --------------------------------------------------------------------------------------------------------------------
+    stale = set(data.get("stale_sources", ()))
+    # WHY span.mono, not <code>, in the two lists: a sha, a dated snapshot or an ffmpeg filter is a record, not code to run (the ruler
+    # reads every <code> for typed numbers; these items are exempt as records, their code would not be)
+    src_items = []
+    for sid, src in data["sources"].items():
+        flags = []
+        if src["moving"]:
+            flags.append('<span class="flag">may move</span>')
+        if sid in stale:
+            flags.append('<span class="flag bad">stale: re-export</span>')
+        link = ""
+        if src["in_repo"]:
+            url = f'{GITHUB}/blob/{src["commit"]}/{src["path"]}'
+            link = f' · <a href="{esc(url)}" rel="noopener">on GitHub at {esc(src["commit"][:7])}</a>'
+        else:
+            link = f' · snapshot <span class="mono">{esc(src["snapshot"])}</span>'
+        src_items.append(
+            f'<li id="src-{esc(sid)}" data-source-id="{esc(sid)}" data-sha256="{esc(src["sha256"])}"><span class="src-what">{esc(src["what"])}</span>'
+            f'<span class="src-meta"><span class="mono">{esc(src["shown"])}</span> · sha256 <span class="mono">{esc(src["sha256"][:12])}</span> · dated '
+            f'{esc(src["dated"][:10])} · <span class="kind-chip">{esc(src["kind"])}</span>{link} {" ".join(flags)}</span></li>')
+    media_items = []
+    for mid, m in data["media"].items():
+        fc = m["frames_checked"]
+        check = (f'frames checked by {esc(fc["by"])} on {esc(fc["utc"][:10])} ({esc(fc["frames"])} frames: no people, no serials, no burned-in text)'
+                 if fc.get("by") else "frames not checked yet")
+        media_items.append(
+            f'<li id="media-{esc(mid)}" data-media-id="{esc(mid)}"><span class="src-what">{esc(L.plain(m["what"]))}</span>'
+            f'<span class="src-meta"><span class="mono">{esc(m["file"])}</span> · sha256 <span class="mono">{esc(m["sha256"][:12])}</span> · cut from '
+            f'<span class="mono">{esc(m["shown"])}</span> (report <span class="mono">{esc(m["report"])}</span>) · filter '
+            f'<span class="mono">{esc(m["filter"])}</span> · {check}</span></li>')
+    stamp = ctx.get("stamp", "sim2real")
+    sources_html = f"""<section class="lp-sec sources" data-section="sources" id="sources" aria-labelledby="sources-h">
+  <h2 id="sources-h">Where every number comes from</h2>
+  <ol class="src-list">{"".join(src_items)}<li id="src-registry" data-source-id="registry"><span class="src-what">The part-type and routine counts, the bench and deployed counts, and the tune step's state</span><span class="src-meta">sim2real's registries (<code>cards/domain.py</code>, <code>cards/calibration.py</code>), read at build time from {esc(stamp)}</span></li></ol>
+  <h3 class="sub-h">Pictures</h3>
+  <ul class="src-list media-list">{"".join(media_items)}</ul>
+  <p class="muted">Every number on this page names its file. A missing number says not measured yet, and why.</p>
+</section>"""
+
+    body = f'<div class="lp">\n{hero_html}\n{proof_html}\n{modes_html}\n{how_html}\n{api_html}\n{life_html}\n{promises_html}\n{sources_html}\n</div>'
     return shell(
-        title="sim2real — types, models, parameters and calibration routines",
-        description="sim2real's generic types, their model rungs and parameters, the calibration routines that identify them, and calibrate().",
-        path="/", body=body, section="home", current="home", types=types, **ctx,
+        title="sim2real · calibration for robot twins",
+        description="Describe your robot in CAD and sim2real builds its twin, plans the calibration routines your bench can run, fits them "
+                    "and scores the twin on runs it never saw.",
+        path="/", body=body, section="home", current="home", types=types, wide=True, **ctx,
     )  # fmt: skip
 
 
@@ -747,6 +1142,7 @@ def not_found(types: list[TypeInfo], **ctx) -> str:
   <p class="lead">Try the list of types or the routine catalog, or go back to the start.</p>
   <div class="cta"><a class="btn primary" href="/types/">Browse types</a><a class="btn" href="/routines/">Routines</a><a class="btn" href="/">Home</a></div>
 </section></div>"""
+    ctx.pop("robots", None)  # WHY: the 404 is always noindex, preview build or not
     return shell(title="Not found · sim2real", description="Page not found.", path="/404.html", body=body, sidebar=False, types=types,
                  robots="noindex", **ctx)
 
@@ -783,11 +1179,8 @@ def _plain(text: str) -> str:
     return re.sub(r"\*\*(.+?)\*\*", r"\1", text).replace("`", "").strip()
 
 
-def render_markdown(text: str, doc_links: dict[str, str]) -> tuple[str, list[tuple[str, str, int]]]:
-    """A small Markdown renderer for docs/*.md: headings, paragraphs, nested lists, fenced code, pipe tables, block quotes. One h1 per
-    page: the file's first '# ' heading; any later one is shown as an h2."""
-    lines = text.splitlines()
-    # pass 1: heading anchors, so a #fragment link resolves only when its heading exists
+def markdown_anchors(lines: list[str]) -> tuple[dict[str, str], set[str]]:
+    """Each heading line's anchor, as the rendered page spells it (render_markdown's pass 1; the landing links into it)."""
     anchors: dict[str, str] = {}
     used: set[str] = set()
     in_fence = False
@@ -803,6 +1196,28 @@ def render_markdown(text: str, doc_links: dict[str, str]) -> tuple[str, list[tup
                 anchor, n = f"{base}-{n}", n + 1
             used.add(anchor)
             anchors[line] = anchors.get(line, anchor)
+    return anchors, used
+
+
+def doc_anchor(docs: list[tuple[str, str, str, str]], slug_: str, starts: str) -> str:
+    """The URL of the first heading in docs/<slug_> whose text starts with `starts` (computed from the file, never typed); the page itself
+    when no heading matches."""
+    for s_, _title, _label, markdown in docs:
+        if s_ != slug_:
+            continue
+        anchors, _ = markdown_anchors(markdown.splitlines())
+        for line, anchor in anchors.items():
+            if re.sub(r"^#{1,6}\s+", "", line).startswith(starts):
+                return f"/docs/{slug_}/#{anchor}"
+    return f"/docs/{slug_}/"
+
+
+def render_markdown(text: str, doc_links: dict[str, str]) -> tuple[str, list[tuple[str, str, int]]]:
+    """A small Markdown renderer for docs/*.md: headings, paragraphs, nested lists, fenced code, pipe tables, block quotes. One h1 per
+    page: the file's first '# ' heading; any later one is shown as an h2."""
+    lines = text.splitlines()
+    # pass 1: heading anchors, so a #fragment link resolves only when its heading exists
+    anchors, used = markdown_anchors(lines)
 
     def resolve(url: str) -> str | None:
         if url.startswith("https://"):
