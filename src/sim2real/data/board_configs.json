@@ -1,0 +1,30 @@
+{
+ "schema": "sim2real/board-config-keys/1",
+ "what": "The moteus config lines a twin's stated loop reads (sim2real.calibration.board_loop), copied from each board's full config dump, per deployment and CAN id. Copied, never typed: tests/test_preflight_analytic_bounds.py holds every line and the dump's sha256 equal to the dump wherever the archive disk is present.",
+ "deployments": {
+  "one-dof-test-rack": {
+   "11": {
+    "board": "CAN 11 on fdcanusb 0607623A (the one-dof test rack's deployment record, records/one-dof-test-rack/deployment.json)",
+    "driver_part": "mjbots-moteus-r4-11",
+    "driver_part_source": "bam_rack_twin.description.station_description(11): the can11_driver instance's robotparts part (the record's driver moteus-r4.11)",
+    "lines": {
+     "aux1.spi.mode": 0,
+     "motor_position.sources.0.aux_number": 1,
+     "motor_position.sources.0.type": 1,
+     "motor_position.sources.0.cpr": 16384,
+     "motor_position.sources.0.pll_filter_hz": 200,
+     "motor_position.rotor_to_output_ratio": 0.1,
+     "servo.pid_dq_hz": 200
+    },
+    "source": {
+     "dump": "/archive/datasets/bam_rig/rack_2026-11-13/config_backups/can11-20261113T222323Z-before.cfg",
+     "kind": "full (moteus_tool --dump-config), the before-dump of the last config write on record",
+     "utc": "2026-11-13T22:23:23Z",
+     "sha256": "de18f0b247fe7aa044642781b9e68ef9ff54902a6f4c4b16149631fb8dcd0d32",
+     "write_after": "can11-20261113T222323Z-write.json changed only servo.max_regen_power_W and servo.timeout_mode (RAM): no line here",
+     "same_lines_in": "/archive/datasets/bam_rig/rack_2026-10-29/config_backups/can11-20261029T080236Z-before.cfg (sha256 b6a96ff09e5a82739c7c5625e7474ee530ca318db0d29e0dd79899e1046c5b8e), the dump behind the deployment record's moteus_config (conf get 2026-10-29T08:03:12Z)"
+    }
+   }
+  }
+ }
+}

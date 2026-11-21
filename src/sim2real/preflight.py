@@ -64,6 +64,7 @@ from pathlib import Path
 from typing import Any
 
 from . import paths
+from .calibration import board_loop
 
 TAU = 2.0 * math.pi
 HOUSE_CAP_FRACTION = 0.97          # the house torque cap: datasheet peak x gear ratio x 0.97 (Zach, 2026-11-13)
@@ -567,37 +568,39 @@ def _tracer_pieces(fitted, unit: _Unit, cap: dict) -> dict:
             record = unit.module.twin({k: float(v) for k, v in fitted.parameters.get(s, {}).items() if v is not None}, "preflight")
         except Exception as error:  # noqa: BLE001  (a pipeline builds its twin its own way)
             unit.notes.append(f"the twin of record could not be built ({type(error).__name__}: {error})")
+    # the board's own numbers first: its recorded config (sim2real/data/board_configs.json, a copy of its moteus dump), then the twin of
+    # record's board knobs
+    entry = board_loop.board(None if unit.record is None else unit.record.parent.name, None if joint is None else joint.can_id)
     knobs = "the twin of record's board knobs (the sysid description's known.board_knobs)"
     lag, delay = getattr(record, "current_loop_hz", None), getattr(record, "command_delay_s", None)
-    pieces["torque_bandwidth_hz"] = ((float(lag), f"{knobs}: current_loop_hz") if lag else (None, f"no current loop: {knobs} state none"))
+    recorded_lag = board_loop.current_loop(entry)
+    pieces["torque_bandwidth_hz"] = (recorded_lag if recorded_lag[0] is not None else
+                                     (float(lag), f"{knobs}: current_loop_hz") if lag else (None, f"no current loop: {knobs} state none"))
     pieces["delay_s"] = ((float(delay), f"{knobs}: command_delay_s") if delay is not None else (None, f"no command delay: {knobs} state none"))
     pieces["loop_hz"] = _driver_rate(fitted, s)
-    pieces["velocity_filter_hz"] = (None, f"no velocity filter: neither the description ({s}.velocity_filter_hz), the twin of record nor "
-                                          f"the deployment record ({unit.record.name if unit.record else 'none'}) states the board's")
+    recorded_filter = board_loop.velocity_filter(entry)
+    pieces["velocity_filter_hz"] = (recorded_filter if recorded_filter[0] is not None else
+                                    (None, f"no velocity filter: neither the description ({s}.velocity_filter_hz) nor the board's recorded "
+                                           f"config (sim2real/data/board_configs.json, {unit.record.parent.name if unit.record else 'no unit'} "
+                                           f"CAN {getattr(joint, 'can_id', None)}: motor_position.sources.0.pll_filter_hz) states it"))
     noise = (getattr(fitted.runner, "state", None) or {}).get("noise") or {}
     speed = noise.get("speed_rad_s", noise.get("velocity_noise_rad_s"))
     pieces["velocity_noise_rad_s"] = ((float(speed), (noise.get("sources") or {}).get("speed_rad_s", "the world's noise block"))
                                       if speed else (None, "no velocity noise: the fit's noise record states none"))
-    pieces["encoder_quantum_rad"] = _encoder_count(fitted, s)
+    recorded_count = board_loop.encoder_count(entry)
+    pieces["encoder_quantum_rad"] = recorded_count if recorded_count[0] is not None else _encoder_count(fitted, s)
     pieces["structural_hz"] = _no_structural_mode(s)
     return _with_stated(fitted, s, pieces)
 
 
 def _driver_rate(fitted, instance: str) -> tuple[float | None, str]:
-    """The board loop's rate (Hz): its driver's robotparts datasheet control_rate (a foc_controller child), the low end of a stated range
-    (the slower loop leaves the smaller margin); None when no driver part states one."""
-    for kind, part in _parts_of(fitted, instance):
-        if kind != "foc_controller":
-            continue
-        path = Path(paths.ROBOTPARTS, *PARTS, f"{part}.json")
-        spec = json.loads(path.read_text(encoding="utf-8")).get("specs", {}).get("control_rate") if path.is_file() else None
-        raw = None if not spec else spec.get("value")
-        scale = {"kHz": 1000.0, "Hz": 1.0}.get((spec or {}).get("unit"))
-        if raw is None or scale is None:
-            continue
-        low = min(raw) if isinstance(raw, (list, tuple)) else raw
-        return float(low) * scale, (f"robotparts {part} control_rate {spec.get('raw') or raw} ({spec.get('source_url', 'its datasheet')}): "
-                                    "the low end, the slower loop")
+    """The board loop's rate (Hz): its driver's (a foc_controller child's) robotparts datasheet control_rate, the low end of a stated
+    range (sim2real.calibration.board_loop.control_rate); None when no driver part states one."""
+    drivers = [part for kind, part in _parts_of(fitted, instance) if kind == "foc_controller"]
+    for part in drivers:
+        found = board_loop.control_rate(part)
+        if found[0] is not None:
+            return found
     return None, f"no board loop rate: no driver part of {instance} states its control_rate (and the description states no {instance}.loop_hz)"
 
 
