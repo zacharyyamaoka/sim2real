@@ -1,0 +1,2378 @@
+{
+ "schema": "sim2real.landing/1",
+ "exported_utc": "2026-11-21T03:44:33Z",
+ "exporter": "website/build/export_landing.py",
+ "sim2real_commit": "5b42714c80651a05561204e1377ad176d8d3bc41",
+ "gate": "gate.tool_mm",
+ "metrics": {
+  "sim": {
+   "title": "Sim",
+   "definition": "The controller that ships, played on the robot's fitted twin over the same target. It is what the robot should do."
+  },
+  "on_real": {
+   "title": "Sim on Real",
+   "definition": "The same target on the robot as found: the controller it had before this calibration and tuning (its board gains and any feed-forward it already carried), with nothing newly fitted. On a pseudo-real row the robot is a hidden simulated world."
+  },
+  "tuned": {
+   "title": "Sim on Real (tuned)",
+   "definition": "The same target on the robot after fitting and tuning: feed-forward from the fitted values and retuned PD gains. On a real robot that means PD and feed-forward only, never an integrator; a pseudo-real row names any integral term its controller has."
+  }
+ },
+ "sources": {
+  "pendulum-r0": {
+   "in_repo": false,
+   "from": "lab:onedof_2026-11-15/scorecards/round0_measured.json",
+   "snapshot": "snap:2026-11-20/pendulum-r0.json",
+   "shown": "lab archive: onedof_2026-11-15/scorecards/round0_measured.json",
+   "what": "1-DOF campaign scorecard, round 0 (the board as found)",
+   "kind": "mixed",
+   "kind_by_key": {
+    "real": "real",
+    "sim": "sim"
+   },
+   "moving": false,
+   "sha256": "cdaf9759caf24e70d3e4a257dce2e4a03939411e0dec43134a296c1b1cfd3b95",
+   "bytes": 211251,
+   "dated": "2026-11-16T15:17:13Z",
+   "dated_from": "key",
+   "dated_key": [
+    "scored_utc"
+   ]
+  },
+  "pendulum-r9": {
+   "in_repo": false,
+   "from": "lab:onedof_2026-11-15/scorecards/round9.json",
+   "snapshot": "snap:2026-11-20/pendulum-r9.json",
+   "shown": "lab archive: onedof_2026-11-15/scorecards/round9.json",
+   "what": "1-DOF campaign scorecard, round 9 (tuned)",
+   "kind": "mixed",
+   "kind_by_key": {
+    "real": "real",
+    "sim": "sim"
+   },
+   "moving": false,
+   "sha256": "73a0bd4c6fa233a8854dc1251ebbb2d6489049d9dc9e6a437a2bf0d8e2253749",
+   "bytes": 277555,
+   "dated": "2026-11-18T04:38:36Z",
+   "dated_from": "key",
+   "dated_key": [
+    "scored_utc"
+   ]
+  },
+  "ur5e-v2": {
+   "in_repo": false,
+   "from": "amb:results/summary_v2.json",
+   "snapshot": "snap:2026-11-20/ur5e-v2.json",
+   "shown": "arm_motion_bench: results/summary_v2.json",
+   "what": "arm_motion_bench summary v2: the UR5e in MuJoCo, held-out workspace tasks",
+   "kind": "pseudo-real",
+   "unit_convention": "si",
+   "moving": false,
+   "sha256": "e2f6a322be4017cdfb0c46fd76c3b4831bd0687ed60daccc19cec3b43b0d9ed8",
+   "bytes": 739055,
+   "dated": "2026-11-19T23:40:10-07:00",
+   "dated_from": "mtime"
+  },
+  "amb-kpi-names": {
+   "in_repo": false,
+   "from": "amb:src/arm_motion_bench/kpi_names.py",
+   "snapshot": "snap:2026-11-20/amb-kpi-names.py",
+   "shown": "arm_motion_bench: src/arm_motion_bench/kpi_names.py",
+   "what": "arm_motion_bench KPI names: each number's unit, display unit and scale",
+   "kind": "code",
+   "moving": false,
+   "sha256": "3fe0db1660f41b6e3bd0f38666c2c54b81e1bc044e8b5fcb95e01147372f45e0",
+   "bytes": 19829,
+   "dated": "2026-11-19T18:53:03-07:00",
+   "dated_from": "mtime"
+  },
+  "amb-ur5e-baselines": {
+   "in_repo": false,
+   "from": "amb:src/arm_motion_bench/baselines/ur5e_mujoco.py",
+   "snapshot": "snap:2026-11-20/amb-ur5e-baselines.py",
+   "shown": "arm_motion_bench: src/arm_motion_bench/baselines/ur5e_mujoco.py",
+   "what": "arm_motion_bench UR5e controllers (CONTROLLER_DESCRIPTIONS)",
+   "kind": "code",
+   "moving": false,
+   "sha256": "a1c5777022c779189b336ee2d3ce8a3553f49cb74e1fa6487ada7ea52bd14ba6",
+   "bytes": 99808,
+   "dated": "2026-11-20T16:00:47-07:00",
+   "dated_from": "mtime"
+  },
+  "urwrist-asfound": {
+   "in_repo": false,
+   "from": "lab:rack_2026-11-10/ur_wrist/gates/gate3_baseline_heldout.json",
+   "snapshot": "snap:2026-11-20/urwrist-asfound.json",
+   "shown": "lab archive: rack_2026-11-10/ur_wrist/gates/gate3_baseline_heldout.json",
+   "what": "UR wrist gate 3, held-out tape, the controller as found",
+   "kind": "real",
+   "moving": false,
+   "sha256": "c582faa27c3480d18ddd0798c69bd79355beb829be154294a1431423878fa636",
+   "bytes": 6452,
+   "dated": "2026-11-12T04:25:45-07:00",
+   "dated_from": "mtime"
+  },
+  "urwrist-tuned": {
+   "in_repo": false,
+   "from": "lab:rack_2026-11-10/ur_wrist/gates/gate3_kphold_heldout.json",
+   "snapshot": "snap:2026-11-20/urwrist-tuned.json",
+   "shown": "lab archive: rack_2026-11-10/ur_wrist/gates/gate3_kphold_heldout.json",
+   "what": "UR wrist gate 3, held-out tape, hold gain retuned",
+   "kind": "real",
+   "moving": false,
+   "sha256": "7f5c78ebab820df6e8520750159faad93b23b3eba73263661be4d67a5ccedba1",
+   "bytes": 6484,
+   "dated": "2026-11-12T04:56:18-07:00",
+   "dated_from": "mtime"
+  },
+  "urwrist-asfound-session": {
+   "in_repo": false,
+   "from": "lab:rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout-407e3359_1112/session.json",
+   "snapshot": "snap:2026-11-20/urwrist-asfound-session.json",
+   "shown": "lab archive: rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout-407e3359_1112/session.json",
+   "what": "UR wrist held-out session plan, as found (its feed-forward)",
+   "kind": "setting",
+   "moving": false,
+   "sha256": "dc1d4441bf021f9ed3c482a9cb57e6d7327f1352ee16ee123c19f95f04eb0517",
+   "bytes": 1336684,
+   "dated": "2026-11-12T03:09:54-07:00",
+   "dated_from": "mtime"
+  },
+  "urwrist-tuned-session": {
+   "in_repo": false,
+   "from": "lab:rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout_kphold_1112/session.json",
+   "snapshot": "snap:2026-11-20/urwrist-tuned-session.json",
+   "shown": "lab archive: rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout_kphold_1112/session.json",
+   "what": "UR wrist held-out session plan, tuned (its hold gains)",
+   "kind": "setting",
+   "moving": false,
+   "sha256": "9769ea8473512538dd60f15136cc6786d7183e6d9f27706045fd69b519bbf737",
+   "bytes": 1337368,
+   "dated": "2026-11-12T04:52:44-07:00",
+   "dated_from": "mtime"
+  },
+  "bamarm-climb": {
+   "in_repo": false,
+   "from": "amb:outputs/bam_fb/real/climb.json",
+   "snapshot": "snap:2026-11-20/bamarm-climb.json",
+   "shown": "arm_motion_bench: outputs/bam_fb/real/climb.json",
+   "what": "BAM arm real speed climb: one row per run on the development tape",
+   "kind": "real",
+   "unit_convention": "display",
+   "moving": true,
+   "sha256": "2bc5c812cfd59de08b359dbc1bf33ff627f784cd72bf0843fbcb8ccb10d27393",
+   "bytes": 25101,
+   "dated": "2026-11-20T19:39:37-07:00",
+   "dated_from": "mtime"
+  },
+  "bamarm-twin": {
+   "in_repo": false,
+   "from": "amb:outputs/bam_fb/real/sim_ab/sim_ab_workspace-dev-000_realgains_kphold.json",
+   "snapshot": "snap:2026-11-20/bamarm-twin.json",
+   "shown": "arm_motion_bench: outputs/bam_fb/real/sim_ab/sim_ab_workspace-dev-000_realgains_kphold.json",
+   "what": "BAM arm twin runs on the development tape (real gains, stiffer hold)",
+   "kind": "sim",
+   "unit_convention": "display",
+   "moving": true,
+   "sha256": "86915b2f7a8e86c0080ee56ca191c205159c13fff6b58eb55171e05762fd13eb",
+   "bytes": 8561,
+   "dated": "2026-11-20T19:12:29-07:00",
+   "dated_from": "mtime"
+  },
+  "bamarm-sweep": {
+   "in_repo": false,
+   "from": "rackq:1117-034942-537b/runs/real_20261117_105019/score_real.json",
+   "snapshot": "snap:2026-11-20/bamarm-sweep.json",
+   "shown": "rack submissions: 1117-034942-537b/runs/real_20261117_105019/score_real.json",
+   "what": "PID tuna workspace sweep on the BAM arm: every stop scored",
+   "kind": "real",
+   "moving": false,
+   "sha256": "51161d1944c7a957b7a40358cdefccd3ed00454b6aee822f03ba4c72de748b3d",
+   "bytes": 4886,
+   "dated": "2026-11-17T10:53:19Z",
+   "dated_from": "key",
+   "dated_key": [
+    "utc"
+   ]
+  },
+  "ex-pendulum": {
+   "in_repo": true,
+   "path": "website/examples/pendulum_can11.out.json",
+   "commit": "7e363ddb4f6ad9ca1a05d1461039514cda02147c",
+   "shown": "sim2real: website/examples/pendulum_can11.out.json",
+   "what": "the pendulum example's recorded output (calibrate on a hidden world)",
+   "kind": "pseudo-real",
+   "moving": false,
+   "sha256": "035a476a50e416c2b75fb80dff933df946dacc2b8786874dc70a21c81f217bb6",
+   "bytes": 19036,
+   "dated": "2026-11-12T04:59:04-07:00",
+   "dated_from": "key",
+   "dated_key": [
+    "recorded"
+   ]
+  },
+  "ex-urwrist": {
+   "in_repo": true,
+   "path": "website/examples/ur_wrist_test_rig.out.json",
+   "commit": "83666b28a253914749166aec19d0c52ca9786efa",
+   "shown": "sim2real: website/examples/ur_wrist_test_rig.out.json",
+   "what": "the UR wrist example's recorded output (calibrate on a hidden world)",
+   "kind": "pseudo-real",
+   "moving": false,
+   "sha256": "1748111f3244a6cee0103e22d045b243479c25ef025dee7edbc51ea2151a97a5",
+   "bytes": 57187,
+   "dated": "2026-11-12T02:50:48-07:00",
+   "dated_from": "key",
+   "dated_key": [
+    "recorded"
+   ]
+  },
+  "sysid-ur5e": {
+   "in_repo": true,
+   "path": "sysid/results/ur5e.json",
+   "commit": "ec4a099488f6591b0e06a270a8d161522edd1a6d",
+   "shown": "sim2real: sysid/results/ur5e.json",
+   "what": "the sysid oracle on the UR5e: a hidden tracker, held-out poses",
+   "kind": "pseudo-real",
+   "moving": false,
+   "sha256": "fcb46cd00e665a7bc3ad83756469b7227fbe496543c7d15c491bf8b16546b6ef",
+   "bytes": 55512,
+   "dated": "2026-11-05T20:37:57-07:00",
+   "dated_from": "commit"
+  },
+  "drift-wear": {
+   "in_repo": true,
+   "path": "sysid/results/drift_backlash_wear.json",
+   "commit": "2886074d722d8091b7af24736e4edca014917f3b",
+   "shown": "sim2real: sysid/results/drift_backlash_wear.json",
+   "what": "drift study: backlash wear on the pendulum_can11 hidden world",
+   "kind": "pseudo-real",
+   "moving": false,
+   "sha256": "83d48c52037cd3c2d86abee153d0a97701b807a4ab578374d097bc5edad660f7",
+   "bytes": 24822,
+   "dated": "2026-11-07T03:13:05-07:00",
+   "dated_from": "commit"
+  },
+  "drift-camera": {
+   "in_repo": true,
+   "path": "sysid/results/drift_camera_knock.json",
+   "commit": "ec4a099488f6591b0e06a270a8d161522edd1a6d",
+   "shown": "sim2real: sysid/results/drift_camera_knock.json",
+   "what": "drift study: a camera knocked in the dual_arm_cell hidden world",
+   "kind": "pseudo-real",
+   "moving": false,
+   "sha256": "3df4a77fdc40c1af3fc07f1de9bc28325ed2f85942d500206e349701b3acf4dd",
+   "bytes": 9039,
+   "dated": "2026-11-05T20:37:57-07:00",
+   "dated_from": "commit"
+  },
+  "tool-gate": {
+   "in_repo": true,
+   "path": "src/sim2real/result.py",
+   "commit": "08c4f9a242a2497ba5ee5e7cb59bc826eec32341",
+   "shown": "sim2real: src/sim2real/result.py",
+   "what": "the tool gate at a stop (TOOL_GATE_MM)",
+   "kind": "code",
+   "moving": false,
+   "sha256": "63596d47d43c461c2748261a5495f486c4c6e69b62442f4013e7992cbbaff437",
+   "bytes": 45113,
+   "dated": "2026-11-11T23:09:17-07:00",
+   "dated_from": "commit"
+  }
+ },
+ "values": {
+  "gate.tool_mm": {
+   "source": "tool-gate",
+   "key": [
+    "TOOL_GATE_MM"
+   ],
+   "derive": null,
+   "value": 1.0,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 0,
+   "measure": "gate",
+   "kind": "code"
+  },
+  "pendulum.target.peak_speed": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "commanded_peak_rad_s"
+   ],
+   "derive": null,
+   "value": 1.9982472712768775,
+   "unit": "rad/s",
+   "display_unit": "°/s",
+   "scale": 57.29577951308232,
+   "digits": 1,
+   "measure": "peak_speed",
+   "kind": "target"
+  },
+  "pendulum.on_real.peak_speed": {
+   "source": "pendulum-r0",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.8
+     }
+    },
+    "commanded_peak_rad_s"
+   ],
+   "derive": null,
+   "value": 1.9982087091817593,
+   "unit": "rad/s",
+   "display_unit": "°/s",
+   "scale": 57.29577951308232,
+   "digits": 1,
+   "measure": "peak_speed",
+   "kind": "target"
+  },
+  "pendulum.on_real.amplitude": {
+   "source": "pendulum-r0",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.8
+     }
+    },
+    "amplitude_rad"
+   ],
+   "derive": null,
+   "value": 0.5254,
+   "unit": "rad",
+   "display_unit": "°",
+   "scale": 57.29577951308232,
+   "digits": 1,
+   "measure": "amplitude",
+   "kind": "target"
+  },
+  "pendulum.tuned.amplitude": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "amplitude_rad"
+   ],
+   "derive": null,
+   "value": 1.0498,
+   "unit": "rad",
+   "display_unit": "°",
+   "scale": 57.29577951308232,
+   "digits": 1,
+   "measure": "amplitude",
+   "kind": "target"
+  },
+  "pendulum.sim.stop_worst": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "sim",
+    "stop_tool_max_mm"
+   ],
+   "derive": null,
+   "value": 0.46842151762717193,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 3,
+   "measure": "stop_worst",
+   "kind": "sim"
+  },
+  "pendulum.sim.stops": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "sim",
+    "stops"
+   ],
+   "derive": null,
+   "value": 14,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "stops",
+   "kind": "sim"
+  },
+  "pendulum.sim.joint_rms": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "sim",
+    "tracking_rms_deg"
+   ],
+   "derive": null,
+   "value": 0.11560277998398073,
+   "unit": "deg",
+   "display_unit": "°",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "joint_rms",
+   "kind": "sim"
+  },
+  "pendulum.on_real.stop_worst": {
+   "source": "pendulum-r0",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.8
+     }
+    },
+    "real",
+    "stop_tool_max_mm"
+   ],
+   "derive": null,
+   "value": 14.361176831665357,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 3,
+   "measure": "stop_worst",
+   "kind": "real"
+  },
+  "pendulum.on_real.stops": {
+   "source": "pendulum-r0",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.8
+     }
+    },
+    "real",
+    "stops"
+   ],
+   "derive": null,
+   "value": 10,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "stops",
+   "kind": "real"
+  },
+  "pendulum.on_real.joint_rms": {
+   "source": "pendulum-r0",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.8
+     }
+    },
+    "real",
+    "tracking_rms_deg"
+   ],
+   "derive": null,
+   "value": 2.604225477615871,
+   "unit": "deg",
+   "display_unit": "°",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "joint_rms",
+   "kind": "real"
+  },
+  "pendulum.tuned.stop_worst": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "real",
+    "stop_tool_max_mm"
+   ],
+   "derive": null,
+   "value": 0.46591572268550785,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 3,
+   "measure": "stop_worst",
+   "kind": "real"
+  },
+  "pendulum.tuned.stops": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "real",
+    "stops"
+   ],
+   "derive": null,
+   "value": 14,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "stops",
+   "kind": "real"
+  },
+  "pendulum.tuned.joint_rms": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "real",
+    "tracking_rms_deg"
+   ],
+   "derive": null,
+   "value": 0.07608812095987293,
+   "unit": "deg",
+   "display_unit": "°",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "joint_rms",
+   "kind": "real"
+  },
+  "pendulum.fidelity.sim_vs_real": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "sim_vs_real_deg"
+   ],
+   "derive": null,
+   "value": 0.05389086926136284,
+   "unit": "deg",
+   "display_unit": "°",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "fidelity_joint",
+   "kind": "real"
+  },
+  "pendulum.fidelity.floor": {
+   "source": "pendulum-r9",
+   "key": [
+    "stations",
+    "can11",
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.4
+     }
+    },
+    "floor_deg"
+   ],
+   "derive": null,
+   "value": 0.03771464759984109,
+   "unit": "deg",
+   "display_unit": "°",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "floor",
+   "kind": "real"
+  },
+  "ur5e.tasks": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_tuned/workspace-v1/holdout/s1.0",
+    "tasks"
+   ],
+   "derive": null,
+   "value": 12,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "tasks",
+   "kind": "pseudo-real"
+  },
+  "ur5e.on_real.tcp_rms": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_model_err/workspace-v1/holdout/s1.0",
+    "median",
+    "tcp_track_rms_mm"
+   ],
+   "derive": null,
+   "value": 0.0010040740309199487,
+   "unit": "m",
+   "display_unit": "mm",
+   "scale": 1000.0,
+   "digits": 3,
+   "measure": "tcp_rms",
+   "kind": "pseudo-real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "tcp_track_rms_mm"
+   }
+  },
+  "ur5e.on_real.stop_task_worst": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_model_err/workspace-v1/holdout/s1.0",
+    "median",
+    "stop_error_max_mm"
+   ],
+   "derive": null,
+   "value": 0.0002835045646213504,
+   "unit": "m",
+   "display_unit": "mm",
+   "scale": 1000.0,
+   "digits": 3,
+   "measure": "stop_task_worst_median",
+   "kind": "pseudo-real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "stop_error_max_mm"
+   }
+  },
+  "ur5e.on_real.stop_pass_rate": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_model_err/workspace-v1/holdout/s1.0",
+    "gate_pass_rate",
+    "stop_error_max_mm"
+   ],
+   "derive": null,
+   "value": 1.0,
+   "unit": "fraction",
+   "display_unit": "%",
+   "scale": 100.0,
+   "digits": 0,
+   "measure": "gate_pass_rate",
+   "kind": "pseudo-real"
+  },
+  "ur5e.tuned.tcp_rms": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_tuned/workspace-v1/holdout/s1.0",
+    "median",
+    "tcp_track_rms_mm"
+   ],
+   "derive": null,
+   "value": 3.717577338760287e-05,
+   "unit": "m",
+   "display_unit": "mm",
+   "scale": 1000.0,
+   "digits": 4,
+   "measure": "tcp_rms",
+   "kind": "pseudo-real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "tcp_track_rms_mm"
+   }
+  },
+  "ur5e.tuned.stop_task_worst": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_tuned/workspace-v1/holdout/s1.0",
+    "median",
+    "stop_error_max_mm"
+   ],
+   "derive": null,
+   "value": 5.3351523200888275e-06,
+   "unit": "m",
+   "display_unit": "mm",
+   "scale": 1000.0,
+   "digits": 4,
+   "measure": "stop_task_worst_median",
+   "kind": "pseudo-real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "stop_error_max_mm"
+   }
+  },
+  "ur5e.tuned.stop_pass_rate": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_tuned/workspace-v1/holdout/s1.0",
+    "gate_pass_rate",
+    "stop_error_max_mm"
+   ],
+   "derive": null,
+   "value": 1.0,
+   "unit": "fraction",
+   "display_unit": "%",
+   "scale": 100.0,
+   "digits": 0,
+   "measure": "gate_pass_rate",
+   "kind": "pseudo-real"
+  },
+  "urwrist.on_real.stop_worst": {
+   "source": "urwrist-asfound",
+   "key": [
+    "runs",
+    "heldout_1112",
+    "summary",
+    "all_poses",
+    "tool_mm_worst"
+   ],
+   "derive": null,
+   "value": 1.1214799779745928,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 2,
+   "measure": "stop_worst",
+   "kind": "real"
+  },
+  "urwrist.on_real.stop_median": {
+   "source": "urwrist-asfound",
+   "key": [
+    "runs",
+    "heldout_1112",
+    "summary",
+    "all_poses",
+    "tool_mm_median_of_stops"
+   ],
+   "derive": null,
+   "value": 1.0924830123416924,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 2,
+   "measure": "stop_median",
+   "kind": "real"
+  },
+  "urwrist.on_real.within": {
+   "source": "urwrist-asfound",
+   "key": [
+    "runs",
+    "heldout_1112",
+    "summary",
+    "all_poses",
+    "within_1mm"
+   ],
+   "derive": null,
+   "value": 2,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "within_gate",
+   "kind": "real"
+  },
+  "urwrist.on_real.stops": {
+   "source": "urwrist-asfound",
+   "key": [
+    "runs",
+    "heldout_1112",
+    "summary",
+    "all_poses",
+    "stops"
+   ],
+   "derive": null,
+   "value": 8,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "stops",
+   "kind": "real"
+  },
+  "urwrist.tuned.stop_worst": {
+   "source": "urwrist-tuned",
+   "key": [
+    "runs",
+    "heldout_kphold_1112",
+    "summary",
+    "all_poses",
+    "tool_mm_worst"
+   ],
+   "derive": null,
+   "value": 0.6255961961140443,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 2,
+   "measure": "stop_worst",
+   "kind": "real"
+  },
+  "urwrist.tuned.stop_median": {
+   "source": "urwrist-tuned",
+   "key": [
+    "runs",
+    "heldout_kphold_1112",
+    "summary",
+    "all_poses",
+    "tool_mm_median_of_stops"
+   ],
+   "derive": null,
+   "value": 0.31971989679291896,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 2,
+   "measure": "stop_median",
+   "kind": "real"
+  },
+  "urwrist.tuned.within": {
+   "source": "urwrist-tuned",
+   "key": [
+    "runs",
+    "heldout_kphold_1112",
+    "summary",
+    "all_poses",
+    "within_1mm"
+   ],
+   "derive": null,
+   "value": 8,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "within_gate",
+   "kind": "real"
+  },
+  "urwrist.tuned.stops": {
+   "source": "urwrist-tuned",
+   "key": [
+    "runs",
+    "heldout_kphold_1112",
+    "summary",
+    "all_poses",
+    "stops"
+   ],
+   "derive": null,
+   "value": 8,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "stops",
+   "kind": "real"
+  },
+  "urwrist.on_real.coulomb_ff": {
+   "source": "urwrist-asfound-session",
+   "key": [
+    "plan",
+    "steps",
+    0,
+    "ff_coulomb_nm",
+    "15"
+   ],
+   "derive": null,
+   "value": 0.0657,
+   "unit": "N.m",
+   "display_unit": "N·m",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "feedforward",
+   "kind": "setting"
+  },
+  "urwrist.tuned.kp_hold": {
+   "source": "urwrist-tuned-session",
+   "key": [
+    "plan",
+    "steps",
+    0,
+    "kp_scale_hold",
+    "15"
+   ],
+   "derive": null,
+   "value": 2.0,
+   "unit": "x",
+   "display_unit": "×",
+   "scale": 1.0,
+   "digits": 0,
+   "measure": "gain_scale",
+   "kind": "setting"
+  },
+  "bamarm.target.speed": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "newest": {
+      "where": {
+       "fraction": 0.5
+      },
+      "startswith": {
+       "layout": "model-FF"
+      },
+      "excludes": {
+       "layout": [
+        "integrator"
+       ]
+      },
+      "by": "job"
+     }
+    },
+    "fraction"
+   ],
+   "derive": null,
+   "value": 0.5,
+   "unit": "fraction",
+   "display_unit": "%",
+   "scale": 100.0,
+   "digits": 0,
+   "measure": "speed_fraction",
+   "kind": "target"
+  },
+  "bamarm.on_real.speed": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.5,
+      "layout": "baseline"
+     }
+    },
+    "fraction"
+   ],
+   "derive": null,
+   "value": 0.5,
+   "unit": "fraction",
+   "display_unit": "%",
+   "scale": 100.0,
+   "digits": 0,
+   "measure": "speed_fraction",
+   "kind": "target"
+  },
+  "bamarm.on_real.tcp_rms": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.5,
+      "layout": "baseline"
+     }
+    },
+    "tcp_track_rms_mm"
+   ],
+   "derive": null,
+   "value": 12.38,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "tcp_rms",
+   "kind": "real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "tcp_track_rms_mm"
+   }
+  },
+  "bamarm.on_real.stop_median": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.5,
+      "layout": "baseline"
+     }
+    },
+    "stop_error_mm"
+   ],
+   "derive": null,
+   "value": 4.44,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "stop_median",
+   "kind": "real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "stop_error_mm"
+   }
+  },
+  "bamarm.on_real.joint_rms": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.5,
+      "layout": "baseline"
+     }
+    },
+    "joint_track_rms_deg"
+   ],
+   "derive": null,
+   "value": 0.929,
+   "unit": "deg",
+   "display_unit": "°",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "joint_rms",
+   "kind": "real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "joint_track_rms_deg"
+   }
+  },
+  "bamarm.tuned.tcp_rms": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "newest": {
+      "where": {
+       "fraction": 0.5
+      },
+      "startswith": {
+       "layout": "model-FF"
+      },
+      "excludes": {
+       "layout": [
+        "integrator"
+       ]
+      },
+      "by": "job"
+     }
+    },
+    "tcp_track_rms_mm"
+   ],
+   "derive": null,
+   "value": 4.19,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "tcp_rms",
+   "kind": "real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "tcp_track_rms_mm"
+   }
+  },
+  "bamarm.tuned.stop_median": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "newest": {
+      "where": {
+       "fraction": 0.5
+      },
+      "startswith": {
+       "layout": "model-FF"
+      },
+      "excludes": {
+       "layout": [
+        "integrator"
+       ]
+      },
+      "by": "job"
+     }
+    },
+    "stop_error_mm"
+   ],
+   "derive": null,
+   "value": 1.65,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "stop_median",
+   "kind": "real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "stop_error_mm"
+   }
+  },
+  "bamarm.tuned.joint_rms": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "newest": {
+      "where": {
+       "fraction": 0.5
+      },
+      "startswith": {
+       "layout": "model-FF"
+      },
+      "excludes": {
+       "layout": [
+        "integrator"
+       ]
+      },
+      "by": "job"
+     }
+    },
+    "joint_track_rms_deg"
+   ],
+   "derive": null,
+   "value": 0.28,
+   "unit": "deg",
+   "display_unit": "°",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "joint_rms",
+   "kind": "real",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "joint_track_rms_deg"
+   }
+  },
+  "bamarm.twin_nearest.tcp_rms": {
+   "source": "bamarm-twin",
+   "key": [
+    "rows",
+    "0.5 kp_hold_2",
+    "tcp_track_rms_mm"
+   ],
+   "derive": null,
+   "value": 4.093508,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "tcp_rms",
+   "kind": "sim",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "tcp_track_rms_mm"
+   }
+  },
+  "bamarm.twin_nearest.stop_median": {
+   "source": "bamarm-twin",
+   "key": [
+    "rows",
+    "0.5 kp_hold_2",
+    "stop_error_mm"
+   ],
+   "derive": null,
+   "value": 0.395002,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "stop_median",
+   "kind": "sim",
+   "kpi": {
+    "source": "amb-kpi-names",
+    "name": "stop_error_mm"
+   }
+  },
+  "bamarm.sweep.stop_worst": {
+   "source": "bamarm-sweep",
+   "key": [
+    "metrics",
+    "tool_error_mm"
+   ],
+   "derive": null,
+   "value": 1.2127041317297942,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 2,
+   "measure": "stop_worst",
+   "kind": "real"
+  },
+  "bamarm.sweep.stops": {
+   "source": "bamarm-sweep",
+   "key": [
+    "metrics",
+    "tool_error_mm_by_stop"
+   ],
+   "derive": {
+    "size": true
+   },
+   "value": 7,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "stops",
+   "kind": "real"
+  },
+  "rec.pendulum.recovered": {
+   "source": "ex-pendulum",
+   "key": [
+    "parameters"
+   ],
+   "derive": {
+    "count": {
+     "field": "pass",
+     "equals": true
+    }
+   },
+   "value": 8,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "recovered",
+   "kind": "pseudo-real"
+  },
+  "rec.pendulum.graded": {
+   "source": "ex-pendulum",
+   "key": [
+    "parameters"
+   ],
+   "derive": {
+    "count": {
+     "field": "pass",
+     "present": true
+    }
+   },
+   "value": 8,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "graded",
+   "kind": "pseudo-real"
+  },
+  "rec.pendulum.nominal": {
+   "source": "ex-pendulum",
+   "key": [
+    "evaluation",
+    "to_dict",
+    "metrics",
+    "held_out_link_fidelity",
+    "before"
+   ],
+   "derive": null,
+   "value": 17.466777257647752,
+   "unit": "x floor",
+   "display_unit": "× floor",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "held_out_ratio",
+   "kind": "pseudo-real"
+  },
+  "rec.pendulum.fitted": {
+   "source": "ex-pendulum",
+   "key": [
+    "evaluation",
+    "to_dict",
+    "metrics",
+    "held_out_link_fidelity",
+    "after"
+   ],
+   "derive": null,
+   "value": 1.3381967216332513,
+   "unit": "x floor",
+   "display_unit": "× floor",
+   "scale": 1.0,
+   "digits": 2,
+   "measure": "held_out_ratio",
+   "kind": "pseudo-real"
+  },
+  "rec.pendulum.floor": {
+   "source": "ex-pendulum",
+   "key": [
+    "evaluation",
+    "to_dict",
+    "floor_mrad"
+   ],
+   "derive": null,
+   "value": 0.4257950044764132,
+   "unit": "mrad",
+   "display_unit": "°",
+   "scale": 0.057295779513082325,
+   "digits": 4,
+   "measure": "floor",
+   "kind": "pseudo-real"
+  },
+  "rec.urwrist.recovered": {
+   "source": "ex-urwrist",
+   "key": [
+    "parameters"
+   ],
+   "derive": {
+    "count": {
+     "field": "pass",
+     "equals": true
+    }
+   },
+   "value": 22,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "recovered",
+   "kind": "pseudo-real"
+  },
+  "rec.urwrist.graded": {
+   "source": "ex-urwrist",
+   "key": [
+    "parameters"
+   ],
+   "derive": {
+    "count": {
+     "field": "pass",
+     "present": true
+    }
+   },
+   "value": 22,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "graded",
+   "kind": "pseudo-real"
+  },
+  "rec.urwrist.not_identified": {
+   "source": "ex-urwrist",
+   "key": [
+    "parameters"
+   ],
+   "derive": {
+    "count": {
+     "field": "pass",
+     "present": false
+    }
+   },
+   "value": 20,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "not_identified",
+   "kind": "pseudo-real"
+  },
+  "rec.urwrist.nominal": {
+   "source": "ex-urwrist",
+   "key": [
+    "evaluation",
+    "to_dict",
+    "tool_stop_m",
+    "nominal"
+   ],
+   "derive": null,
+   "value": 0.06240492842937083,
+   "unit": "m",
+   "display_unit": "mm",
+   "scale": 1000.0,
+   "digits": 1,
+   "measure": "held_out_tool",
+   "kind": "pseudo-real"
+  },
+  "rec.urwrist.fitted": {
+   "source": "ex-urwrist",
+   "key": [
+    "evaluation",
+    "to_dict",
+    "tool_stop_m",
+    "fitted"
+   ],
+   "derive": null,
+   "value": 4.576534142069724e-05,
+   "unit": "m",
+   "display_unit": "mm",
+   "scale": 1000.0,
+   "digits": 3,
+   "measure": "held_out_tool",
+   "kind": "pseudo-real"
+  },
+  "rec.urwrist.floor": {
+   "source": "ex-urwrist",
+   "key": [
+    "evaluation",
+    "to_dict",
+    "tool_stop_m",
+    "floor"
+   ],
+   "derive": null,
+   "value": 1.411053076386773e-05,
+   "unit": "m",
+   "display_unit": "mm",
+   "scale": 1000.0,
+   "digits": 3,
+   "measure": "floor",
+   "kind": "pseudo-real"
+  },
+  "rec.ur5e.recovered": {
+   "source": "sysid-ur5e",
+   "key": [
+    "verdict",
+    "parameters_pass"
+   ],
+   "derive": null,
+   "value": 24,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "recovered",
+   "kind": "pseudo-real"
+  },
+  "rec.ur5e.graded": {
+   "source": "sysid-ur5e",
+   "key": [
+    "verdict",
+    "parameters"
+   ],
+   "derive": null,
+   "value": 24,
+   "unit": "",
+   "display_unit": "",
+   "scale": 1,
+   "digits": 0,
+   "measure": "graded",
+   "kind": "pseudo-real"
+  },
+  "rec.ur5e.nominal": {
+   "source": "sysid-ur5e",
+   "key": [
+    "metrics",
+    {
+     "where": {
+      "id": "held_out_tool_position_mm"
+     }
+    },
+    "before"
+   ],
+   "derive": null,
+   "value": 2.9455627460327167,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 2,
+   "measure": "held_out_flange",
+   "kind": "pseudo-real"
+  },
+  "rec.ur5e.fitted": {
+   "source": "sysid-ur5e",
+   "key": [
+    "metrics",
+    {
+     "where": {
+      "id": "held_out_tool_position_mm"
+     }
+    },
+    "after"
+   ],
+   "derive": null,
+   "value": 0.2391856894298625,
+   "unit": "mm",
+   "display_unit": "mm",
+   "scale": 1,
+   "digits": 3,
+   "measure": "held_out_flange",
+   "kind": "pseudo-real"
+  },
+  "life.wear.check_every_h": {
+   "source": "drift-wear",
+   "key": [
+    "check_every_h"
+   ],
+   "derive": null,
+   "value": 12,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 0,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.wear.ratio_alarm_h": {
+   "source": "drift-wear",
+   "key": [
+    "ratio_alarm_h"
+   ],
+   "derive": null,
+   "value": 204.0,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 0,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.wear.gap_alarm_h": {
+   "source": "drift-wear",
+   "key": [
+    "gap_alarm_h"
+   ],
+   "derive": null,
+   "value": 300.0,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 0,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.wear.crossing_h": {
+   "source": "drift-wear",
+   "key": [
+    "actual_crossing_h"
+   ],
+   "derive": null,
+   "value": 292.4013663377827,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 1,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.wear.predicted_at_h": {
+   "source": "drift-wear",
+   "key": [
+    "predicted_at_h"
+   ],
+   "derive": null,
+   "value": 168.0,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 0,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.wear.predicted_crossing_h": {
+   "source": "drift-wear",
+   "key": [
+    "predicted_crossing_h"
+   ],
+   "derive": null,
+   "value": 298.35949022015154,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 1,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.wear.plan_by_h": {
+   "source": "drift-wear",
+   "key": [
+    "plan_by_h"
+   ],
+   "derive": null,
+   "value": 280.4496296466265,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 1,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.camera.knock_h": {
+   "source": "drift-camera",
+   "key": [
+    "knock_h"
+   ],
+   "derive": null,
+   "value": 300.0,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 0,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  },
+  "life.camera.alarm_h": {
+   "source": "drift-camera",
+   "key": [
+    "alarm_h"
+   ],
+   "derive": null,
+   "value": 300.0,
+   "unit": "h",
+   "display_unit": "h",
+   "scale": 1,
+   "digits": 0,
+   "measure": "hours",
+   "kind": "pseudo-real"
+  }
+ },
+ "labels": {
+  "pendulum.sim.twin": {
+   "source": "pendulum-r9",
+   "key": [
+    "twins_used",
+    "can11"
+   ],
+   "derive": null,
+   "text": "can11-r18a"
+  },
+  "pendulum.on_real.controller": {
+   "source": "pendulum-r0",
+   "key": [
+    "controller"
+   ],
+   "derive": null,
+   "text": "as-found"
+  },
+  "pendulum.tuned.controller": {
+   "source": "pendulum-r9",
+   "key": [
+    "controller"
+   ],
+   "derive": null,
+   "text": "r8-can14-b2"
+  },
+  "ur5e.on_real.controller": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_model_err/workspace-v1/holdout/s1.0",
+    "controller"
+   ],
+   "derive": null,
+   "text": "ctc_model_err"
+  },
+  "ur5e.tuned.controller": {
+   "source": "ur5e-v2",
+   "key": [
+    "groups",
+    "ur5e/ctc_tuned/workspace-v1/holdout/s1.0",
+    "controller"
+   ],
+   "derive": null,
+   "text": "ctc_tuned"
+  },
+  "ur5e.on_real.description": {
+   "source": "amb-ur5e-baselines",
+   "key": [
+    "CONTROLLER_DESCRIPTIONS",
+    "ctc_model_err"
+   ],
+   "derive": null,
+   "text": "The same, but the model has 10 % mass and inertia errors and no friction while the arm has friction (realistic)."
+  },
+  "ur5e.tuned.description": {
+   "source": "amb-ur5e-baselines",
+   "key": [
+    "CONTROLLER_DESCRIPTIONS",
+    "ctc_tuned"
+   ],
+   "derive": null,
+   "text": "The realistic arm's model plus friction identified on the min-jerk (v1) runs, a 20 Hz loop and a 5 Hz integral, tuned on v1."
+  },
+  "urwrist.on_real.run": {
+   "source": "urwrist-asfound",
+   "key": [
+    "runs",
+    "heldout_1112",
+    "folder"
+   ],
+   "derive": {
+    "basename": true
+   },
+   "text": "multi3_shuffle_heldout-407e3359_1112"
+  },
+  "urwrist.tuned.run": {
+   "source": "urwrist-tuned",
+   "key": [
+    "runs",
+    "heldout_kphold_1112",
+    "folder"
+   ],
+   "derive": {
+    "basename": true
+   },
+   "text": "multi3_shuffle_heldout_kphold_1112"
+  },
+  "bamarm.on_real.layout": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "where": {
+      "fraction": 0.5,
+      "layout": "baseline"
+     }
+    },
+    "layout"
+   ],
+   "derive": null,
+   "text": "baseline"
+  },
+  "bamarm.tuned.layout": {
+   "source": "bamarm-climb",
+   "key": [
+    "rungs",
+    {
+     "newest": {
+      "where": {
+       "fraction": 0.5
+      },
+      "startswith": {
+       "layout": "model-FF"
+      },
+      "excludes": {
+       "layout": [
+        "integrator"
+       ]
+      },
+      "by": "job"
+     }
+    },
+    "layout"
+   ],
+   "derive": null,
+   "text": "model-FF+LA + measured static load at rest + kp x2 at rest"
+  },
+  "rec.pendulum.routines": {
+   "source": "ex-pendulum",
+   "key": [
+    "calibration",
+    "routines"
+   ],
+   "derive": {
+    "pluck": "routine"
+   },
+   "text": "sysid.pendulum_can11.M0, sysid.pendulum_can11.M2, sysid.pendulum_can11.M3, sysid.pendulum_can11.M4"
+  },
+  "rec.urwrist.routines": {
+   "source": "ex-urwrist",
+   "key": [
+    "calibration",
+    "routines"
+   ],
+   "derive": {
+    "pluck": "routine"
+   },
+   "text": "servo.backlash_reversal_held, servo.breakaway_two_sided, homing.single_touch, servo.dynamics_regression, arm.gravity_direction, servo.command_delay_scan"
+  }
+ },
+ "media": {
+  "pendulum-can11-loop": {
+   "file": "media/pendulum-can11.webp",
+   "sha256": "b150533f8dcfcf74091846a25e71a29eba3b922be883bf90a03367284886e647",
+   "bytes": 194462,
+   "kind": "real",
+   "what": "The {=CAN 11} pendulum on its tuned controller, speed rising rung by rung (real, one-to-one time). The numbers beside it are its twin's calibration against a hidden world.",
+   "from": "bamws:reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
+   "from_sha256": "d7642f5a82ca4b9d3558cf264983e8b18436d3ed1d429c43809a983134eeae4c",
+   "shown": "bam_ws: reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
+   "report": "bamws:reports/onedof-pendulum-2026-11-15.html",
+   "filter": "trim=0:10,crop=640:240:0:104,fps=12",
+   "frames_checked": {
+    "frames": 10,
+    "by": "Claude Opus 5.5 (claude-opus-5-5), landing builder",
+    "utc": "2026-11-21T03:30:35Z",
+    "people": false,
+    "serials": false,
+    "burned_text": false
+   }
+  },
+  "pendulum-can11-still": {
+   "file": "media/pendulum-can11.jpg",
+   "sha256": "0f637aab2349702ea3648ac14db45f0c4a2f070e2b9cec50b2f673ce66eda1dd",
+   "bytes": 18213,
+   "kind": "real",
+   "what": "The {=CAN 11} pendulum on the bench (real).",
+   "from": "bamws:reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
+   "from_sha256": "d7642f5a82ca4b9d3558cf264983e8b18436d3ed1d429c43809a983134eeae4c",
+   "shown": "bam_ws: reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
+   "report": "bamws:reports/onedof-pendulum-2026-11-15.html",
+   "filter": "crop=640:240:0:104",
+   "frames_checked": {
+    "frames": 1,
+    "by": "Claude Opus 5.5 (claude-opus-5-5), landing builder",
+    "utc": "2026-11-21T03:30:35Z",
+    "people": false,
+    "serials": false,
+    "burned_text": false
+   }
+  },
+  "ur-wrist-rig": {
+   "file": "media/ur-wrist-rig.jpg",
+   "sha256": "9bb5a2604d98a4245aa6c6ae962bb84217b3e6941e6e09bb960e3979b3eb3c31",
+   "bytes": 72368,
+   "kind": "real",
+   "what": "The UR wrist test rig on the bench (real).",
+   "from": "bamws:reports/media/ur-wrist-sim2real-2026-11-12/poster.jpg",
+   "from_sha256": "9bb5a2604d98a4245aa6c6ae962bb84217b3e6941e6e09bb960e3979b3eb3c31",
+   "shown": "bam_ws: reports/media/ur-wrist-sim2real-2026-11-12/poster.jpg",
+   "report": "bamws:reports/ur-wrist-sim2real-2026-11-12.html",
+   "filter": "none (copied)",
+   "frames_checked": {
+    "frames": 1,
+    "by": "Claude Opus 5.5 (claude-opus-5-5), landing builder",
+    "utc": "2026-11-21T03:30:35Z",
+    "people": false,
+    "serials": false,
+    "burned_text": false
+   }
+  },
+  "bam-arm-tuned": {
+   "file": "media/bam-arm-tuned.jpg",
+   "sha256": "aed2c68f29931b481111090f264fdf4001e3603a6663e060a540010410ab5f6f",
+   "bytes": 57091,
+   "kind": "real",
+   "what": "The BAM arm during the tuned run in its row (real).",
+   "from": "amb:reports/media/bam_fb_real/dev000_v2_rung_0.5_modelff_la_restload_kp2_1120-191453-1e54.mp4",
+   "from_sha256": "ba26ecd33dc4fb780b98dc1bc850614f3c754e5d35712054f61f798f6e53ed32",
+   "shown": "arm_motion_bench: reports/media/bam_fb_real/dev000_v2_rung_0.5_modelff_la_restload_kp2_1120-191453-1e54.mp4",
+   "report": "amb:outputs/bam_fb/real/climb.json",
+   "filter": "scale=960:-2",
+   "frames_checked": {
+    "frames": 1,
+    "by": "Claude Opus 5.5 (claude-opus-5-5), landing builder",
+    "utc": "2026-11-21T03:30:35Z",
+    "people": false,
+    "serials": false,
+    "burned_text": false
+   }
+  }
+ },
+ "hero": {
+  "eyebrow": "sim2real · calibration for robot twins",
+  "h1": "Describe your robot in CAD. The calibration comes with it.",
+  "lead": "Every part in a robot description has a known type: a servo, a gearbox, a camera. Each type knows the models that describe it and the routines that measure them, so the description is enough: sim2real builds the twin, plans the routines your bench can run, fits them, and scores the twin on runs it never saw.",
+  "today": "Today that holds for the {=CAN 11} pendulum's description, and for the UR wrist rig's CAD bundle through a test-only reader. The BAM arm's description is refused until its servos are typed parts: that is the next leg.",
+  "lines": [
+   "{=CAN 11} pendulum: {rec.pendulum.recovered} of {rec.pendulum.graded} hidden values recovered; held-out error {rec.pendulum.nominal} with the description's values, {rec.pendulum.fitted} fitted.",
+   "UR wrist rig: {rec.urwrist.recovered} of {rec.urwrist.graded} recovered; p95 tool error at stops {rec.urwrist.nominal} with the description's values, {rec.urwrist.fitted} fitted."
+  ],
+  "media": "pendulum-can11-loop"
+ },
+ "robots": [
+  {
+   "id": "pendulum",
+   "title": "The {=1-DOF} pendulum",
+   "rows": [
+    {
+     "id": "pendulum-real",
+     "where": "real",
+     "title": "{=1-DOF} pendulum, {=CAN 11}",
+     "link": "/examples/pendulum_can11/",
+     "media": "pendulum-can11-still",
+     "target": "Swings to a commanded peak of {pendulum.target.peak_speed}; worst stop at the tip, stops played, joint tracking RMS.",
+     "cells": {
+      "sim": {
+       "values": [
+        "pendulum.sim.stop_worst",
+        "pendulum.sim.stops",
+        "pendulum.sim.joint_rms"
+       ],
+       "gate": "pendulum.sim.stop_worst",
+       "controller": {
+        "words": "the fitted twin under the tuned controller",
+        "label": "pendulum.sim.twin"
+       }
+      },
+      "on_real": {
+       "values": [
+        "pendulum.on_real.stop_worst",
+        "pendulum.on_real.stops",
+        "pendulum.on_real.joint_rms"
+       ],
+       "gate": "pendulum.on_real.stop_worst",
+       "controller": {
+        "words": "the board as found",
+        "label": "pendulum.on_real.controller"
+       }
+      },
+      "tuned": {
+       "values": [
+        "pendulum.tuned.stop_worst",
+        "pendulum.tuned.stops",
+        "pendulum.tuned.joint_rms"
+       ],
+       "gate": "pendulum.tuned.stop_worst",
+       "controller": {
+        "words": "board PD retuned, with fitted gravity, inertia and friction feed-forward",
+        "label": "pendulum.tuned.controller"
+       }
+      }
+     },
+     "same": [
+      [
+       "pendulum.target.peak_speed",
+       "pendulum.on_real.peak_speed"
+      ]
+     ],
+     "notes": [
+      "Both rounds were commanded to the same peak speed ({pendulum.on_real.peak_speed} as found), but the as-found plays swing to an amplitude of {pendulum.on_real.amplitude} and the tuned ones to {pendulum.tuned.amplitude}.",
+      "Twin against robot on the same tuned runs: {pendulum.fidelity.sim_vs_real}, against a run-to-run floor of {pendulum.fidelity.floor}. The as-found round's floor was not measured: it ran fewer repeats than planned.",
+      "Scored by bam_rack_twin's pendulum scorer on the {=1-DOF} campaign branch, which is not merged yet."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ur_arm",
+   "title": "The UR arm",
+   "rows": [
+    {
+     "id": "ur5e-pseudo",
+     "where": "pseudo-real",
+     "title": "UR5e, in simulation",
+     "link": "#recovery-ur5e-oracle",
+     "target": "The held-out workspace tasks at full speed in MuJoCo, where the arm has joint friction its controller's model lacks and inertia it gets wrong; medians over {ur5e.tasks} tasks of TCP tracking RMS and of each task's worst stop, and the share of tasks with every stop within the gate.",
+     "cells": {
+      "sim": {
+       "status": "not_measured",
+       "why": "arm_motion_bench plays this hidden world only, never a fitted twin of it; its perfect-model run is a frictionless ceiling, not this robot."
+      },
+      "on_real": {
+       "values": [
+        "ur5e.on_real.tcp_rms",
+        "ur5e.on_real.stop_task_worst",
+        "ur5e.on_real.stop_pass_rate"
+       ],
+       "gate": "ur5e.on_real.stop_pass_rate",
+       "controller": {
+        "words": "computed torque on a model with inertia errors and no friction",
+        "label": "ur5e.on_real.controller",
+        "evidence": [
+         "ur5e.on_real.description"
+        ]
+       }
+      },
+      "tuned": {
+       "values": [
+        "ur5e.tuned.tcp_rms",
+        "ur5e.tuned.stop_task_worst",
+        "ur5e.tuned.stop_pass_rate"
+       ],
+       "gate": "ur5e.tuned.stop_pass_rate",
+       "controller": {
+        "words": "the same with friction identified, a stiffer loop and an integral term",
+        "label": "ur5e.tuned.controller",
+        "evidence": [
+         "ur5e.tuned.description"
+        ]
+       }
+      }
+     },
+     "same": [],
+     "notes": [
+      "No UR5e exists here. Tuned means friction identified and the controller rebuilt in arm_motion_bench, not sim2real's `calibrate()`; it was tuned on the development tasks and is scored here on held-out ones."
+     ]
+    },
+    {
+     "id": "urwrist-real",
+     "where": "real",
+     "title": "UR wrist test rig",
+     "link": "/examples/ur_wrist_test_rig/",
+     "media": "ur-wrist-rig",
+     "target": "Three wrist joints returning to the park pose {urwrist.tuned.stops} times on a held-out tape; worst and median tool stop, and the stops within the gate.",
+     "cells": {
+      "sim": {
+       "status": "not_measured",
+       "why": "the twin was never replayed under these two controllers on this tape."
+      },
+      "on_real": {
+       "values": [
+        "urwrist.on_real.stop_worst",
+        "urwrist.on_real.stop_median",
+        "urwrist.on_real.within",
+        "urwrist.on_real.stops"
+       ],
+       "gate": "urwrist.on_real.stop_worst",
+       "controller": {
+        "words": "the it5 fit's gains with Coulomb feed-forward",
+        "label": "urwrist.on_real.run"
+       }
+      },
+      "tuned": {
+       "values": [
+        "urwrist.tuned.stop_worst",
+        "urwrist.tuned.stop_median",
+        "urwrist.tuned.within",
+        "urwrist.tuned.stops"
+       ],
+       "gate": "urwrist.tuned.stop_worst",
+       "controller": {
+        "words": "the same, with the hold gain on {=CAN 15} at {urwrist.tuned.kp_hold}",
+        "label": "urwrist.tuned.run"
+       }
+      }
+     },
+     "same": [
+      [
+       "urwrist.on_real.stops",
+       "urwrist.tuned.stops"
+      ]
+     ],
+     "notes": [
+      "Every stop here is a return to the park pose. The as-found controller already carried a Coulomb feed-forward of {urwrist.on_real.coulomb_ff} on {=CAN 15} from an earlier fit; tuning changed only that joint's hold gain.",
+      "Retired after this campaign; its design is now the BAM arm's wrist."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "bam_arm",
+   "title": "The BAM arm",
+   "rows": [
+    {
+     "id": "bamarm-track",
+     "where": "real",
+     "title": "BAM arm (five-bar, UR wrist, claw)",
+     "link": "#recovery-bamarm-oracle",
+     "media": "bam-arm-tuned",
+     "target": "The development workspace tape at {bamarm.target.speed} of full speed; TCP tracking RMS, median stop error, worst-joint tracking RMS.",
+     "cells": {
+      "sim": {
+       "status": "not_measured",
+       "why": "the twin has not been played with the measured static load at rest that the tuned controller adds."
+      },
+      "on_real": {
+       "values": [
+        "bamarm.on_real.tcp_rms",
+        "bamarm.on_real.stop_median",
+        "bamarm.on_real.joint_rms"
+       ],
+       "gate": "bamarm.on_real.stop_median",
+       "controller": {
+        "words": "the trajectory controller as found: board PD with gravity compensation",
+        "label": "bamarm.on_real.layout"
+       }
+      },
+      "tuned": {
+       "values": [
+        "bamarm.tuned.tcp_rms",
+        "bamarm.tuned.stop_median",
+        "bamarm.tuned.joint_rms"
+       ],
+       "gate": "bamarm.tuned.stop_median",
+       "controller": {
+        "words": "model feed-forward with lookahead, the measured static load held at rest, and a stiffer hold",
+        "label": "bamarm.tuned.layout"
+       }
+      }
+     },
+     "same": [
+      [
+       "bamarm.target.speed",
+       "bamarm.on_real.speed"
+      ]
+     ],
+     "notes": [
+      "Picked by a stated rule, not by hand: the newest run at this speed with model feed-forward and no integrator. It was tuned on this same tape: the static load came from earlier runs of it.",
+      "The twin's nearest run (the same feed-forward and stiffer hold, without the static load): {bamarm.twin_nearest.tcp_rms} tracking, {bamarm.twin_nearest.stop_median} median stop ({gate:bamarm.twin_nearest.stop_median}).",
+      "This file records only each run's median stop. PID tuna's workspace sweep, a different target, records every stop: worst {bamarm.sweep.stop_worst} over {bamarm.sweep.stops} stops ({gate:bamarm.sweep.stop_worst}).",
+      "Written by a live lane; the page cites a frozen snapshot. The rest-integrator run in the same file is left out: the real arm runs PD and feed-forward only."
+     ]
+    }
+   ]
+  }
+ ],
+ "recovery": [
+  {
+   "id": "pendulum-oracle",
+   "robot": "pendulum",
+   "title": "{=CAN 11} pendulum",
+   "via": "sim2real.examples.pendulum_can11().calibrate(on=\"sim\")",
+   "measure": "link angle, twin against the hidden world on held-out runs, in multiples of the run-to-run floor",
+   "recorded": {
+    "source": "ex-pendulum",
+    "routines": "rec.pendulum.routines"
+   },
+   "cells": {
+    "recovered": {
+     "values": [
+      "rec.pendulum.recovered",
+      "rec.pendulum.graded"
+     ]
+    },
+    "nominal": {
+     "values": [
+      "rec.pendulum.nominal"
+     ]
+    },
+    "fitted": {
+     "values": [
+      "rec.pendulum.fitted"
+     ]
+    },
+    "floor": {
+     "values": [
+      "rec.pendulum.floor"
+     ]
+    }
+   },
+   "notes": [
+    "Recorded before the pendulum's schedule changed: today it runs `servo.dynamics_regression` and `servo.backlash_reversals_camera`. A re-record on the current schedule is the next leg."
+   ]
+  },
+  {
+   "id": "urwrist-oracle",
+   "robot": "ur_arm",
+   "title": "UR wrist test rig",
+   "via": "sim2real.examples.ur_wrist_test_rig().calibrate(on=\"sim\")",
+   "measure": "p95 tool position at stops, twin against the hidden world on held-out runs",
+   "recorded": {
+    "source": "ex-urwrist",
+    "routines": "rec.urwrist.routines"
+   },
+   "cells": {
+    "recovered": {
+     "values": [
+      "rec.urwrist.recovered",
+      "rec.urwrist.graded"
+     ]
+    },
+    "nominal": {
+     "values": [
+      "rec.urwrist.nominal"
+     ]
+    },
+    "fitted": {
+     "values": [
+      "rec.urwrist.fitted"
+     ]
+    },
+    "floor": {
+     "values": [
+      "rec.urwrist.floor"
+     ]
+    }
+   },
+   "notes": [
+    "{rec.urwrist.not_identified} more values are carried, each saying why it is not identified."
+   ]
+  },
+  {
+   "id": "ur5e-oracle",
+   "robot": "ur_arm",
+   "title": "UR5e",
+   "via": "python -m sysid run ur5e",
+   "measure": "flange position, twin against a hidden tracker on held-out poses (the sysid oracle; not yet a RobotTwin)",
+   "recorded": {
+    "source": "sysid-ur5e"
+   },
+   "cells": {
+    "recovered": {
+     "values": [
+      "rec.ur5e.recovered",
+      "rec.ur5e.graded"
+     ]
+    },
+    "nominal": {
+     "values": [
+      "rec.ur5e.nominal"
+     ]
+    },
+    "fitted": {
+     "values": [
+      "rec.ur5e.fitted"
+     ]
+    },
+    "floor": {
+     "status": "not_measured",
+     "why": "the sysid oracle records no floor for this measure."
+    }
+   },
+   "notes": []
+  },
+  {
+   "id": "bamarm-oracle",
+   "robot": "bam_arm",
+   "title": "BAM arm",
+   "via": null,
+   "measure": "none yet",
+   "recorded": null,
+   "cells": {
+    "recovered": {
+     "status": "not_built",
+     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+    },
+    "nominal": {
+     "status": "not_built",
+     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+    },
+    "fitted": {
+     "status": "not_built",
+     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+    },
+    "floor": {
+     "status": "not_built",
+     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+    }
+   },
+   "notes": []
+  }
+ ],
+ "modes": [
+  {
+   "n": 1,
+   "title": "Start in sim at the right values and see the performance",
+   "what": "Not a sim2real call yet, on any robot. The Sim column above was played by each robot's own campaign twin. The missing verb: play a target on the twin under the controller you ship, and score it with the robot's own ruler.",
+   "call": null,
+   "robots": {
+    "pendulum": {
+     "status": "not_built",
+     "why": "`simulate()` plays a free release, not a target; the campaign's scorer plays targets on its own twin."
+    },
+    "ur_arm": {
+     "status": "not_built",
+     "why": "the wrist rig has no `simulate()` yet; the UR5e is played in arm_motion_bench, not as a sim2real twin."
+    },
+    "bam_arm": {
+     "status": "not_built",
+     "why": "no RobotTwin for the BAM arm yet; its sims run in arm_motion_bench."
+    }
+   }
+  },
+  {
+   "n": 2,
+   "title": "Run every routine and check it recovers the true values",
+   "what": "The twin calibrates against a sealed world whose values differ from its description's, then each recovered value is checked against the hidden one.",
+   "call": "sim2real.examples.pendulum_can11().calibrate(on=\"sim\")",
+   "robots": {
+    "pendulum": {
+     "status": "runs",
+     "why": "every hidden value recovered (the table below)."
+    },
+    "ur_arm": {
+     "status": "runs",
+     "why": "the wrist rig through `sim2real.examples.ur_wrist_test_rig()`; the UR5e only through the sysid oracle."
+    },
+    "bam_arm": {
+     "status": "not_built",
+     "why": "no hidden-truth world for the BAM arm yet."
+    }
+   }
+  },
+  {
+   "n": 3,
+   "title": "Pseudo-real: another sim with slightly different values",
+   "what": "Move the hidden world away from the description with `move_truth=`: a fit that misses the moved values must turn red.",
+   "call": "sim2real.RobotTwin.from_robot_description(station_description(11), world=\"nominal\").calibrate(on=\"sim\", move_truth={\"can11.gravity_nm\": 5.2, \"can11.damping_nm_s_rad\": 0.25})",
+   "robots": {
+    "pendulum": {
+     "status": "runs",
+     "why": "the sealed world, and the description's own world moved by `move_truth`."
+    },
+    "ur_arm": {
+     "status": "runs",
+     "why": "the wrist rig's sealed world, and its CAD bundle moved through a test-only reader; the UR5e's sysid hidden world."
+    },
+    "bam_arm": {
+     "status": "not_built",
+     "why": "only its homing plant hides values; no `calibrate()` world yet."
+    }
+   }
+  }
+ ],
+ "lifecycle": {
+  "lead": "Once a robot is at work, calibration is mostly watching the fit. Its own work, every pick, is data. The twin replays recent runs; when the fit drifts it refits a challenger on recent sessions, scores it against the twin in service on the same held-out runs, and keeps it only if it wins. Nothing is installed on its own.",
+  "loop": [
+   "monitor",
+   "trigger",
+   "refit a challenger",
+   "shadow-compare",
+   "keep if it wins",
+   "new record"
+  ],
+  "today": [
+   {
+    "href": "/routines/servo.live_reid_t10/",
+    "text": "Live re-identification while the joint works; its page shows its grades, biased against a Stribeck truth."
+   },
+   {
+    "href": "/routines/servo.gap_check_forecast/",
+    "text": "A gap check every {life.wear.check_every_h} with a wear forecast. In a sim study on the pendulum_can11 hidden world the fidelity ratio warned at {life.wear.ratio_alarm_h} and the gap check alone at {life.wear.gap_alarm_h}; the hidden wear crossed its allowance at {life.wear.crossing_h}. At {life.wear.predicted_at_h} the forecast named {life.wear.predicted_crossing_h}, with plan-by {life.wear.plan_by_h}."
+   },
+   {
+    "href": "/routines/camera.pose_recal_belt_tags/",
+    "text": "Camera pose refit from belt tags. In the dual_arm_cell sim study a camera knocked at {life.camera.knock_h} was flagged at {life.camera.alarm_h}."
+   },
+   {
+    "href": "/routines/cell.tags_bundle_adjustment/",
+    "text": "Cell tags bundle adjustment."
+   },
+   {
+    "href": "/api/#api-Budget",
+    "text": "`Budget(settings=(\"deployed\",))` plans only what runs on a robot at work, and `calibrate(data=…)` refits on runs the twin already holds."
+   },
+   {
+    "href": "/api/#api-Ledger",
+    "text": "Each calibration writes a ledger with a W&B copy, and `preflight()` checks a fit before it ships."
+   },
+   {
+    "text": "No robot has a real deployed record yet."
+   }
+  ],
+  "not_built": [
+   {
+    "name": "production",
+    "text": "`sim2real.calibration.production()`: pick sessions in, CalibrationData out, the newest sessions held out."
+   },
+   {
+    "name": "monitor",
+    "text": "`fitted.monitor()`: fidelity, parameter drift with its forecast, performance, coverage, and what is due."
+   },
+   {
+    "name": "recalibrate",
+    "text": "`fitted.recalibrate()`: a challenger refit on recent sessions, kept only if it wins on the same held-out runs."
+   },
+   {
+    "name": "valid_until",
+    "text": "a validity window on the record."
+   },
+   {
+    "name": "save_description",
+    "text": "`fitted.save_description()`: the description is written only when you say so."
+   }
+  ]
+ }
+}
