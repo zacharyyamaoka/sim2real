@@ -831,7 +831,8 @@ ROUTINES = (
                         note="PidTune: the runnable wrapper, sim2real -> pidtuna one way")),
          status="implemented",
          oracle_note="not in the sysid ladder: tuning picks gains and recovers no hidden value; graded on the performance it gains "
-                     "against the best PD + feed-forward on a moved hidden CAN 11 (regret <= 0.15) by tests/test_pid_tune_routine.py; "
+                     "against the best PD + feed-forward inside pidtuna's gain guard and damping band on a moved hidden CAN 11 (regret <= 0.15) "
+                     "by tests/test_pid_tune_routine.py; on CAN 11 no gains in the guard reach the band, so the gain is the feed-forward's; "
                      "ladder routine_ladders/pid.pidtuna.json",
          requires=("armature_kg_m2", "frictionloss_nm"),
          uses=("gravity_nm", "gravity_bottom_rad", "damping_nm_s_rad", "command_delay_s", "friction_stribeck_drop_nm")),
