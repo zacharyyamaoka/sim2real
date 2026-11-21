@@ -16,7 +16,9 @@ for every twin (the UR wrist bundle's nominal twin, which passed 4 of 4 blocking
    own (coordinator, 2026-11-21: preflight must not be stricter than the deploy it gates).
 4. A bound broken turns the check False with its numbers: a kp past the gain margin (damping held at 1).
 5. A twin that states every piece passes, every bound computed and inside.
-6. A relative range is kept only where it is stated, and a stated range must cite its source; pidtuna's Envelope states none now.
+6. A relative range is kept only where it is stated, and a stated range must cite its source; pidtuna's Envelope states none now. Since
+   pidtuna amendment 4 (v2.4) an Envelope states its travel and speed and a bare Envelope() is refused, so preflight reads the range the
+   Envelope's fields default to without building one (red first on 4fa083a: Envelope() raised, and a default range would read as none).
 7. Without pidtuna the check says so (None), and only then.
 8. CAN 11's missing pieces are stated from its board's recorded config, cited: one encoder count (motor_position.sources.0.cpr at the
    rotor x rotor_to_output_ratio) and the velocity filter (motor_position.sources.0.pll_filter_hz), copied into sim2real/data/
@@ -218,7 +220,27 @@ def test_pidtunas_envelope_states_no_relative_range():
     sys.path.insert(0, str(PIDTUNA)) if str(PIDTUNA) not in sys.path and importlib.util.find_spec("pidtuna") is None else None
     from pidtuna.types import Envelope  # noqa: PLC0415
 
-    assert Envelope().gain_scale_range is None and Envelope().kd_range is None
+    stated = Envelope(travel_rad=0.3, max_speed_rad_s=2.0)  # amendment 4: travel and speed are stated, a bare Envelope() is refused
+    assert stated.gain_scale_range is None and stated.kd_range is None
+    import sim2real.preflight as module  # noqa: PLC0415
+
+    assert module._relative_range(None) is None
+
+
+def test_preflight_reads_the_range_an_envelope_defaults_to_without_building_one(monkeypatch):
+    import sim2real.preflight as module  # noqa: PLC0415
+
+    @dataclasses.dataclass(frozen=True, kw_only=True)
+    class Envelope:   # pidtuna's shape since amendment 4, with a default range stated (as before amendment 3)
+        travel_rad: float
+        max_speed_rad_s: float
+        gain_scale_range: tuple | None = (0.25, 2.0)
+        kd_scale_range: tuple | None = None
+
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    monkeypatch.setattr(module, "_pidtuna", lambda name: SimpleNamespace(Envelope=Envelope))
+    assert module._relative_range(None) == ((0.25, 2.0), (0.25, 2.0), "pidtuna types.Envelope's default range")
 
 
 def test_a_stated_range_holds_the_gains_and_must_cite_its_source(nominal, can11_fitted):

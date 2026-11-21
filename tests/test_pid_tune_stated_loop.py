@@ -14,6 +14,9 @@ ruler:
 2. On CAN 11's sim (the committed fit's values), PID tuna gets that loop, its climb has a finite analytic ceiling, and every rung the
    climb plays is at or under it.
 3. The control: with no stated loop the climb has no analytic ceiling (the loop is what holds it).
+4. An envelope that states no torque cap tunes to the board's datasheet limit (pidtuna CONTRACT amendment 4, v2.4: Envelope.max_torque_nm
+   None is "not stated", and Servo.torque_cap_nm is the one rule). Written red first (on 4fa083a, pidtuna with amendment 4): PidTune
+   spelled min(envelope.max_torque_nm, torque_limit_nm) itself and raised on None.
 """
 
 from __future__ import annotations
@@ -123,6 +126,17 @@ def test_without_a_stated_loop_the_climb_has_no_analytic_ceiling(pendulum, tune_
     servo, tuning = _tune(pendulum, bare, values, monkeypatch)
     assert servo.loop is None
     assert tuning.log.find(stage="sweep", kind="limit")[-1].data.get("wn_climb_cap") is None
+
+
+def test_an_envelope_stating_no_torque_cap_tunes_to_the_boards_limit(pendulum, tune_step, values, monkeypatch):
+    import dataclasses  # noqa: PLC0415
+
+    board = tune_step.servo() if callable(tune_step.servo) else tune_step.servo
+    unstated = dataclasses.replace(board, envelope=dataclasses.replace(board.envelope, max_torque_nm=None))
+    servo, tuning = _tune(pendulum, dataclasses.replace(tune_step, servo=unstated), values, monkeypatch)
+    assert servo.envelope.max_torque_nm is None
+    start = tuning.log.find(stage="tune", kind="start")[-1]
+    assert start.data["torque_cap_nm"] == board.torque_limit_nm, (start.data["torque_cap_nm"], board.torque_limit_nm)
 
 
 if __name__ == "__main__":
