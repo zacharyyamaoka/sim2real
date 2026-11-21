@@ -30,6 +30,7 @@ MEDIA_DIR = "media/landing-2026-11-20"
 MEDIA = REPO / "reports" / MEDIA_DIR
 OUT = REPO / "reports" / "landing-page-2026-11-20.html"
 LANDED = "c01f206"
+RULER_FIX = "48dba0e"  # the ruler owner's fix to its serial check (2026-11-20), cloud d06201020
 e = html.escape
 
 DATA = json.loads((REPO / "website" / "data" / "landing.json").read_text(encoding="utf-8"))
@@ -96,7 +97,7 @@ def img(name: str, alt: str, cls: str = "") -> str:
 
 def cloud_rows() -> str:
     rows = []
-    for label, name in (("after the fix round", "cloud_fix_own.json"), ("after the fix round, bam_rack_twin's venv", "cloud_fix_calls.json"),
+    for label, name in (("after the ruler fix (48dba0e)", "cloud_rulerfix_own.json"), ("after the fix round", "cloud_fix_own.json"), ("after the fix round, bam_rack_twin's venv", "cloud_fix_calls.json"),
                         ("before (40e1cd8)", "cloud_prev_own.json")):
         s = load(name)
         if s is None:
@@ -146,13 +147,18 @@ def main() -> None:
     clip_s = re.search(r"trim=[\d.]+:([\d.]+)", loop_media["filter"]).group(1)
     loop_kib = f"{loop_media['bytes'] / 1024:.0f} KiB"
     ruler_lines = (REPO / "tests" / "test_landing_page.py").read_text(encoding="utf-8").splitlines()
-    serial_line = next((i for i, ln in enumerate(ruler_lines, 1) if "assert not SERIAL.search(text)" in ln), "not found")
+    serial_line = next((i for i, ln in enumerate(ruler_lines, 1) if "assert not SERIAL.search(bare)" in ln), "not found")
+    rulerfix = load("cloud_rulerfix_own.json")
+    rf_landing = next((f for f in (rulerfix or {}).get("files", []) if f["file"] == "tests/test_landing_page.py"), None)
+    rf_green = rulerfix is not None and rulerfix["exit"] == 0
+    pushed = subprocess.run(["git", "-C", str(REPO), "merge-base", "--is-ancestor", RULER_FIX, "origin/main"], capture_output=True).returncode == 0
 
-    verdict_line = (f"<strong>The landing page's claims now match their files, and it is on sim2real <code>main</code> @ <code>{LANDED}</code>"
-                    "</strong> (local, not pushed). "
-                    if is_landed else "<strong>The fixes are on <code>claude/landing</code>, not merged.</strong> ")
-    verdict_line += ("One ruler assertion stays red on the ruler's own false positive: it reads the decimal digits inside sha256 and commit "
-                     "hashes as a device serial. Every other check is green.")
+    verdict_line = (f"<strong>The landing page's claims now match their files, every ruler is green, and it is on sim2real <code>main</code>"
+                    f"</strong> ({'pushed to origin' if pushed else 'local, not pushed'}; page at <code>{LANDED}</code>, ruler fix <code>{RULER_FIX}</code>). "
+                    if is_landed and rf_green else "<strong>The fixes are on <code>claude/landing</code>, not merged.</strong> ")
+    verdict_line += ("The one red assertion was the ruler's own false positive (it read the decimal digits inside sha256 and commit hashes as a "
+                     "device serial); its owner fixed it, and the cloud re-run is green." if rf_green else
+                     "One ruler assertion stays red on the ruler's own false positive.")
 
     fix_rows = [
         ("The page said no integrator ever runs on the arm; the BAM arm file it cites holds a rest-integrator run, and the tuned run's static "
@@ -243,7 +249,8 @@ ul {{ padding-left: 20px; }} li {{ margin: 4px 0; }}
 <p class="dim">2026-11-20 · from Zach's Daily Note "# Sim2Real routines" · branch <code>claude/landing</code> · built by <code>docs/build_report_landing_2026_11_20.py</code></p>
 <p class="verdict">{verdict_line}</p>
 <ul>
-<li><strong>Cloud:</strong> docs-site rulers {own and sum(f['passed'] for f in own['files'] if 'docs_site' in f['file'])} passed, 0 failed; the landing ruler {own_landing['passed'] if own_landing else 'not captured'} passed, {own_landing['failed'] if own_landing else '?'} failed (the false positive), {own_landing['skipped'] if own_landing else '?'} skipped (it runs in the other venv); in bam_rack_twin's venv the shown calls and mode 3's moved-truth fit {'both passed' if calls_ok else 'did not both pass'}. All at sim2real <code>{e((own or {}).get('sim2real', '')[:7])}</code>.</li>
+<li><strong>Cloud, after the ruler fix:</strong> the landing ruler {rf_landing['passed'] if rf_landing else 'not captured'} passed, {rf_landing['failed'] if rf_landing else '?'} failed, {rf_landing['skipped'] if rf_landing else '?'} skipped; docs-site rulers {rulerfix and sum(f['passed'] for f in rulerfix['files'] if 'docs_site' in f['file'])} passed. At sim2real <code>{e((rulerfix or {}).get('sim2real', '')[:7])}</code>, cloud run <code>d06201020</code>.</li>
+<li><strong>Cloud, the fix round:</strong> docs-site rulers {own and sum(f['passed'] for f in own['files'] if 'docs_site' in f['file'])} passed, 0 failed; the landing ruler {own_landing['passed'] if own_landing else 'not captured'} passed, {own_landing['failed'] if own_landing else '?'} failed (the false positive), {own_landing['skipped'] if own_landing else '?'} skipped (it runs in the other venv); in bam_rack_twin's venv the shown calls and mode 3's moved-truth fit {'both passed' if calls_ok else 'did not both pass'}. All at sim2real <code>{e((own or {}).get('sim2real', '')[:7])}</code>.</li>
 <li><strong>Local:</strong> <code>{e(check_line)}</code>; the light pre-check with the ruler's own helpers: <code>{e(pre_line)}</code>. No page-wide horizontal scroll at 1280 or 390 ({'none found' if not any(wide_after.values()) else e(str(wide_after))}).</li>
 </ul>
 
@@ -297,26 +304,27 @@ priors over a window of sessions, never install a challenger by itself, write th
 
 <h2>Proof</h2>
 <div class="wrap"><table><thead><tr><th>Run</th><th>File</th><th>Verdict</th><th>Passed</th><th>Failed</th><th>Skipped</th></tr></thead><tbody>{cloud_rows()}</tbody></table></div>
-<h3>The one red assertion is the ruler's, not the page's</h3>
-<p><code>tests/test_landing_page.py</code> line {serial_line} searches the raw <code>landing.json</code> for a serial (eight upper-case hex characters, or ten decimal digits in a row)
-without first blanking the hash fields, as <code>export_landing.py</code> does. Digests of fixed snapshot files hold such runs, so it fails whatever the page says.
+<h3>The one red assertion was the ruler's, not the page's (fixed at <code>{RULER_FIX}</code>)</h3>
+<p><code>tests/test_landing_page.py</code> searched the raw <code>landing.json</code> for a serial (eight upper-case hex characters, or ten decimal digits in a row)
+without first blanking the hash fields, as <code>export_landing.py</code> does. Its fixed check is now line {serial_line}. Digests of fixed snapshot files hold such runs, so it fails whatever the page says.
 The cloud's first failure: <code>{e(fp_line)}</code>. Every hit, and the field it sits in:</p>
 <p><code>{e(', '.join(f'{h} ({f})' for h, f in hits))}</code></p>
 <p class="dim">All in {e(', '.join(hit_fields))}. The rest of that test's assertions (no absolute path; no typed number or bad name in any template) hold when checked by hand with the ruler's own regexes.
-The ruler forbids its builder to edit it; the fix is one line for its owner: blank <code>sha256</code>, <code>from_sha256</code>, <code>commit</code> and <code>sim2real_commit</code> before the search, and re-pin.</p>
+The ruler forbade its builder to edit it, so its owner (the dispatcher) made the fix: blank <code>sha256</code>, <code>from_sha256</code>, <code>commit</code> and <code>sim2real_commit</code> before the search. A ten-digit number planted in a label still fails it.</p>
 
 <h2>Decided for you</h2>
 <ul>
-<li>Landed on local <code>main</code> with that one ruler assertion red, because every red hit is a hash and every other check is green. Undo: <code>git -C /home/bam/sim2real reset --keep 8dd457f</code> (nothing was pushed).</li>
+<li>Landed on <code>main</code> and pushed to origin once the ruler fix ran green. Undo: <code>git -C /home/bam/sim2real revert 0c29ac1^..{RULER_FIX}</code>, then push.</li>
+<li>Fixed the ruler's serial check as its owner (blank the four digest fields first, mutation-checked). Undo: <code>git revert {RULER_FIX}</code>.</li>
 <li>Re-cut the hero loop from the whole clip and cropped it to the swing ({loop_kib} of WebP, under the ruler's cap); the row's still is cropped the same way. Undo: revert <code>96115ba</code>'s media.</li>
 <li>Kept the BAM twin's median as "not judged" (conservative, and the gate rule says so).</li>
 <li>Dispatched the cloud checks on the <code>bam</code> account: <code>jidoka</code>'s CLI still shows its first-run theme picker to a scripted terminal, so its workers do not start.</li>
 </ul>
 <h2>Left</h2>
 <ul>
-<li>The ruler's false positive (above): the ruler owner's one-line fix and re-pin.</li>
+<li>Lane L10 (PID tune as calibrate()'s third step) is code-complete on <code>claude/l10-c</code> but not landed: pidtuna's new damping-band rule fails its grade, and preflight's fixture needs its owner's change.</li>
 <li>bam_ws <code>reports/ur-wrist-sim2real-2026-11-12.html</code> calls the as-found wrist run "no feed-forward"; its session plan and runner carried Coulomb feed-forward on all three joints. The landing follows the plan; the old report's label is the one to correct.</li>
-<li>The site is built, not deployed (preview only, <code>--noindex</code>).</li>
+<li>The site is built, not deployed (a preview build is <code>--noindex</code>).</li>
 <li>Next real numbers: a Sim cell for the UR wrist and the BAM arm, and the pendulum's example re-recorded on today's schedule.</li>
 </ul>
 <h2>Needs you</h2>
@@ -325,7 +333,7 @@ The ruler forbids its builder to edit it; the fix is one line for its owner: bla
 </ul>
 <h2>Not done, on purpose</h2>
 <ul>
-<li>No push, no deploy. No edit to <code>tests/</code>. No pytest, MuJoCo or simulation on the workstation (the arm is powered): every test ran on a cloud VM.</li>
+<li>No deploy: a first public site is your call (the domain too). No pytest, MuJoCo or simulation on the workstation (the arm is powered): every test ran on a cloud VM.</li>
 </ul>
 <p class="dim">Commits: {e(' · '.join(line.split(' ', 1)[0] for line in text('git_log.txt').splitlines()))}.</p>
 </main></body></html>
