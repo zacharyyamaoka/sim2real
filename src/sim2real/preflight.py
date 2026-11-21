@@ -17,7 +17,9 @@ can ship. Before the values reach a board, the twin is held to four blocking che
    and its damping band's floor): the gain margin with the loop's delay, current loop, velocity filter and rate; the damping floor; the
    velocity-noise budget (kd x noise inside the tuner's chatter share of the cap); one encoder count against the cap; a third of the
    structural mode; the linear range. Each bound's value, limit and the source of every piece it read are in the check's limit. A bound
-   whose piece the twin does not state is None, naming the piece, and the check is None ("could not be checked"), never True; any bound
+   whose piece the twin does not state is None, naming the piece, and the check is None ("could not be checked"), never True, except
+   the structural mode, which pidtuna's §2 applies only to a known mode: unstated, it is "not applied" (in the limit, never a pass on
+   its own) and blocks nothing; any bound
    broken is False with its numbers. A relative range only where one is stated (preflight(gain_range=...), with its source; pidtuna's
    Envelope states none since amendment 3). And no integrator. WHY PD only (Zach, 2026-11-13): the real arm runs PD + feed-forward, never
    an integrator; a board that keeps its ki with ilimit 0 integrates nothing (moteus holds the integral to +-ilimit; bam_ws 9de804493), so
@@ -368,9 +370,16 @@ def _encoder_count(fitted, instance: str) -> tuple[float | None, str]:
                   f"states no {instance}.encoder_quantum_rad)")
 
 
+NOT_APPLIED = "not applied: no structural mode stated (pidtuna §2 applies it to a known mode)"
+# WHY a bound that is not applied rather than None (the coordinator's ruling, 2026-11-21): pidtuna's contract §2 bounds wn at a third of a
+# KNOWN structural mode and analytic.limits treats an unstated one as no bound; preflight must not be stricter than the deploy it gates,
+# or gains pidtuna delivers are blocked here. Every other unstated piece stays None: pidtuna needs those
+APPLIED_ONLY_WHEN_STATED = {"structural mode": "structural_hz"}
+
+
 def _no_structural_mode(instance: str) -> tuple[None, str]:
-    return None, (f"no structural mode: neither the description ({instance}.structural_hz) nor robotparts states one (a gearbox's or a "
-                  "belt's stiffness against the inertia)")
+    return None, (f"{NOT_APPLIED}; {instance}.structural_hz in the description (a gearbox's or a belt's stiffness against the inertia, "
+                  "from a datasheet or a measurement) would apply it")
 
 
 def _finite(number: float) -> float | str:
@@ -421,7 +430,11 @@ def _bounds(pieces: Mapping[str, tuple], kp: float, kd: float) -> dict[str, dict
     out = {}
     for name, (value, limit, rule, unit, ok, why) in rows.items():
         missing = [pieces.get(p, (None, f"no {p}"))[1] for p in BOUND_NEEDS[name] if pieces.get(p, (None,))[0] is None]
-        if missing:
+        optional = APPLIED_ONLY_WHEN_STATED.get(name)
+        if optional is not None and pieces.get(optional, (None,))[0] is None and len(missing) == 1:
+            out[name] = {"passed": "not applied", "value": _finite(value), "limit": None, "rule": rule, "unit": unit.strip(),
+                         "why": missing[0], "from": {p: pieces[p][1] for p in BOUND_NEEDS[name] if p != optional}}
+        elif missing:
             out[name] = {"passed": None, "value": None, "limit": None, "rule": rule, "unit": unit.strip(), "missing": missing}
         else:
             out[name] = {"passed": bool(ok), "value": _finite(value), "limit": _finite(limit), "rule": rule, "unit": unit.strip(), "why": why,
@@ -432,6 +445,8 @@ def _bounds(pieces: Mapping[str, tuple], kp: float, kd: float) -> dict[str, dict
 def _bound_words(name: str, b: Mapping[str, Any]) -> str:
     if b["passed"] is None:
         return f"{name} could not be checked ({'; '.join(b['missing'])})"
+    if b["passed"] == "not applied":
+        return f"{name} {b['why']}"
     unit = f" {b['unit']}" if b["unit"] else ""
     shown = [v if isinstance(v, str) else f"{v:.4g}" for v in (b["value"], b["limit"])]
     return f"{name} {shown[0]}{unit} {'≥' if b['rule'] == '>=' else '≤'} {shown[1]}{unit}" + ("" if b["passed"] else " BROKEN")
@@ -510,7 +525,7 @@ def _gains_check(entries: Mapping[str, dict], value: Any, limit: Any, sources: s
         return Check("gains_within_board_limits", GAIN_TITLE, None, value, limit, GAIN_UNIT,
                      f"could not be checked: {'; '.join(unknown)}. Inside: {computed}. PD only holds. Shipped: {sources}")
     return Check("gains_within_board_limits", GAIN_TITLE, True, value, limit, GAIN_UNIT,
-                 f"every analytic bound inside: {computed}; no integrator. Shipped: {sources}")
+                 f"every analytic bound it applies is inside: {computed}; no integrator. Shipped: {sources}")
 
 
 def _tracer_pieces(fitted, unit: _Unit, cap: dict) -> dict:
