@@ -80,6 +80,44 @@
    }
   },
   {
+   "name": "hover_empty_belt",
+   "group": "arm",
+   "kind": "joint",
+   "digest": "ef9cd56d9afc38df",
+   "pose": {
+    "_type": "manipulation/NamedPose",
+    "name": "hover_empty_belt",
+    "group": "arm",
+    "joint_names": [
+     "revolute_3",
+     "revolute_6",
+     "revolute_7",
+     "revolute_11",
+     "revolute_14",
+     "revolute_17"
+    ],
+    "positions": {
+     "dtype": "<f8",
+     "shape": [
+      6
+     ],
+     "data": [
+      -0.09696690212987596,
+      0.18238917677274405,
+      1.8797548436695743,
+      -2.373322709891076,
+      1.3537186239444796,
+      1.42079248190351
+     ]
+    },
+    "tolerance": null,
+    "tool_pose": null,
+    "tip_link": "",
+    "why": "Zach 2026-11-21: when there is no more waste on the belt, enforce only that the arm hovers just above it. Solved by robot_reach.goals (robot_reach 58ba1e7; bam_ws docs/named_poses/rest_explorer/solve_goals.py, record reports/media/rest-explorer/goal_records.json 'hover_empty_belt'). The goal: belt clearance >= 20 mm (the far rail and the lane 0 mm, touching allowed), torque held, the workspace the pick zone (hover, claw plumb: 9 poses, mean readiness), weights energy 3 / readiness 1, stop margin 2 deg, J1 searched in [-30, 0], the claw at 0; gates the bam_fivebar valid region (fold >= 0.05), the wrist rules proven, the hand >= 20 mm from the shoulder / L1 / cranks. 1217 poses evaluated, 104 passed every gate; this one scores 0.93 (energy 0.17 W, compactness 150 mm, readiness 2.59 s, occlusion 11.5 %), the Pareto runners-up hold at 1.28 / 3.03 / 7.61 W for readiness 2.08 / 1.52 / 1.49 s. Readiness is per-joint trapezoids, the slowest joint; the path between is not checked. Re-measured independently with the rest-pose study's tools (reports/media/rest-poses-2026-11-21/results.json sleep_on_belt_check): 0.169 W, 77.8 mm over the belt, the hand 150 mm from the line, 11.5 % of the pick zone hidden (8.3 % of the belt from the belt-plane refit), the wrist's self-collision proven, no envelope violation. It is the study's sleep region held under power: the upper arm 10 deg off vertical and the forearm plumb, beside sleep_limp's gravity bowl (Craig 100.45 / 245.16 against sleep's 96 / 235.5), so gravity costs almost nothing to hold; its fold 0.069 sits just over the gate's 0.05. Not limp: every joint stays held.",
+    "description": "The belt is empty: hover just above it on the least power, still near the pick zone - 78 mm over the belt, 0.17 W to hold, the hand 150 mm from the red line (J2's vertical); it reaches the pick zone (hover, claw plumb) in 2.59 s mean / 2.90 s worst and hides 11.5 % of it from the overhead D435."
+   }
+  },
+  {
    "name": "sleep_limp",
    "group": "arm",
    "kind": "joint",
@@ -113,7 +151,7 @@
     "tolerance": null,
     "tool_pose": null,
     "tip_link": "",
-    "why": "Zach 2026-11-21: a sleep phase that lets the arm go limp in an intelligent way. Until now limp was never for a joint that carries gravity (Zach 2026-11-13: hold, brake on a fault, never a bare stop), and today's arm_hold never lets go - so nothing walks the arm here and goes limp yet; the only limps are the claw on request and W1-W3 in return-home's fold escape. The gravity bowl: torque off at any working pose (the READY ready_to_pick replaced, V4, ready_to_pick, stow_low_power) drops the arm into the five-bar's gravity bowl with the claw 70-85 mm under the belt top (sleep_survey.json) - never limp there. The other rest the potential map has, the coupler's crank-end eye on the L1 tube (~270 mm over the belt, holds limp), is the crank-FLIPPED assembly: entering it drives the crank through its fold and return-home refuses a flipped five-bar, so it was rejected (sleep_rest.json, sleep_basin.json); a J1 tilt does not help (the arm swings back to its hang). So sleep is the bowl on the working assembly, made safe by the wrist: the five-bar at its lowest-torque pose (comp J2 +0.54 / C1 -0.04 N.m, under their 0.59 / 0.62 N.m Coulomb), the claw turned 105 deg from plumb so gravity (+0.16 N.m) presses W1 onto its own 169.85 deg stop instead of hanging the claw. Torque off (boards stopped or braked) it moves at most 2.0 deg, its lowest point 78 mm over the belt (gate >= 30; the items are 65 mm), +-3 deg kicks on every drive all stay >= 75 mm. W2 is held only by friction: gravity 0.007 N.m against 0.083 kinetic / 0.140 static measured; in the frictionless bound W2 creeps to its stop and the claw ends 0.4 mm over the belt top - so it holds stopped or braked on the measured friction (brake mode 15 preferred: phases shorted, damped), and W2 alone kept holding (~0.0002 W) makes it friction-proof; holding the whole pose powered would cost 0.28 W. The limp sim (limp_sim.py, three cases: free, brake, frictionless) modelled gravity on the 15c masses, the bundle's stop pairs as contacts, the closed loop, each drive's Coulomb / viscous loss and reflected rotor inertia, and brake mode's damping (the JMC drives' ASSUMED); it did not model backlash, cogging, static friction over kinetic (the frictionless bound stands in), contacts with the belt, the rail or the wrist on the arm (checked from the geometry along the settle), cable drag or belt vibration (the kicks stand in). Waking: the five-bar stays inside the envelope, and the bowl is the five-bar homing's own start. Study: bam_ws docs/named_poses/rest_poses_1121 (landscape.py, limp_sim.py, sleep_survey / sleep_basin / sleep_rest / sleep_bowl / sleep_pick.py), reports/media/rest-poses-2026-11-21 (sleep_pick.json).",
+    "why": "Zach 2026-11-21: a sleep phase that lets the arm go limp in an intelligent way. Until now limp was never for a joint that carries gravity (Zach 2026-11-13: hold, brake on a fault, never a bare stop), and today's arm_hold never lets go - so nothing walks the arm here and goes limp yet; the only limps are the claw on request and W1-W3 in return-home's fold escape. The gravity bowl: torque off at any working pose (the READY ready_to_pick replaced, V4, ready_to_pick, stow_low_power) drops the arm into the five-bar's gravity bowl with the claw 70-85 mm under the belt top (sleep_survey.json) - never limp there. The other rest the potential map has, the coupler's crank-end eye on the L1 tube (~270 mm over the belt, holds limp), is the crank-FLIPPED assembly: entering it drives the crank through its fold and return-home refuses a flipped five-bar, so it was rejected (sleep_rest.json, sleep_basin.json); a J1 tilt does not help (the arm swings back to its hang). So sleep is the bowl on the working assembly, made safe by the wrist: the five-bar at its lowest-torque pose (comp J2 +0.54 / C1 -0.04 N.m, under their 0.59 / 0.62 N.m Coulomb), the claw turned 105 deg from plumb so gravity (+0.16 N.m) presses W1 onto its own 169.85 deg stop instead of hanging the claw. Torque off (boards stopped or braked) it moves at most 2.0 deg, its lowest point 78 mm over the belt (gate >= 30; the items are 65 mm), +-3 deg kicks on every drive all stay >= 75 mm. W2 is held only by friction: gravity 0.007 N.m against 0.083 kinetic / 0.140 static measured; in the frictionless bound W2 creeps to its stop and the claw ends 0.4 mm over the belt top - so it holds stopped or braked on the measured friction (brake mode 15 preferred: phases shorted, damped), and W2 alone kept holding (~0.0002 W) makes it friction-proof; holding the whole pose powered would cost 0.28 W. The limp sim (limp_sim.py, three cases: free, brake, frictionless) modelled gravity on the 15c masses, the bundle's stop pairs as contacts, the closed loop, each drive's Coulomb / viscous loss and reflected rotor inertia, and brake mode's damping (the JMC drives' ASSUMED); it did not model backlash, cogging, static friction over kinetic (the frictionless bound stands in), contacts with the belt, the rail or the wrist on the arm (checked from the geometry along the settle), cable drag or belt vibration (the kicks stand in). The goal solver's alternative sleep (robot_reach.goals: the claw resting on the belt, J2 42.7 / W1 45.6 deg) was rejected in MuJoCo with the belt as a contact (reports/media/rest-poses-2026-11-21/results.json sleep_on_belt_check): 3 deg kicks (0.5 rad/s) on J1 and J2 collapse it - the J2 kick folds J2 51 deg and C1 26 and ends with the elbow past straight (j3 +1.8), which return-home refuses - and with no joint friction it slides and folds about the contact, the claw dragging 27 mm; this pose settles after 12 of 12 kicks. Waking: the five-bar stays inside the envelope, and the bowl is the five-bar homing's own start. Study: bam_ws docs/named_poses/rest_poses_1121 (landscape.py, limp_sim.py, sleep_survey / sleep_basin / sleep_rest / sleep_bowl / sleep_pick.py), reports/media/rest-poses-2026-11-21 (sleep_pick.json).",
     "description": "Torque off, for an idle line: the arm hangs straight down in its own gravity bowl with the claw folded up onto W1's hard stop and stays put (it moves 2 deg) 78 mm over the belt - so only with the belt stopped or empty. Limp only with the boards stopped or braked, or W2 kept powered; no runtime path goes here yet."
    }
   },

@@ -54,7 +54,8 @@ def test_the_ruler_cells_and_j1s_home_are_byte_for_byte_the_old_ones():
 
 def test_the_copy_is_digest_checked_and_names_the_poses():
     assert [(p.name, p.group) for p in named_poses.named_poses()] == [("ready_to_pick", "arm"), ("stow_low_power", "arm"),
-                                                                      ("sleep_limp", "arm"), ("homing", "arm"), ("home", "fivebar")]
+                                                                      ("hover_empty_belt", "arm"), ("sleep_limp", "arm"),
+                                                                      ("homing", "arm"), ("home", "fivebar")]
     with pytest.raises(KeyError, match="there are"):
         named_poses.named_pose("fold")
     j2, c1 = named_poses.fivebar_craig_deg(named_poses.named_pose("home"))
