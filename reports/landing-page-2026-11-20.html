@@ -28,7 +28,7 @@ ul { padding-left: 20px; } li { margin: 4px 0; }
 </style></head><body><main>
 <h1>sim2real landing page: fix round</h1>
 <p class="dim">2026-11-20 · from Zach's Daily Note "# Sim2Real routines" · branch <code>claude/landing</code> · built by <code>docs/build_report_landing_2026_11_20.py</code></p>
-<p class="verdict"><strong>The landing page's claims now match their files, every ruler is green, and it is on sim2real <code>main</code></strong> (local, not pushed; page at <code>c01f206</code>, ruler fix <code>48dba0e</code>). The one red assertion was the ruler's own false positive (it read the decimal digits inside sha256 and commit hashes as a device serial); its owner fixed it, and the cloud re-run is green.</p>
+<p class="verdict"><strong>The landing page's claims now match their files, every ruler is green, and it is on sim2real <code>main</code></strong> (pushed to origin; page at <code>c01f206</code>, ruler fix <code>48dba0e</code>). The one red assertion was the ruler's own false positive (it read the decimal digits inside sha256 and commit hashes as a device serial); its owner fixed it, and the cloud re-run is green.</p>
 <ul>
 <li><strong>Cloud, after the ruler fix:</strong> the landing ruler 23 passed, 0 failed, 1 skipped; docs-site rulers 18 passed. At sim2real <code>48dba0e</code>, cloud run <code>d06201020</code>.</li>
 <li><strong>Cloud, the fix round:</strong> docs-site rulers 18 passed, 0 failed; the landing ruler 22 passed, 1 failed (the false positive), 1 skipped (it runs in the other venv); in bam_rack_twin's venv the shown calls and mode 3's moved-truth fit both passed. All at sim2real <code>6c8cb62</code>.</li>
