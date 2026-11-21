@@ -11,13 +11,20 @@ to be able to see the summary statistics accross a bunch of runs. Then I want to
 store; Rerun links only through the always-on launcher on 127.0.0.1:8771, never the campaign's 9461/9462 web viewer (dead when not served).
 
 What a sync writes into the deployment's project ("Sim2Real · 1-DOF rack", bam_ws tools/wandb_trackers/trackers/sim2real_1_dof_rack.py):
-- the summary run (id `deployment-summary`, group deployment-summary): the round-by-round table (runs, median and p95 tracking RMS, worst
-  stop, share of runs meeting the goal, the scorecard's own goal and gates), the same per station, goal-line charts across the rounds, and
-  the runs table: one row per run of every scored round, its `rerun` cell the 8771 link or "no recording yet" (never a dead link);
-- one run per round (id `deployment-summary-r<n>`): that round's headline as summary numbers and its own runs table, so the round's W&B
-  run page is its drill-down. WHY not one W&B run per rig run: 2485 runs would bury the project, and a rig run's drill-down is its Rerun
-  recording, one click from its row;
-- the report "1-DOF rack · where we stand": the summary first, then the runs table, then the per-station panels.
+- the summary run (id `deployment-summary`, group deployment-summary): the latest round's headline as summary numbers (now/*), and the
+  goal lines across the rounds as history steps, one per round (x = `round`: each station's tracking RMS and tip stop at 0.9 of top
+  speed beside the round's own goal, the share of runs meeting the goal, each station's median and p95 run);
+- one run per round (id `deployment-summary-r<n>`): that round's headline and per-station numbers as summary scalars. WHY not one W&B
+  run per rig run: 2485 runs would bury the project, and a rig run's drill-down is its Rerun recording, one click from its row;
+- the report "1-DOF rack · where we stand": the summary first, the round-by-round numbers, then where every run is kept, then the
+  per-station panels.
+
+WHY the tables are local (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary statistics;
+for the media-rich things we should be using rerun!"): the project held ~17 MB of runs-table artifacts per sync. The drill-down - one
+row per run of every scored round, its `rerun` cell the 8771 link or "no recording yet" (never a dead link) - and the round and station
+roll-ups are jsonl under LOCAL (runs.jsonl, by_round.jsonl, by_round_station.jsonl, lines.jsonl; r<n>/runs.jsonl per round), each W&B
+run's config names its folder (`local_tables`) and its summary carries the row counts (`rows/<table>`). The sim2real app's Runs view
+shows the same rows.
 
 WHY a copy: W&B is a copy of a local ledger (vault memory project_wandb_trackers). Every number comes from sim2real.deployments_page (runs(),
 read_round(), performance(), history()), which reads the campaign's scorecards read-only; this file only rolls them up. The links come from
@@ -50,7 +57,7 @@ if str(REPO / "src") not in sys.path:
 
 from sim2real import deployments_page as dp  # noqa: E402
 from sim2real import paths  # noqa: E402
-from sim2real.tracking.wandb_log import ENTITY, WANDB_DIR  # noqa: E402 - stdlib only at import (wandb is imported inside its functions)
+from sim2real.tracking.wandb_log import ENTITY, WANDB_DIR, project_dir, write_tables  # noqa: E402 - stdlib only at import
 
 PROJECT = "Sim2Real · 1-DOF rack"
 GROUP = "deployment-summary"
@@ -59,12 +66,16 @@ SUMMARY_NAME = "1-DOF rack · where we stand"
 ROUND_JOB = "round_summary"
 REPORT_TITLE = "1-DOF rack · where we stand"
 STATE = Path.home() / ".local" / "state" / "sim2real" / "deployments-wandb.json"
+# the runs table and the roll-ups, kept on this computer (LOCAL/<project>/...); W&B gets the folder and the row counts
+LOCAL = Path.home() / ".cache" / "sim2real" / "deployments_wandb"
+# the sim2real app's Runs view of the rack (Stable channel, :4820): the same rows, each opening its Rerun recording
+RUNS_VIEW = f"http://127.0.0.1:4820/deployments/?d={dp.DEPLOYMENT}&view=runs"
+# WHY a schema in every run's digest: the 2026-11-21 move to scalars must rewrite each run once even where the campaign did not change
+SCHEMA = "deployments-wandb/2 summary-only 2026-11-21"
 # WHY the /wandb prefix by hand: the app lives at forge.coreweave.com/wandb and wandb-workspaces' Report.url drops it (bam_interventions)
 WEB = "https://forge.coreweave.com/wandb"
 NO_RECORDING = "no recording yet"
 NO_LAUNCHER = "recorded; no 8771 launcher on this computer"
-LINESERIES = "wandb/lineseries/v0"
-LINE_FIELDS = {"step": "step", "lineKey": "lineKey", "lineVal": "lineVal"}
 
 # The runs table, in the order a reader wants it: what the run was, how it did against the target, the link, then the rest of its metadata.
 # WHY the stop columns are the RUNG's: the scorer measures the tip stop per rung (median, p95, max over its stops), not per play.
@@ -238,6 +249,28 @@ def station_lines(by_station: list[dict], rounds: dict[int, dict]) -> dict[str, 
     return out
 
 
+def series_id(line: str) -> str:
+    """A chart line's stable key: "CAN 11" -> "can11", "goal ≤ 0.5°" -> "goal" (one line even when a round's goal number moves),
+    "all stations" -> "all", "median run" -> "median", "p95 run" -> "p95"."""
+    if line.startswith("goal"):
+        return "goal"
+    if line.startswith("CAN "):
+        return "can" + line[4:]
+    return {"all stations": "all", "median run": "median", "p95 run": "p95"}.get(line, re.sub(r"[^A-Za-z0-9]+", "_", line).strip("_"))
+
+
+def round_steps(charts: dict[str, dict]) -> list[dict]:
+    """The charts' lines as W&B history steps, one per round: {"round": n, "<chart>/<line>": value}, e.g.
+    "chart/tracking_rms_at_goal/can11" beside "chart/tracking_rms_at_goal/goal". A value not measured is left out (never 0), as in the
+    charts. WHY steps of scalars (Zach, 2026-11-21: W&B is for summary statistics): a line plot over x = `round` draws what the
+    line-series tables drew, with no table stored."""
+    by_round: dict[int, dict] = {}
+    for key, spec in charts.items():
+        for n, line, value in spec["rows"]:
+            by_round.setdefault(n, {"round": n})[f"{key}/{series_id(line)}"] = value
+    return [by_round[n] for n in sorted(by_round)]
+
+
 def headline(r: dict) -> str:
     """One sentence for a round, performance first."""
     goal = "goal met" if r["goal_met"] else "goal not met"
@@ -255,7 +288,7 @@ def payload(runs: list[dict], rounds: dict[int, dict], history: list[dict], urls
     by_round = round_rows(rows, rounds)
     by_station = station_rows(rows, rounds)
     charts = {**goal_lines(history, rounds), **share_lines(by_round, by_station), **station_lines(by_station, rounds)}
-    return {"rows": rows, "by_round": by_round, "by_station": by_station, "charts": charts,
+    return {"rows": rows, "by_round": by_round, "by_station": by_station, "charts": charts, "steps": round_steps(charts),
             "now": by_round[-1] if by_round else None,
             "links": {"rows": len(rows), "with_link": sum(1 for r in rows if r["rerun"].startswith("http")),
                       "no_recording": sum(1 for r in rows if r["rerun"] == NO_RECORDING),
@@ -318,20 +351,6 @@ def code_version() -> str:
         return "unknown"
 
 
-def table(rows: list[dict], columns: tuple[str, ...]):
-    import wandb  # noqa: PLC0415
-
-    return wandb.Table(columns=list(columns), data=[[r.get(c) for c in columns] for r in rows], allow_mixed_types=True)
-
-
-def chart(spec: dict):
-    import wandb  # noqa: PLC0415
-
-    data = wandb.Table(columns=["step", "lineKey", "lineVal"], data=spec["rows"])
-    return wandb.plot_table(vega_spec_name=LINESERIES, data_table=data, fields=LINE_FIELDS,
-                            string_fields={"title": spec["title"], "xname": "round"})
-
-
 def flat(prefix: str, row: dict, keys: tuple[str, ...]) -> dict:
     out = {}
     for k in keys:
@@ -343,61 +362,97 @@ def flat(prefix: str, row: dict, keys: tuple[str, ...]) -> dict:
     return out
 
 
-def write_run(api, *, run_id: str, name: str, job_type: str, tags: list[str], notes: str, config: dict, values: dict,
-              summary: dict, content: Any, entity: str, project: str) -> dict:
-    """Write one of this tool's runs: unchanged content (its digest already in the run's summary) writes nothing; else one more step with
-    `values` (tables, charts) and `summary` updated."""
+def local_folder(project: str = PROJECT, local: Path | None = None) -> Path:
+    """Where a sync keeps the runs table and the roll-ups on this computer: `local`, else LOCAL/<project>."""
+    return Path(local) if local is not None else LOCAL / project_dir(project)
+
+
+def write_local(data: dict, folder: Path) -> dict[str, dict[str, str]]:
+    """The drill-down and the roll-ups as jsonl in `folder`: runs.jsonl (one row per run of every scored round, its `rerun` link),
+    by_round.jsonl, by_round_station.jsonl, lines.jsonl (the goal lines, one row per round), and r<n>/runs.jsonl, r<n>/by_station.jsonl
+    per round. Returns {"all": {table: path}, "r<n>": {table: path}}.
+
+    WHY local (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary statistics; for the
+    media-rich things we should be using rerun!"): every row is on this computer before W&B hears of it; W&B gets the folder."""
+    out = {"all": write_tables(folder, {"runs": data["rows"], "by_round": data["by_round"], "by_round_station": data["by_station"],
+                                        "lines": data["steps"]})}
+    for r in data["by_round"]:
+        n = r["round"]
+        out[f"r{n}"] = write_tables(folder / f"r{n}", {"runs": [x for x in data["rows"] if x["round"] == n],
+                                                        "by_station": [x for x in data["by_station"] if x["round"] == n]})
+    return out
+
+
+def write_run(api, *, run_id: str, name: str, job_type: str, tags: list[str], notes: str, config: dict, summary: dict, content: Any,
+              entity: str, project: str, steps: list[dict] = ()) -> dict:
+    """Write one of this tool's runs: unchanged content (its digest already in the run's summary) writes nothing; else the history
+    `steps` it does not hold yet (each names its `round`: those after the run's `sync/last_round`) and `summary`. Scalars only.
+
+    WHY scalars only (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary statistics; for the
+    media-rich things we should be using rerun!"): until then each changed sync logged the runs tables and line-series tables again
+    (~17 MB of artifacts a round); they are write_local's jsonl now."""
     import wandb  # noqa: PLC0415
 
-    want = digest(content)
-    # WHY a miss is harmless: right after a write the API can still serve the old summary (seen 2026-11-18, a sync a minute after the
-    # first rewrote every run); the extra step logs identical tables, which W&B keeps as the same artifact version
+    want = digest({"schema": SCHEMA, "content": content})
     try:
-        have = api.run(f"{entity}/{project}/{run_id}").summary.get("sync/digest")
+        have = dict(api.run(f"{entity}/{project}/{run_id}").summary)
     except Exception:  # noqa: BLE001 - wandb raises CommError / ValueError for a run that does not exist yet
-        have = None
-    if have == want:
+        have = {}
+    if have.get("sync/digest") == want:
         return {"id": run_id, "name": name, "written": False}
+    # WHY only the rounds the run lacks: a step's x is its round, so a round logged twice is drawn twice. A round re-scored after it was
+    # logged keeps its first point in these lines; its own round run's summary carries the new numbers. A stale read right after a
+    # write (the API can still serve the old summary, seen 2026-11-18) re-logs at most the rounds of that one write
+    last = have.get("sync/last_round")
+    fresh = [step for step in steps if not isinstance(last, (int, float)) or step["round"] > last]
     WANDB_DIR.mkdir(parents=True, exist_ok=True)
     run = wandb.init(entity=entity, project=project, id=run_id, name=name, group=GROUP, job_type=job_type, tags=tags, notes=notes,
                      config=config, resume="allow", reinit="create_new", allow_val_change=True, dir=str(WANDB_DIR),
                      settings=wandb.Settings(silent=True, console="off"))
-    run.log(values)
-    run.summary.update({**summary, "sync/digest": want, "sync/utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    for step in fresh:
+        run.log({k: v for k, v in step.items() if v is not None})
+    rounds = [step["round"] for step in steps]
+    run.summary.update({**summary, **({"sync/last_round": max(rounds)} if rounds else {}), "sync/digest": want,
+                        "sync/utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")})
     url = run.url
     run.finish()
     return {"id": run_id, "name": name, "written": True, "url": url}
 
 
-def sync(data: dict, *, entity: str = ENTITY, project: str = PROJECT, scorecards: Path = dp.SCORECARDS) -> list[dict]:
-    """The summary run, then one run per round (see the module docstring)."""
+def sync(data: dict, *, entity: str = ENTITY, project: str = PROJECT, scorecards: Path = dp.SCORECARDS, local: Path | None = None) -> list[dict]:
+    """The local files first (write_local), then the summary run, then one run per round (see the module docstring)."""
     import wandb  # noqa: PLC0415
 
+    folder = local_folder(project, local)
+    write_local(data, folder)
     api = wandb.Api(timeout=60)
     sha = code_version()
     base = {"deployment": dp.DEPLOYMENT, "deployment_label": "One Dof Test Rack", "scorecards": str(scorecards),
-            "built_by": "sim2real tools/deployments_wandb.py", "sim2real_sha": sha, "goal_fraction": dp.GOAL_FRACTION}
+            "built_by": "sim2real tools/deployments_wandb.py", "sim2real_sha": sha, "goal_fraction": dp.GOAL_FRACTION, "runs_view": RUNS_VIEW}
     now = data["now"]
-    summary_values = {"by_round": table(data["by_round"], ROUND_COLUMNS), "by_round_station": table(data["by_station"], STATION_COLUMNS),
-                      "runs": table(data["rows"], RUN_COLUMNS), **{k: chart(v) for k, v in data["charts"].items()}}
     summary_scalars = {**flat("now/", now, ROUND_COLUMNS), "now/headline": headline(now), "links/rows": data["links"]["rows"],
-                       "links/with_link": data["links"]["with_link"], "links/no_recording": data["links"]["no_recording"]}
+                       "links/with_link": data["links"]["with_link"], "links/no_recording": data["links"]["no_recording"],
+                       "rows/runs": len(data["rows"]), "rows/by_round": len(data["by_round"]), "rows/by_round_station": len(data["by_station"])}
     out = [write_run(api, run_id=SUMMARY_ID, name=SUMMARY_NAME, job_type="summary", tags=["deployment-summary", "summary"],
-                     notes="The summary across every run of the pendulum campaign, and every run with its Rerun link (8771 launcher).",
-                     config={**base, "rounds": [r["round"] for r in data["by_round"]]}, values=summary_values, summary=summary_scalars,
-                     content={k: data[k] for k in ("rows", "by_round", "by_station", "charts")}, entity=entity, project=project)]
+                     notes="The summary across every run of the pendulum campaign; every run with its Rerun link (8771 launcher) is in "
+                           f"{folder / 'runs.jsonl'} on the workstation.",
+                     config={**base, "rounds": [r["round"] for r in data["by_round"]], "local_tables": str(folder)},
+                     summary=summary_scalars, steps=data["steps"], content={k: data[k] for k in ("rows", "by_round", "by_station", "charts")},
+                     entity=entity, project=project)]
+    lines = {step["round"]: step for step in data["steps"]}
     for r in data["by_round"]:
         n = r["round"]
         rows = [x for x in data["rows"] if x["round"] == n]
         stations = [x for x in data["by_station"] if x["round"] == n]
-        scalars = {**flat("", r, ROUND_COLUMNS), "headline": headline(r)}
+        scalars = {**flat("", r, ROUND_COLUMNS), "headline": headline(r), "rows/runs": len(rows), "rows/by_station": len(stations)}
         for s in stations:
             scalars.update(flat(f"{s['station']}/", s, STATION_COLUMNS[3:]))
+        # the round's own point on each goal line, so a chart over the round runs' summaries draws the same lines
+        scalars.update({k: v for k, v in lines.get(n, {}).items() if k != "round" and v is not None})
         out.append(write_run(api, run_id=f"{SUMMARY_ID}-r{n}", name=f"round {n} · {r['controller']}", job_type=ROUND_JOB,
                              tags=["deployment-summary", f"round {n}", *(["goal met"] if r["goal_met"] else [])],
                              notes=headline(r), config={**base, "round": n, "controller": r["controller"], "twin": r["twin"],
-                                                        "scored_utc": r["scored_utc"]},
-                             values={"runs": table(rows, RUN_COLUMNS), "by_station": table(stations, STATION_COLUMNS)},
+                                                        "scored_utc": r["scored_utc"], "local_tables": str(folder / f"r{n}")},
                              summary=scalars, content={"round": r, "rows": rows, "stations": stations}, entity=entity, project=project))
     return out
 
@@ -414,19 +469,42 @@ def project_url(entity: str = ENTITY, project: str = PROJECT) -> str:
     return f"{WEB}/{entity}/{urllib.parse.quote(project)}"
 
 
-def report_blocks(data: dict, *, entity: str = ENTITY, project: str = PROJECT) -> list:
+def by_round_markdown(by_round: list[dict]) -> str:
+    """The round-by-round numbers as a markdown table (one row per round, a dozen rounds at most): the report's summary across rounds."""
+    def cell(value, fmt="{}"):
+        return "—" if value is None else fmt.format(value)
+
+    lines = ["| Round | Scored | Controller | Goal | Stations at goal | Real perf gates | Meeting the goal | Median RMS (°) | p95 RMS (°) "
+             "| Worst stop (mm) | Recorded |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in by_round:
+        lines.append(f"| {r['round']} | {str(r['scored_utc'] or '')[:10]} | {r['controller']} | {'met' if r['goal_met'] else 'not met'} "
+                     f"| {r['stations_at_goal']} of {len(dp.STATIONS)} | {r['perf_gates_passed']} of {r['perf_gates_total']} "
+                     f"| {cell(r['share_meeting_goal'], '{:.0%}')} | {cell(r['tracking_rms_median_deg'])} | {cell(r['tracking_rms_p95_deg'])} "
+                     f"| {cell(r['worst_stop_mm'])} | {r['recordings']} of {r['runs']} |")
+    return "\n".join(lines)
+
+
+def report_blocks(data: dict, *, entity: str = ENTITY, project: str = PROJECT, local: Path | None = None) -> list:
+    """The report, charts over scalars only. WHY no table or custom-chart panels (Zach, 2026-11-21: "to help limit W and B storage I think
+    we need to just be using it for summary statistics; for the media-rich things we should be using rerun!"): the lines are the summary
+    run's history over x = round, the round-by-round numbers a markdown table written at build time, and every run's row a pointer to
+    the local jsonl and the sim2real app's Runs view."""
     import wandb_workspaces.reports.v2 as wr  # noqa: PLC0415
 
+    from sim2real.tracking.wandb_log import local_panel  # noqa: PLC0415
+
     now, links = data["now"], data["links"]
+    folder = local_folder(project, local)
 
     def summary_grid(panels: list):
         return wr.PanelGrid(runsets=[wr.Runset(entity=entity, project=project, name="summary", filters=f"ID in ['{SUMMARY_ID}']")],
                             panels=panels, hide_run_sets=True)
 
     def line(key: str, w: int = 12, h: int = 9):
+        """A chart's lines across the rounds: the summary run's history steps (round_steps), the goal drawn last."""
         spec = data["charts"][key]
-        return wr.CustomChart(query={"summaryTable": {"tableKey": f"{key}_table"}}, chart_name=LINESERIES, chart_fields=LINE_FIELDS,
-                              chart_strings={"title": spec["title"], "xname": "round"}, layout=wr.Layout(w=w, h=h))
+        lines = sorted({series_id(name) for _, name, _ in spec["rows"]}, key=lambda one: (one == "goal", one))
+        return wr.LinePlot(title=spec["title"], x="round", y=[f"{key}/{one}" for one in lines], title_x="round", layout=wr.Layout(w=w, h=h))
 
     def tile(metric: str, title: str):
         return wr.ScalarChart(title=title, metric=metric, font_size="large", layout=wr.Layout(w=6, h=4))
@@ -439,29 +517,32 @@ def report_blocks(data: dict, *, entity: str = ENTITY, project: str = PROJECT) -
             "**Performance first: real vs the target.** Six single-joint pendulums on the One Dof Test Rack, each run up a speed ladder "
             "(0.2 to 1.0 of its top speed). The goal is every station tracking (RMS ≤ 0.5°, worst instant ≤ 1.5°) and stopping its tip "
             "within 1 mm, up to 0.9 of its top speed. A **run** is one play of one rung: the atomic unit. Read the summary across rounds "
-            "first, then sort or filter the runs table and click a row's `rerun` link to open that run in Rerun.")),
+            "first, then open the runs (on the workstation) and a run's `rerun` link to open it in Rerun.")),
         wr.H2("Now"),
         summary_grid([tile("now/share_meeting_goal", "Share of runs meeting the goal (to 0.9)"),
                       tile("now/tracking_rms_median_deg", "Median run tracking RMS (°)"),
                       tile("now/perf_gates_passed", f"Real performance gates passed (of {now['perf_gates_total']})"),
                       tile("now/worst_stop_mm", "Worst tip stop (mm)")]),
         wr.H2("Summary across rounds"),
-        summary_grid([line("chart/tracking_rms_at_goal"), line("chart/stop_at_goal"), line("chart/share_meeting_goal", w=24, h=8),
-                      wr.WeavePanelSummaryTable(table_name="by_round", layout=wr.Layout(w=24, h=10))]),
+        summary_grid([line("chart/tracking_rms_at_goal"), line("chart/stop_at_goal"), line("chart/share_meeting_goal", w=24, h=8)]),
+        wr.MarkdownBlock(text=by_round_markdown(data["by_round"])),
         wr.H2("Every run"),
         wr.MarkdownBlock(text=(
-            f"{links['rows']} runs, one row each. {links['with_link']} have a Rerun recording: the `rerun` cell is a link to "
+            f"{links['rows']} runs, one row each, kept on the workstation (W&B holds summary statistics only, since 2026-11-21): "
+            f"`{folder / 'runs.jsonl'}` (one round: `{folder}/r<n>/runs.jsonl`), and the same rows in the sim2real app's "
+            f"[Runs view]({RUNS_VIEW}) (Stable channel). {links['with_link']} have a Rerun recording: the `rerun` field is a link to "
             "127.0.0.1:8771, the always-on launcher on Zach's workstation, which opens the native Rerun viewer there (it works only on "
             f"that computer). {links['no_recording']} runs have no recording yet and say so ({missing}). The stop columns are the run's "
-            "rung (the scorer measures stops per rung). Filter with the table's filter box, e.g. `row[\"round\"] = 9`.")),
-        summary_grid([wr.WeavePanelSummaryTable(table_name="runs", layout=wr.Layout(w=24, h=20))]),
+            "rung (the scorer measures stops per rung).")),
         wr.H2("Per station"),
         summary_grid([line(f"station/{sid}/tracking_rms", w=8, h=8) for sid in dp.STATIONS]
-                     + [wr.WeavePanelSummaryTable(table_name="by_round_station", layout=wr.Layout(w=24, h=12))]),
+                     + [local_panel(wr, "Each station's numbers per round", folder / "by_round_station.jsonl",
+                                    layout=wr.Layout(w=24, h=5))]),
         wr.H2("Each round's own page"),
         wr.MarkdownBlock(text=(
-            "One W&B run per round (group `deployment-summary`, job type `round_summary`): its headline in the summary and its own runs "
-            "table. Click a round's name below to open its page.")),
+            "One W&B run per round (group `deployment-summary`, job type `round_summary`): its headline and each station's numbers in "
+            "the summary; its config `local_tables` names the round's runs on the workstation. Click a round's name below to open its "
+            "page.")),
         wr.PanelGrid(runsets=[wr.Runset(entity=entity, project=project, name="rounds",
                                         filters=f"Group = '{GROUP}' and JobType = '{ROUND_JOB}'")],
                      panels=[wr.BarPlot(title="Share of runs meeting the goal, per round", metrics=["share_meeting_goal"],
@@ -512,8 +593,10 @@ def panel_name(panel) -> str:
     return f"{type(panel).__name__}({name or ''})"
 
 
-def verify(data: dict, *, entity: str = ENTITY, project: str = PROJECT, state: Path = STATE, samples: int = 3) -> list[str]:
-    """Read back: the summary and round runs exist with this sync's digest, the report exists and its panels are listed; HEAD-check
+def verify(data: dict, *, entity: str = ENTITY, project: str = PROJECT, state: Path = STATE, samples: int = 3,
+           local: Path | None = None) -> list[str]:
+    """Read back: the summary and round runs exist, the summary's row count matches the local runs.jsonl, the report exists and its panels
+    are listed; HEAD-check
     `samples` linked rows (newest round, oldest, middle) through 8771 and resolve each id to its .rrd. Returns the failures."""
     import wandb  # noqa: PLC0415
     import wandb_workspaces.reports.v2 as wr  # noqa: PLC0415
@@ -527,10 +610,12 @@ def verify(data: dict, *, entity: str = ENTITY, project: str = PROJECT, state: P
     if summary is None:
         failures.append("no summary run")
     else:
-        print(f"  summary run {summary.url}: runs table {summary.summary.get('runs', {}).get('nrows')} rows, "
+        kept = Path(str(summary.config.get("local_tables") or local_folder(project, local))) / "runs.jsonl"
+        lines = sum(1 for line in kept.read_text(encoding="utf-8").splitlines() if line.strip()) if kept.is_file() else None
+        print(f"  summary run {summary.url}: {summary.summary.get('rows/runs')} runs ({lines} rows in {kept}), "
               f"now/round {summary.summary.get('now/round')}, links {summary.summary.get('links/with_link')} of {summary.summary.get('links/rows')}")
-        if summary.summary.get("runs", {}).get("nrows") != len(data["rows"]):
-            failures.append(f"summary runs table: {summary.summary.get('runs', {}).get('nrows')} rows, want {len(data['rows'])}")
+        if summary.summary.get("rows/runs") != len(data["rows"]) or lines != len(data["rows"]):
+            failures.append(f"summary run: rows/runs {summary.summary.get('rows/runs')}, {lines} rows in {kept}, want {len(data['rows'])}")
     rounds = {r.config.get("round") for r in mine if r.job_type == ROUND_JOB}
     if rounds != {r["round"] for r in data["by_round"]}:
         failures.append(f"round runs {sorted(rounds)} != scored rounds {[r['round'] for r in data['by_round']]}")
@@ -589,6 +674,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for result in sync(data, project=args.project, scorecards=args.scorecards):
         print(f"  {'wrote' if result['written'] else 'unchanged'} {result['id']} ({result['name']})")
+    print(f"local: every run and roll-up as jsonl in {local_folder(args.project)}")
     if not args.no_report:
         print(f"report: {save_report(data, project=args.project)}")
     print(f"project: {project_url(project=args.project)}")

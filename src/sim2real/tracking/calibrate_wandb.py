@@ -22,6 +22,11 @@ degrees here and only here (Zach, 2026-11-11: angles shown to him in degrees, ne
 wandb_log's trend keys, eval/<metric>_before_deg beside eval/<metric>_after_deg. The live copy, the follower and the replay share row(),
 so all three log exactly the same rows.
 
+WHY the tables stay beside the ledger (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary
+statistics; for the media-rich things we should be using rerun!"): the schedule, steps, parameters and gates tables are written as jsonl
+into the ledger's own folder (<ledger>/tables/<table>.jsonl, wandb_log.write_tables); the run's config names that folder (local_tables)
+and its summary carries each table's row count (rows/<table>). W&B holds scalars only.
+
 WHY a twin with no project logs nowhere (rather than to the hub "Sim2Real"): a toy or test twin is not a deployment, and the free plan's
 5 GB is shared by every project; WandbLogger(ledger, project=...) sends one anywhere on purpose.
 
@@ -40,10 +45,11 @@ from typing import Any
 
 from .._json import json_default_or_text
 from .rigs import HUB, RIGS
-from .wandb_log import ENTITY, REPO, WANDB_DIR, _clean, _table_rows, push, run_id
+from .wandb_log import ENTITY, REPO, WANDB_DIR, _clean, push, run_id, write_tables
 
 REGISTRY = REPO / "app" / "registry.json"            # the deployments, each with its W&B project (the Deployments page's "Open in W&B")
 EXAMPLES = REPO / "sysid" / "examples"                 # each twin's manifest names its unit (record.path: the deployment record)
+TABLES = "tables"                                      # <ledger folder>/tables/<table>.jsonl: the run's tables, kept beside the ledger
 JOB_TYPE = "calibrate"
 ENDED = ("done", "error", "pending", "evaluate")
 # a unit an angle is stored in -> (the suffix it is shown with, the stored suffix it replaces, the factor to degrees)
@@ -198,16 +204,18 @@ def read_events(folder: str | Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _head(begun: Mapping[str, Any], ledger: str) -> dict:
-    """A run's identity and config from its schedule event: everything but history, summary and tables."""
+def _head(begun: Mapping[str, Any], folder: Path) -> dict:
+    """A run's identity and config from its schedule event and its ledger folder: everything but history, summary and tables."""
     twin, backend = str(begun.get("twin")), str(begun.get("backend"))
+    ledger = folder.name
     schedule = begun.get("schedule") or {}
     routines = [s.get("routine") for s in schedule.get("steps") or []]
     code = begun.get("code") or {}
     deployment = deployment_for(twin) or {}
+    # WHY local_tables (Zach, 2026-11-21: W&B is for summary statistics): the folder the run's tables are written to, beside its ledger
     config = {"twin": twin, "deployment": deployment.get("id"), "backend": backend, "model": begun.get("model"), "level": schedule.get("level"),
-              "routines": routines, "ledger": ledger, "calibration": begun.get("calibration"), "sim2real_sha": code.get("sha"),
-              "dirty": code.get("dirty"), "events_schema": begun.get("schema"), "version_kind": "calibration"}
+              "routines": routines, "ledger": ledger, "local_tables": str(folder / TABLES), "calibration": begun.get("calibration"),
+              "sim2real_sha": code.get("sha"), "dirty": code.get("dirty"), "events_schema": begun.get("schema"), "version_kind": "calibration"}
     tags = {JOB_TYPE, backend, twin} | ({"dirty"} if code.get("dirty") else set())
     return {"id": run_id(JOB_TYPE, str(begun.get("calibration"))), "name": f"calibrate · {twin} · {backend} · {str(begun.get('utc', ''))[:19]}",
             "group": f"calibrate · {twin}", "job_type": JOB_TYPE, "tags": sorted(tags),
@@ -275,23 +283,26 @@ def records(folder: str | Path) -> list[dict]:
     if begun is None:
         return []
     history = [values for values in (row(e) for e in events) if values]
-    return [{**_head(begun, folder.name), "history": history, "summary": _summary(events), "tables": _tables(events)}]
+    return [{**_head(begun, folder), "history": history, "summary": _summary(events), "tables": _tables(events)}]
 
 
 # --- the live copy ----------------------------------------------------------------------------------------------------------------------
 
 
 class _Copy:
-    """One calibration's W&B run as it is written: opened at the schedule, one row per event, tables and summary when it closes."""
+    """One calibration's W&B run as it is written: opened at the schedule, one row per event; when it closes, its tables are written
+    beside the ledger (<ledger>/tables/) and the summary is set."""
 
     def __init__(self, project: str, entity: str, wandb_dir: Path | None):
         self.project, self.entity, self.wandb_dir = project, entity, wandb_dir
         self.head: dict | None = None
+        self.folder: Path | None = None
         self.run = None
         self.events: list[dict] = []
 
-    def start(self, begun: Mapping[str, Any], ledger: str) -> None:
-        self.head = _head(begun, ledger)
+    def start(self, begun: Mapping[str, Any], folder: Path) -> None:
+        self.folder = Path(folder)
+        self.head = _head(begun, self.folder)
         self._open()
 
     def _open(self) -> None:
@@ -314,16 +325,17 @@ class _Copy:
         if values:
             self.run.log(values)
 
-    def close(self, names: Iterable[str]) -> None:
-        import wandb  # noqa: PLC0415
-
+    def close(self) -> None:
         if self.run is None:
             return
-        tables = _tables(self.events, names)
+        tables = _tables(self.events)
         if tables:
-            # WHY a row of their own: history rows stay exactly the replay's rows (a table is no point on a chart)
-            self.run.log({name: wandb.Table(columns=columns, data=data, allow_mixed_types=True)
-                          for name, (columns, data) in ((n, _table_rows(rows)) for n, rows in tables.items())})
+            # WHY jsonl beside the ledger and never a W&B table (Zach, 2026-11-21: "to help limit W and B storage I think we need to just
+            # be using it for summary statistics; for the media-rich things we should be using rerun!"): every table the events hold so
+            # far is rewritten whole (an evaluate's close adds gates), the config already names the folder (local_tables), and the
+            # counts go to the summary, never a history row: history rows stay exactly the replay's rows
+            write_tables(self.folder / TABLES, tables)
+            self.run.summary.update({f"rows/{name}": len(rows) for name, rows in tables.items()})
         self.run.summary.update(_summary(self.events))
         self.run.finish()
         self.run = None
@@ -380,7 +392,7 @@ class WandbLogger:
             return None
         held = self._held.pop(cid)
         copy = self._copies[cid]
-        copy.start(held[0], folder.name)
+        copy.start(held[0], folder)
         for event in held:
             copy.log(event)
         return copy
@@ -397,17 +409,17 @@ class WandbLogger:
     def on_calibrate_end(self, event: dict, *, fitted: Any = None) -> None:
         copy = self._log(event)
         if copy is not None:
-            copy.close(("schedule", "steps", "parameters"))
+            copy.close()
 
     def on_calibrate_error(self, event: dict) -> None:
         copy = self._log(event)
         if copy is not None:
-            copy.close(("schedule", "steps"))
+            copy.close()
 
     def on_evaluate_end(self, event: dict, *, report: Any = None, fitted: Any = None) -> None:
         copy = self._log(event)   # reopens the calibration's run by its id
         if copy is not None:
-            copy.close(("gates",))
+            copy.close()
 
 
 # --- the follower and the replay ---------------------------------------------------------------------------------------------------------
@@ -445,7 +457,7 @@ def follow(folder: str | Path, *, project: str | None = None, entity: str = ENTI
                         if not chosen:
                             raise ValueError(f"no W&B project for twin {event.get('twin')!r}: pass --project")
                         copy = _Copy(chosen, entity, None if wandb_dir is None else Path(wandb_dir))
-                        copy.start(event, folder.name)
+                        copy.start(event, folder)
                     copy.log(event)
                     rows += bool(row(event))
                     last_kind = event.get("kind")
@@ -458,7 +470,7 @@ def follow(folder: str | Path, *, project: str | None = None, entity: str = ENTI
             time.sleep(max(float(poll_s), 0.05))   # WHY a floor: a follower never spins a core beside the powered arm
     finally:
         if copy is not None:
-            copy.close(("schedule", "steps", "parameters", "gates"))
+            copy.close()
     return {"id": None if copy is None else copy.head["id"], "project": None if copy is None else copy.project, "rows": rows}
 
 

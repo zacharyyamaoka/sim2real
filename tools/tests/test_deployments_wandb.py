@@ -150,3 +150,77 @@ def test_a_second_build_has_the_same_digest(campaign):
     first, _ = built(cards)
     second, _ = built(cards)
     assert dw.digest(first) == dw.digest(second)
+
+
+def test_the_goal_lines_are_one_scalar_step_per_round(campaign):
+    cards, _ = campaign
+    data, _ = built(cards)
+    r0, r1 = data["steps"]
+    assert (r0["round"], r0["chart/tracking_rms_at_goal/can11"], r0["chart/tracking_rms_at_goal/goal"]) == (0, 0.45, 0.5)
+    assert (r1["chart/stop_at_goal/can11"], r1["chart/stop_at_goal/goal"]) == (0.3, 1.0)
+    assert (r0["station/can11/tracking_rms/median"], r0["station/can11/tracking_rms/p95"]) == (0.4, 0.76)
+    assert (r0["chart/share_meeting_goal/all"], r0["chart/share_meeting_goal/can11"]) == (0.75, 0.75)
+    assert "chart/tracking_rms_at_goal/can1" not in r0, "a value not measured is left out, never 0"
+
+
+def test_a_sync_sends_w_and_b_scalars_and_keeps_every_run_local(campaign, tmp_path, monkeypatch):
+    """Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary statistics; for the media-rich
+    things we should be using rerun!". Against a stand-in wandb whose Table / plot_table / Artifact raise and whose runs refuse a
+    non-scalar: the runs table and the roll-ups are jsonl on this computer, W&B gets the headline, the goal lines as steps, the counts."""
+    sys.path.insert(0, str(REPO / "tests"))
+    from strict_wandb import StrictWandb  # noqa: PLC0415
+
+    cards, rrd = campaign
+    data, rl = built(cards)
+    monkeypatch.setattr(dw, "WANDB_DIR", tmp_path / "wandb")
+    fake = StrictWandb()
+    monkeypatch.setitem(sys.modules, "wandb", fake)
+    local = tmp_path / "local"
+    out = dw.sync(data, scorecards=cards, local=local)
+    assert [o["id"] for o in out] == [dw.SUMMARY_ID, f"{dw.SUMMARY_ID}-r0", f"{dw.SUMMARY_ID}-r1"] and all(o["written"] for o in out)
+
+    def rows(path):
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    runs = rows(local / "runs.jsonl")
+    assert runs == json.loads(json.dumps(data["rows"])) and len(runs) == 6
+    linked = [r for r in runs if r["rerun"].startswith("http")]
+    assert [r["name"] for r in linked] == ["s01"] and linked[0]["rerun"] == f"http://127.0.0.1:8771/f/tok/{rl.replay_id(rrd)}"
+    assert len(rows(local / "r0" / "runs.jsonl")) == 5 and len(rows(local / "r1" / "runs.jsonl")) == 1
+    assert rows(local / "by_round.jsonl")[1]["round"] == 1 and len(rows(local / "by_round_station.jsonl")) == 2 * len(dp.STATIONS)
+    summary, round0, round1 = fake.runs
+    assert summary.config["local_tables"] == str(local) and round1.config["local_tables"] == str(local / "r1")
+    assert summary.logged == data["steps"], "the goal lines: one step per round, x = round"
+    assert (summary.summary["rows/runs"], summary.summary["links/with_link"], summary.summary["now/round"]) == (6, 1, 1)
+    assert summary.summary["sync/last_round"] == 1
+    assert round0.logged == [] and (round0.summary["rows/runs"], round0.summary["share_meeting_goal"]) == (5, 0.75)
+    assert round0.summary["chart/tracking_rms_at_goal/can11"] == 0.45 and round0.summary["can11/runs"] == 5
+
+    # an unchanged campaign writes nothing; a changed one logs only the rounds the summary run lacks
+    held = {run.id: dict(run.summary) for run in fake.runs}
+    again = StrictWandb(held=held)
+    monkeypatch.setitem(sys.modules, "wandb", again)
+    assert not any(o["written"] for o in dw.sync(data, scorecards=cards, local=local)) and again.runs == []
+    held[dw.SUMMARY_ID]["sync/digest"] = "older"
+    moved = StrictWandb(held=held)
+    monkeypatch.setitem(sys.modules, "wandb", moved)
+    dw.sync(data, scorecards=cards, local=local)
+    assert [run.logged for run in moved.runs] == [[]], "both rounds are already lines: no point drawn twice"
+
+
+def test_the_report_is_charts_over_scalars_and_pointers_to_the_local_files(campaign, tmp_path):
+    wr = pytest.importorskip("wandb_workspaces.reports.v2", reason="sim2real's tracking extra")
+    cards, _ = campaign
+    data, _ = built(cards)
+    blocks = dw.report_blocks(data, local=tmp_path / "local")
+    panels = [p for b in blocks for p in (getattr(b, "panels", None) or [])]
+    kinds = {type(p).__name__ for p in panels}
+    assert kinds <= {"ScalarChart", "LinePlot", "BarPlot", "MarkdownPanel"}, kinds
+    logged = {key for step in data["steps"] for key in step}
+    for plot in (p for p in panels if isinstance(p, wr.LinePlot)):
+        assert plot.x == "round" and set(plot.y) <= logged, plot.y   # every line is a key the summary run logs
+        goal = [key for key in plot.y if key.endswith("/goal")]
+        assert goal in ([], plot.y[-1:]), "the goal line is drawn last"
+    text = "\n".join(getattr(b, "text", "") or "" for b in blocks) + "\n".join(p.markdown for p in panels if hasattr(p, "markdown"))
+    assert str(tmp_path / "local" / "runs.jsonl") in text and dw.RUNS_VIEW in text and "by_round_station.jsonl" in text
+    assert "| 0 | 2026-11-15 | c0 | not met |" in text, "the round-by-round numbers, written into the report"

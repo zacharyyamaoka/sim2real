@@ -5,7 +5,8 @@
 From one homing bench results JSON (sim2real.sim.homing.bench), nothing recomputed but the five metrics' scorecards it already holds:
 
 * one W&B run per (rung, backlash model, procedure): config ``rung``, ``backlash_model``, ``procedure``, ``bundle_sha`` (+ the code
-  shas, the hardstops sha, the gate), summary = the scorecard, a table of every start;
+  shas, the hardstops sha, the gate), summary = the scorecard; the table of every start is jsonl on this computer (wandb_log.push:
+  config ``local_tables``; W&B holds summary statistics only, Zach 2026-11-21);
 * one Weave evaluation per (procedure, environment), environment = "<rung> · <model>" (the black box is the procedure; each start
   is an episode), and ONE leaderboard, "Homing · five-bar rig": rows the procedures, columns (environment x metric).
 

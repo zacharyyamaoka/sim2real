@@ -489,6 +489,59 @@ def test_the_wandb_records_are_one_run_per_routine_and_environment_with_the_map_
     assert hf.records(results)[0]["id"] == batch[0]["id"]  # the same numbers map to the same run
 
 
+def test_the_homing_push_sends_w_and_b_the_card_and_keeps_the_map_and_starts_local(tmp_path, monkeypatch):
+    """Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary statistics; for the media-rich
+    things we should be using rerun!". Against a stand-in wandb whose Table / Image raise and whose runs refuse a non-scalar: the card's
+    numbers and row counts reach W&B, the starts / metrics / replays tables are local jsonl, the coverage map stays its PNG (its path in
+    the config), and the Rerun replay link is a summary string."""
+    import sys
+    import types
+
+    from strict_wandb import StrictWandb
+
+    from sim2real.tracking import homing_fullarm as hf
+    from sim2real.tracking import wandb_log
+
+    monkeypatch.setattr(hf, "MEDIA", tmp_path / "media")
+    monkeypatch.setattr(hf, "WANDB_DIR", tmp_path / "wandb")
+    monkeypatch.setattr(wandb_log, "TABLES_DIR", tmp_path / "tables")
+    fake = StrictWandb()
+    monkeypatch.setitem(sys.modules, "wandb", fake)
+    runlink = types.ModuleType("data_recorder.runlink")
+
+    def log_to_wandb(run, path):
+        run.summary["replay_url"] = f"http://127.0.0.1:8771/f/tok/{Path(path).stem}"
+        return {"replay_url": run.summary["replay_url"]}
+
+    runlink.log_to_wandb = log_to_wandb
+    monkeypatch.setitem(sys.modules, "data_recorder", types.ModuleType("data_recorder"))
+    monkeypatch.setitem(sys.modules, "data_recorder.runlink", runlink)
+    cell = ruler.grid_cells()[22]
+    episodes = []
+    for environment in ("nominal", "B2"):
+        r = report(procedure="zach_v1 @ READY", environment=environment, start=cell["name"])
+        r.update({"row": "zach_v1 @ READY", "cell": cell["cell"], "key": f"zach_v1 @ READY | {environment} | {cell['name']}",
+                  "outcome_class": "homed", "covered": True})
+        episodes.append(r)
+    results = {"cards": ruler.score(episodes), "episodes": episodes, "environments": {k: v["why"] for k, v in ruler.ENVIRONMENTS.items()},
+               "plant": {}, "ruler": "test", "targets": {}, "sim2real_sha": "abc", "bam_ws_sha": "def", "bundle": "b"}
+    replays = {"zach_v1 @ READY | nominal": {"typical": str(tmp_path / "typical.rrd"), "table": [{"start": cell["name"], "rrd": "x.rrd"}]}}
+    batch = hf.records(results, replays=replays)
+    logged = hf.push(batch)
+    assert len(logged) == len(batch) == len(fake.runs) == 2
+    for record, run in zip(batch, fake.runs, strict=True):
+        folder = tmp_path / "tables" / "Homing_bam_fb_v2" / record["id"]
+        assert run.config["local_tables"] == str(folder)
+        assert run.config["local_media"] == {"coverage_map": record["images"]["coverage_map"]}
+        assert Path(record["images"]["coverage_map"]).is_file()
+        starts = [json.loads(line) for line in (folder / "starts.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert starts == json.loads(json.dumps(record["tables"]["starts"], default=str)) and len(starts) == 1
+        assert run.summary["rows/starts"] == 1 and run.summary["rows/metrics"] == 1
+        assert run.logged == [{k: v for k, v in record["history"][-1].items() if v is not None}]
+    nominal = next(run for record, run in zip(batch, fake.runs, strict=True) if record["config"]["environment"] == "nominal")
+    assert nominal.summary["replay_url"].startswith("http://127.0.0.1:8771/") and "rows/replays" in nominal.summary
+
+
 @pytest.mark.skipif(not RACK_HOMED_1124.is_file(), reason="the rack's 11:24 homed file is not here")
 @needs_twin
 def test_the_rack_plan_carries_the_sequence_the_witness_calibration_and_which_steps_define(tmp_path):

@@ -12,13 +12,17 @@ What a run is: one node of the result's typed tree (deployment -> arm -> joint -
 evaluation. The last iteration's run carries the five answers (proposal C: Floor -> Data -> Routines -> Twin -> Job, the verdict is the
 first "no"), their soft numbers and the node's curriculum rungs, and logs the held-out sim->real of every iteration as its history (so
 a line chart shows the trend); each earlier iteration is a run of its own carrying its twin's held-out sim->real. The deployment's last
-run also carries the whole tree, every node's five questions and the curriculum as W&B Tables.
+run also has the whole tree, every node's five questions and the curriculum as tables.
+
+WHY the tables stay on this computer (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary
+statistics; for the media-rich things we should be using rerun!"): push() writes every record's tables as jsonl (write_tables, under
+TABLES_DIR or the folder its config's `local_tables` names) and W&B gets the scalars, the row counts (`rows/<table>`) and that folder.
 
 Nothing is recomputed: every number is the result tree's own (verdicts(), tables(), Node fields). wandb and wandb-workspaces are imported
 only inside the functions that talk to W&B (the `tracking` extra), so sim2real never depends on them.
 
 Layer: like result.py, right of every folder (tests/test_layers.py); nothing in sim2real imports this module at load (a calibration's
-ledger reads code_version lazily, and calibrate_wandb.py, the ledger's W&B copy, reuses run_id, push and _table_rows; gap E, 2026-11-18).
+ledger reads code_version lazily, and calibrate_wandb.py, the ledger's W&B copy, reuses run_id, push and write_tables; gap E, 2026-11-18).
 """
 
 from __future__ import annotations
@@ -42,6 +46,8 @@ ENTITY = "zach-yamaoka-independent"   # the entity every BAM project logs to (ba
 PROJECT = "Sim2Real"
 REPO = Path(__file__).resolve().parents[3]
 WANDB_DIR = Path.home() / ".cache" / "sim2real" / "wandb"      # W&B's local run files: a cache, never the repo
+# a run's tables, as jsonl: TABLES_DIR/<project>/<run id>/<table>.jsonl (a record whose config names `local_tables` writes there instead)
+TABLES_DIR = Path.home() / ".cache" / "sim2real" / "wandb_tables"
 REGISTRY = Path(__file__).resolve().parent / "wandb_views.json"  # report and view URLs, so a rebuild updates them in place
 DOMAIN = Path(__file__).resolve().parents[1] / "cards" / "domain_v3.json"
 # WHY a kind fallback: the result tree's Node.type is sometimes the description's own words ("robot arm", "Tool (payload + TCP)");
@@ -302,6 +308,52 @@ def _table_rows(rows: list[dict]) -> tuple[list[str], list[list]]:
     return columns, data
 
 
+# ---------------------------------------------------------------------------------------------------------------- local: tables
+
+
+def project_dir(project: str) -> str:
+    """A W&B project name as one folder name: "Sim2Real · 1-DOF rack" -> "Sim2Real_1-DOF_rack"."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", project).strip("_") or "project"
+
+
+def write_tables(directory: str | Path, tables: dict[str, list[dict]]) -> dict[str, str]:
+    """Each table as `<name>.jsonl` (one JSON object per row, as the record holds it) in `directory`, rewritten whole; {name: path}.
+
+    WHY local jsonl and never a W&B table (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for
+    summary statistics; for the media-rich things we should be using rerun!"): every row stays on this computer, W&B gets the folder."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    out = {}
+    for name, rows in tables.items():
+        path = directory / f"{re.sub(r'[^A-Za-z0-9._-]+', '_', name)}.jsonl"
+        partial = path.with_name(path.name + ".partial")
+        partial.write_text("".join(json.dumps(row, default=str, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+        partial.replace(path)   # WHY a rename: a reader never sees half a table
+        out[name] = str(path)
+    return out
+
+
+def keep_local(record: dict, project: str) -> tuple[str | None, dict[str, int]]:
+    """Write a record's non-empty tables as jsonl: into the folder its config names (`local_tables`: a calibration's ledger), else
+    TABLES_DIR/<project>/<run id>/. Returns (that folder, {"rows/<table>": row count}); (None, {}) for a record without tables."""
+    tables = {name: rows for name, rows in (record.get("tables") or {}).items() if rows}
+    if not tables:
+        return None, {}
+    directory = Path(record["config"].get("local_tables") or TABLES_DIR / project_dir(project) / record["id"])
+    write_tables(directory, tables)
+    return str(directory), {f"rows/{name}": len(rows) for name, rows in tables.items()}
+
+
+def local_panel(wr, title: str, *paths: Any, layout=None):
+    """A report panel that points at a view kept off W&B: its file(s) on this computer.
+
+    WHY (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary statistics; for the media-rich
+    things we should be using rerun!"): the tables and images these panels showed stay local; a pointer never shows a stale copy."""
+    files = "\n".join(f"- `{path}`" for path in paths)
+    return wr.MarkdownPanel(markdown=f"**{title}** is kept off W&B (summary statistics only, since 2026-11-21). On the workstation:\n\n{files}",
+                            **({"layout": layout} if layout is not None else {}))
+
+
 # ---------------------------------------------------------------------------------------------------------------- W&B: writes
 
 
@@ -321,39 +373,38 @@ def log(result, *, entity: str = ENTITY, project: str = PROJECT, extra_config: d
 
 def push(batch: list[dict], *, entity: str = ENTITY, project: str = PROJECT) -> list[dict]:
     """Write records (records()'s shape) as W&B runs: a new id makes a run; an existing one gets only what it lacks or holds
-    differently, as one more step (see log)."""
+    differently, as one more step (see log). The tables go to jsonl on this computer first (keep_local), never to W&B."""
     import wandb
 
     WANDB_DIR.mkdir(parents=True, exist_ok=True)
     api = wandb.Api(timeout=60)
     logged = []
     for record in batch:
+        # WHY local first and scalars only (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for
+        # summary statistics; for the media-rich things we should be using rerun!"): the tables were W&B's biggest files; they are
+        # written as jsonl before the run opens, and the run gets their folder (config local_tables) and row counts (summary rows/*)
+        local, counts = keep_local(record, project)
         try:
             have = dict(api.run(f"{entity}/{project}/{record['id']}").summary)
         except Exception:   # wandb raises CommError / ValueError for a run that does not exist yet
             have = None
+        config = {**record["config"], **({"local_tables": local} if local else {})}
         run = wandb.init(entity=entity, project=project, id=record["id"], name=record["name"], group=record["group"],
-                         job_type=record["job_type"], tags=record["tags"], notes=record["notes"], config=record["config"],
+                         job_type=record["job_type"], tags=record["tags"], notes=record["notes"], config=config,
                          resume="allow", reinit="create_new", allow_val_change=True, dir=str(WANDB_DIR),
                          settings=wandb.Settings(silent=True, console="off"))
         steps = [_clean(step) for step in record["history"]]
-        tables = {name: rows for name, rows in record["tables"].items() if rows}
         if have is not None:
             # WHY only what is missing or changed: the run id is the evaluation's content id, so the run already holds this
             # evaluation; re-logging its trend would add steps W&B drops (a step must increase) and duplicate points. A logger that
             # learned a number (or fixed how it reads one) patches just that key in, as one more step
             last = {k: v for k, v in steps[-1].items()
                     if k != "iteration" and not k.startswith("trend/") and (k not in have or _differs(have[k], v))}
-            tables = {name: rows for name, rows in tables.items() if name not in have}
-            steps = [last] if (last or tables) else []
-        for index, values in enumerate(steps):
-            if index == len(steps) - 1:
-                for name, rows in tables.items():
-                    columns, data = _table_rows(rows)
-                    values[name] = wandb.Table(columns=columns, data=data, allow_mixed_types=True)
+            steps = [last] if last else []
+        for values in steps:
             if values:
                 run.log(values)
-        run.summary.update(record["summary"])
+        run.summary.update({**record["summary"], **counts})
         logged.append({"id": run.id, "url": run.url, "name": record["name"], "resumed": have is not None, "group": record["group"],
                        "patched": sorted(steps[-1]) if (have is not None and steps) else []})
         run.finish()
@@ -435,7 +486,7 @@ INTRO = ("Every node of a deployment's tree (deployment → arm → joint → to
          "`rack_results.py`; the curriculum and the three tracker proposals: sim2real `docs/KPIS_GATES_CURRICULUM.md`.")
 
 
-def _panels(wr, slice_: dict) -> list:
+def _panels(wr, slice_: dict, project: str = PROJECT) -> list:
     """The KPI panels every view and report shows over its runset (the slice's latest runs at their last twin iteration)."""
     L = wr.Layout
     panels = [
@@ -463,8 +514,12 @@ def _panels(wr, slice_: dict) -> list:
     if slice_["by"] == "deployment" or "tool" in slice_["levels"]:
         panels.append(wr.BarPlot(title="Tool at settled holds (mm, gate 1 mm)", metrics=["Job/tool_settled_mm", "Job/tool_gate_mm"],
                                  orientation="h", layout=L(x=0, y=24, w=12, h=8)))
-    panels += [wr.WeavePanelSummaryTable(table_name="questions", layout=L(x=0, y=32, w=24, h=12)),
-               wr.WeavePanelSummaryTable(table_name="curriculum", layout=L(x=0, y=44, w=24, h=12))]
+    # WHY pointers, not table panels (Zach, 2026-11-21: W&B is for summary statistics): push() writes the tables as jsonl on the
+    # workstation; each run's verdict, why and per-question text are in its summary (the runs table), the rungs in the report's markdown
+    folder = TABLES_DIR / project_dir(project)
+    panels += [local_panel(wr, "Each node's five questions (one row per question)", f"{folder}/<run id>/questions.jsonl",
+                           layout=L(x=0, y=32, w=12, h=6)),
+               local_panel(wr, "Each node's curriculum rungs", f"{folder}/<run id>/curriculum.jsonl", layout=L(x=12, y=32, w=12, h=6))]
     return panels
 
 
@@ -489,7 +544,8 @@ def build_views(results: list, *, entity: str = ENTITY, project: str = PROJECT, 
     every = slices(results)
     for slice_ in every:
         # the saved view (the workspace's view menu: "filter that data to show it for particular types")
-        sections = [ws.Section(name="Five questions (latest evaluation, last twin iteration)", panels=_panels(wr, slice_), is_open=True)]
+        sections = [ws.Section(name="Five questions (latest evaluation, last twin iteration)", panels=_panels(wr, slice_, project),
+                               is_open=True)]
         settings = ws.RunsetSettings(filters=_filters(expr, slice_), pinned_columns=pinned)
         view = None
         if slice_["key"] in urls["views"]:
@@ -520,14 +576,18 @@ def build_views(results: list, *, entity: str = ENTITY, project: str = PROJECT, 
             wr.H2(text="The KPI panels"),
             wr.PanelGrid(runsets=[wr.Runset(entity=entity, project=project, name=slice_["title"], filters=_filters(expr, slice_),
                                             pinned_columns=pinned)],
-                         panels=_panels(wr, slice_)),
+                         panels=_panels(wr, slice_, project)),
         ]
         if slice_["by"] == "deployment":
+            # WHY a pointer (Zach, 2026-11-21: W&B is for summary statistics): the tree is the deployment run's local tree.jsonl
             blocks += [wr.H2(text="The tree"),
                        wr.PanelGrid(hide_run_sets=True,
                                     runsets=[wr.Runset(entity=entity, project=project, name="the deployment",
                                                        filters=[*_filters(expr, slice_), expr.Config("level") == "deployment"])],
-                                    panels=[wr.WeavePanelSummaryTable(table_name="tree", layout=wr.Layout(x=0, y=0, w=24, h=14))])]
+                                    panels=[local_panel(wr, "The deployment's whole tree, every node's five questions and rungs",
+                                                        *(f"{TABLES_DIR / project_dir(project)}/<deployment run id>/{name}.jsonl"
+                                                          for name in ("tree", "questions_all", "curriculum_all", "trend_all")),
+                                                        layout=wr.Layout(x=0, y=0, w=24, h=8))])]
         blocks += [wr.H2(text="Every twin iteration"),
                    wr.MarkdownBlock(text="One run per node per twin iteration (oldest = before, last = after): held-out sim→real median "
                                          "of each iteration's twin, from the result's own error table."),
@@ -548,7 +608,7 @@ def build_views(results: list, *, entity: str = ENTITY, project: str = PROJECT, 
                 wr.PanelGrid(runsets=[wr.Runset(entity=entity, project=project, name="every node",
                                                 filters=[expr.Config("evaluation_state") == "latest", expr.Config("stage_role") == "after"],
                                                 pinned_columns=pinned)],
-                             panels=_panels(wr, {"by": "deployment", "levels": []})[:5])]
+                             panels=_panels(wr, {"by": "deployment", "levels": []}, project)[:5])]
     urls["reports"]["overview"] = _save_report(wr, entity, project, urls["reports"].get("overview"), "Sim2Real · Overview",
                                                "Every type and deployment in one project: the five questions, the curriculum, the views",
                                                overview)

@@ -278,8 +278,9 @@ def wandb_section(batches: dict, verify_log: str | None) -> str:
              "question `<Q>/own`, `<Q>/pass`, `<Q>/numbers`, `<Q>/gate`; the numbers `Floor/floor_deg`, `Floor/pairs`, "
              "`Data/coverage_pct` (or `Data/cube_pct`, `Data/workspace_pct`, `Data/facing_pct`), `Twin/ratio`, `Twin/sim_real_after_deg`, "
              "`Twin/sim_real_before_deg`, `Job/settled_median_deg`, `Job/share_deg`, `Job/tool_settled_mm`; the held-out trend as history "
-             "(`trend/heldout_median_deg` per `iteration`); W&B Tables `questions`, `curriculum`, `floors`, `models`, `parameters`, and on "
-             "the deployment's run `tree`, `questions_all`, `curriculum_all`, `trend_all`.",
+             "(`trend/heldout_median_deg` per `iteration`); the tables `questions`, `curriculum`, `floors`, `models`, `parameters`, and on "
+             "the deployment's run `tree`, `questions_all`, `curriculum_all`, `trend_all`, kept as jsonl on the workstation (config "
+             "`local_tables`, row counts `rows/<table>`; W&B holds summary statistics only, Zach 2026-11-21).",
              "- **Saved views** (the workspace's view menu) and **reports**, one per type and per deployment, plus an overview:",
              ""]
     lines += ["| Slice | Saved view | Report |", "|---|---|---|"]

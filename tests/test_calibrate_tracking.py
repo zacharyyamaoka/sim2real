@@ -618,6 +618,44 @@ def test_a_follower_process_copies_a_ledger_with_the_same_rows(toy, tmp_path, mo
     assert _history(fake) == copy.records(ledger.folder)[0]["history"]
 
 
+def test_the_copy_sends_w_and_b_scalars_and_keeps_its_tables_beside_the_ledger(toy, tmp_path, monkeypatch):
+    """Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary statistics; for the media-rich
+    things we should be using rerun!". Against a stand-in wandb whose Table / Image / Artifact raise and whose runs refuse a non-scalar:
+    the live copy and the --sync replay log scalars only and write the schedule, steps, parameters and gates as <ledger>/tables/*.jsonl."""
+    from strict_wandb import StrictWandb  # noqa: PLC0415
+
+    from sim2real.tracking import wandb_log  # noqa: PLC0415
+
+    cal, copy = _cal(), _copy()
+    twin, _ = toy
+    monkeypatch.setattr(wandb_log, "WANDB_DIR", tmp_path / "wandb")
+    monkeypatch.setattr(copy, "WANDB_DIR", tmp_path / "wandb")
+    live = StrictWandb()
+    monkeypatch.setitem(sys.modules, "wandb", live)
+    ledger = cal.Ledger(tmp_path / "ledgers")
+    fitted = twin.calibrate(on="sim", callbacks=[ledger, copy.WandbLogger(ledger, project="Sim2Real")])
+    fitted.evaluate()
+    assert "callback_error" not in kinds(ledger.folder), [e for e in events(ledger.folder) if e["kind"] == "callback_error"]
+    (record,) = copy.records(ledger.folder)
+    tables = ledger.folder / "tables"
+    assert record["config"]["local_tables"] == str(tables)
+    for name in ("schedule", "steps", "parameters", "gates"):
+        kept = [json.loads(line) for line in (tables / f"{name}.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert kept == json.loads(json.dumps(record["tables"][name], default=str)), name
+    assert [row for run in live.runs for row in run.logged] == record["history"], "the history is the replay's rows, nothing else"
+    assert all(run.config["local_tables"] == str(tables) for run in live.runs)
+    assert live.runs[-1].summary["rows/gates"] == len(record["tables"]["gates"]), "evaluate()'s close counts its gates"
+    assert live.runs[0].summary["rows/steps"] == len(record["tables"]["steps"]) == 2
+
+    replay = StrictWandb()
+    monkeypatch.setitem(sys.modules, "wandb", replay)
+    (entry,) = copy.sync([ledger.folder], project="Sim2Real")
+    assert entry["action"] == "written"
+    (run,) = replay.runs
+    assert run.config["local_tables"] == str(tables) and run.logged == record["history"]
+    assert {k: v for k, v in run.summary.items() if k.startswith("rows/")} == {f"rows/{n}": len(r) for n, r in record["tables"].items()}
+
+
 # --- the tracer hands each step over as it finishes ---------------------------------------------------------------------------------------
 
 

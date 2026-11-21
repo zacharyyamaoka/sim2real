@@ -10,8 +10,12 @@ witness) and ``metrics`` (the card, one row); media = ``coverage_map`` (routine_
 one, the run's Rerun replay through ``data_recorder.runlink.log_to_wandb`` (the run's typical episode) plus a ``replays`` table of the
 others' links.
 
+WHY W&B gets the card and paths only (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary
+statistics; for the media-rich things we should be using rerun!"): the tables are written as jsonl on this computer (wandb_log.keep_local:
+config ``local_tables``, summary ``rows/<table>``), the coverage map stays the PNG on disk (config ``local_media``), the replay is Rerun's.
+
 The project's report ("Homing · bam_fb_v2 — routines") holds the runs table, a parallel-coordinates plot over the targets, coverage and
-time bars, and the coverage maps (``build_report``).
+time bars, and where the coverage maps and starts tables are kept (``build_report``).
 
 WHY one run per routine x environment and not per episode (Zach, 16:50: "create a W&B track for this homing routine"): the ruler scores a
 routine over a grid; an episode is a row of that run's ``starts`` table. WHY nothing deleted (sim2real.tracking.homing's rule): a re-run of
@@ -28,7 +32,7 @@ from pathlib import Path
 
 from .. import paths as _paths
 from .homing import _tag
-from .wandb_log import ENTITY, WANDB_DIR, _clean, _save_report, _table_rows, browser_url, retire, run_id
+from .wandb_log import ENTITY, TABLES_DIR, WANDB_DIR, _clean, _save_report, browser_url, keep_local, local_panel, project_dir, retire, run_id
 
 PROJECT = "Homing · bam_fb_v2"
 REPORT_TITLE = "Homing · bam_fb_v2 — routines"
@@ -134,7 +138,8 @@ def records(results: dict, *, replays: dict | None = None) -> list[dict]:
 
 
 def push(batch: list[dict], *, entity: str = ENTITY, project: str = PROJECT) -> list[dict]:
-    """wandb_log.push's rule (an existing run gets only what it lacks), plus the coverage map image and the Rerun replay link."""
+    """wandb_log.push's rule (an existing run gets only what it lacks), plus where the coverage map and the tables are kept on this
+    computer and the Rerun replay link."""
     import wandb  # noqa: PLC0415
 
     WANDB_DIR.mkdir(parents=True, exist_ok=True)
@@ -145,28 +150,28 @@ def push(batch: list[dict], *, entity: str = ENTITY, project: str = PROJECT) -> 
 
     logged = []
     for record in batch:
+        # WHY paths, never a wandb.Table or wandb.Image (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be
+        # using it for summary statistics; for the media-rich things we should be using rerun!"): the starts / metrics / replays tables
+        # are written as jsonl first (keep_local), the coverage map is already a PNG on disk; the run's config names both
+        local, counts = keep_local(record, project)
         try:
             have = dict(api.run(f"{entity}/{project}/{record['id']}").summary)
         except Exception:  # noqa: BLE001 - wandb raises CommError / ValueError for a run that does not exist yet
             have = None
+        config = {**record["config"], **({"local_tables": local} if local else {}),
+                  **({"local_media": {name: str(path) for name, path in record["images"].items()}} if record.get("images") else {})}
         run = wandb.init(entity=entity, project=project, id=record["id"], name=record["name"], group=record["group"],
-                         job_type=record["job_type"], tags=record["tags"], notes=record["notes"], config=record["config"],
+                         job_type=record["job_type"], tags=record["tags"], notes=record["notes"], config=config,
                          resume="allow", reinit="create_new", allow_val_change=True, dir=str(WANDB_DIR),
                          settings=wandb.Settings(silent=True, console="off"))
         values = _clean(dict(record["history"][-1]))
         if have is None:
-            for name, rows in record["tables"].items():
-                if rows:
-                    columns, data = _table_rows(rows)
-                    values[name] = wandb.Table(columns=columns, data=data, allow_mixed_types=True)
-            for name, path in record["images"].items():
-                values[name] = wandb.Image(path, caption=record["name"])
             run.log(values)
         else:
             missing = {k: v for k, v in values.items() if k not in have}
             if missing:
                 run.log(missing)
-        run.summary.update(record["summary"])
+        run.summary.update({**record["summary"], **counts})
         links = log_to_wandb(run, record["replay"]) if record.get("replay") else {}
         logged.append({"id": run.id, "url": browser_url(run.url), "name": record["name"], "resumed": have is not None, "replay": links})
         run.finish()
@@ -216,7 +221,11 @@ def build_report(results: dict, *, entity: str = ENTITY, project: str = PROJECT)
                                         max_bars_to_show=20, layout=L(x=0, y=19, w=12, h=9)),
                              wr.BarPlot(title="Zero error p95 (°)", metrics=["zero_error_p95_deg"], orientation="h",
                                         max_bars_to_show=20, layout=L(x=12, y=19, w=12, h=9)),
-                             wr.MediaBrowser(media_keys=["coverage_map"], num_columns=1, layout=L(x=0, y=28, w=24, h=24))]),
+                             # WHY a pointer, not a media browser (Zach, 2026-11-21: W&B is for summary statistics, media is
+                             # Rerun's): the maps are PNGs and the starts are jsonl on the workstation, each run's config names its own
+                             local_panel(wr, "The coverage maps and every start", f"{MEDIA}/<map>.png (config local_media.coverage_map)",
+                                         f"{TABLES_DIR / project_dir(project)}/<run id>/starts.jsonl (config local_tables)",
+                                         layout=L(x=0, y=28, w=24, h=6))]),
         wr.MarkdownBlock(text="**Perturbed twins** (hidden B1 / B2 gaps, the wrist's breakaway friction, a 0.50 kg claw, the witness's "
                               "calibration 1.5° off, another power-up frame) on every 6th grid cell."),
         wr.PanelGrid(hide_run_sets=False, runsets=[every],

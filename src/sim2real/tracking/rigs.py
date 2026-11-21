@@ -37,7 +37,7 @@ from pathlib import Path
 
 from .. import paths as _paths
 from . import curriculum
-from .wandb_log import ENTITY, REPO, browser_url, code_version, push, records, retire, run_id
+from .wandb_log import ENTITY, REPO, TABLES_DIR, browser_url, code_version, local_panel, project_dir, push, records, retire, run_id
 
 # WHY loaded by file, not imported or copied: bbo.py is the house template (bam_ws main) and imports only the standard library at
 # module level (weave lazily); importing the bam_trackio package would pull trackio, the pick ladder and the trajgen bench, and a
@@ -530,6 +530,9 @@ def build_views(*, registry: Path = REGISTRY) -> dict:
     results = {name: load(name) for name in RIGS}
     for name, rig in RIGS.items():
         result = results[name]
+        # WHY pointers, not table panels (Zach, 2026-11-21: "to help limit W and B storage I think we need to just be using it for summary
+        # statistics; for the media-rich things we should be using rerun!"): push() writes each run's tables as jsonl on the workstation
+        folder = TABLES_DIR / project_dir(rig.project)
         twin_rows = [latest, expr.Config("version_kind") == "twin", expr.Config("level") == "deployment"]
         controller_rows = [latest, expr.Config("version_kind") == "controller"]
         twin_panels = [wr.BarPlot(title="Held-out sim vs real per twin version (°): the objective", metrics=[OBJECTIVE], orientation="h",
@@ -538,7 +541,8 @@ def build_views(*, registry: Path = REGISTRY) -> dict:
                                    layout=L(x=12, y=0, w=12, h=8)),
                        wr.BarPlot(title="Per joint, per twin version (°)", metrics=[f"{OBJECTIVE}_{j}" for j in rig.joints], orientation="h",
                                   layout=L(x=0, y=8, w=24, h=8)),
-                       wr.WeavePanelSummaryTable(table_name="episodes", layout=L(x=0, y=16, w=24, h=10))]
+                       local_panel(wr, "Every held-out run of a twin version, with its Rerun link", f"{folder}/<run id>/episodes.jsonl",
+                                   layout=L(x=0, y=16, w=24, h=6))]
         controller_panels = [wr.BarPlot(title="Gate 1 · target vs sim, worst joint (°): the controller in sim",
                                         metrics=["target_vs_sim_tracking_deg"], orientation="h", layout=L(x=0, y=24, w=12, h=8)),
                              wr.BarPlot(title="Gate 3 · target vs real on the coverage set, worst joint (°)", metrics=["tracking_rms_deg"],
@@ -552,7 +556,8 @@ def build_views(*, registry: Path = REGISTRY) -> dict:
                                              layout=L(x=0, y=8, w=12, h=8)),
                                   wr.BarPlot(title="Tool at a stop, settled holds (mm, gate 1 mm)", metrics=["tool_error_at_stop_mm"],
                                              orientation="h", layout=L(x=12, y=8, w=12, h=8))]
-        controller_panels.append(wr.WeavePanelSummaryTable(table_name="episodes", layout=L(x=0, y=16, w=24, h=10)))
+        controller_panels.append(local_panel(wr, "Every run of a controller version", f"{folder}/<run id>/episodes.jsonl",
+                                             layout=L(x=0, y=16, w=24, h=6)))
         tree_rows = [latest, expr.Config("version_kind") == "twin", expr.Config("level") == "deployment", expr.Config("stage_role") == "after"]
         root = next(n for n in result.nodes if n.parent is None)
         blocks = [
@@ -571,8 +576,9 @@ def build_views(*, registry: Path = REGISTRY) -> dict:
                          panels=controller_panels),
             wr.H2(text="The tree (latest twin)"),
             wr.PanelGrid(hide_run_sets=True, runsets=[wr.Runset(entity=ENTITY, project=rig.project, name="latest", filters=tree_rows)],
-                         panels=[wr.WeavePanelSummaryTable(table_name="tree", layout=L(x=0, y=0, w=24, h=12)),
-                                 wr.WeavePanelSummaryTable(table_name="questions_all", layout=L(x=0, y=12, w=24, h=12))]),
+                         panels=[local_panel(wr, "The tree and every node's five questions (the latest twin's deployment run)",
+                                             f"{folder}/<run id>/tree.jsonl", f"{folder}/<run id>/questions_all.jsonl",
+                                             layout=L(x=0, y=0, w=24, h=7))]),
             wr.H2(text="The ladders"),
             wr.MarkdownBlock(text=_ladders_markdown(["deployment", "arm", "joint", "tool"])),
         ]
@@ -604,7 +610,8 @@ def build_views(*, registry: Path = REGISTRY) -> dict:
               wr.BarPlot(title="Settled stop ÷ its share of the 1 mm gate", metrics=["Job/settled_over_share"], orientation="h",
                          layout=L(x=12, y=8, w=12, h=8)),
               wr.BarPlot(title="Questions passed in order (5 = all)", metrics=["questions_passed"], orientation="h", layout=L(x=0, y=16, w=24, h=8)),
-              wr.WeavePanelSummaryTable(table_name="questions", layout=L(x=0, y=24, w=24, h=12))]
+              local_panel(wr, "Each joint's five questions", *(f"{TABLES_DIR / project_dir(rig.project)}/<run id>/questions.jsonl"
+                                                               for rig in RIGS.values()), layout=L(x=0, y=24, w=24, h=6))]
     gate_runsets = [wr.Runset(entity=ENTITY, project=rig.project, name=f"{rig.label} versions",
                               filters=[latest, expr.Config("level") == "deployment"]) for rig in RIGS.values()]
     gate_panels = [wr.BarPlot(title="1 · target vs sim, worst joint (°)", metrics=["target_vs_sim_tracking_deg"], orientation="h",
