@@ -1,0 +1,48 @@
+{
+ "generated_by": "tests/test_pid_tune_routine.py",
+ "levels": {
+  "0x": {
+   "admissible": true,
+   "cost_oracle": 0.2456519286256316,
+   "cost_tuned": 0.47752946310023736,
+   "gain": 4.188223250175002,
+   "pass": false,
+   "regret": 0.9439271890593715,
+   "stop_p90_mrad": 6.588023687028278,
+   "worst_error_over_tolerance": 6.292847927062477
+  },
+  "1x": {
+   "admissible": true,
+   "cost_oracle": 0.2456519286256316,
+   "cost_tuned": 0.495998163847036,
+   "gain": 4.0322729916733975,
+   "pass": false,
+   "regret": 1.019109585754268,
+   "stop_p90_mrad": 6.988563254242625,
+   "worst_error_over_tolerance": 6.7940639050284535
+  },
+  "3x": {
+   "admissible": true,
+   "cost_oracle": 0.2456519286256316,
+   "cost_tuned": 0.6341810897779309,
+   "gain": 3.1536733469935747,
+   "pass": false,
+   "regret": 1.5816247131705188,
+   "stop_p90_mrad": 9.33171890773799,
+   "worst_error_over_tolerance": 10.544164754470126
+  }
+ },
+ "provenance": {
+  "pid_tune_sha256": "ee56ec3401bf93a4105be986baa565f0cc500659bb9c7d1823cd76efdf40c52b",
+  "pidtuna_head": "ae35ed8cc64c6bf1c3f1af7fcc43da63a7d1ed0d",
+  "test_sha256": "56d2692142a852a0cb47e7b0fa0c163531238010379fa87f7147ab0a0df39d6c"
+ },
+ "routine": "pid.pidtuna",
+ "schema": "sim2real.routine_ladder/1",
+ "tolerance": {
+  "closed_loop_cost": {
+   "kind": "rel_to_oracle",
+   "value": "regret <= 0.15 against the best admissible PD + feed-forward controller on the hidden truth (cost = stop p90 / as found + tracking RMS / as found, held-out tapes); the level scales how far the handed fitted values sit from the truth, in units of the dynamics fit's acceptance tolerance (sysid/acceptance.json), not sensor noise"
+  }
+ }
+}
