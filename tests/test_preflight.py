@@ -76,7 +76,11 @@ def _cheap_fit(twin):
     planned = twin.generate_schedule()
     recovered = {r["key"]: float(r["recovered"]) for r in rows}
     steps = [{"routine": s.routine, "identifies": list(s.identifies), "runs": 0, "seconds": 0.0,
-              "found": {k: recovered[k] for k in s.identifies}} for s in planned.steps]
+              # WHY a tune step's keys are configured, never found (L10, 2026-11-20, applied for the One-click session, which owns this file and
+              # was not running): pid.pidtuna lists kp / kd in identifies, but they are settings (settings_), so the committed fit has no
+              # value for them and calibrate() records them under configures, the way PidTune's real step does
+              "found": {k: recovered[k] for k in s.identifies if s.kind != "tune"},
+              **({"configures": list(s.identifies)} if s.kind == "tune" else {})} for s in planned.steps]
     calibration = sim2real.twin.Calibration("sim", twin.model, "M4", values, {"M4": {k: float(v) for k, v in values.items()}}, rows, {}, 0.0,
                                             {"train_runs": 0, "held_out_runs": 0, "digest": "committed", "coverage_train_pct": 0.0,
                                              "routines": [s["routine"] for s in steps]})
