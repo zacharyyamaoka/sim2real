@@ -96,6 +96,7 @@ The ruler forbade its builder to edit it, so its owner (the dispatcher) made the
 <h2>Decided for you</h2>
 <ul>
 <li>Landed on <code>main</code> and pushed to origin once the ruler fix ran green. Undo: <code>git -C /home/bam/sim2real revert 0c29ac1^..48dba0e</code>, then push.</li>
+<li>Deployed the noindexed preview (robots <code>Disallow: /</code> and a noindex meta; everything on it is already public on GitHub). Undo: <code>wrangler delete --env preview</code> from <code>/home/bam/sim2real/website</code>.</li>
 <li>Fixed the ruler's serial check as its owner (blank the four digest fields first, mutation-checked). Undo: <code>git revert 48dba0e</code>.</li>
 <li>Re-cut the hero loop from the whole clip and cropped it to the swing (318 KiB of WebP, under the ruler's cap); the row's still is cropped the same way. Undo: revert <code>96115ba</code>'s media.</li>
 <li>Kept the BAM twin's median as "not judged" (conservative, and the gate rule says so).</li>
@@ -105,7 +106,7 @@ The ruler forbade its builder to edit it, so its owner (the dispatcher) made the
 <ul>
 <li>Lane L10 (PID tune as calibrate()'s third step) is code-complete on <code>claude/l10-c</code> but not landed: pidtuna's new damping-band rule fails its grade, and preflight's fixture needs its owner's change.</li>
 <li>bam_ws <code>reports/ur-wrist-sim2real-2026-11-12.html</code> calls the as-found wrist run "no feed-forward"; its session plan and runner carried Coulomb feed-forward on all three joints. The landing follows the plan; the old report's label is the one to correct.</li>
-<li>The site is built, not deployed (a preview build is <code>--noindex</code>).</li>
+<li>The site is live as a noindexed preview at <code>https://sim2real-docs-preview.zach-yamaoka.workers.dev</code> (version a540f109); a production domain is still to pick.</li>
 <li>Next real numbers: a Sim cell for the UR wrist and the BAM arm, and the pendulum's example re-recorded on today's schedule.</li>
 </ul>
 <h2>Needs you</h2>
@@ -114,7 +115,7 @@ The ruler forbade its builder to edit it, so its owner (the dispatcher) made the
 </ul>
 <h2>Not done, on purpose</h2>
 <ul>
-<li>No deploy: a first public site is your call (the domain too). No pytest, MuJoCo or simulation on the workstation (the arm is powered): every test ran on a cloud VM.</li>
+<li>No production domain: that is your pick. No pytest, MuJoCo or simulation on the workstation (the arm is powered): every test ran on a cloud VM.</li>
 </ul>
 <p class="dim">Commits: c01f206 · 6c8cb62 · 96115ba · b1ad571 · 42857a2 · e4aa08d · 0c29ac1.</p>
 </main></body></html>
