@@ -53,10 +53,19 @@ def plural(count: int, word: str) -> str:
 # --------------------------------------------------------------------------------- components
 
 
+def wrap_points(markup: str) -> str:
+    """Markup with a <wbr> after each dot, bracket and comma of its text (never inside a tag or an entity), so a long call wraps where a
+    reader would split it, not mid-identifier (WHY, review 2026-11-20 D6). A <wbr> carries no text: copy and the ruler read the same."""
+    return "".join(part if part.startswith("<") else re.sub(r"(?<=[.(,\[])(?!$)", "<wbr>", part)
+                   for part in re.split(r"(<[^>]*>)", markup))
+
+
 def code_block(code: str, language: str = "python", *, wrap: bool = False, label: str = "", pre_attrs: str = "") -> str:
     cls = "code wrap" if wrap else "code"
     # WHY plain text is only escaped: robotmsgs' highlighter knows Python and JSON; a shell line or printed table is not Python
     body = highlight(code, language) if language in ("python", "json") else esc(code)
+    if wrap:
+        body = wrap_points(body)
     return (
         f'<div class="{cls}">'
         f'<button class="copy" type="button" aria-label="Copy {esc(label or "code")}">Copy</button>'
@@ -107,6 +116,7 @@ def shell(
     nav: tuple[tuple[str, str, str], ...] = NAV,
     footer: str = FOOTER,
     wide: bool = False,
+    page_class: str = "",
 ) -> str:
     nav_links = "".join(
         f'<a href="{href}"{" aria-current=\"page\"" if section == key else ""}>{label}</a>'
@@ -144,7 +154,7 @@ def shell(
 <link rel="stylesheet" href="/assets/site.css?v={asset_version}">
 <link rel="stylesheet" href="/assets/sim2real.css?v={asset_version}">
 </head>
-<body class="{layout}">
+<body class="{layout}{" " + page_class if page_class else ""}">
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
   <div class="topbar-in">
@@ -303,25 +313,36 @@ GATE_WORDS = {"pass": "pass", "fail": "fail", "unjudged": "not judged"}
 COMPARE_WORDS = {-1: "smaller than", 0: "the same as", 1: "larger than"}
 STATUS_WORDS = {"not_measured": "not measured yet", "not_built": "not built yet", "runs": "runs today"}
 # the small label after each number in a cell (what the number is); a count that follows a stop number reads "worst of N stops"
+# WHY "of runs" (review 2026-11-20 C5): arm_motion_bench's gate_pass_rate is the share of runs, every repeat counted, not of tasks
 MEASURE_WORDS = {"stop_worst": "worst stop", "stop_median": "median stop", "stop_task_worst_median": "median task's worst stop",
-                 "gate_pass_rate": "of tasks within the gate", "tcp_rms": "TCP RMS", "joint_rms": "joint RMS", "stops": "stops",
+                 "gate_pass_rate": "of runs within the gate", "tcp_rms": "TCP RMS", "joint_rms": "joint RMS", "stops": "stops",
+                 "not_identified": "more carried, not identified",
                  "held_out_ratio": "", "held_out_tool": "", "held_out_flange": "", "floor": ""}
+GATE_TITLES = {"stop_worst": "the worst stop against the tool gate", "gate_pass_rate": "every stop of every run against the tool gate",
+               "stop_median": "a median above the tool gate proves a fail; at or under it proves nothing",
+               "stop_task_worst_median": "a median above the tool gate proves a fail; at or under it proves nothing"}
 ROBOT_WORDS = {"pendulum": "Pendulum", "ur_arm": "UR arm", "bam_arm": "BAM arm"}
 RECOVERY_HEADS = {"recovered": "Recovered", "nominal": "Description's values", "fitted": "Fitted", "floor": "Floor"}
+# WHY short comments on their own lines (review 2026-11-20 D4): the old trailing comments made the block scroll sideways at 1280 px
 API_EXAMPLE = '''import sim2real
 from bam_rack_twin.description import station_description
 from sim2real.calibration import Budget, CalibrationConfig, Ledger
 
-if __name__ == "__main__":  # calibrate() replays runs in a process pool that re-imports this module
-    rd = station_description(11)                          # a robot description: typed parts with their priors, an MJCF, its unit
+# calibrate() replays runs in a process pool that re-imports this file
+if __name__ == "__main__":
+    # the bench pendulum's description (it sits on CAN id 11):
+    # typed parts with their priors, an MJCF, its unit
+    rd = station_description(11)
     twin = sim2real.RobotTwin.from_robot_description(rd)
-    config = CalibrationConfig(budget=Budget(settings=("bench",), equipment=("camera_tags",)))
-    schedule = twin.generate_schedule(config)             # what will run, in order, with its time and equipment; nothing moves
+    config = CalibrationConfig(
+        budget=Budget(settings=("bench",), equipment=("camera_tags",)))
+    # what will run, in order, with its time and equipment; nothing moves
+    schedule = twin.generate_schedule(config)
     print(schedule.summary())
     fitted = twin.calibrate(on="sim", config=config, callbacks=[Ledger()])
-    report = fitted.evaluate()                            # held-out error ÷ floor, and the gates
+    report = fitted.evaluate()  # held-out error and the gates
     print(report.summary())
-    print(fitted.data_)                                   # the runs it was fitted on; fitted.calibrate(data=fitted.data_ + more) refits
+    print(fitted.data_)  # the runs it was fitted on
 '''
 
 
@@ -363,8 +384,9 @@ class Landing:
 
     def gate(self, vid: str) -> str:
         verdict = self.verdict(vid)
+        title = GATE_TITLES.get(self.value(vid)["measure"], "against the tool gate at a stop")
         return (f'<span class="gate gate-{verdict}" data-gate="{verdict}" data-gate-value="{esc(vid)}" '
-                f'title="against the tool gate at every stop">{GATE_WORDS[verdict]}</span>')
+                f'title="{esc(title)}">{GATE_WORDS[verdict]}</span>')
 
     def compare(self, a: str, b: str) -> str:
         va, vb = self.value(a), self.value(b)
@@ -407,13 +429,17 @@ class Landing:
             return self.shown(body) if not body.startswith("cmp:") else ""
         return " ".join(LANDING_PLACE.sub(one, template).replace("`", "").split())
 
-    def figure(self, mid: str, cls: str = "") -> str:
+    def img(self, mid: str, *, alt: str | None = None) -> str:
+        """A picture with its own pixel size (WHY, review 2026-11-20: without width/height the page shifts as each one loads)."""
         m = self.data["media"][mid]
-        return (f'<figure class="shot {cls}" data-media="{esc(mid)}"><img src="/assets/{esc(m["file"])}" alt="{esc(self.plain(m["what"]))}" '
-                f'decoding="async"><figcaption>{self.render(m["what"])} '
+        size = f' width="{m["width"]}" height="{m["height"]}"' if m.get("width") else ""
+        return f'<img src="/assets/{esc(m["file"])}" alt="{esc(alt if alt is not None else self.plain(m["what"]))}"{size}>'
+
+    def figure(self, mid: str, cls: str = "") -> str:
+        return (f'<figure class="shot {cls}" data-media="{esc(mid)}">{self.img(mid)}<figcaption>{self.render(self.data["media"][mid]["what"])} '
                 f'<a class="media-src" href="#media-{esc(mid)}">where it is from</a></figcaption></figure>')
 
-    def numbers(self, ids: list[str]) -> str:
+    def numbers(self, ids: list[str]) -> list[str]:
         """A cell's numbers, one line each, with what each one is; a stop count reads with the number before it."""
         lines, i = [], 0
         while i < len(ids):
@@ -436,7 +462,7 @@ class Landing:
             word = MEASURE_WORDS.get(measure, "")
             lines.append(self.span(vid) + (f' <span class="mw">{esc(word)}</span>' if word else ""))
             i += 1
-        return "".join(f'<div class="num-line">{line}</div>' for line in lines)
+        return lines
 
     def cell(self, key: str, spec: dict, *, head: str = "") -> str:
         # WHY data-head: on a phone the table stacks into cards and each cell shows its column's title (CSS), so nobody scrolls sideways
@@ -445,21 +471,24 @@ class Landing:
             return (f'<td data-cell="{key}"{h} class="cell status-cell"><span class="st st-{esc(spec["status"])}" '
                     f'data-status="{esc(spec["status"])}">{STATUS_WORDS[spec["status"]]}</span>'
                     f'<span class="why" data-why>{self.render(spec["why"])}</span></td>')
-        body = self.numbers(spec["values"])
-        if spec.get("gate"):
-            body += f'<div class="gate-line">{self.gate(spec["gate"])}</div>'
+        # WHY a headline (review 2026-11-20 D1): the first number (the one the gate judges, by the picks' order) reads large with its
+        # verdict beside it, the rest small under it, so each cell says one thing at a glance
+        first, *rest = self.numbers(spec["values"])
+        chip = f" {self.gate(spec['gate'])}" if spec.get("gate") else ""
+        body = f'<div class="num-line num-head">{first}{chip}</div>'
+        if rest:
+            body += '<div class="num-rest">' + "".join(f'<div class="num-line">{line}</div>' for line in rest) + "</div>"
         ctl = spec.get("controller")
         if ctl:
             text = self.data["labels"][ctl["label"]]["text"]
             body += (f'<div class="ctl"><span data-ctl-words>{self.render(ctl["words"])}</span> '
-                     f'<code class="ctl-code" data-label-id="{esc(ctl["label"])}">{esc(text)}</code></div>')
+                     f'<code class="ctl-code" data-label-id="{esc(ctl["label"])}" title="the controller as its file names it">{esc(text)}'
+                     '</code></div>')
         return f'<td data-cell="{key}"{h} class="cell">{body}</td>'
 
 
-def _seam_svg(tune_on_main: bool, links: dict[str, str]) -> str:
-    """How it works: the one-click seam Zach approved, ten steps in two rows. No numbers; every step links to its page."""
-    w, h, gap, top, row2 = 204, 84, 36, 18, 164
-    steps = (
+def _seam_steps(tune_on_main: bool) -> tuple:
+    return (
         ("describe", "Describe", ("rd: typed parts,", "priors and an MJCF"), ""),
         ("twin", "Twin", ("RobotTwin.", "from_robot_description(rd)"), ""),
         ("schedule", "Plan", ("generate_schedule(config)", "→ CalibrationSchedule"), ""),
@@ -471,6 +500,25 @@ def _seam_svg(tune_on_main: bool, links: dict[str, str]) -> str:
         ("preflight", "Preflight", ("preflight(fitted)", "before it ships"), ""),
         ("deployed", "Deployed", ("monitor → refit →", "keep if it wins"), "designed"),
     )
+
+
+def _seam_list(tune_on_main: bool, links: dict[str, str]) -> str:
+    """The same ten steps as a list a phone stacks (WHY, review 2026-11-20 D7: the diagram's text is unreadable at phone width)."""
+    items = []
+    for key, title, (l1, l2), status in _seam_steps(tune_on_main):
+        badge = {"branch": "on a branch", "designed": "designed"}.get(status, "")
+        tag = f' <span class="badge designed">{badge}</span>' if badge else ""
+        second = "" if status == "branch" else l2
+        detail = l1 + ("" if l1.endswith(".") or not second else " ") + second
+        items.append(f'<li class="seam-li{" seam-li-amber" if badge else ""}"><a href="{esc(links[key])}"><strong>{esc(title)}</strong>{tag}'
+                     f'<span class="seam-li-code">{esc(detail)}</span></a></li>')
+    return f'<ol class="seam-list">{"".join(items)}</ol>'
+
+
+def _seam_svg(tune_on_main: bool, links: dict[str, str]) -> str:
+    """How it works: the seam from a description to a deployed twin, ten steps in two rows. No numbers; every step links to its page."""
+    w, h, gap, top, row2 = 204, 84, 36, 18, 164
+    steps = _seam_steps(tune_on_main)
     parts = []
     for i, (key, title, (l1, l2), status) in enumerate(steps):
         col, y = i % 5, (top if i < 5 else row2)
@@ -524,23 +572,32 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
     # 1 hero ------------------------------------------------------------------------------------------------------------------
     hero = data["hero"]
     lines = "".join(f'<p class="readout-line" data-line>{L.render(line)}</p>' for line in hero["lines"])
+    # WHY a strip of the three robots (review 2026-11-20 D2): the hero loop shows one robot; Zach asked to see all three, so each real
+    # robot's own picture (the same files its row shows) sits in the first screen and opens its row
+    rows_by_id = {row["id"]: row for robot in data["robots"] for row in robot["rows"]}
+    strip = "".join(
+        f'<a class="robot-pick" href="#row-{esc(rid)}">{L.img(rows_by_id[rid]["media"], alt=L.plain(rows_by_id[rid]["title"]))}'
+        f'<span class="robot-pick-name">{L.render(name)}</span></a>'
+        for rid, name in (("pendulum-real", "The {=1-DOF} pendulum"), ("urwrist-real", "The UR arm's wrist rig"), ("bamarm-track", "The BAM arm"))
+        if rows_by_id.get(rid, {}).get("media"))
     hero_html = f"""<section class="lp-hero" data-section="hero" id="hero" aria-labelledby="hero-h">
   <div class="hero-copy">
     <p class="eyebrow">{L.render(hero["eyebrow"])}</p>
     <h1 id="hero-h">{L.render(hero["h1"])}</h1>
+    <div class="robot-strip" aria-label="The three robots on this page">{strip}</div>
     <p class="lead">{L.render(hero["lead"])}</p>
     <p class="today" data-today>{L.render(hero["today"])}</p>
     <div class="cta">
       <a class="btn primary" href="#api">Quickstart</a>
       <a class="btn" href="#how">How it works</a>
-      <a class="btn" href="#proof">The three robots</a>
+      <a class="btn" href="#proof">See the numbers</a>
       <a class="btn" href="/routines/">All routines</a>
       <a class="btn ghost" href="{GITHUB}" rel="noopener">Source on GitHub</a>
     </div>
   </div>
   <div class="hero-stage">{L.figure(hero["media"], "hero-shot")}
     <div class="readout" data-readout>
-      <p class="readout-head"><span class="where where-pseudo" data-chip="pseudo-real">pseudo-real</span> sim2real's own <code>calibrate()</code>, against a hidden world</p>
+      <p class="readout-head"><span class="where where-pseudo" data-chip="pseudo-real">pseudo-real</span> sim2real's own <code>calibrate()</code>, against a hidden world whose values differ from the description's on purpose</p>
       {lines}
     </div>
     <p class="counts"><span data-count="types">{len(types)}</span> part types · <span data-count="routines">{len(routines)}</span> calibration routines, read from the registries</p>
@@ -563,17 +620,19 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
                   f'{L.render(row["title"])}</a></div><span class="where where-{"real" if where == "real" else "pseudo"}" data-where-chip>{where}</span>'
                   f'<p class="target" data-target>{L.render(row["target"])}</p>{fig}</th>')
             cells = "".join(L.cell(k, row["cells"][k], head=metrics[k]["title"]) for k in ("sim", "on_real", "tuned"))
-            body_rows.append(f'<tr data-row="{esc(row["id"])}" data-robot="{esc(robot["id"])}" data-where="{esc(where)}">{th}{cells}</tr>')
+            body_rows.append(f'<tr data-row="{esc(row["id"])}" data-robot="{esc(robot["id"])}" data-where="{esc(where)}" '
+                             f'id="row-{esc(row["id"])}">{th}{cells}</tr>')
             notes += [f'<li data-note-for="{esc(row["id"])}">{L.render(n)}</li>' for n in row.get("notes", [])]
         if notes:
             note_groups.append(f'<li class="note-group"><span class="note-head">{esc(ROBOT_WORDS[robot["id"]])}</span><ul>{"".join(notes)}</ul></li>')
-    caveat = ('Every number in this table was measured by that robot\'s own campaign tooling (the <span class="name">1-DOF</span> campaign, '
-              'the UR wrist lane, arm_motion_bench), not by sim2real: <code>calibrate(on="real")</code> is built and proven on the rack twin '
-              'and has not yet run on hardware. sim2real\'s own numbers are the hidden-truth table under <a href="#modes">What you can do '
-              'today</a>.')
+    caveat = ('Measured by each robot\'s own lab tooling (bam_rack_twin\'s pendulum scorer, the UR wrist rig\'s scripts, arm_motion_bench), '
+              'not by sim2real. sim2real\'s <code>calibrate(on="real")</code> is built and tested on the rack twin; no hardware run of it is '
+              'recorded yet. sim2real\'s own numbers are in <a href="#recovery">Does calibration find the truth?</a>')
+    # WHY these words (review 2026-11-20 C4, D1): the rows do not share one set of measures or one matched target, so the intro says
+    # what every cell leads with and how a median is judged, and each row says how its cells were matched
     proof_html = f"""<section class="lp-sec" data-section="proof" id="proof" aria-labelledby="proof-h">
-  <div class="sec-head"><p class="kicker">Proof</p><h2 id="proof-h">Three numbers per robot</h2>
-  <p>Fitting a model only pays if the robot then hits its target. So every robot gets the same three numbers on the same target motion: tool error in mm, joint error in degrees, and a verdict against the gate of {L.span(data["gate"])} at every stop.</p></div>
+  <div class="sec-head"><p class="kicker">Measured on the robots</p><h2 id="proof-h">Sim, Sim on Real, Sim on Real (tuned)</h2>
+  <p>Fitting a model only pays if the robot then hits its target. Each row plays one target three ways: on the twin, on the robot as found, and on the robot after tuning. Each cell leads with the tool error at a stop and its verdict against the gate of {L.span(data["gate"])}: a worst stop passes or fails, a median above the gate fails, and a median at or under it is not judged. The rest is what that run's own file records; the notes under the table say what differs between a row's cells.</p></div>
   <dl class="metric-defs">{defs}</dl>
   <div class="table-wrap proof-wrap"><table class="proof" data-table="metrics">
     <caption><span data-caveat>{caveat}</span></caption>
@@ -606,7 +665,7 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
                 meta.append(f'commit <code data-commit="{esc(rec["source"])}">{esc(src["commit"][:7])}</code>')
             if rec.get("routines"):
                 meta.append(f'routines <code data-label-id="{esc(rec["routines"])}">{esc(data["labels"][rec["routines"]]["text"])}</code>')
-        call = f'<code class="call" data-call>{esc(row["via"])}</code>' if row["via"] else ""
+        call = f'<code class="call" data-call>{wrap_points(esc(row["via"]))}</code>' if row["via"] else ""
         th = (f'<th scope="row" data-cell="robot" class="robot-cell"><div class="row-title" data-title>{L.render(row["title"])}</div>{call}'
               f'<p class="measure" data-measure>{L.render(row["measure"])}</p>'
               + (f'<p class="rec-meta">{" · ".join(meta)}</p>' if meta else "") + "</th>")
@@ -637,8 +696,9 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
     kinds = doc_anchor(docs, "calibrate", "The routine kinds")
     how_html = f"""<section class="lp-sec" data-section="how" id="how" aria-labelledby="how-h">
   <div class="sec-head"><p class="kicker">How it works</p><h2 id="how-h">From a description to a fitted twin</h2>
-  <p>One seam from the robot description to a twin that is fitted, checked and ready to ship. Each box opens its page.</p></div>
+  <p>From the robot description to a twin that is fitted, checked and ready to ship. Each step opens its page.</p></div>
   <div class="seam-wrap">{_seam_svg(tune_on_main, links)}</div>
+  {_seam_list(tune_on_main, links)}
   <p class="muted small">Routines come in four kinds, <a href="{esc(kinds)}">configure → fit → tune → measure</a>, and that is their order when nothing else orders them.</p>
 </section>"""
 
@@ -646,16 +706,16 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
     wandb = doc_anchor(docs, "guide", "`sim2real.tracking.calibrate_wandb.WandbLogger(")
     api_html = f"""<section class="lp-sec" data-section="api" id="api" aria-labelledby="api-h">
   <div class="sec-head"><p class="kicker">Quickstart</p><h2 id="api-h">The API on one screen</h2>
-  <p>Not packaged yet: the examples run in bam_rack_twin's environment (see the README).</p></div>
+  <p>There is no install command yet: sim2real is not on PyPI, its dependencies install from local checkouts, and this example reads the pendulum's description from bam_rack_twin, a workstation package. It runs there today.</p></div>
   <div class="api-code">{code_block(API_EXAMPLE, label="quickstart", pre_attrs=' data-code="api"')}</div>
   <ul class="api-notes">
       <li><a href="/api/#api-CalibrationConfig"><code>CalibrationConfig</code></a>: which models to fit, what is already known, what to include or leave out, the noise and the budget.</li>
       <li><a href="/api/#api-Budget"><code>Budget</code></a>: <code>settings=</code> says where it runs (bench, deployed), <code>equipment=</code> what you have. A routine needing anything else is dropped, and the schedule names the item and its price.</li>
       <li><code>callbacks=</code>: <a href="/api/#api-Ledger"><code>Ledger()</code></a> writes every event and the record; <a href="{esc(wandb)}">WandbLogger</a> keeps a W&amp;B copy of it.</li>
       <li><code>fitted.data_</code>: the runs it was fitted on. <code>fitted.calibrate(data=fitted.data_ + more)</code> refits with new runs.</li>
-      <li><code>on="real", transport=</code>: the same call on hardware, through a transport you pass. Built and proven on the rack twin; not yet run on a robot.</li>
+      <li><code>on="real", transport=</code>: the same call on hardware, through a transport you pass. Built and tested on the rack twin; no robot run of it is recorded yet.</li>
   </ul>
-  <p class="api-more"><a href="/examples/pendulum_can11/"><code>calibrate()</code> in one screen, run for real: the pendulum example</a> · <a href="/api/">the whole API</a> · <a href="/docs/guide/">the guide</a></p>
+  <p class="api-more"><a href="/examples/pendulum_can11/">The pendulum example: <code>calibrate()</code> on a hidden world, with its recorded output</a> · <a href="/api/">the whole API</a> · <a href="/docs/guide/">the guide</a></p>
 </section>"""
 
     # 6 bench today, deployed next ----------------------------------------------------------------------------------------------
@@ -669,10 +729,12 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
                   'stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a>')
         today.append(f'<li data-today-item>{go}{L.render(item["text"])}</li>')
     not_built = "".join(f'<li data-not-built="{esc(item["name"])}">{L.render(item["text"])}</li>' for item in life["not_built"])
-    loop = ' <span class="loop-arrow" aria-hidden="true">→</span> '.join(f'<span class="loop-step">{esc(step)}</span>' for step in life["loop"])
+    # WHY each arrow travels with the step after it (review 2026-11-20 D9): a wrapped line never ends on a dangling arrow
+    loop = " ".join((f'<span class="loop-item">{"" if i == 0 else "<span class=\"loop-arrow\" aria-hidden=\"true\">→</span> "}'
+                     f'<span class="loop-step">{esc(step)}</span></span>') for i, step in enumerate(life["loop"]))
     life_html = f"""<section class="lp-sec" data-section="lifecycle" id="bench-or-deployed" aria-labelledby="life-h">
   <div class="sec-head"><p class="kicker">Bench and deployed</p><h2 id="life-h">Bench today, deployed next</h2>
-  <p>Every routine says where it runs. <code>Budget(settings=("bench",))</code> keeps the <span data-setting-count="bench">{settings["bench"]}</span> bench routines and the <span data-setting-count="both">{settings["both"]}</span> that run anywhere; <code>("deployed",)</code> keeps the <span data-setting-count="deployed">{settings["deployed"]}</span> that run on a robot at work.</p>
+  <p>Every routine says where it runs. <code>Budget(settings=("bench",))</code> keeps the <span data-setting-count="bench">{settings["bench"]}</span> bench routines and the <span data-setting-count="both">{settings["both"]}</span> that run anywhere; <code>("deployed",)</code> keeps the <span data-setting-count="deployed">{settings["deployed"]}</span> that run on a robot at work and the same <span data-setting-count="both">{settings["both"]}</span> that run anywhere.</p>
   <p><code>Budget(equipment=(...))</code> says what you have: a routine needing anything else is dropped, and the schedule names the item and its price.</p></div>
   <div class="deployed">
     <h3 id="deployed">Deployed: lifetime calibration and monitoring <span class="badge designed" data-status="designed">designed, not built</span></h3>
@@ -692,7 +754,7 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
   <div class="promises">
     <div class="promise" data-promise><strong>The fit never sees the answer.</strong><p>A hidden world stays sealed while the twin fits; the grade opens it only afterwards, and the score comes from runs the fit never used.</p></div>
     <div class="promise" data-promise><strong>It never moves a motor by itself.</strong><p>A calibration plans its runs and asks for them; on hardware a transport you pass moves the robot, and nothing is written to a board or a description unless you say so.</p></div>
-    <div class="promise" data-promise><strong>PD and feed-forward, nothing else.</strong><p>On a real robot the controller is PD with feed-forward from the fitted values. An integrator never runs on the arm.</p></div>
+    <div class="promise" data-promise><strong>It ships PD and feed-forward.</strong><p>The controller sim2real hands over is PD with feed-forward from the fitted values, and <code>preflight()</code> refuses one that integrates before it ships.</p></div>
   </div>
   <div class="cta lp-cta">
     <a class="btn primary" href="/routines/">Browse the routines</a>
@@ -711,7 +773,7 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
     for sid, src in data["sources"].items():
         flags = []
         if src["moving"]:
-            flags.append('<span class="flag">may move</span>')
+            flags.append('<span class="flag">still being written; the page cites the frozen copy</span>')
         if sid in stale:
             flags.append('<span class="flag bad">stale: re-export</span>')
         link = ""
@@ -727,20 +789,26 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
     media_items = []
     for mid, m in data["media"].items():
         fc = m["frames_checked"]
-        check = (f'frames checked by {esc(fc["by"])} on {esc(fc["utc"][:10])} ({esc(fc["frames"])} frames: no people, no serials, no burned-in text)'
-                 if fc.get("by") else "frames not checked yet")
+        # WHY the time and "UTC" (review 2026-11-20): a bare UTC date read as tomorrow on the workstation's clock
+        check = (f'frames checked by {esc(fc["by"])} at {esc(fc["utc"][:10])} {esc(fc["utc"][11:16])} UTC ({esc(plural(fc["frames"], "frame"))}: '
+                 'no people, no serials, no burned-in text)' if fc.get("by") else "frames not checked yet")
         media_items.append(
             f'<li id="media-{esc(mid)}" data-media-id="{esc(mid)}"><span class="src-what">{esc(L.plain(m["what"]))}</span>'
             f'<span class="src-meta"><span class="mono">{esc(m["file"])}</span> · sha256 <span class="mono">{esc(m["sha256"][:12])}</span> · cut from '
             f'<span class="mono">{esc(m["shown"])}</span> (report <span class="mono">{esc(m["report"])}</span>) · filter '
             f'<span class="mono">{esc(m["filter"])}</span> · {check}</span></li>')
     stamp = ctx.get("stamp", "sim2real")
+    # WHY folded (review 2026-11-20 D9): the list is a reference, about two screens on a phone; every [n] still opens its entry (the
+    # script below opens the fold when a link lands inside it)
     sources_html = f"""<section class="lp-sec sources" data-section="sources" id="sources" aria-labelledby="sources-h">
   <h2 id="sources-h">Where every number comes from</h2>
+  <p class="muted">Every number on this page names its file: its sha256, its date and whether it is real, sim or pseudo-real. A missing number says not measured yet, and why.</p>
+  <details class="src-fold" id="sources-list"><summary>The files, with their hashes and dates</summary>
   <ol class="src-list">{"".join(src_items)}<li id="src-registry" data-source-id="registry"><span class="src-what">The part-type and routine counts, the bench and deployed counts, and the tune step's state</span><span class="src-meta">sim2real's registries (<code>cards/domain.py</code>, <code>cards/calibration.py</code>), read at build time from {esc(stamp)}</span></li></ol>
   <h3 class="sub-h">Pictures</h3>
   <ul class="src-list media-list">{"".join(media_items)}</ul>
-  <p class="muted">Every number on this page names its file. A missing number says not measured yet, and why.</p>
+  </details>
+  <script>(function(){{var fold=document.getElementById("sources-list");function open(){{var id=location.hash.slice(1);var el=id&&document.getElementById(id);if(el&&fold&&fold.contains(el)){{fold.open=true;el.scrollIntoView();}}}}window.addEventListener("hashchange",open);open();}})();</script>
 </section>"""
 
     body = f'<div class="lp">\n{hero_html}\n{proof_html}\n{modes_html}\n{how_html}\n{api_html}\n{life_html}\n{promises_html}\n{sources_html}\n</div>'
@@ -748,7 +816,7 @@ def home(types: list[TypeInfo], routines: list[RoutineInfo], examples: list[Exam
         title="sim2real · calibration for robot twins",
         description="Describe your robot in CAD and sim2real builds its twin, plans the calibration routines your bench can run, fits them "
                     "and scores the twin on runs it never saw.",
-        path="/", body=body, section="home", current="home", types=types, wide=True, **ctx,
+        path="/", body=body, section="home", current="home", types=types, wide=True, page_class="landing", **ctx,
     )  # fmt: skip
 
 

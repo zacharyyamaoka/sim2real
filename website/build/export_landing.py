@@ -303,10 +303,38 @@ def cut_media(sheets: Path) -> None:
         elif m.how == "loop":
             _ffmpeg("-i", str(source), "-an", "-vf", m.filter, "-c:v", "libwebp_anim", "-lossless", "0", "-q:v", str(m.quality),
                     "-compression_level", "6", "-loop", "0", str(target))
-            # one frame per second of what the loop shows, tiled: every second of the clip is looked at
-            _ffmpeg("-i", str(source), "-an", "-vf", f"{m.filter},fps=1,tile=2x5:padding=4", "-frames:v", "1",
+            # one frame per second of what the loop shows, tiled: every second of the clip is looked at. WHY the tile grows with the
+            # clip (review 2026-11-20 C10): a fixed 2x5 tile showed ten seconds of a longer loop while the record claimed them all
+            rows = max(1, math.ceil(frames_in(m) / 4))
+            _ffmpeg("-i", str(source), "-an", "-vf", f"{m.filter},fps=1,tile=4x{rows}:padding=4", "-frames:v", "1",
                     str(sheets / f"{m.mid}.png"))
         print(f"media  {m.mid}: {target.relative_to(REPO)} {target.stat().st_size / 1024:.0f} KiB; sheet in {sheets}")
+
+
+def _dims(path: Path) -> tuple[int, int]:
+    """An image's pixel size, read from its header (the page's <img> width/height, so nothing shifts as it loads). WHY not ffprobe:
+    ffmpeg cannot decode an animated WebP, and the hero loop is one."""
+    data = path.read_bytes()
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        chunk = data[12:16]
+        if chunk == b"VP8X":
+            return int.from_bytes(data[24:27], "little") + 1, int.from_bytes(data[27:30], "little") + 1
+        if chunk == b"VP8 ":
+            return int.from_bytes(data[26:28], "little") & 0x3FFF, int.from_bytes(data[28:30], "little") & 0x3FFF
+        if chunk == b"VP8L":
+            bits = int.from_bytes(data[21:25], "little")
+            return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+    if data[:2] == b"\xff\xd8":
+        i = 2
+        while i < len(data) - 9:
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker, size = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
+            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+            i += 2 + size
+    raise Refused(f"{path}: no width and height in its header")
 
 
 def frames_in(m: P.Media) -> int:
@@ -444,7 +472,9 @@ def export(*, frames_checked_by: str | None) -> dict:
                       "people": False, "serials": False, "burned_text": False}
         else:  # WHY: frames nobody looked at say so; the ruler fails them until someone does
             frames = {"frames": 0, "by": "", "utc": "", "people": None, "serials": None, "burned_text": None}
-        media[m.mid] = {"file": m.file, "sha256": digest, "bytes": len(data), "kind": "real", "what": m.what, "from": m.ref,
+        width, height = _dims(path)
+        media[m.mid] = {"file": m.file, "sha256": digest, "bytes": len(data), "width": width, "height": height, "kind": "real",
+                        "what": m.what, "from": m.ref,
                         "from_sha256": sha(local(m.ref).read_bytes()), "shown": shown_name(m.ref), "report": m.report,
                         "filter": m.filter or "none (copied)", "frames_checked": frames}
 

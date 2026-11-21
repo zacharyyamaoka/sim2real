@@ -82,11 +82,20 @@ table.example-out td:last-child { white-space: normal; min-width: 200px; }
 }
 :root[data-theme="dark"] { --amber: #fbbf24; --amber-bg: rgba(251, 191, 36, 0.09); --pseudo: #c4b5fd; --pseudo-bg: rgba(196, 181, 253, 0.09); }
 .lp { max-width: 1180px; }
-.lp code { overflow-wrap: anywhere; }
+/* WHY break-word, not anywhere (review 2026-11-20 D6): code broke mid-identifier (from_robot_desc|ription); calls carry <wbr> after
+   their dots and brackets instead, so they wrap where a reader would */
+.lp code { overflow-wrap: break-word; }
+/* WHY no docs sidebar on the landing at desktop width (review 2026-11-20 D8): it took a fifth of the width for a type filter the Types
+   page already has; it stays in the page (the drawer on a phone) */
+@media (min-width: 768px) {
+  body.docs.landing .shell { grid-template-columns: minmax(0, 1fr); }
+  body.docs.landing .sidebar { display: none; }
+  body.landing .main { max-width: 1180px; margin: 0 auto; width: 100%; }
+}
 .lp .v { white-space: nowrap; color: var(--fg); font-weight: 500; }
 .lp .v .n { font-family: var(--mono); font-size: 0.95em; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .lp .v .u { font-weight: 400; color: var(--fg2); }
-.lp .v .src { font: 400 10px var(--sans); color: var(--faint); text-decoration: none; vertical-align: 4px; margin-left: 1px; }
+.lp .v .src { font: 400 9.5px var(--sans); color: var(--faint); opacity: 0.7; text-decoration: none; vertical-align: 4px; margin-left: 1px; }
 .lp .v .src:hover { color: var(--accent); }
 .lp .name { white-space: nowrap; }
 .lp-sec { margin-top: var(--lp-gap); scroll-margin-top: calc(var(--header-h) + 16px); }
@@ -99,9 +108,14 @@ table.example-out td:last-child { white-space: normal; min-width: 200px; }
 .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywhere; }
 
 /* hero */
-.lp-hero { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(24px, 4vw, 48px); align-items: start; padding-top: 8px; }
-.lp-hero h1 { font-size: clamp(32px, 4.4vw, 50px); line-height: 1.06; letter-spacing: -0.035em; margin: 0 0 18px; font-weight: 600; }
+/* WHY the copy column is the wide one: the hero loop is a 360 px crop of a 640 px clip, so a narrow stage keeps it near its own size */
+.lp-hero { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr); gap: clamp(24px, 4vw, 48px); align-items: start; padding-top: 8px; }
+.lp-hero h1 { font-size: clamp(32px, 4.4vw, 50px); line-height: 1.06; letter-spacing: -0.035em; margin: 0 0 18px; font-weight: 600; text-wrap: balance; }
 .lp-hero .lead { font-size: 17px; color: var(--fg2); max-width: 60ch; }
+.robot-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; }
+.robot-pick { display: grid; gap: 5px; text-decoration: none; color: var(--fg2); font-size: 12.5px; line-height: 1.3; }
+.robot-pick img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--code-bg); }
+.robot-pick:hover .robot-pick-name { color: var(--accent); }
 .today { margin: 0 0 18px; padding: 10px 14px; border-left: 3px solid var(--amber); background: var(--amber-bg); border-radius: 0 8px 8px 0; color: var(--fg2); font-size: 14.5px; }
 .readout { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-soft); padding: 12px 16px; margin: 0 0 14px; }
 .readout-head { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
@@ -141,6 +155,12 @@ tr.robot-group th { background: var(--bg-soft); font-weight: 600 !important; fon
 td.cell { font-size: 13px; line-height: 1.5; }
 .num-line { margin: 0 0 3px; }
 .num-line .v { font-size: 14px; }
+.num-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-bottom: 6px; }
+.num-head .v .n { font-size: 19px; font-weight: 600; letter-spacing: -0.03em; }
+.num-head .v .u { font-size: 13px; }
+.num-head .gate { align-self: center; }
+.num-rest .num-line .v { font-size: 12.5px; font-weight: 400; }
+.num-rest .num-line { color: var(--muted); }
 .mw { color: var(--muted); font-size: 12px; }
 .gate-line { margin: 6px 0 8px; }
 .gate { display: inline-block; font: 600 11px/18px var(--sans); padding: 0 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -170,14 +190,14 @@ ul.notes[data-notes="recovery"] li { margin: 4px 0; }
 .mode h3 { margin: 0; font-size: 16px; line-height: 1.3; letter-spacing: -0.01em; }
 .mode-what { margin: 10px 0 4px; font-size: 13.5px; color: var(--fg2); line-height: 1.55; }
 .mode .code { margin: 8px 0 4px; }
-.mode .code.wrap pre { font-size: 12px; padding: 30px 14px 12px; word-break: normal; overflow-wrap: anywhere; }
+.mode .code.wrap pre { font-size: 12px; padding: 30px 14px 12px; white-space: pre-wrap; word-break: normal; overflow-wrap: normal; }
 .no-call { margin: 8px 0 4px; padding: 12px 14px; border: 1px dashed var(--amber); border-radius: 10px; color: var(--amber); font-size: 13px; background: var(--amber-bg); }
-.mode-robots { list-style: none; padding: 0; margin: auto 0 0; padding-top: 10px; display: grid; gap: 8px; }
+.mode-robots { list-style: none; padding: 0; margin: 0; padding-top: 10px; display: grid; gap: 8px; }
 .mode-robots li { font-size: 12.5px; line-height: 1.45; color: var(--fg2); }
 .mode-robots .who { font-weight: 600; color: var(--fg); }
 .mode-robots .why { display: block; margin-top: 2px; color: var(--muted); }
 table.recovery-proof thead th:first-child { width: 40%; }
-.robot-cell .call { display: block; font-size: 11.5px; color: var(--fg2); margin: 2px 0 6px; overflow-wrap: anywhere; }
+.robot-cell .call { display: block; font-size: 11.5px; color: var(--fg2); margin: 2px 0 6px; overflow-wrap: normal; }
 .robot-cell .measure { margin: 0 0 6px; font-size: 12.5px; color: var(--fg2); line-height: 1.5; }
 .rec-meta { margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
 .rec-meta code { font-size: 11px; overflow-wrap: anywhere; }
@@ -195,6 +215,13 @@ table.recovery-proof td.cell .v { font-size: 15px; }
 .seam-badge-bg { fill: var(--bg); stroke: var(--amber); stroke-width: 1; }
 .seam-badge { font: 600 10px var(--sans); fill: var(--amber); }
 .seam-arrow { fill: none; stroke: var(--faint); stroke-width: 1.5; }
+.seam-list { display: none; list-style: none; margin: 0; padding: 0; counter-reset: seam; }
+.seam-li { counter-increment: seam; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-soft); margin: 0 0 8px; }
+.seam-li a { display: block; padding: 10px 14px 10px 44px; position: relative; text-decoration: none; color: var(--fg); }
+.seam-li a::before { content: counter(seam); position: absolute; left: 12px; top: 10px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); font: 600 12px var(--mono); }
+.seam-li-code { display: block; font: 400 12.5px var(--mono); color: var(--fg2); margin-top: 2px; }
+.seam-li-amber { border-style: dashed; border-color: var(--amber); background: var(--amber-bg); }
+.seam-li .badge { margin-left: 6px; font-size: 11px; }
 .seam-head { fill: var(--faint); }
 
 /* the API */
@@ -209,6 +236,7 @@ table.recovery-proof td.cell .v { font-size: 15px; }
 .badge.designed { color: var(--amber); border-color: var(--amber); border-style: dashed; vertical-align: 3px; }
 .lead-sm { margin: 0 0 12px; color: var(--fg2); font-size: 15px; max-width: 75ch; }
 .loop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 16px; }
+.loop-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .loop-step { font: 500 12.5px var(--mono); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--bg); }
 .loop-arrow { color: var(--faint); }
 .life-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; }
@@ -236,6 +264,9 @@ table.recovery-proof td.cell .v { font-size: 15px; }
 .flag { font: 500 11px var(--mono); color: var(--amber); }
 .flag.bad { color: var(--fail); }
 .media-list { list-style: disc; }
+.src-fold { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; background: var(--bg-soft); }
+.src-fold > summary { cursor: pointer; font-weight: 500; font-size: 14px; }
+.src-fold[open] > summary { margin-bottom: 10px; }
 
 @media (max-width: 960px) {
   .lp-hero { grid-template-columns: minmax(0, 1fr); }
@@ -246,7 +277,12 @@ table.recovery-proof td.cell .v { font-size: 15px; }
 @media (max-width: 640px) {
   .lp-hero h1 { font-size: 30px; }
   .note-group { grid-template-columns: minmax(0, 1fr); }
-  .seam-wrap { padding: 10px; }
+  .seam-wrap { display: none; }
+  .metric-defs { gap: 8px; }
+  .mdef { padding: 10px 12px; }
+  .mdef dd { font-size: 13px; }
+  .seam-list { display: block; }
+  .robot-strip { gap: 8px; }
   .deployed { padding: 16px; }
   .readout { padding: 10px 12px; }
   /* the two tables stack into one card per row; each cell shows its column's title (data-head), so nothing scrolls sideways */
@@ -258,5 +294,5 @@ table.recovery-proof td.cell .v { font-size: 15px; }
   table.proof tr[data-row], table.recovery-proof tr[data-row] { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
   table.proof td.cell, table.recovery-proof td.cell { border-bottom: 0; padding-top: 6px; padding-bottom: 6px; }
   td.cell[data-head]::before { content: attr(data-head); display: block; font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }
-  .row-shot img, .row-shot figcaption { max-width: 100%; }
+  .row-shot img, .row-shot figcaption { max-width: 220px; }
 }

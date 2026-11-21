@@ -1,21 +1,21 @@
 {
  "schema": "sim2real.landing/1",
- "exported_utc": "2026-11-21T03:44:33Z",
+ "exported_utc": "2026-11-21T04:41:37Z",
  "exporter": "website/build/export_landing.py",
- "sim2real_commit": "5b42714c80651a05561204e1377ad176d8d3bc41",
+ "sim2real_commit": "40e1cd89e75654214286bed5ae4b666b3e3773ca",
  "gate": "gate.tool_mm",
  "metrics": {
   "sim": {
    "title": "Sim",
-   "definition": "The controller that ships, played on the robot's fitted twin over the same target. It is what the robot should do."
+   "definition": "The controller that ships, played on the robot's fitted twin over the row's target. It is what the robot should do."
   },
   "on_real": {
    "title": "Sim on Real",
-   "definition": "The same target on the robot as found: the controller it had before this calibration and tuning (its board gains and any feed-forward it already carried), with nothing newly fitted. On a pseudo-real row the robot is a hidden simulated world."
+   "definition": "The row's target on the robot as found: the controller it had before this calibration and tuning (its board gains and any feed-forward it already carried), with nothing newly fitted. On a pseudo-real row the robot is a hidden simulated world."
   },
   "tuned": {
    "title": "Sim on Real (tuned)",
-   "definition": "The same target on the robot after fitting and tuning: feed-forward from the fitted values and retuned PD gains. On a real robot that means PD and feed-forward only, never an integrator; a pseudo-real row names any integral term its controller has."
+   "definition": "The row's target on the robot after fitting and tuning: feed-forward from the fitted values and retuned PD gains. Every real tuned run shown ran PD and feed-forward only; a pseudo-real row names any integral term its controller has."
   }
  },
  "sources": {
@@ -23,7 +23,7 @@
    "in_repo": false,
    "from": "lab:onedof_2026-11-15/scorecards/round0_measured.json",
    "snapshot": "snap:2026-11-20/pendulum-r0.json",
-   "shown": "lab archive: onedof_2026-11-15/scorecards/round0_measured.json",
+   "shown": "lab recordings: onedof_2026-11-15/scorecards/round0_measured.json",
    "what": "1-DOF campaign scorecard, round 0 (the board as found)",
    "kind": "mixed",
    "kind_by_key": {
@@ -43,7 +43,7 @@
    "in_repo": false,
    "from": "lab:onedof_2026-11-15/scorecards/round9.json",
    "snapshot": "snap:2026-11-20/pendulum-r9.json",
-   "shown": "lab archive: onedof_2026-11-15/scorecards/round9.json",
+   "shown": "lab recordings: onedof_2026-11-15/scorecards/round9.json",
    "what": "1-DOF campaign scorecard, round 9 (tuned)",
    "kind": "mixed",
    "kind_by_key": {
@@ -103,7 +103,7 @@
    "in_repo": false,
    "from": "lab:rack_2026-11-10/ur_wrist/gates/gate3_baseline_heldout.json",
    "snapshot": "snap:2026-11-20/urwrist-asfound.json",
-   "shown": "lab archive: rack_2026-11-10/ur_wrist/gates/gate3_baseline_heldout.json",
+   "shown": "lab recordings: rack_2026-11-10/ur_wrist/gates/gate3_baseline_heldout.json",
    "what": "UR wrist gate 3, held-out tape, the controller as found",
    "kind": "real",
    "moving": false,
@@ -116,7 +116,7 @@
    "in_repo": false,
    "from": "lab:rack_2026-11-10/ur_wrist/gates/gate3_kphold_heldout.json",
    "snapshot": "snap:2026-11-20/urwrist-tuned.json",
-   "shown": "lab archive: rack_2026-11-10/ur_wrist/gates/gate3_kphold_heldout.json",
+   "shown": "lab recordings: rack_2026-11-10/ur_wrist/gates/gate3_kphold_heldout.json",
    "what": "UR wrist gate 3, held-out tape, hold gain retuned",
    "kind": "real",
    "moving": false,
@@ -129,7 +129,7 @@
    "in_repo": false,
    "from": "lab:rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout-407e3359_1112/session.json",
    "snapshot": "snap:2026-11-20/urwrist-asfound-session.json",
-   "shown": "lab archive: rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout-407e3359_1112/session.json",
+   "shown": "lab recordings: rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout-407e3359_1112/session.json",
    "what": "UR wrist held-out session plan, as found (its feed-forward)",
    "kind": "setting",
    "moving": false,
@@ -142,7 +142,7 @@
    "in_repo": false,
    "from": "lab:rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout_kphold_1112/session.json",
    "snapshot": "snap:2026-11-20/urwrist-tuned-session.json",
-   "shown": "lab archive: rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout_kphold_1112/session.json",
+   "shown": "lab recordings: rack_2026-11-10/ur_wrist/coverage/real/multi3_pick/multi3_shuffle_heldout_kphold_1112/session.json",
    "what": "UR wrist held-out session plan, tuned (its hold gains)",
    "kind": "setting",
    "moving": false,
@@ -183,7 +183,7 @@
    "in_repo": false,
    "from": "rackq:1117-034942-537b/runs/real_20261117_105019/score_real.json",
    "snapshot": "snap:2026-11-20/bamarm-sweep.json",
-   "shown": "rack submissions: 1117-034942-537b/runs/real_20261117_105019/score_real.json",
+   "shown": "arm job records: 1117-034942-537b/runs/real_20261117_105019/score_real.json",
    "what": "PID tuna workspace sweep on the BAM arm: every stop scored",
    "kind": "real",
    "moving": false,
@@ -912,7 +912,25 @@
    "measure": "stops",
    "kind": "real"
   },
-  "urwrist.on_real.coulomb_ff": {
+  "urwrist.on_real.coulomb_ff_can14": {
+   "source": "urwrist-asfound-session",
+   "key": [
+    "plan",
+    "steps",
+    0,
+    "ff_coulomb_nm",
+    "14"
+   ],
+   "derive": null,
+   "value": 0.0413,
+   "unit": "N.m",
+   "display_unit": "N·m",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "feedforward",
+   "kind": "setting"
+  },
+  "urwrist.on_real.coulomb_ff_can15": {
    "source": "urwrist-asfound-session",
    "key": [
     "plan",
@@ -923,6 +941,24 @@
    ],
    "derive": null,
    "value": 0.0657,
+   "unit": "N.m",
+   "display_unit": "N·m",
+   "scale": 1.0,
+   "digits": 3,
+   "measure": "feedforward",
+   "kind": "setting"
+  },
+  "urwrist.on_real.coulomb_ff_can16": {
+   "source": "urwrist-asfound-session",
+   "key": [
+    "plan",
+    "steps",
+    0,
+    "ff_coulomb_nm",
+    "16"
+   ],
+   "derive": null,
+   "value": 0.0611,
    "unit": "N.m",
    "display_unit": "N·m",
    "scale": 1.0,
@@ -1801,19 +1837,21 @@
  "media": {
   "pendulum-can11-loop": {
    "file": "media/pendulum-can11.webp",
-   "sha256": "b150533f8dcfcf74091846a25e71a29eba3b922be883bf90a03367284886e647",
-   "bytes": 194462,
+   "sha256": "89fbc8209a40c5893c1649853e2a733418e701dadb9071d8f7f69d82b6d29a56",
+   "bytes": 325820,
+   "width": 360,
+   "height": 240,
    "kind": "real",
-   "what": "The {=CAN 11} pendulum on its tuned controller, speed rising rung by rung (real, one-to-one time). The numbers beside it are its twin's calibration against a hidden world.",
+   "what": "The {=1-DOF} pendulum on its tuned controller, speed rising rung by rung (real, one-to-one time). The numbers beside it are its twin's calibration against a hidden world.",
    "from": "bamws:reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
    "from_sha256": "d7642f5a82ca4b9d3558cf264983e8b18436d3ed1d429c43809a983134eeae4c",
    "shown": "bam_ws: reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
    "report": "bamws:reports/onedof-pendulum-2026-11-15.html",
-   "filter": "trim=0:10,crop=640:240:0:104,fps=12",
+   "filter": "trim=0:25.8,crop=360:240:280:104,fps=10",
    "frames_checked": {
-    "frames": 10,
-    "by": "Claude Opus 5.5 (claude-opus-5-5), landing builder",
-    "utc": "2026-11-21T03:30:35Z",
+    "frames": 26,
+    "by": "Claude Opus 5.5 (claude-opus-5-5), landing fix round",
+    "utc": "2026-11-21T04:39:00Z",
     "people": false,
     "serials": false,
     "burned_text": false
@@ -1821,19 +1859,21 @@
   },
   "pendulum-can11-still": {
    "file": "media/pendulum-can11.jpg",
-   "sha256": "0f637aab2349702ea3648ac14db45f0c4a2f070e2b9cec50b2f673ce66eda1dd",
-   "bytes": 18213,
+   "sha256": "4956192177e7be4bec9c057fb8cd6349e578d113acbfb6ab91802829b49ab43f",
+   "bytes": 10386,
+   "width": 360,
+   "height": 240,
    "kind": "real",
-   "what": "The {=CAN 11} pendulum on the bench (real).",
+   "what": "The {=1-DOF} pendulum on the bench (real).",
    "from": "bamws:reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
    "from_sha256": "d7642f5a82ca4b9d3558cf264983e8b18436d3ed1d429c43809a983134eeae4c",
    "shown": "bam_ws: reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
    "report": "bamws:reports/onedof-pendulum-2026-11-15.html",
-   "filter": "crop=640:240:0:104",
+   "filter": "crop=360:240:280:104",
    "frames_checked": {
     "frames": 1,
-    "by": "Claude Opus 5.5 (claude-opus-5-5), landing builder",
-    "utc": "2026-11-21T03:30:35Z",
+    "by": "Claude Opus 5.5 (claude-opus-5-5), landing fix round",
+    "utc": "2026-11-21T04:39:00Z",
     "people": false,
     "serials": false,
     "burned_text": false
@@ -1843,6 +1883,8 @@
    "file": "media/ur-wrist-rig.jpg",
    "sha256": "9bb5a2604d98a4245aa6c6ae962bb84217b3e6941e6e09bb960e3979b3eb3c31",
    "bytes": 72368,
+   "width": 960,
+   "height": 540,
    "kind": "real",
    "what": "The UR wrist test rig on the bench (real).",
    "from": "bamws:reports/media/ur-wrist-sim2real-2026-11-12/poster.jpg",
@@ -1863,6 +1905,8 @@
    "file": "media/bam-arm-tuned.jpg",
    "sha256": "aed2c68f29931b481111090f264fdf4001e3603a6663e060a540010410ab5f6f",
    "bytes": 57091,
+   "width": 960,
+   "height": 540,
    "kind": "real",
    "what": "The BAM arm during the tuned run in its row (real).",
    "from": "amb:reports/media/bam_fb_real/dev000_v2_rung_0.5_modelff_la_restload_kp2_1120-191453-1e54.mp4",
@@ -1884,10 +1928,10 @@
   "eyebrow": "sim2real · calibration for robot twins",
   "h1": "Describe your robot in CAD. The calibration comes with it.",
   "lead": "Every part in a robot description has a known type: a servo, a gearbox, a camera. Each type knows the models that describe it and the routines that measure them, so the description is enough: sim2real builds the twin, plans the routines your bench can run, fits them, and scores the twin on runs it never saw.",
-  "today": "Today that holds for the {=CAN 11} pendulum's description, and for the UR wrist rig's CAD bundle through a test-only reader. The BAM arm's description is refused until its servos are typed parts: that is the next leg.",
+  "today": "Today that holds for the bench pendulum's description, and for the UR wrist rig's CAD bundle through a test-only reader. The BAM arm's description is not accepted yet: its servos are not typed parts.",
   "lines": [
-   "{=CAN 11} pendulum: {rec.pendulum.recovered} of {rec.pendulum.graded} hidden values recovered; held-out error {rec.pendulum.nominal} with the description's values, {rec.pendulum.fitted} fitted.",
-   "UR wrist rig: {rec.urwrist.recovered} of {rec.urwrist.graded} recovered; p95 tool error at stops {rec.urwrist.nominal} with the description's values, {rec.urwrist.fitted} fitted."
+   "{=1-DOF} pendulum: {rec.pendulum.recovered} of {rec.pendulum.graded} hidden values recovered. Held-out error in multiples of the run-to-run floor: {rec.pendulum.nominal} with the description's values, {rec.pendulum.fitted} after fitting.",
+   "UR wrist rig: {rec.urwrist.recovered} of {rec.urwrist.graded} graded values recovered, {rec.urwrist.not_identified} more not identified. Tool error at stops on held-out runs (p95): {rec.urwrist.nominal} with the description's values, {rec.urwrist.fitted} after fitting."
   ],
   "media": "pendulum-can11-loop"
  },
@@ -1899,10 +1943,10 @@
     {
      "id": "pendulum-real",
      "where": "real",
-     "title": "{=1-DOF} pendulum, {=CAN 11}",
+     "title": "{=1-DOF} pendulum on the bench",
      "link": "/examples/pendulum_can11/",
      "media": "pendulum-can11-still",
-     "target": "Swings to a commanded peak of {pendulum.target.peak_speed}; worst stop at the tip, stops played, joint tracking RMS.",
+     "target": "Swings to a commanded peak speed of {pendulum.target.peak_speed}; worst tool error at a stop, stops played, joint tracking RMS. The rounds are matched by peak speed only: the notes say what differs.",
      "cells": {
       "sim": {
        "values": [
@@ -1948,9 +1992,9 @@
       ]
      ],
      "notes": [
-      "Both rounds were commanded to the same peak speed ({pendulum.on_real.peak_speed} as found), but the as-found plays swing to an amplitude of {pendulum.on_real.amplitude} and the tuned ones to {pendulum.tuned.amplitude}.",
-      "Twin against robot on the same tuned runs: {pendulum.fidelity.sim_vs_real}, against a run-to-run floor of {pendulum.fidelity.floor}. The as-found round's floor was not measured: it ran fewer repeats than planned.",
-      "Scored by bam_rack_twin's pendulum scorer on the {=1-DOF} campaign branch, which is not merged yet."
+      "The two rounds share only their commanded peak speed ({pendulum.on_real.peak_speed} as found). The as-found plays swing to {pendulum.on_real.amplitude} and stop {pendulum.on_real.stops} times; the tuned ones swing to {pendulum.tuned.amplitude} and stop {pendulum.tuned.stops} times.",
+      "Twin against robot on the same tuned runs: {pendulum.fidelity.sim_vs_real}, against a run-to-run floor of {pendulum.fidelity.floor}. The as-found round's floor was not measured: its scorer found no pair of repeat runs with the same input on the tick clock (each candidate pair was rejected for its length).",
+      "Scored by bam_rack_twin's pendulum scorer, on a branch that is not merged yet."
      ]
     }
    ]
@@ -1964,7 +2008,7 @@
      "where": "pseudo-real",
      "title": "UR5e, in simulation",
      "link": "#recovery-ur5e-oracle",
-     "target": "The held-out workspace tasks at full speed in MuJoCo, where the arm has joint friction its controller's model lacks and inertia it gets wrong; medians over {ur5e.tasks} tasks of TCP tracking RMS and of each task's worst stop, and the share of tasks with every stop within the gate.",
+     "target": "The held-out workspace tasks at full speed in MuJoCo, where the arm has joint friction its controller's model lacks and inertia it gets wrong. The share of runs (every repeat counts) with every stop within the gate, then medians over {ur5e.tasks} tasks of each task's worst stop and of TCP tracking RMS. No joint error is recorded for this row.",
      "cells": {
       "sim": {
        "status": "not_measured",
@@ -1972,9 +2016,9 @@
       },
       "on_real": {
        "values": [
-        "ur5e.on_real.tcp_rms",
+        "ur5e.on_real.stop_pass_rate",
         "ur5e.on_real.stop_task_worst",
-        "ur5e.on_real.stop_pass_rate"
+        "ur5e.on_real.tcp_rms"
        ],
        "gate": "ur5e.on_real.stop_pass_rate",
        "controller": {
@@ -1987,9 +2031,9 @@
       },
       "tuned": {
        "values": [
-        "ur5e.tuned.tcp_rms",
+        "ur5e.tuned.stop_pass_rate",
         "ur5e.tuned.stop_task_worst",
-        "ur5e.tuned.stop_pass_rate"
+        "ur5e.tuned.tcp_rms"
        ],
        "gate": "ur5e.tuned.stop_pass_rate",
        "controller": {
@@ -2012,7 +2056,7 @@
      "title": "UR wrist test rig",
      "link": "/examples/ur_wrist_test_rig/",
      "media": "ur-wrist-rig",
-     "target": "Three wrist joints returning to the park pose {urwrist.tuned.stops} times on a held-out tape; worst and median tool stop, and the stops within the gate.",
+     "target": "Three wrist joints returning to the park pose {urwrist.tuned.stops} times on a held-out tape; worst and median tool error at a stop, and the stops within the gate. No joint error is recorded for this row.",
      "cells": {
       "sim": {
        "status": "not_measured",
@@ -2027,7 +2071,7 @@
        ],
        "gate": "urwrist.on_real.stop_worst",
        "controller": {
-        "words": "the it5 fit's gains with Coulomb feed-forward",
+        "words": "gains and Coulomb feed-forward from an earlier fit of this rig",
         "label": "urwrist.on_real.run"
        }
       },
@@ -2040,7 +2084,7 @@
        ],
        "gate": "urwrist.tuned.stop_worst",
        "controller": {
-        "words": "the same, with the hold gain on {=CAN 15} at {urwrist.tuned.kp_hold}",
+        "words": "the same, with one joint's hold gain at {urwrist.tuned.kp_hold}",
         "label": "urwrist.tuned.run"
        }
       }
@@ -2052,7 +2096,7 @@
       ]
      ],
      "notes": [
-      "Every stop here is a return to the park pose. The as-found controller already carried a Coulomb feed-forward of {urwrist.on_real.coulomb_ff} on {=CAN 15} from an earlier fit; tuning changed only that joint's hold gain.",
+      "Every stop here is a return to the park pose. The as-found controller was already the product of an earlier fit: its gains, and a Coulomb feed-forward on all three joints ({urwrist.on_real.coulomb_ff_can14}, {urwrist.on_real.coulomb_ff_can15} and {urwrist.on_real.coulomb_ff_can16}). Tuning changed only one joint's hold gain.",
       "Retired after this campaign; its design is now the BAM arm's wrist."
      ]
     }
@@ -2068,7 +2112,7 @@
      "title": "BAM arm (five-bar, UR wrist, claw)",
      "link": "#recovery-bamarm-oracle",
      "media": "bam-arm-tuned",
-     "target": "The development workspace tape at {bamarm.target.speed} of full speed; TCP tracking RMS, median stop error, worst-joint tracking RMS.",
+     "target": "The development workspace tape at {bamarm.target.speed} of full speed; median tool error at a stop (the only stop number this file records per run), TCP tracking RMS, worst-joint tracking RMS.",
      "cells": {
       "sim": {
        "status": "not_measured",
@@ -2076,8 +2120,8 @@
       },
       "on_real": {
        "values": [
-        "bamarm.on_real.tcp_rms",
         "bamarm.on_real.stop_median",
+        "bamarm.on_real.tcp_rms",
         "bamarm.on_real.joint_rms"
        ],
        "gate": "bamarm.on_real.stop_median",
@@ -2088,13 +2132,13 @@
       },
       "tuned": {
        "values": [
-        "bamarm.tuned.tcp_rms",
         "bamarm.tuned.stop_median",
+        "bamarm.tuned.tcp_rms",
         "bamarm.tuned.joint_rms"
        ],
        "gate": "bamarm.tuned.stop_median",
        "controller": {
-        "words": "model feed-forward with lookahead, the measured static load held at rest, and a stiffer hold",
+        "words": "model feed-forward with lookahead, the measured static load held at rest, and a stiffer hold; the boards' integral gain at zero",
         "label": "bamarm.tuned.layout"
        }
       }
@@ -2106,10 +2150,11 @@
       ]
      ],
      "notes": [
-      "Picked by a stated rule, not by hand: the newest run at this speed with model feed-forward and no integrator. It was tuned on this same tape: the static load came from earlier runs of it.",
+      "Picked by a stated rule, not by hand: the newest run at this speed with model feed-forward and no integrator. It was tuned on this same tape: the static load it holds at rest was measured on earlier runs of it.",
+      "The tuned run shown ran PD and feed-forward only: its notes say the boards ran with integral gain zero. One run in the same file added a rest integrator; it is left out under that rule, but it is one of the earlier runs the static load was measured on.",
       "The twin's nearest run (the same feed-forward and stiffer hold, without the static load): {bamarm.twin_nearest.tcp_rms} tracking, {bamarm.twin_nearest.stop_median} median stop ({gate:bamarm.twin_nearest.stop_median}).",
       "This file records only each run's median stop. PID tuna's workspace sweep, a different target, records every stop: worst {bamarm.sweep.stop_worst} over {bamarm.sweep.stops} stops ({gate:bamarm.sweep.stop_worst}).",
-      "Written by a live lane; the page cites a frozen snapshot. The rest-integrator run in the same file is left out: the real arm runs PD and feed-forward only."
+      "A running job still adds rows to this file; the page cites a frozen copy of it."
      ]
     }
    ]
@@ -2119,7 +2164,7 @@
   {
    "id": "pendulum-oracle",
    "robot": "pendulum",
-   "title": "{=CAN 11} pendulum",
+   "title": "{=1-DOF} pendulum",
    "via": "sim2real.examples.pendulum_can11().calibrate(on=\"sim\")",
    "measure": "link angle, twin against the hidden world on held-out runs, in multiples of the run-to-run floor",
    "recorded": {
@@ -2150,7 +2195,7 @@
     }
    },
    "notes": [
-    "Recorded before the pendulum's schedule changed: today it runs `servo.dynamics_regression` and `servo.backlash_reversals_camera`. A re-record on the current schedule is the next leg."
+    "Recorded before the pendulum's schedule changed: today it runs `servo.backlash_reversals_camera`, then `servo.dynamics_regression`. A re-record on the current schedule is still to do."
    ]
   },
   {
@@ -2167,7 +2212,8 @@
     "recovered": {
      "values": [
       "rec.urwrist.recovered",
-      "rec.urwrist.graded"
+      "rec.urwrist.graded",
+      "rec.urwrist.not_identified"
      ]
     },
     "nominal": {
@@ -2233,19 +2279,19 @@
    "cells": {
     "recovered": {
      "status": "not_built",
-     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+     "why": "no hidden-truth world or RobotTwin for the BAM arm yet."
     },
     "nominal": {
      "status": "not_built",
-     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+     "why": "needs that world."
     },
     "fitted": {
      "status": "not_built",
-     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+     "why": "needs that world."
     },
     "floor": {
      "status": "not_built",
-     "why": "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
+     "why": "needs repeat runs on that world."
     }
    },
    "notes": []
@@ -2255,12 +2301,12 @@
   {
    "n": 1,
    "title": "Start in sim at the right values and see the performance",
-   "what": "Not a sim2real call yet, on any robot. The Sim column above was played by each robot's own campaign twin. The missing verb: play a target on the twin under the controller you ship, and score it with the robot's own ruler.",
+   "what": "Not a sim2real call yet, on any robot. The Sim column above was played by each robot's own lab twin. The missing verb: play a target on the twin under the controller you ship, and score it with the robot's own ruler.",
    "call": null,
    "robots": {
     "pendulum": {
      "status": "not_built",
-     "why": "`simulate()` plays a free release, not a target; the campaign's scorer plays targets on its own twin."
+     "why": "`simulate()` plays a free release, not a target; the lab's scorer plays targets on its own twin."
     },
     "ur_arm": {
      "status": "not_built",
@@ -2330,11 +2376,11 @@
    },
    {
     "href": "/routines/servo.gap_check_forecast/",
-    "text": "A gap check every {life.wear.check_every_h} with a wear forecast. In a sim study on the pendulum_can11 hidden world the fidelity ratio warned at {life.wear.ratio_alarm_h} and the gap check alone at {life.wear.gap_alarm_h}; the hidden wear crossed its allowance at {life.wear.crossing_h}. At {life.wear.predicted_at_h} the forecast named {life.wear.predicted_crossing_h}, with plan-by {life.wear.plan_by_h}."
+    "text": "A gap check every {life.wear.check_every_h} with a wear forecast. In a sim study on the pendulum's hidden world the fidelity ratio warned at {life.wear.ratio_alarm_h} and the gap check alone at {life.wear.gap_alarm_h}; the hidden wear crossed its allowance at {life.wear.crossing_h}. At {life.wear.predicted_at_h} the forecast named {life.wear.predicted_crossing_h}, with plan-by {life.wear.plan_by_h}."
    },
    {
     "href": "/routines/camera.pose_recal_belt_tags/",
-    "text": "Camera pose refit from belt tags. In the dual_arm_cell sim study a camera knocked at {life.camera.knock_h} was flagged at {life.camera.alarm_h}."
+    "text": "Camera pose refit from belt tags. In a sim study of a two-arm cell, a camera knocked at {life.camera.knock_h} was flagged at {life.camera.alarm_h}."
    },
    {
     "href": "/routines/cell.tags_bundle_adjustment/",
@@ -2342,7 +2388,7 @@
    },
    {
     "href": "/api/#api-Budget",
-    "text": "`Budget(settings=(\"deployed\",))` plans only what runs on a robot at work, and `calibrate(data=…)` refits on runs the twin already holds."
+    "text": "`Budget(settings=(\"deployed\",))` plans the routines that run on a robot at work plus those that run anywhere, and `calibrate(data=…)` refits on runs the twin already holds."
    },
    {
     "href": "/api/#api-Ledger",

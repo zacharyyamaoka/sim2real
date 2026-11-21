@@ -27,7 +27,8 @@ ROOTS = {
     "rackq": "/home/bam/.local/state/rack/submissions",
     "bamws": "/home/bam/bam_ws",
 }
-ROOT_WORDS = {"lab": "lab archive", "amb": "arm_motion_bench", "rackq": "rack submissions", "bamws": "bam_ws", "": "sim2real"}
+# WHY plain words (review 2026-11-20 B5): "lab archive" and "rack submissions" read as process words on a public page
+ROOT_WORDS = {"lab": "lab recordings", "amb": "arm_motion_bench", "rackq": "arm job records", "bamws": "bam_ws", "": "sim2real"}
 
 
 # ---------------------------------------------------------------------------------------------------------------- the shapes
@@ -242,7 +243,12 @@ VALUES = (
     Value("urwrist.tuned.stop_median", "urwrist-tuned", TUNED_RUN + ("tool_mm_median_of_stops",), "mm", "mm", 2, "stop_median"),
     Value("urwrist.tuned.within", "urwrist-tuned", TUNED_RUN + ("within_1mm",), "", "", 0, "within_gate"),
     Value("urwrist.tuned.stops", "urwrist-tuned", TUNED_RUN + ("stops",), "", "", 0, "stops"),
-    Value("urwrist.on_real.coulomb_ff", "urwrist-asfound-session", ("plan", "steps", 0, "ff_coulomb_nm", "15"), "N.m", "N·m", 3,
+    # WHY all three joints (review 2026-11-20 C6): the as-found plan carries a Coulomb feed-forward on every wrist joint, not one
+    Value("urwrist.on_real.coulomb_ff_can14", "urwrist-asfound-session", ("plan", "steps", 0, "ff_coulomb_nm", "14"), "N.m", "N·m", 3,
+          "feedforward"),
+    Value("urwrist.on_real.coulomb_ff_can15", "urwrist-asfound-session", ("plan", "steps", 0, "ff_coulomb_nm", "15"), "N.m", "N·m", 3,
+          "feedforward"),
+    Value("urwrist.on_real.coulomb_ff_can16", "urwrist-asfound-session", ("plan", "steps", 0, "ff_coulomb_nm", "16"), "N.m", "N·m", 3,
           "feedforward"),
     Value("urwrist.tuned.kp_hold", "urwrist-tuned-session", ("plan", "steps", 0, "kp_scale_hold", "15"), "x", "×", 0, "gain_scale"),
     # the BAM arm (arm_motion_bench's real climb stores display units)
@@ -317,22 +323,29 @@ GATE = "gate.tool_mm"
 
 # WHY these titles: Zach's own words (Daily Note 2026-11-20); "as found" lives in the definition
 METRICS = (
-    ("sim", "Sim", "The controller that ships, played on the robot's fitted twin over the same target. It is what the robot should do."),
-    ("on_real", "Sim on Real", "The same target on the robot as found: the controller it had before this calibration and tuning (its board "
+    # WHY "the row's target", not "the same target" (review 2026-11-20 C4): each row says how its cells were matched, and its notes say
+    # what still differs (the pendulum's rounds share their peak speed, not their swing)
+    ("sim", "Sim", "The controller that ships, played on the robot's fitted twin over the row's target. It is what the robot should do."),
+    ("on_real", "Sim on Real", "The row's target on the robot as found: the controller it had before this calibration and tuning (its board "
                                "gains and any feed-forward it already carried), with nothing newly fitted. On a pseudo-real row the robot is a "
                                "hidden simulated world."),
-    ("tuned", "Sim on Real (tuned)", "The same target on the robot after fitting and tuning: feed-forward from the fitted values and retuned "
-                                     "PD gains. On a real robot that means PD and feed-forward only, never an integrator; a pseudo-real row "
-                                     "names any integral term its controller has."),
+    # WHY no "never an integrator" (review 2026-11-20 C1): one real BAM arm run in a cited file had a rest integrator; what holds is the
+    # rows shown, and what sim2real ships (preflight refuses an integrator)
+    ("tuned", "Sim on Real (tuned)", "The row's target on the robot after fitting and tuning: feed-forward from the fitted values and retuned "
+                                     "PD gains. Every real tuned run shown ran PD and feed-forward only; a pseudo-real row names any integral "
+                                     "term its controller has."),
 )
 
 
 # ---------------------------------------------------------------------------------------------------------------- the three robots
 
+# WHY each cell leads with the number its gate chip judges (review 2026-11-20 D1): the page shows that one large and the rest small, so a
+# row reads at a glance; the ruler pins the order of a cell's numbers to this tuple.
 ROBOTS = (
     Robot("pendulum", "The {=1-DOF} pendulum", (
-        Row("pendulum-real", "real", "{=1-DOF} pendulum, {=CAN 11}", "/examples/pendulum_can11/",
-            "Swings to a commanded peak of {pendulum.target.peak_speed}; worst stop at the tip, stops played, joint tracking RMS.",
+        Row("pendulum-real", "real", "{=1-DOF} pendulum on the bench", "/examples/pendulum_can11/",
+            "Swings to a commanded peak speed of {pendulum.target.peak_speed}; worst tool error at a stop, stops played, joint tracking "
+            "RMS. The rounds are matched by peak speed only: the notes say what differs.",
             {
                 "sim": Cell(("pendulum.sim.stop_worst", "pendulum.sim.stops", "pendulum.sim.joint_rms"), "pendulum.sim.stop_worst",
                             "the fitted twin under the tuned controller", "pendulum.sim.twin"),
@@ -343,26 +356,31 @@ ROBOTS = (
             },
             same=(("pendulum.target.peak_speed", "pendulum.on_real.peak_speed"),),
             notes=(
-                "Both rounds were commanded to the same peak speed ({pendulum.on_real.peak_speed} as found), but the as-found plays swing to "
-                "an amplitude of {pendulum.on_real.amplitude} and the tuned ones to {pendulum.tuned.amplitude}.",
+                # WHY both differences named (review 2026-11-20 C4): the amplitude and the stop count differ, not only the amplitude
+                "The two rounds share only their commanded peak speed ({pendulum.on_real.peak_speed} as found). The as-found plays swing to "
+                "{pendulum.on_real.amplitude} and stop {pendulum.on_real.stops} times; the tuned ones swing to {pendulum.tuned.amplitude} "
+                "and stop {pendulum.tuned.stops} times.",
+                # WHY this reason (review 2026-11-20 C2): round 0 ran the three repeats it planned; its scorer's own why_unknown says no
+                # same-input pair survived, each rejected for its length
                 "Twin against robot on the same tuned runs: {pendulum.fidelity.sim_vs_real}, against a run-to-run floor of "
-                "{pendulum.fidelity.floor}. The as-found round's floor was not measured: it ran fewer repeats than planned.",
-                "Scored by bam_rack_twin's pendulum scorer on the {=1-DOF} campaign branch, which is not merged yet.",
+                "{pendulum.fidelity.floor}. The as-found round's floor was not measured: its scorer found no pair of repeat runs with the "
+                "same input on the tick clock (each candidate pair was rejected for its length).",
+                "Scored by bam_rack_twin's pendulum scorer, on a branch that is not merged yet.",
             ),
             media="pendulum-can11-still"),
     )),
     Robot("ur_arm", "The UR arm", (
         Row("ur5e-pseudo", "pseudo-real", "UR5e, in simulation", "#recovery-ur5e-oracle",
             "The held-out workspace tasks at full speed in MuJoCo, where the arm has joint friction its controller's model lacks and inertia "
-            "it gets wrong; medians over {ur5e.tasks} tasks of TCP tracking RMS and of each task's worst stop, and the share of tasks with "
-            "every stop within the gate.",
+            "it gets wrong. The share of runs (every repeat counts) with every stop within the gate, then medians over {ur5e.tasks} tasks "
+            "of each task's worst stop and of TCP tracking RMS. No joint error is recorded for this row.",
             {
                 "sim": Status("not_measured", "arm_motion_bench plays this hidden world only, never a fitted twin of it; its perfect-model "
                                               "run is a frictionless ceiling, not this robot."),
-                "on_real": Cell(("ur5e.on_real.tcp_rms", "ur5e.on_real.stop_task_worst", "ur5e.on_real.stop_pass_rate"),
+                "on_real": Cell(("ur5e.on_real.stop_pass_rate", "ur5e.on_real.stop_task_worst", "ur5e.on_real.tcp_rms"),
                                 "ur5e.on_real.stop_pass_rate", "computed torque on a model with inertia errors and no friction",
                                 "ur5e.on_real.controller", evidence=("ur5e.on_real.description",)),
-                "tuned": Cell(("ur5e.tuned.tcp_rms", "ur5e.tuned.stop_task_worst", "ur5e.tuned.stop_pass_rate"), "ur5e.tuned.stop_pass_rate",
+                "tuned": Cell(("ur5e.tuned.stop_pass_rate", "ur5e.tuned.stop_task_worst", "ur5e.tuned.tcp_rms"), "ur5e.tuned.stop_pass_rate",
                               "the same with friction identified, a stiffer loop and an integral term", "ur5e.tuned.controller",
                               evidence=("ur5e.tuned.description",)),
             },
@@ -371,49 +389,54 @@ ROBOTS = (
                 "`calibrate()`; it was tuned on the development tasks and is scored here on held-out ones.",
             )),
         Row("urwrist-real", "real", "UR wrist test rig", "/examples/ur_wrist_test_rig/",
-            "Three wrist joints returning to the park pose {urwrist.tuned.stops} times on a held-out tape; worst and median tool stop, and "
-            "the stops within the gate.",
+            "Three wrist joints returning to the park pose {urwrist.tuned.stops} times on a held-out tape; worst and median tool error at "
+            "a stop, and the stops within the gate. No joint error is recorded for this row.",
             {
                 "sim": Status("not_measured", "the twin was never replayed under these two controllers on this tape."),
                 "on_real": Cell(("urwrist.on_real.stop_worst", "urwrist.on_real.stop_median", "urwrist.on_real.within",
                                  "urwrist.on_real.stops"), "urwrist.on_real.stop_worst",
-                                "the it5 fit's gains with Coulomb feed-forward", "urwrist.on_real.run"),
+                                "gains and Coulomb feed-forward from an earlier fit of this rig", "urwrist.on_real.run"),
                 "tuned": Cell(("urwrist.tuned.stop_worst", "urwrist.tuned.stop_median", "urwrist.tuned.within", "urwrist.tuned.stops"),
-                              "urwrist.tuned.stop_worst", "the same, with the hold gain on {=CAN 15} at {urwrist.tuned.kp_hold}",
+                              "urwrist.tuned.stop_worst", "the same, with one joint's hold gain at {urwrist.tuned.kp_hold}",
                               "urwrist.tuned.run"),
             },
             same=(("urwrist.on_real.stops", "urwrist.tuned.stops"),),
             notes=(
-                "Every stop here is a return to the park pose. The as-found controller already carried a Coulomb feed-forward of "
-                "{urwrist.on_real.coulomb_ff} on {=CAN 15} from an earlier fit; tuning changed only that joint's hold gain.",
+                "Every stop here is a return to the park pose. The as-found controller was already the product of an earlier fit: its "
+                "gains, and a Coulomb feed-forward on all three joints ({urwrist.on_real.coulomb_ff_can14}, "
+                "{urwrist.on_real.coulomb_ff_can15} and {urwrist.on_real.coulomb_ff_can16}). Tuning changed only one joint's hold gain.",
                 "Retired after this campaign; its design is now the BAM arm's wrist.",
             ),
             media="ur-wrist-rig"),
     )),
     Robot("bam_arm", "The BAM arm", (
         Row("bamarm-track", "real", "BAM arm (five-bar, UR wrist, claw)", "#recovery-bamarm-oracle",
-            "The development workspace tape at {bamarm.target.speed} of full speed; TCP tracking RMS, median stop error, worst-joint "
-            "tracking RMS.",
+            "The development workspace tape at {bamarm.target.speed} of full speed; median tool error at a stop (the only stop number this "
+            "file records per run), TCP tracking RMS, worst-joint tracking RMS.",
             {
                 "sim": Status("not_measured", "the twin has not been played with the measured static load at rest that the tuned controller "
                                               "adds."),
-                "on_real": Cell(("bamarm.on_real.tcp_rms", "bamarm.on_real.stop_median", "bamarm.on_real.joint_rms"),
+                "on_real": Cell(("bamarm.on_real.stop_median", "bamarm.on_real.tcp_rms", "bamarm.on_real.joint_rms"),
                                 "bamarm.on_real.stop_median", "the trajectory controller as found: board PD with gravity compensation",
                                 "bamarm.on_real.layout"),
-                "tuned": Cell(("bamarm.tuned.tcp_rms", "bamarm.tuned.stop_median", "bamarm.tuned.joint_rms"), "bamarm.tuned.stop_median",
-                              "model feed-forward with lookahead, the measured static load held at rest, and a stiffer hold",
+                "tuned": Cell(("bamarm.tuned.stop_median", "bamarm.tuned.tcp_rms", "bamarm.tuned.joint_rms"), "bamarm.tuned.stop_median",
+                              "model feed-forward with lookahead, the measured static load held at rest, and a stiffer hold; the boards' "
+                              "integral gain at zero",
                               "bamarm.tuned.layout"),
             },
             same=(("bamarm.target.speed", "bamarm.on_real.speed"),),
             notes=(
                 "Picked by a stated rule, not by hand: the newest run at this speed with model feed-forward and no integrator. It was tuned "
-                "on this same tape: the static load came from earlier runs of it.",
+                "on this same tape: the static load it holds at rest was measured on earlier runs of it.",
+                # WHY (review 2026-11-20 C1): the old note said "the real arm runs PD and feed-forward only", which this file contradicts
+                "The tuned run shown ran PD and feed-forward only: its notes say the boards ran with integral gain zero. One run in the "
+                "same file added a rest integrator; it is left out under that rule, but it is one of the earlier runs the static load was "
+                "measured on.",
                 "The twin's nearest run (the same feed-forward and stiffer hold, without the static load): {bamarm.twin_nearest.tcp_rms} "
                 "tracking, {bamarm.twin_nearest.stop_median} median stop ({gate:bamarm.twin_nearest.stop_median}).",
                 "This file records only each run's median stop. PID tuna's workspace sweep, a different target, records every stop: worst "
                 "{bamarm.sweep.stop_worst} over {bamarm.sweep.stops} stops ({gate:bamarm.sweep.stop_worst}).",
-                "Written by a live lane; the page cites a frozen snapshot. The rest-integrator run in the same file is left out: the real arm "
-                "runs PD and feed-forward only.",
+                "A running job still adds rows to this file; the page cites a frozen copy of it.",
             ),
             media="bam-arm-tuned"),
     )),
@@ -422,21 +445,22 @@ ROBOTS = (
 
 # ---------------------------------------------------------------------------------------------------------------- hidden-truth recovery
 
-NOT_BUILT_BAM = "no hidden-truth world or RobotTwin for the BAM arm yet; building its rig on the one-click seam is the next leg."
-
 RECOVERY = (
-    Recovery("pendulum-oracle", "pendulum", "{=CAN 11} pendulum", 'sim2real.examples.pendulum_can11().calibrate(on="sim")',
+    Recovery("pendulum-oracle", "pendulum", "{=1-DOF} pendulum", 'sim2real.examples.pendulum_can11().calibrate(on="sim")',
              "link angle, twin against the hidden world on held-out runs, in multiples of the run-to-run floor",
              "ex-pendulum", "rec.pendulum.routines",
              {"recovered": Cell(("rec.pendulum.recovered", "rec.pendulum.graded")), "nominal": Cell(("rec.pendulum.nominal",)),
               "fitted": Cell(("rec.pendulum.fitted",)), "floor": Cell(("rec.pendulum.floor",))},
-             notes=("Recorded before the pendulum's schedule changed: today it runs `servo.dynamics_regression` and "
-                    "`servo.backlash_reversals_camera`. A re-record on the current schedule is the next leg.",)),
+             # WHY this order (review 2026-11-20 C9): docs/CALIBRATE.md and docs/API.md run the gear gap first, then the regression
+             notes=("Recorded before the pendulum's schedule changed: today it runs `servo.backlash_reversals_camera`, then "
+                    "`servo.dynamics_regression`. A re-record on the current schedule is still to do.",)),
+    # WHY the not-identified count in the cell (review 2026-11-20 C7): the hero quotes it beside the recovered count, and the hero may
+    # only quote this table
     Recovery("urwrist-oracle", "ur_arm", "UR wrist test rig", 'sim2real.examples.ur_wrist_test_rig().calibrate(on="sim")',
              "p95 tool position at stops, twin against the hidden world on held-out runs",
              "ex-urwrist", "rec.urwrist.routines",
-             {"recovered": Cell(("rec.urwrist.recovered", "rec.urwrist.graded")), "nominal": Cell(("rec.urwrist.nominal",)),
-              "fitted": Cell(("rec.urwrist.fitted",)), "floor": Cell(("rec.urwrist.floor",))},
+             {"recovered": Cell(("rec.urwrist.recovered", "rec.urwrist.graded", "rec.urwrist.not_identified")),
+              "nominal": Cell(("rec.urwrist.nominal",)), "fitted": Cell(("rec.urwrist.fitted",)), "floor": Cell(("rec.urwrist.floor",))},
              notes=("{rec.urwrist.not_identified} more values are carried, each saying why it is not identified.",)),
     Recovery("ur5e-oracle", "ur_arm", "UR5e", "python -m sysid run ur5e",
              "flange position, twin against a hidden tracker on held-out poses (the sysid oracle; not yet a RobotTwin)",
@@ -444,8 +468,12 @@ RECOVERY = (
              {"recovered": Cell(("rec.ur5e.recovered", "rec.ur5e.graded")), "nominal": Cell(("rec.ur5e.nominal",)),
               "fitted": Cell(("rec.ur5e.fitted",)),
               "floor": Status("not_measured", "the sysid oracle records no floor for this measure.")}),
+    # WHY four short reasons, not one sentence four times (review 2026-11-20 D9)
     Recovery("bamarm-oracle", "bam_arm", "BAM arm", None, "none yet", None, None,
-             {cell: Status("not_built", NOT_BUILT_BAM) for cell in ("recovered", "nominal", "fitted", "floor")}),
+             {"recovered": Status("not_built", "no hidden-truth world or RobotTwin for the BAM arm yet."),
+              "nominal": Status("not_built", "needs that world."),
+              "fitted": Status("not_built", "needs that world."),
+              "floor": Status("not_built", "needs repeat runs on that world.")}),
 )
 
 
@@ -453,10 +481,10 @@ RECOVERY = (
 
 MODES = (
     Mode(1, "Start in sim at the right values and see the performance",
-         "Not a sim2real call yet, on any robot. The Sim column above was played by each robot's own campaign twin. The missing verb: play "
+         "Not a sim2real call yet, on any robot. The Sim column above was played by each robot's own lab twin. The missing verb: play "
          "a target on the twin under the controller you ship, and score it with the robot's own ruler.",
          None,
-         {"pendulum": Status("not_built", "`simulate()` plays a free release, not a target; the campaign's scorer plays targets on its own "
+         {"pendulum": Status("not_built", "`simulate()` plays a free release, not a target; the lab's scorer plays targets on its own "
                                           "twin."),
           "ur_arm": Status("not_built", "the wrist rig has no `simulate()` yet; the UR5e is played in arm_motion_bench, not as a sim2real "
                                         "twin."),
@@ -488,13 +516,16 @@ HERO = {
     "lead": "Every part in a robot description has a known type: a servo, a gearbox, a camera. Each type knows the models that describe it "
             "and the routines that measure them, so the description is enough: sim2real builds the twin, plans the routines your bench can "
             "run, fits them, and scores the twin on runs it never saw.",
-    "today": "Today that holds for the {=CAN 11} pendulum's description, and for the UR wrist rig's CAD bundle through a test-only reader. "
-             "The BAM arm's description is refused until its servos are typed parts: that is the next leg.",
+    # WHY "not accepted", the plain reading of twin.py's refusal of component types sim2real does not know (review 2026-11-20 C11)
+    "today": "Today that holds for the bench pendulum's description, and for the UR wrist rig's CAD bundle through a test-only reader. "
+             "The BAM arm's description is not accepted yet: its servos are not typed parts.",
+    # WHY each measure is named where it is quoted (review 2026-11-20 D3): "x floor" was first defined a section later
     "lines": (
-        "{=CAN 11} pendulum: {rec.pendulum.recovered} of {rec.pendulum.graded} hidden values recovered; held-out error "
-        "{rec.pendulum.nominal} with the description's values, {rec.pendulum.fitted} fitted.",
-        "UR wrist rig: {rec.urwrist.recovered} of {rec.urwrist.graded} recovered; p95 tool error at stops {rec.urwrist.nominal} with the "
-        "description's values, {rec.urwrist.fitted} fitted.",
+        "{=1-DOF} pendulum: {rec.pendulum.recovered} of {rec.pendulum.graded} hidden values recovered. Held-out error in multiples "
+        "of the run-to-run floor: {rec.pendulum.nominal} with the description's values, {rec.pendulum.fitted} after fitting.",
+        "UR wrist rig: {rec.urwrist.recovered} of {rec.urwrist.graded} graded values recovered, {rec.urwrist.not_identified} more not "
+        "identified. Tool error at stops on held-out runs (p95): {rec.urwrist.nominal} with the description's values, "
+        "{rec.urwrist.fitted} after fitting.",
     ),
     "media": "pendulum-can11-loop",
 }
@@ -511,15 +542,16 @@ LIFECYCLE = {
         ("/routines/servo.live_reid_t10/", "Live re-identification while the joint works; its page shows its grades, biased against a "
                                            "Stribeck truth."),
         ("/routines/servo.gap_check_forecast/", "A gap check every {life.wear.check_every_h} with a wear forecast. In a sim study on the "
-                                                "pendulum_can11 hidden world the fidelity ratio warned at {life.wear.ratio_alarm_h} and the "
+                                                "pendulum's hidden world the fidelity ratio warned at {life.wear.ratio_alarm_h} and the "
                                                 "gap check alone at {life.wear.gap_alarm_h}; the hidden wear crossed its allowance at "
                                                 "{life.wear.crossing_h}. At {life.wear.predicted_at_h} the forecast named "
                                                 "{life.wear.predicted_crossing_h}, with plan-by {life.wear.plan_by_h}."),
-        ("/routines/camera.pose_recal_belt_tags/", "Camera pose refit from belt tags. In the dual_arm_cell sim study a camera knocked at "
+        ("/routines/camera.pose_recal_belt_tags/", "Camera pose refit from belt tags. In a sim study of a two-arm cell, a camera knocked at "
                                                    "{life.camera.knock_h} was flagged at {life.camera.alarm_h}."),
         ("/routines/cell.tags_bundle_adjustment/", "Cell tags bundle adjustment."),
-        ("/api/#api-Budget", '`Budget(settings=("deployed",))` plans only what runs on a robot at work, and `calibrate(data=…)` refits on runs '
-                             "the twin already holds."),
+        # WHY "plus those that run anywhere" (review 2026-11-20 C3): Budget.allows admits setting "both" whatever the settings say
+        ("/api/#api-Budget", '`Budget(settings=("deployed",))` plans the routines that run on a robot at work plus those that run anywhere, '
+                             "and `calibrate(data=…)` refits on runs the twin already holds."),
         ("/api/#api-Ledger", "Each calibration writes a ledger with a W&B copy, and `preflight()` checks a fit before it ships."),
         (None, "No robot has a real deployed record yet."),
     ),
@@ -537,16 +569,18 @@ LIFECYCLE = {
 
 # WHY WebP and JPEG only: the cloud cut drops *.mp4, *.webm and *.gif (bam_ws tools/cloud/slim_repo.py), so a VM would build a page whose
 # video is missing. WHY the crop: the onedof clip burns in text in its top band (rows 0-103: rung, speed, numbers) and a progress bar along
-# its bottom edge (rows 350-359), so the crop keeps rows 104-343 only (seen on the contact sheets).
+# its bottom edge (rows 350-359), so the crop keeps rows 104-343 only (seen on the contact sheets); and the camera sits the pendulum at the
+# clip's right edge, so the crop keeps columns 280-639, where the link swings (review 2026-11-20 D2). WHY the whole clip (review C10): the
+# caption says the speed rises rung by rung, and the first ten seconds showed only the slow rungs.
 MEDIA = (
     Media("pendulum-can11-loop", "media/pendulum-can11.webp", "bamws:reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
           "bamws:reports/onedof-pendulum-2026-11-15.html",
-          "The {=CAN 11} pendulum on its tuned controller, speed rising rung by rung (real, one-to-one time). The numbers beside it are its "
+          "The {=1-DOF} pendulum on its tuned controller, speed rising rung by rung (real, one-to-one time). The numbers beside it are its "
           "twin's calibration against a hidden world.",
-          "loop", "trim=0:10,crop=640:240:0:104,fps=12", quality=55),
+          "loop", "trim=0:25.8,crop=360:240:280:104,fps=10", quality=55),
     Media("pendulum-can11-still", "media/pendulum-can11.jpg", "bamws:reports/media/onedof-pendulum-2026-11-15/rising-can11.mp4",
-          "bamws:reports/onedof-pendulum-2026-11-15.html", "The {=CAN 11} pendulum on the bench (real).",
-          "frame", "crop=640:240:0:104", at_s=5.0, quality=4),
+          "bamws:reports/onedof-pendulum-2026-11-15.html", "The {=1-DOF} pendulum on the bench (real).",
+          "frame", "crop=360:240:280:104", at_s=5.0, quality=4),
     Media("ur-wrist-rig", "media/ur-wrist-rig.jpg", "bamws:reports/media/ur-wrist-sim2real-2026-11-12/poster.jpg",
           "bamws:reports/ur-wrist-sim2real-2026-11-12.html", "The UR wrist test rig on the bench (real).", "copy"),
     Media("bam-arm-tuned", "media/bam-arm-tuned.jpg",
