@@ -18,6 +18,9 @@ for every twin (the UR wrist bundle's nominal twin, which passed 4 of 4 blocking
 5. A twin that states every piece passes, every bound computed and inside.
 6. A relative range is kept only where it is stated, and a stated range must cite its source; pidtuna's Envelope states none now.
 7. Without pidtuna the check says so (None), and only then.
+8. CAN 11's missing pieces are stated from its board's recorded config, cited: one encoder count (motor_position.sources.0.cpr at the
+   rotor x rotor_to_output_ratio) and the velocity filter (motor_position.sources.0.pll_filter_hz), copied into sim2real/data/
+   board_configs.json from the moteus dump and held equal to it here; the tracer reads them, and its golden case passes every bound.
 
 The oracles are this file's own: the bound names and the rule (pidtuna's Objective() margin and damping floor) are read from pidtuna here.
 """
@@ -237,3 +240,47 @@ def test_without_pidtuna_the_check_says_so(can11_fitted, monkeypatch):
     monkeypatch.setattr(module, "_pidtuna", gone)
     gains = check(sim2real.preflight(can11_fitted, soak_s=0.5))
     assert gains.passed is None and "pidtuna" in gains.why and "cannot be imported" in gains.why, gains.why
+
+
+# --- 8: CAN 11's board config, copied from its dump and read by the tracer ---------------------------------------------------------------
+
+
+BOARD_CONFIGS = REPO / "src" / "sim2real" / "data" / "board_configs.json"
+
+
+def _board11():
+    import json  # noqa: PLC0415
+
+    return json.loads(BOARD_CONFIGS.read_text(encoding="utf-8"))["deployments"]["one-dof-test-rack"]["11"]
+
+
+def _dump_lines(path: Path) -> dict[str, str]:
+    return dict(line.split(" ", 1) for line in path.read_text(encoding="utf-8").splitlines() if " " in line)
+
+
+def test_can11s_board_config_copy_is_its_dump():
+    import hashlib  # noqa: PLC0415
+
+    board = _board11()
+    dump = Path(board["source"]["dump"])
+    if not dump.is_file():
+        pytest.skip(f"the dump {dump} is not on this machine (the archive disk)")
+    assert hashlib.sha256(dump.read_bytes()).hexdigest() == board["source"]["sha256"], dump
+    lines = _dump_lines(dump)
+    for key, value in board["lines"].items():
+        assert float(lines[key]) == pytest.approx(float(value)), (key, lines.get(key), value)
+
+
+def test_the_tracer_states_can11s_encoder_count_and_velocity_filter_from_its_board(tracer, tracer_fitted):
+    board = _board11()
+    dump = Path(board["source"]["dump"])
+    lines = _dump_lines(dump) if dump.is_file() else {k: str(v) for k, v in board["lines"].items()}
+    count = TAU * float(lines["motor_position.rotor_to_output_ratio"]) / float(lines["motor_position.sources.0.cpr"])
+    gains = check(sim2real.preflight(tracer._tuned(tracer_fitted), soak_s=0.5))
+    bounds = bounds_of(gains)
+    encoder, margin = bounds["encoder count"], bounds["gain margin"]
+    assert encoder["passed"] is True and dump.name in encoder["from"]["encoder_quantum_rad"], encoder
+    assert encoder["value"] == pytest.approx(gains.value["kp_nm_rad"] * count, rel=1e-9), (encoder, count)
+    assert margin["passed"] is True and "pll_filter_hz" in margin["from"]["velocity_filter_hz"], margin
+    assert gains.passed is True, gains.why
+    never_a_bare_pass(gains)
