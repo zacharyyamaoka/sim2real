@@ -18,8 +18,8 @@ Re-record an example's real output (heavy: the pendulum about 15-27 min, the wri
 
 ## The landing page (`/`)
 
-The home page is the landing (Zach, Daily Note 2026-11-20): three numbers per robot (Sim / Sim on Real / Sim on Real (tuned)) for the
-pendulum, the UR arm and the BAM arm; the three modes; how it works; the API on one screen; bench vs deployed (lifetime calibration and
+The home page is the landing (Zach, Daily Note 2026-11-20): his three metrics (Sim / Sim on Real / Sim on Real (tuned)) on each row of
+the pendulum, the UR arm and the BAM arm, each cell led by its tool error at a stop and its gate verdict; the three modes; how it works; the API on one screen; bench vs deployed (lifetime calibration and
 monitoring, designed, not built; the design is `docs/DEPLOYED.md`); and where every number comes from.
 
 - **Every number comes from a file.** `build/landing_picks.py` names each number's file and key (and holds the page's claims as
