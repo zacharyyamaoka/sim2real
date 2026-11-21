@@ -34,7 +34,8 @@ The ruler (written before the code; whoever turns it green may not edit it):
    inside the caller's damping band on the truth AND inside every analytic bound on the TRUE loop; the grid is pidtuna's oracle grid
    since amendment 3 (6c6c4a9): its coarse band around the closed form's bandwidth on the true model and loop, no relative gain range, so
    the pool tops out at the analytic ceiling on the true loop. Where no grid gains are, the pool is the as-found kp / kd under each
-   feed-forward (what PID tuna keeps), and the tuned gains are held to the same rules. The ruler fails the board's own
+   feed-forward (what PID tuna keeps), and the tuned gains are held to the same rules: the band as it is, the bounds within pidtuna's
+   own 5 % TRUTH_SLACK for delivered gains (its tests/test_admissible_on_truth.py). The ruler fails the board's own
    as-found controller (else it cannot grade a gain) and a deliberately bad corner. The ladder is written BEFORE the pass asserts (a
    FAIL is recorded, not lost) and carries the hashes of the wrapper and this file, so a hand-written ladder cannot stand in for the run.
 6. The pendulum's one-click schedule holds it after the regression (or drops it by name where pidtuna cannot be imported); slow:
@@ -759,14 +760,23 @@ def _obeys_bounds(pt, plant, servo, gains) -> bool:
     return all(ok for name, ok in rules.items() if name != "damping")
 
 
+# WHY a slack for the TUNED gains only (pidtuna tests/test_admissible_on_truth.py TRUTH_SLACK, its own acceptance of delivered gains): a
+# tuner holds a rule only on what it identified, and identification comes back a few percent off (inertia ~5 %, Coulomb up to 6 %, gravity
+# over the reach ~1.5 %); a rule broken by more than 5 % on the truth is one it did not hold. The pool, like pidtuna's search, has none
+TRUTH_SLACK = 0.05
+
+
 def _obeys_band(bench, controller) -> bool:
-    """The tuned gains under the oracle's rule: inside the caller's band on the truth and every analytic bound on the true loop, or the
-    as-found kp and kd (pidtuna's tune exempts only those: keeping them changes nothing)."""
+    """The tuned gains under the oracle's rule: inside the caller's band on the truth, and every other rule on the true loop within
+    TRUTH_SLACK (oracle.rules_on_truth: the gain margin, one encoder count, the structural mode, the linear range), or the as-found kp
+    and kd (pidtuna's tune exempts only those: keeping them changes nothing)."""
     g, board = controller.gains, bench.servo.gains
     if math.isclose(g.kp, board.kp, rel_tol=1e-9) and math.isclose(g.kd, board.kd, rel_tol=1e-9):
         return True
     zeta = bench.pt.gains.bandwidth_of(g, bench.pt.oracle.true_model(bench.plant))[1]
-    return bench.band[0] - 1e-6 <= zeta <= bench.band[1] + 1e-6 and _obeys_bounds(bench.pt, bench.plant, bench.servo, g)
+    rules = bench.pt.oracle.rules_on_truth(bench.plant, bench.servo, g, _objective(bench.pt))
+    within = all(entry["ratio"] <= 1.0 + TRUTH_SLACK for name, entry in rules.items() if not name.startswith("damping"))
+    return bench.band[0] - 1e-6 <= zeta <= bench.band[1] + 1e-6 and within
 
 
 def _grade(bench, controller) -> dict:
