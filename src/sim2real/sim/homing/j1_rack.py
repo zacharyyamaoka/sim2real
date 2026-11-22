@@ -27,7 +27,11 @@ The real run, in order (every rack piece is bam_rack_twin.hardware's, never re-m
    ceiling raised from J1_HOLD_NM to each step's own cap (11 N.m seek, 17.98 return) - the one change j1_seek_min's SeekBus also made.
 3. **The homing posture:** every joint but J1 walked to the named pose "homing" (``homing_start_q``; READY's record until READY moved
    on 2026-11-19) by ``fullarm_stops.route_to_start`` when it is off by more than the tolerance (Zach:
-   runners route, they do not refuse a pose); J1 is not routed - its frame is what this run establishes.
+   runners route, they do not refuse a pose); J1 is not routed - its frame is what this run establishes. **The measured cell, fail closed**
+   (2026-11-22, after the 17:57Z seek hit the right flood lamp): the seek to the stop and its return leg are judged against
+   ``fullarm_stops.cell_judge`` (cell_frame.FULL_CELL_POSTS) from the planned posture BEFORE the route moves anything, the route itself with
+   ``cell=``, and the seek again from the measured pose before step 4 (``route_and_judge``). A breach, or a deployment without the judge,
+   is Refused with nothing moved, naming the member and the gap.
 4. **J1's home:** the seek (-110 deg relative at 7.2 deg/s, cap 11 N.m) until EffortStall (still < 0.01 rad/s for 0.2 s while pushing the way
    it seeks past 9 N.m), which defines J1 = -89.972 deg; then back to the homing posture's -12.7 deg in that frame. J1 runs PID tuna's gains (j1_gains:
    kp x14 / kd x16.8, ilimit 0 - PD only) and J1's gravity fed forward EVERY tick at its joint angle in the best frame known: the map's when
@@ -645,6 +649,66 @@ def main(argv: Sequence[str] | None = None) -> int:
     return real_run(arguments, check, rack=rack, say=say)
 
 
+# ---------------------------------------------------------------------------------------------------------------- the measured cell
+#
+# WHY (2026-11-22, fail closed per CONTRACT v3.11): the 17:57Z step-8 seek (j1_home_175659) drove the wrist into the right flood lamp - the
+# route judged the belt only and the seek nothing. Every motion this run makes is now judged against the MEASURED cell
+# (fullarm_stops.cell_judge: cell_frame.FULL_CELL_POSTS at plan margins, bam_ws 265d451ce) BEFORE it starts: the route to the homing
+# posture, the seek to the stop and its return leg. A breach, a pose the judge cannot place, or a deployment without the judge is Refused
+# with nothing moved. With the 2026-11-21 cell record this refuses EVERY J1 top-stop seek (the five-bar links cross the carved right side
+# near the stop; lane F's HOMING_CELL_CHECK.md) until the right side is re-measured or the lamps move: intended.
+
+
+def cell_judge_for(fs, geometry, *, refused) -> Callable[[Mapping[str, float]], str]:
+    """fullarm_stops' measured-cell judge for this geometry; Refused when the deployment's fullarm_stops has none (never run unjudged)."""
+    make = getattr(fs, "cell_judge", None)
+    if make is None:
+        raise refused(f"REFUSED before motion: the deployment's fullarm_stops ({getattr(fs, '__file__', fs)}) has no cell_judge, so J1's "
+                      "seek cannot be judged against the measured cell (needs bam_ws >= 265d451ce; fail closed)")
+    return make(geometry)
+
+
+def full_q(geometry, joints: Mapping[str, float], *, refused) -> dict[str, float]:
+    """The full URDF pose (the five-bar closed) for the arm's named joints - what the cell's hulls are placed from; Refused if it won't close."""
+    names = (J1, "revolute_6", "revolute_7", "revolute_11", "revolute_14", "revolute_17", "revolute_5")
+    missing = [name for name in names if joints.get(name) is None]
+    if missing:
+        raise refused(f"REFUSED before motion: the seek's posture has no {', '.join(missing)}, so the cell cannot judge it (fail closed)")
+    q = geometry.q_from(geometry.craig_of(joints), j1=joints[J1], wrist=[joints["revolute_11"], joints["revolute_14"], joints["revolute_17"]],
+                        claw=joints["revolute_5"])
+    if q is None:
+        raise refused("REFUSED before motion: the seek's posture does not close the five-bar, so the cell cannot judge it (fail closed)")
+    return q
+
+
+def judge_seek(fs, geometry, here: Mapping[str, float], judge, *, refused) -> dict[str, Any]:
+    """The seek (J1 from ``here`` to J1_STOP_DEG, every other joint held) and its return leg (to J1_READY_RAD), each a ``plan_route`` J1 step
+    judged against ``judge`` at every sample; Refused naming the leg, the member and the gap on the first breach."""
+    stop = {**here, J1: math.radians(J1_STOP_DEG)}
+    legs = []
+    for name, a, b in (("seek", here, stop), ("return", stop, {**stop, J1: J1_READY_RAD})):
+        try:
+            plan = fs.plan_route(a, geometry.craig_of(a), b, geometry, None, cell=judge)
+        except refused as refusal:
+            raise refused(f"REFUSED before motion: J1's top-stop {name} ({math.degrees(a[J1]):+.1f} -> {math.degrees(b[J1]):+.1f} deg, every "
+                          f"other joint held) breaches the measured cell (fullarm_stops.cell_judge, fail closed): {refusal}") from None
+        legs.append({"leg": name, "from_deg": math.degrees(a[J1]), "to_deg": math.degrees(b[J1]), "order": plan.get("order")})
+    return {"legs": legs}
+
+
+def route_and_judge(bus, frames, geometry, start_q: Mapping[str, float], *, fs, judge, refused, tolerance_deg: float, say) -> dict[str, Any]:
+    """Steps 3-4's gate: the seek judged from the PLANNED posture (before the route moves anything), the route walked with the cell judged,
+    then the seek judged again from the MEASURED pose the route left (just before home_j1)."""
+    planned = judge_seek(fs, geometry, full_q(geometry, start_q, refused=refused), judge, refused=refused)
+    route = fs.route_to_start(bus, frames, geometry, start_q, tolerance_deg=tolerance_deg, say=say, cell=judge)
+    here = frames.q(fs.board_angles(bus.last), geometry)
+    if here is None:
+        raise refused("REFUSED before the seek: the measured five-bar does not close after the route, so the cell cannot judge the seek")
+    measured = judge_seek(fs, geometry, here, judge, refused=refused)
+    say("cell: the seek and its return clear the measured cell (fullarm_stops.cell_judge)")
+    return {"planned": planned, "route": route, "measured": measured}
+
+
 def real_run(arguments, check: Mapping[str, Any], *, rack, say) -> int:
     """The real run (module docstring, steps 1-6); the report is written on every exit."""
 
@@ -664,6 +728,7 @@ def real_run(arguments, check: Mapping[str, Any], *, rack, say) -> int:
             raise Refused(f"REFUSED: fdcanusb {home.ADAPTER} enumerated under {USB_QUIET_S:g} s ago")
         geometry = fs.ClawGeometry()  # before the bus: seconds of loading, never inside a powered tick
         frames = fs.ArmFrames.load(Path(check["fivebar_homed"]), Path(check["latest"]))
+        judge = cell_judge_for(fs, geometry, refused=Refused)  # the measured cell, before the bus (fail closed: no judge, no run)
     except Refused as refusal:
         say(str(refusal))
         result["result"] = str(refusal)
@@ -696,7 +761,9 @@ def real_run(arguments, check: Mapping[str, Any], *, rack, say) -> int:
             here = frames.q(fs.board_angles(bus.last), geometry) or {}
             start_q = homing_start_q(here, check["ready_rad"])
             start_q[J1] = here.get(J1, start_q.get(J1, 0.0))  # J1 is not routed: its frame is what this run establishes
-            result["route"] = fs.route_to_start(bus, frames, geometry, start_q, tolerance_deg=arguments.start_tolerance_deg, say=say)
+            gate = route_and_judge(bus, frames, geometry, start_q, fs=fs, judge=judge, refused=Refused,
+                                   tolerance_deg=arguments.start_tolerance_deg, say=say)
+            result["route"], result["cell"] = gate["route"], {"planned": gate["planned"], "measured": gate["measured"]}
             bus.stage = "J1 home"
             record = home_j1(bus, check["_j1map"], make_command=real_command(rack), gravity_nm=j1_gravity_source(rack),
                              frame_known=check["powered_up_since_j1_home"] is False, say=say)

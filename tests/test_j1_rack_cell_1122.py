@@ -141,7 +141,7 @@ def test_a_clear_seek_routes_with_the_cell_and_is_judged_again_from_the_measured
     plans = [call for call in fs.calls if call[0] == "plan_route"]
     # the seek and its return, from the planned start, then again from the measured pose after the route: all with the cell
     assert [(round(a, 2), round(b, 2), c) for _, a, b, c in plans] == [
-        (-2.23, J1_STOP_DEG, True), (J1_STOP_DEG, round(math.degrees(J1_READY_RAD), 2), True)] * 2
+        (-2.23, round(J1_STOP_DEG, 2), True), (round(J1_STOP_DEG, 2), round(math.degrees(J1_READY_RAD), 2), True)] * 2
     assert fs.calls.index(("route_to_start", True)) == 2  # between the planned and the measured judgements
     assert set(record) >= {"planned", "route", "measured"}
 
