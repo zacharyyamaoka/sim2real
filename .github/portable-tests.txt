@@ -1,0 +1,31 @@
+# Test files that pass without the rig checkouts (bam_ws, bam_rack_twin, data-ui, pidtuna), proved 2026-11-23
+# against the installed wheel in a fresh venv. test.yml and publish.yml run exactly these.
+tests/test_calibration_rounds.py
+tests/test_calibration_schedule.py
+tests/test_camera_types.py
+tests/test_homing_backlash_vs_twin.py
+tests/test_homing_bench.py
+tests/test_homing_claw_rung_cache_1113.py
+tests/test_homing_gravity_ff.py
+tests/test_homing_pass7_row_models_1113.py
+tests/test_homing_real_plant.py
+tests/test_homing_tracking_families_1113.py
+tests/test_homing_tracking.py
+tests/test_homing_tracking_tag_bytes_1113.py
+tests/test_j1_rack_cell_1122.py
+tests/test_j1_rack.py
+tests/test_kincal_tracking.py
+tests/test_masses.py
+tests/test_metrics_actuator.py
+tests/test_one_click_seam.py
+tests/test_repeat_floor.py
+tests/test_robot_models_parity.py
+tests/test_schedule_joint.py
+tests/test_series_clock.py
+tests/test_servo_gates.py
+tests/test_tracking.py
+tests/test_tracking_rigs.py
+tests/test_twin_holds_data.py
+tests/test_twin_j1_hang_1117.py
+tests/test_type_cards_shim.py
+tests/test_wandb_summary_only.py

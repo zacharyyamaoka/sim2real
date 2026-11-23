@@ -1,0 +1,32 @@
+# Publishes to PyPI when a version tag (v*) is pushed, through PyPI trusted publishing:
+# no API token is stored anywhere. One-time setup on pypi.org: a "pending publisher" for
+# project sim2real, owner zacharyyamaoka, repository sim2real, workflow publish.yml,
+# environment pypi.
+name: publish
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --isolated --no-sources --extra sim --extra vision --extra homing --extra test python -m pytest -q $(grep -v '^#' .github/portable-tests.txt)
+        env:
+          MPLBACKEND: Agg
+          OPENBLAS_NUM_THREADS: "1"
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build --no-sources
+      - run: uv publish --trusted-publishing always

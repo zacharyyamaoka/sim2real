@@ -6,15 +6,36 @@ build-backend = "hatchling.build"
 name = "sim2real"
 version = "0.1.0"
 description = "How close each digital twin is to its real hardware: robot_msgs values in, numbers out (metrics, schedule, fit, sim, models, cards)."
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Zach Yamaoka" }]
+keywords = ["robotics", "sim2real", "digital-twin", "system-identification", "calibration"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
 # WHY robot_msgs and nothing else at runtime (Zach, 2026-11-10, proposal 2): the package sits on robot_msgs, the slowest-changing
-# layer; anything heavier is an extra, so the stable folders never pull a simulator.
-dependencies = ["robot-msgs"]
+# layer; anything heavier is an extra, so the stable folders never pull a simulator. numpy is named because the stable folders
+# import it at module level (robot-msgs also requires it).
+# Not on PyPI and so not declared: pidtuna, sysid (this repo's app folder), bam_* rig packages and data_recorder are loaded lazily
+# from their checkouts (sim2real.paths, SIM2REAL_* env vars) by the rig-only verbs that need them.
+dependencies = ["numpy>=1.26", "robot-msgs>=0.3.0"]
+
+[project.urls]
+Homepage = "https://github.com/zacharyyamaoka/sim2real"
+Repository = "https://github.com/zacharyyamaoka/sim2real"
 
 [project.optional-dependencies]
 # WHY pinned: bam_rack_twin and the frozen CAN 12 twin run under mujoco 3.11.0 (its pyproject); sim/ replays them.
-sim = ["mujoco==3.11.0"]
+# scipy: nominal.py's and preflight's fits, imported lazily beside mujoco.
+sim = ["mujoco==3.11.0", "scipy>=1.11"]
 # WHY opencv in its own extra (2026-11-11, the conveyor belt type): the ChArUco verbs in metrics/charuco.py import cv2 lazily, so the
 # stable folders still load without it; 4.11.0.86 is the build bam_aruco and bam_rack_twin run (cv2.aruco.CharucoDetector).
 vision = ["opencv-python-headless==4.11.0.86"]
@@ -25,10 +46,12 @@ vision = ["opencv-python-headless==4.11.0.86"]
 tracking = ["wandb==0.31.0", "wandb-workspaces==0.4.13", "weave==0.54.1"]
 # WHY its own extra (2026-11-12, the homing bench): the kinematic homing rung runs on robot_models' stop core (coal + trimesh through
 # its contact extra) and draws its starts with scipy's Sobol; sim2real's stable folders never import it.
-homing = ["robot-models-lib[contact]", "scipy>=1.11"]
+# sim2real.sim.homing imports robot_models at module level, so the whole subpackage needs this extra; pillow draws its media.
+homing = ["robot-models-lib[contact]>=0.3.0", "scipy>=1.11", "pillow"]
 # WHY its own extra and not the test extra (2026-11-18, gap FF): the bench feedforward routine builds its paired out-and-back runs
 # with robot_trajectories, imported only inside the function that makes them, so the package never needs it; the library has no
 # remote yet, so the extra resolves on this machine and in a cloud cut that carries it (a first push would make it public).
+# By PyPI name: the release resolves it from PyPI once robot-trajectories is published there.
 trajectories = ["robot-trajectories"]
 test = ["pytest>=8", "robot-models-lib[contact]", "scipy>=1.11"]
 
