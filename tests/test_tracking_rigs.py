@@ -113,6 +113,9 @@ def test_target_vs_sim_at_a_stop_reads_the_twin_replay_of_the_same_holds():
     assert numbers["target_vs_sim_at_stop_pass"] == int(numbers["target_vs_sim_at_stop_mm"] <= 1.0)
 
 
+# WHY the guard (2026-11-25): it reads the five-bar dwell files under the rig archive; without it the portable CI job, which has
+# no /archive, failed with FileNotFoundError instead of skipping like its siblings.
+@pytest.mark.skipif(not ARCHIVE.exists(), reason="the rig archive is not mounted")
 def test_the_fivebars_controller_versions_follow_the_job_history():
     # rack_results.fivebar_job_configs() is the Job's history and its newest config is the one judged (identified comp + settle
     # integrator since 2026-11-12); the W&B controller versions must end on that same config, or the project's newest tool number
