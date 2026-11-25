@@ -5,6 +5,14 @@ schema = "robot-sdk-declaration/1"
 role = "library"
 layer = "outer"
 one_line = "RobotTwin, calibrate() and fit/replay over real or simulated runs"
+summary = "The outer API on top of everything: digital twins (`RobotTwin`), one-click `.calibrate()` (configure → fit → tune → measure routines), MuJoCo simulation, and dashboards of how close each twin is to its real hardware. May import every package above."
+use_when = "Twins, calibration, system identification, sim-vs-real comparison, the one-call API over a whole robot."
+
+# Where to read more. github and pypi are required; the rest are what this package has.
+[links]
+github = "https://github.com/zacharyyamaoka/sim2real"
+pypi = "https://pypi.org/project/sim2real/"
+docs = "https://github.com/zacharyyamaoka/sim2real/tree/main/docs/peps"
 
 [[produces]]
 type = "robot_msgs.control.EffortStall"
