@@ -1,0 +1,97 @@
+# robot-sdk declaration: the shared types this package's public API takes (consumes) and gives (produces),
+# each with the symbols that are the contract. Checked against the code by robot_sdk's
+# `python -m tools.sdk_graph check` (docs/graph-schema.md in github.com/zacharyyamaoka/robot_sdk).
+schema = "robot-sdk-declaration/1"
+role = "library"
+layer = "outer"
+one_line = "RobotTwin, calibrate() and fit/replay over real or simulated runs"
+
+[[produces]]
+type = "robot_msgs.control.EffortStall"
+symbols = [
+  "sim2real.sim.homing.j1_home.effort_stall",
+]
+
+[[consumes]]
+type = "robot_msgs.control.JointCommand"
+symbols = [
+  "sim2real.sim.homing.gravity_ff.feedforward_for",
+]
+
+[[produces]]
+type = "robot_msgs.control.JointCommand"
+symbols = [
+  "sim2real.sim.homing.j1_home.seek_command",
+]
+
+[[consumes]]
+type = "robot_msgs.control.JointCommandSequence"
+symbols = [
+  "sim2real.sim.homing.j1_rack.run_sequence",
+]
+
+[[produces]]
+type = "robot_msgs.control.JointCommandSequence"
+symbols = [
+  "sim2real.sim.homing.j1_home.j1_home_sequence",
+]
+
+[[consumes]]
+type = "robot_msgs.control.JointCommandStep"
+symbols = [
+  "sim2real.sim.homing.recover.with_prefix",
+]
+
+[[produces]]
+type = "robot_msgs.control.JointCommandStep"
+symbols = [
+  "sim2real.sim.homing.recover.recovery_steps",
+]
+
+[[consumes]]
+type = "robot_msgs.control.Reached"
+symbols = [
+  "sim2real.sim.homing.sag_proof.still_at_target",
+]
+
+[[produces]]
+type = "robot_msgs.control.Reached"
+symbols = [
+  "sim2real.sim.homing.sag_proof.still_at_target",
+]
+
+[[consumes]]
+type = "robot_msgs.control.ServoCommand"
+symbols = [
+  "sim2real.sim.homing.plant.KinematicStopPlant.tick",
+  "sim2real.sim.homing.mujoco_plant.MujocoRigPlant.tick",
+  "sim2real.sim.homing.real_plant.RealRigPlant.tick",
+]
+
+[[produces]]
+type = "robot_msgs.coverage.CoverageResult"
+symbols = [
+  "sim2real.cards.coverage.arm_coverage",
+  "sim2real.cards.coverage.servo_coverage",
+]
+
+[[consumes]]
+type = "robot_msgs.manipulation.NamedPose"
+symbols = [
+  "sim2real.named_poses.fivebar_craig_deg",
+]
+
+[[produces]]
+type = "robot_msgs.manipulation.NamedPose"
+symbols = [
+  "sim2real.named_poses.named_poses",
+  "sim2real.named_poses.named_pose",
+]
+
+[[produces]]
+type = "robot_msgs.sensor.JointState"
+symbols = [
+  "sim2real.sim.homing.plant.KinematicStopPlant.tick",
+  "sim2real.sim.homing.mujoco_plant.MujocoRigPlant.tick",
+  "sim2real.sim.homing.real_plant.RealRigPlant.tick",
+]
