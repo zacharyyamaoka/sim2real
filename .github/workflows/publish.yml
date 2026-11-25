@@ -14,7 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv run --isolated --no-sources --extra sim --extra vision --extra homing --extra test python -m pytest -q $(grep -v '^#' .github/portable-tests.txt)
+      # WHY uv pip, not `uv run --isolated` (2026-11-25, CI red): uv run resolves EVERY extra for every platform, so one
+      # unpublished extra (trajectories -> robot-trajectories, not on PyPI) failed the job before a test ran. Installing just
+      # these extras from PyPI is what a user's `pip install sim2real[...]` does.
+      - run: uv venv .venv && uv pip install --no-sources ".[sim,vision,homing,test]"
+      - run: .venv/bin/python -m pytest -q $(grep -v '^#' .github/portable-tests.txt)
         env:
           MPLBACKEND: Agg
           OPENBLAS_NUM_THREADS: "1"

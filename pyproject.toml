@@ -47,7 +47,9 @@ tracking = ["wandb==0.31.0", "wandb-workspaces==0.4.13", "weave==0.54.1"]
 # WHY its own extra (2026-11-12, the homing bench): the kinematic homing rung runs on robot_models' stop core (coal + trimesh through
 # its contact extra) and draws its starts with scipy's Sobol; sim2real's stable folders never import it.
 # sim2real.sim.homing imports robot_models at module level, so the whole subpackage needs this extra; pillow draws its media.
-homing = ["robot-models-lib[contact]>=0.3.0", "scipy>=1.11", "pillow"]
+# WHY >=0.2.0, not 0.3.0 (2026-11-25, CI red): robot_models.homing, the only part imported here, is byte-identical between
+# 0.2.0 and 0.3.0, the portable suite passes on PyPI's 0.2.0, and 0.3.0 is not on PyPI yet, so a 0.3.0 floor made the extra unresolvable.
+homing = ["robot-models-lib[contact]>=0.2.0", "scipy>=1.11", "pillow"]
 # WHY its own extra and not the test extra (2026-11-18, gap FF): the bench feedforward routine builds its paired out-and-back runs
 # with robot_trajectories, imported only inside the function that makes them, so the package never needs it; the library has no
 # remote yet, so the extra resolves on this machine and in a cloud cut that carries it (a first push would make it public).
